@@ -6,7 +6,7 @@ on:
       - '*.*.*'
 
 env:
-  REGISTRY_IMAGE: MaStr950/batcontrol-test
+  REGISTRY_IMAGE: mastr950/batcontrol-test
 
 
 jobs:
