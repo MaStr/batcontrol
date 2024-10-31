@@ -14,7 +14,6 @@ RUN apk add --no-cache \
 COPY *.py ./
 COPY default_load_profile.csv ./config/load_profile.csv
 COPY default_load_profile.csv ./
-COPY api ./api
 COPY config ./config
 COPY dynamictariff ./dynamictariff
 COPY inverter ./inverter
