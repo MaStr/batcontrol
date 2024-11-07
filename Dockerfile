@@ -1,5 +1,16 @@
 FROM alpine:3.20
 
+ARG VERSION
+ARG GIT_SHA
+
+LABEL version="${VERSION}"
+LABEL git-sha="${GIT_SHA}"
+LABEL description="This is a Docker image for the BatControl project."
+LABEL maintainer="matthias.strubel@aod-rpg.de"
+
+ENV BATCONTROL_VERSION=${VERSION}
+ENV BATCONTROL_GIT_SHA=${GIT_SHA}
+
 RUN mkdir /batcontrol
 WORKDIR /batcontrol
 RUN apk add --no-cache \

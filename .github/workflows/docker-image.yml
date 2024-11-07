@@ -25,8 +25,8 @@ jobs:
       - name: Prepare
         run: |
           platform=${{ matrix.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV          
-      
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
@@ -52,7 +52,10 @@ jobs:
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
-      
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+            BUILD_TRIGGER_TAG=${{ github.ref_name != '' && github.ref_name || 'snapshot' }}
+
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
