@@ -11,8 +11,8 @@ LABEL maintainer="matthias.strubel@aod-rpg.de"
 ENV BATCONTROL_VERSION=${VERSION}
 ENV BATCONTROL_GIT_SHA=${GIT_SHA}
 
-RUN mkdir /batcontrol
-WORKDIR /batcontrol
+RUN mkdir /app
+WORKDIR /app
 RUN apk add --no-cache \
             python3 \
             py3-numpy \
@@ -31,5 +31,9 @@ COPY inverter ./inverter
 COPY forecastconsumption ./forecastconsumption
 COPY forecastsolar ./forecastsolar
 COPY logfilelimiter ./logfilelimiter
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
 
-CMD [ "./batcontrol.py" ]
+VOLUME [ "/app/logs" ]
+
+CMD [ "/app/entrypoint.sh" ]
