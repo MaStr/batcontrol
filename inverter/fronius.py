@@ -1,10 +1,10 @@
-from .baseclass import InverterBaseclass
-import requests
-import json
-import hashlib
-import logging
 import time
 import os
+import logging
+import json
+import hashlib
+import requests
+from .baseclass import InverterBaseclass
 
 logger = logging.getLogger('__main__')
 logger.info(f'[Inverter] loading module ')
@@ -42,12 +42,20 @@ class FroniusWR(InverterBaseclass):
         self.nonce = 0
         self.user = user
         self.password = password
-        self.previous_config = self.get_battery_config()
-        if not self.previous_config:
+        self.previous_battery_config = self.get_battery_config()
+        if not self.previous_battery_config:
             raise RuntimeError(
                 f'[Inverter] failed to load Battery config from Inverter at {self.address}')
-        self.min_soc = self.previous_config['BAT_M0_SOC_MIN']  # in percent
-        self.max_soc = self.previous_config['BAT_M0_SOC_MAX']
+        self.previous_backup_power_config = self.get_powerunit_config()
+        if not self.previous_backup_power_config:
+            raise RuntimeError(
+                f'[Inverter] failed to load Power Unit config from Inverter at {self.address}')
+        self.backup_power_mode = self.previous_backup_power_config['backuppower']['DEVICE_MODE_BACKUPMODE_TYPE_U16']
+        if self.backup_power_mode == 0:
+            self.min_soc = self.previous_battery_config['BAT_M0_SOC_MIN'] # in percent
+        else:
+            self.min_soc = max(self.previous_battery_config['BAT_M0_SOC_MIN'], self.previous_battery_config['HYB_BACKUP_RESERVED'])  # in percent
+        self.max_soc = self.previous_battery_config['BAT_M0_SOC_MAX']
 
         self.get_time_of_use()  # save timesofuse
 
@@ -85,11 +93,20 @@ class FroniusWR(InverterBaseclass):
         path = '/config/batteries'
         response = self.send_request(path, auth=True)
         if not response:
-            logger.error(f'[Inverter] Failed to get SOC. Returning empty dict')
+            logger.error(f'[Inverter] Failed to get battery configuration. Returning empty dict')
             return {}
         result = json.loads(response.text)
         with open(BATTERY_CONFIG_FILENAME, 'w') as f:
             f.write(response.text)
+        return result
+
+    def get_powerunit_config(self):
+        path = '/config/powerunit'
+        response = self.send_request(path, auth=True)
+        if not response:
+            logger.error(f'[Inverter] Failed to get power unit configuration. Returning empty dict')
+            return {}
+        result = json.loads(response.text)
         return result
 
     def restore_battery_config(self):
@@ -104,8 +121,8 @@ class FroniusWR(InverterBaseclass):
         ]
         settings = {}
         for key in settings_to_restore:
-            if key in self.previous_config.keys():
-                settings[key] = self.previous_config[key]
+            if key in self.previous_battery_config.keys():
+                settings[key] = self.previous_battery_config[key]
             else:
                 RuntimeError(
                     f"Unable to restore settings. Parameter {key} is missing")

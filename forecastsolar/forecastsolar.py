@@ -1,10 +1,9 @@
 import datetime
 import time
 import math
-import requests
 import json
 import logging
-
+import requests
 
 logger = logging.getLogger('__main__')
 logger.info(f'[FCSolar] loading module ')

@@ -1,17 +1,17 @@
-from .baseclass import DynamicTariffBaseclass
-import requests
 import datetime
 import math
+import requests
+from .baseclass import DynamicTariffBaseclass
 
 class Evcc(DynamicTariffBaseclass):
-    
+
     def __init__(self, timezone , url , min_time_between_API_calls=60):
         super().__init__(timezone,min_time_between_API_calls)
         self.url=url
-    
+
     def get_raw_data_from_provider(self):
         response=requests.get(self.url)
-        
+
         if response.status_code != 200:
            raise RuntimeError(f'[EVCC] API returned {response}')
         # {"result":
@@ -29,12 +29,12 @@ class Evcc(DynamicTariffBaseclass):
         #        ]
         #     }
         # }
-        
+
 
         raw_data=response.json()
         return raw_data
-        
-        
+
+
     def get_prices_from_raw_data(self):
         data=self.raw_data['result']['rates']
         now=datetime.datetime.now().astimezone(self.timezone)
@@ -45,7 +45,7 @@ class Evcc(DynamicTariffBaseclass):
             # "start":"2024-06-20T08:00:00+02:00" to timestamp
             timestamp=datetime.datetime.fromisoformat(item['start']).astimezone(self.timezone)
             diff=timestamp-now
-            rel_hour=math.ceil(diff.total_seconds()/3600)   
+            rel_hour=math.ceil(diff.total_seconds()/3600)
             if rel_hour >=0:
                 prices[rel_hour]=item['price']
         return prices

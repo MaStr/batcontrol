@@ -22,7 +22,7 @@ class LogFileLimiter:
         """
         if pruneFactor < 0 or pruneFactor > 1:
             raise ValueError("Prune factor must be between 0 and 1.")
-        
+
         logger.info(f'[LogFileLimiter] File {self.path} is too large. File will be pruned by {pruneFactor*100:2.0f} %. ')
         with open(self.path, 'r+') as file:
             lines = file.readlines()

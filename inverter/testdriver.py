@@ -16,39 +16,54 @@ logger.info(f'[Testdriver] loading module ')
 class Testdriver(InverterBaseclass):
     def __init__(self, max_grid_charge:float):
         self.max_grid_charge_rate=max_grid_charge
-        self.max_capacity=5000
-        self.SOC=99.0
+        self.installed_capacity=11000 # in Wh
+        self.SOC=69.0 # static simulation SOC in percent
+        self.min_soc=8 # in percent
+        self.max_soc=100 # in percent
         self.mode='allow_discharge'
         self.mqtt_api = None
-        
+
     def set_mode_force_charge(self,chargerate=500):
         self.mode='force_charge'
-        
+
     def set_mode_allow_discharge(self):
         self.mode='allow_discharge'
-        
+
     def set_mode_avoid_discharge(self):
         self.mode='avoid_discharge'
-        
+
     def get_stored_energy(self):
-        return self.max_capacity * self.SOC / 100
-        
+        current_soc = self.get_SOC()
+        capa = self.get_capacity()
+        energy = (current_soc - self.min_soc) / 100 * capa
+        return energy
+
     def get_free_capacity(self):
-        return self.max_capacity-self.get_stored_energy()
-        
+        current_soc = self.get_SOC()
+        capa = self.get_capacity()
+        free_capa = (self.max_soc - current_soc) / 100 * capa
+        return free_capa
+
+    def get_capacity(self):
+        return self.installed_capacity
+
     def get_max_capacity(self):
-        return self.max_capacity
-        
+        return self.max_soc/100*self.get_capacity()
+
+    def get_usable_capacity(self):
+        usable_capa = (self.max_soc-self.min_soc)/100*self.get_capacity()
+        return usable_capa
+
     def get_SOC(self):
         return self.SOC
-    
+
     def api_set_SOC(self, SOC:int):
         if SOC < 0 or SOC > 100:
             logger.warning(f'[BatCtrl] testdriver API: Invalid SOC {SOC}')
             return
-        logger.info(f'[BatCtrl] testdriver API: Setting SOC: {SOC}%')     
+        logger.info(f'[BatCtrl] testdriver API: Setting SOC: {SOC}%')
         self.SOC = SOC
-    
+
     def activate_mqtt(self, api_mqtt_api):  # no type here to prevent the need of loading mqtt_api
         import mqtt_api
         self.mqtt_api = api_mqtt_api

@@ -7,22 +7,22 @@ class DynamicTariff(object):
     def __new__(cls,  config:dict, timezone,min_time_between_API_calls):
         selected_tariff=None
         provider=config['type']
-        
+
         if provider.lower()=='awattar_at':
             required_fields=['vat', 'markup', 'fees']
             for field in required_fields:
                 if not field in config.keys():
-                    raise RuntimeError(f'[DynTariff] Please include {field} in your configuration file')           
+                    raise RuntimeError(f'[DynTariff] Please include {field} in your configuration file')
             vat = float(config['vat'])
             markup = float(config['markup'])
             fees = float(config['fees'])
             selected_tariff= Awattar(timezone,'at',fees,markup,vat,min_time_between_API_calls)
-        
+
         elif provider.lower()=='awattar_de':
             required_fields=['vat', 'markup', 'fees']
             for field in required_fields:
                 if not field in config.keys():
-                    raise RuntimeError(f'[DynTariff] Please include {field} in your configuration file')           
+                    raise RuntimeError(f'[DynTariff] Please include {field} in your configuration file')
             vat = float(config['vat'])
             markup = float(config['markup'])
             fees = float(config['fees'])
@@ -41,4 +41,3 @@ class DynamicTariff(object):
         else:
             raise RuntimeError(f'[DynamicTariff] Unkown provider {provider}')
         return selected_tariff
-        
