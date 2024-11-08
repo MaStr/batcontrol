@@ -7,7 +7,7 @@ on:
       - '*.*.*'
 
 env:
-  REGISTRY_IMAGE: ${{ var.THIS_REGISTRY_IMAGE }}
+  REGISTRY_IMAGE: ${{ vars.THIS_REGISTRY_IMAGE }}
 
 jobs:
   build:
