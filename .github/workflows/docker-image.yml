@@ -1,10 +1,13 @@
 name: Docker Image CI
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - '*.*.*'
+
+env:
+  REGISTRY_IMAGE: mastr950/batcontrol-test
+
 
 jobs:
   build:
@@ -28,7 +31,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ vars.REGISTRY_IMAGE }}
+          images: ${{ env.REGISTRY_IMAGE }}
       
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -48,7 +51,7 @@ jobs:
         with:
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ vars.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           build-args: |
             GIT_SHA=${{ github.sha }}
             VERSION=${{ github.ref_name != '' && github.ref_name || 'snapshot' }}
@@ -87,7 +90,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ vars.REGISTRY_IMAGE }}
+          images: ${{ env.REGISTRY_IMAGE }}
           tags: |
             type=schedule
             type=ref,event=branch
@@ -106,8 +109,8 @@ jobs:
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ vars.REGISTRY_IMAGE }}@sha256:%s ' *)
+            $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)          
       
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect ${{ vars.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}              
