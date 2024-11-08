@@ -35,7 +35,7 @@ python batcontrol.py
 # Preparations
 
 ```
-mkdir ./config
+mkdir -p ./config -p ./logs
 ```
 
 - Download the the latest [batcontrol_config.yaml](https://raw.githubusercontent.com/muexxl/batcontrol/refs/heads/main/config/batcontrol_config_dummy.yaml) sample, adjust and place it to config/batcontrol_config.yaml.
@@ -48,6 +48,7 @@ mkdir ./config
 docker run -d \
   --name batcontrol \
   -v /path/to/config:/app/config \
+  -v /path/to/logs:/app/logs \
   mastr950/batcontrol:latest
 ```
 
@@ -63,6 +64,7 @@ services:
     image: mastr950/batcontrol:latest
     volumes:
       - ./config:/app/config
+      - ./logs:/app/logs
     restart: unless-stopped
 ```
 

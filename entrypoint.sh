@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 CONFIG_FILE="/app/config/batcontrol_config.yaml"
 
@@ -27,6 +28,13 @@ fi
 # Print BATCONTROL_VERSION and BATCONTROL_GIT_SHA
 echo "BATCONTROL_VERSION: $BATCONTROL_VERSION"
 echo "BATCONTROL_GIT_SHA: $BATCONTROL_GIT_SHA"
+
+# Workaround for non configurable logfile path
+# Create a symlink to /app/log/batcontrol.log
+if [ ! -e "/app/log/batcontrol.log" ]; then
+  touch /app/log/batcontrol.log
+  ln -s /app/log/batcontrol.log /app/batcontrol.log
+fi
 
 # Start batcontrol.py
 exec python /app/batcontrol.py
