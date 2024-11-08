@@ -7,14 +7,15 @@ To include batcontrol in home assistant please use the repository: https://githu
 1. You have a PV Installation with a BYD Battery and a Fronius inverter  
 1. You have a Tibber or aWattar contract with hourly electricity pricing. (Use this link if you want 50€ Bonus on sign up https://invite.tibber.com/x8ci52nj.)  
 
-# Preparations:
+# Local installation
+## Preparations:
 
 1. verify the credentials of your inverter for customer or technician
 1. get your tibber API key from https://developer.tibber.com/
 1. create your batcontrol_config.yaml in the config folder
 1. customize your load profile or use the default load profile
 
-# Install:
+## Install:
 ```
 git clone https://github.com/muexxl/batcontrol.git  
 cd batcontrol  
@@ -23,9 +24,46 @@ source venv/bin/activate
 pip install -r requirements.txt  
 ```
 
-# run 
+## run
 ```
-cd /PATH/TO/batcontrol  
-source venv/bin/activate        
-python batcontrol.py  
+cd /PATH/TO/batcontrol
+source venv/bin/activate
+python batcontrol.py
 ```
+# Docker usage
+
+# Preparations
+
+```
+mkdir ./config
+```
+
+- Download the the latest [batcontrol_config.yaml](https://raw.githubusercontent.com/muexxl/batcontrol/refs/heads/main/config/batcontrol_config_dummy.yaml) sample, adjust and place it to config/batcontrol_config.yaml.
+
+- Use the default load_profile (automatically) or create your own.-
+
+# Plain Docker
+
+```
+docker run -d \
+  --name batcontrol \
+  -v /path/to/config:/app/config \
+  mastr950/batcontrol:latest
+```
+
+# Docker-compose example
+
+Create docker-compose.yml with the following content:
+
+```
+version: '3.8'
+
+services:
+  batcontrol:
+    image: mastr950/batcontrol:latest
+    volumes:
+      - ./config:/app/config
+    restart: unless-stopped
+```
+
+Then start the container using `docker-compose up -d`.
