@@ -37,4 +37,4 @@ RUN chmod +x entrypoint.sh
 
 VOLUME [ "/app/logs" , "/app/config" ]
 
-CMD [ "/app/entrypoint.sh" ]
+CMD [ "/bin/sh", "/app/entrypoint.sh" ]

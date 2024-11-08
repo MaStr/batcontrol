@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 CONFIG_FILE="/app/config/batcontrol_config.yaml"
