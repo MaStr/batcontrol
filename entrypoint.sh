@@ -2,7 +2,14 @@
 
 CONFIG_FILE="/app/config/batcontrol_config.yaml"
 
-# Check if the config file is mounted
+if [ ! -e "/app/config/.init"] ; then
+  echo "Initializing config file from template"
+  # Copy files but don't overwrite
+  cp -nv /app/config_template/* /app/config
+  echo "$BATCONTROL_VERSION" >  /app/config/.init
+fi
+
+# Check if the config file is available
 if [ ! -f "$CONFIG_FILE" ]; then
   echo "ERROR: Config file not found: $CONFIG_FILE !"
   echo "       Please mount the config file to /app/config/batcontrol_config.yaml"
@@ -12,6 +19,8 @@ if [ ! -f "$CONFIG_FILE" ]; then
   else
      echo "        https://raw.githubusercontent.com/muexxl/batcontrol/refs/tags/${BATCONTROL_VERSION}/config/batcontrol_config_dummy.yaml"
   fi
+  echo ""
+  echo "       In the config folder a template is available to copy."
   exit 1
 fi
 

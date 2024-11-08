@@ -11,7 +11,7 @@ LABEL maintainer="matthias.strubel@aod-rpg.de"
 ENV BATCONTROL_VERSION=${VERSION}
 ENV BATCONTROL_GIT_SHA=${GIT_SHA}
 
-RUN mkdir /app
+RUN mkdir -p /app /app/logs /app/config
 WORKDIR /app
 RUN apk add --no-cache \
             python3 \
@@ -23,9 +23,10 @@ RUN apk add --no-cache \
 
 
 COPY *.py ./
+COPY LICENSE ./
 COPY default_load_profile.csv ./config/load_profile.csv
 COPY default_load_profile.csv ./
-COPY config ./config
+COPY config ./config_template
 COPY dynamictariff ./dynamictariff
 COPY inverter ./inverter
 COPY forecastconsumption ./forecastconsumption
@@ -34,6 +35,6 @@ COPY logfilelimiter ./logfilelimiter
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
 
-VOLUME [ "/app/logs" ]
+VOLUME [ "/app/logs" , "/app/config" ]
 
 CMD [ "/app/entrypoint.sh" ]
