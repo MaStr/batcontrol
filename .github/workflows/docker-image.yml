@@ -11,8 +11,8 @@ env:
 
 jobs:
   build:
-    #runs-on: ubuntu-latest
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    #runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
@@ -71,8 +71,8 @@ jobs:
           retention-days: 1
 
   merge:
-    #runs-on: ubuntu-latest
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    #runs-on: self-hosted
     needs:
       - build
     steps:
