@@ -59,6 +59,7 @@ jobs:
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
+          rm -v /tmp/digests/* || echo "OK, no files"
           digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"          
       
