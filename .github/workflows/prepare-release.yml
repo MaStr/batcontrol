@@ -18,24 +18,25 @@ jobs:
 
       - name: Set up uv with Python 3.12
         id: setup-uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: 3.12
           activate-environment: true
+          enable-cache: true
           
       - name: Install bump-my-version
         run: uv pip install bump-my-version
         
       - name: Setup git user
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-      - name: Create release branch
+      - name: Generate unique branch name
         id: create_branch
         run: |
-          BRANCH="prepare-release"
-          git switch -c $BRANCH
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          BRANCH="prepare-release-$TIMESTAMP"
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
           
       - name: Bump version
@@ -77,12 +78,9 @@ jobs:
             - Python wheel package
             - Source distribution
           
-      - name: Push branch
-        run: git push -f -u origin ${{ steps.create_branch.outputs.branch }}
-          
       - name: Create PR
         id: create-pr
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@v7
         with:
           title: "Release ${{ steps.bump_version.outputs.current-version }}"
           body: |
