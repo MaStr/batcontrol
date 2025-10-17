@@ -52,7 +52,7 @@ jobs:
           python-version: '3.12'
         
       - name: Install bump-my-version
-        run: uv pip install bump-my-version
+        run: uv pip install --system bump-my-version
 
       - name: Setup git user
         run: |
