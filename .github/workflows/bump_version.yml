@@ -52,7 +52,9 @@ jobs:
           python-version: '3.12'
         
       - name: Install bump-my-version
-        run: uv pip install --system bump-my-version
+        run: |
+           uv venv
+           uv pip install bump-my-version
 
       - name: Setup git user
         run: |
@@ -62,6 +64,7 @@ jobs:
       - name: Bump version
         id: bump
         run: |
+          uv venv
           echo "previous-version=$(bump-my-version show current_version)" >> $GITHUB_OUTPUT
           bump-my-version bump ${{ inputs.bump-type }} --commit
           ([[ $? -gt 0 ]] && echo "bumped=false" || echo "bumped=true") >> $GITHUB_OUTPUT
