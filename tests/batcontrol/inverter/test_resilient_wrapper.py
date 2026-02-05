@@ -84,6 +84,11 @@ class MockInverter:
         if self.should_fail:
             raise ConnectionError("Inverter unreachable")
 
+    def set_mode_limit_battery_charge(self, limit_charge_rate):
+        self.set_mode_calls.append(('limit_battery_charge', limit_charge_rate))
+        if self.should_fail:
+            raise ConnectionError("Inverter unreachable")
+
     def activate_mqtt(self, api):
         self.mqtt_api = api
 
