@@ -266,6 +266,79 @@ class TestMqttInverter:
             retain=False
         )
 
+    def test_set_mode_limit_battery_charge_publishes_commands(self):
+        """Test that limit battery charge mode publishes correct MQTT commands"""
+        config = {
+            'base_topic': 'inverter',
+            'capacity': 10000,
+            'max_grid_charge_rate': 5000
+        }
+
+        inverter = MqttInverter(config)
+
+        # Setup mock MQTT client
+        mock_mqtt_api = MagicMock()
+        mock_client = MagicMock()
+        mock_mqtt_api.client = mock_client
+        inverter.activate_mqtt(mock_mqtt_api)
+
+        # Set mode to limit battery charge with max rate 2000W
+        inverter.set_mode_limit_battery_charge(2000)
+
+        # Verify MQTT publish calls
+        assert mock_client.publish.call_count == 2
+        calls = mock_client.publish.call_args_list
+
+        # Check mode command
+        assert calls[0] == call(
+            'inverter/command/mode',
+            'limit_battery_charge',
+            qos=1,
+            retain=False
+        )
+
+        # Check charge rate command
+        assert calls[1] == call(
+            'inverter/command/limit_battery_charge_rate',
+            '2000',
+            qos=1,
+            retain=False
+        )
+
+        # Verify mode was updated
+        assert inverter.last_mode == 'limit_battery_charge'
+
+    def test_set_mode_limit_battery_charge_zero(self):
+        """Test that limit=0 blocks all charging"""
+        config = {
+            'base_topic': 'inverter',
+            'capacity': 10000,
+            'max_grid_charge_rate': 5000
+        }
+
+        inverter = MqttInverter(config)
+
+        # Setup mock MQTT client
+        mock_mqtt_api = MagicMock()
+        mock_client = MagicMock()
+        mock_mqtt_api.client = mock_client
+        inverter.activate_mqtt(mock_mqtt_api)
+
+        # Set mode to limit battery charge with limit=0 (no charging)
+        inverter.set_mode_limit_battery_charge(0)
+
+        # Verify MQTT publish calls
+        assert mock_client.publish.call_count == 2
+        calls = mock_client.publish.call_args_list
+
+        # Check charge rate command is 0
+        assert calls[1] == call(
+            'inverter/command/limit_battery_charge_rate',
+            '0',
+            qos=1,
+            retain=False
+        )
+
     def test_shutdown_unsubscribes_from_topics(self):
         """Test that shutdown cleanly unsubscribes from MQTT topics"""
         config = {

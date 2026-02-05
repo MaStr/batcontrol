@@ -6,13 +6,14 @@ The following topics are published:
 - /status: online/offline status of batcontrol
 - /evaluation_intervall: interval in seconds
 - /last_evaluation: timestamp of last evaluation
-- /mode: operational mode (-1 = charge from grid, 0 = avoid discharge, 10 = discharge allowed)
+- /mode: operational mode (-1 = charge from grid, 0 = avoid discharge, 8 = limit battery charge, 10 = discharge allowed)
 - /max_charging_from_grid_limit: charge limit in 0.1-1
 - /max_charging_from_grid_limit_percent: charge limit in %
 - /always_allow_discharge_limit: always discharge limit in 0.1-1
 - /always_allow_discharge_limit_percent: always discharge limit in %
 - /always_allow_discharge_limit_capacity: always discharge limit in Wh
 - /charge_rate: charge rate in W
+- /limit_battery_charge_rate: dynamic battery charge rate limit in W
 - /max_energy_capacity: maximum capacity of battery in Wh
 - /stored_energy_capacity: energy stored in battery in Wh
 - /stored_usable_energy_capacity: energy stored in battery in Wh and usable (min SOC considered)
@@ -29,8 +30,9 @@ The following statistical arrays are published as JSON arrays:
 - /FCST/net_consumption: forecasted net consumption in W
 
 Implemented Input-API:
-- /mode/set: set mode (-1 = charge from grid, 0 = avoid discharge, 10 = discharge allowed)
+- /mode/set: set mode (-1 = charge from grid, 0 = avoid discharge, 8 = limit battery charge, 10 = discharge allowed)
 - /charge_rate/set: set charge rate in W, sets mode to -1
+- /limit_battery_charge_rate/set: set dynamic battery charge rate limit in W
 - /always_allow_discharge_limit/set: set always discharge limit in 0.1-1
 - /max_charging_from_grid_limit/set: set charge limit in 0-1
 - /min_price_difference/set: set minimum price difference in EUR
@@ -190,6 +192,17 @@ class MqttApi:
         """
         if self.client.is_connected():
             self.client.publish(self.base_topic + '/charge_rate', rate)
+
+    def publish_limit_battery_charge_rate(self, limit: int) -> None:
+        """ Publish dynamic battery charge rate limit to MQTT
+            /limit_battery_charge_rate
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/limit_battery_charge_rate',
+                limit,
+                retain=True
+            )
 
     def publish_production(
             self,

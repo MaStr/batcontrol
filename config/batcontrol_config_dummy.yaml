@@ -52,7 +52,12 @@ inverter:
   # user: customer #customer or technician lowercase only!!
   # password: YOUR-PASSWORD #
   max_grid_charge_rate: 5000 # Watt, Upper limit for Grid to Battery charge rate.
-  max_pv_charge_rate: 0 # Watt, This allows to limit the PV to Battery charge rate. Set to 0 for unlimited charging.
+  max_pv_charge_rate: 0 # Watt, STATIC upper limit for PV to Battery charge rate. Set to 0 for unlimited charging.
+                        # Applied in MODE_ALLOW_DISCHARGING (10) and as upper bound in MODE_LIMIT_BATTERY_CHARGE_RATE (8).
+  min_pv_charge_rate: 0 # Watt, STATIC lower limit for MODE_LIMIT_BATTERY_CHARGE_RATE (8).
+                        # Set to 0 to allow complete charge blocking.
+                        # Set to e.g. 100 to ensure minimum 100W charging when mode 8 is active.
+                        # Only affects mode 8; ignored in other modes.
   # fronius_inverter_id: '1' # Optional: ID of the inverter in Fronius API (default: '1')
   # fronius_controller_id: '0' # Optional: ID of the controller in Fronius API (default: '0')
   enable_resilient_wrapper: false # Enable resilient wrapper for graceful outage handling (default: false)

@@ -538,6 +538,32 @@ class FroniusWR(InverterBaseclass):
 
         return response
 
+    def set_mode_limit_battery_charge(self, limit_charge_rate: int):
+        """ Limit PV charging rate while allowing battery discharge
+
+        Args:
+            limit_charge_rate: Maximum charge rate in W (0 = no charging)
+        """
+        if limit_charge_rate < 0:
+            raise ValueError(f"limit_charge_rate must be >= 0, got {limit_charge_rate}")
+
+        # Always set TimeOfUse rule for mode 8 (even if 0 = no charging)
+        timeofuselist = [{'Active': True,
+                          'Power': int(limit_charge_rate),
+                          'ScheduleType': 'CHARGE_MAX',
+                          "TimeTable": {"Start": "00:00", "End": "23:59"},
+                          "Weekdays":
+                          {"Mon": True,
+                           "Tue": True,
+                           "Wed": True,
+                           "Thu": True,
+                           "Fri": True,
+                           "Sat": True,
+                           "Sun": True}
+                          }]
+        response = self.set_time_of_use(timeofuselist)
+        return response
+
     def set_mode_force_charge(self, chargerate=500):
         """ Set the inverter to charge the battery with a specific power from GRID."""
         # activate timeofuse rules

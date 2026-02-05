@@ -372,6 +372,34 @@ class MqttInverter(InverterBaseclass):
             retain=False
         )
 
+    def set_mode_limit_battery_charge(self, limit_charge_rate: int):
+        """
+        Set inverter to limit battery charge rate mode.
+
+        Publishes mode and max charge rate to MQTT command topics (non-retained).
+
+        Args:
+            limit_charge_rate: Maximum charge rate in W (0 = no charging)
+        """
+        self.last_mode = 'limit_battery_charge'
+        logger.info('Setting mode to limit_battery_charge with max rate %sW', limit_charge_rate)
+
+        # Publish mode command (QoS 1, not retained)
+        self.mqtt_client.publish(
+            f'{self.inverter_topic}/command/mode',
+            'limit_battery_charge',
+            qos=1,
+            retain=False
+        )
+
+        # Publish max charge rate command (QoS 1, not retained)
+        self.mqtt_client.publish(
+            f'{self.inverter_topic}/command/limit_battery_charge_rate',
+            str(limit_charge_rate),
+            qos=1,
+            retain=False
+        )
+
     def get_capacity(self):
         """
         Get battery capacity in Wh.
