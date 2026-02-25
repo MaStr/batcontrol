@@ -25,7 +25,7 @@ class Dummy(InverterBaseclass):
 
     def set_mode_force_charge(self, chargerate=500):
         self.mode = 'force_charge'
-        logger.debug(f'Dummy inverter: Set to force charge mode (rate: {chargerate}W)')
+        logger.debug('Dummy inverter: Set to force charge mode (rate: %dW)', chargerate)
 
     def set_mode_allow_discharge(self):
         self.mode = 'allow_discharge'
@@ -34,6 +34,11 @@ class Dummy(InverterBaseclass):
     def set_mode_avoid_discharge(self):
         self.mode = 'avoid_discharge'
         logger.debug('Dummy inverter: Set to avoid discharge mode')
+
+    def set_mode_limit_battery_charge(self, limit_charge_rate: int):
+        """ Dummy implementation for limit battery charge mode """
+        self.mode = 'limit_battery_charge'
+        logger.info('DUMMY: Limit battery charge rate to %d W', limit_charge_rate)
 
     def get_capacity(self):
         return self.installed_capacity
@@ -44,12 +49,10 @@ class Dummy(InverterBaseclass):
     def activate_mqtt(self, api_mqtt_api):
         # Dummy inverter doesn't support MQTT for simplicity
         logger.debug('Dummy inverter: MQTT activation ignored (not supported)')
-        pass
 
     def refresh_api_values(self):
-        # Call parent implementation for basic MQTT publishing if available
-        super().refresh_api_values()
+        # No-op for dummy inverter - no values to refresh
+        logger.debug('Dummy inverter: refresh_api_values called (no action needed)')
 
     def shutdown(self):
         logger.info('Dummy inverter: Shutdown called (no action needed)')
-        pass

@@ -400,6 +400,16 @@ class ResilientInverterWrapper(InverterInterface):
             mark_initialized=True
         )
 
+    def set_mode_limit_battery_charge(self, limit_charge_rate: int):
+        """Set limit battery charge mode with resilience handling."""
+        return self._call_with_resilience(
+            self._inverter.set_mode_limit_battery_charge,
+            "set_mode_limit_battery_charge",
+            None, None,
+            method_args=(limit_charge_rate,),
+            mark_initialized=True
+        )
+
     # =========================================================================
     # InverterInterface Implementation - Other Methods
     # =========================================================================

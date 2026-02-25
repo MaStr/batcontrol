@@ -21,6 +21,14 @@ class InverterInterface(ABC):
         """ Set the inverter to avoid discharge mode """
 
     @abstractmethod
+    def set_mode_limit_battery_charge(self, limit_charge_rate: int):
+        """ Set the inverter to limit PV charging while allowing discharge
+
+        Args:
+            limit_charge_rate: Maximum charge rate in W (0 = no charging)
+        """
+
+    @abstractmethod
     def get_stored_energy(self) -> float:
         """ Get the stored energy in the inverter.
         This value does not account MIN_SOC and MAX_SOC values.

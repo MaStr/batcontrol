@@ -385,6 +385,88 @@ class TestFroniusConfigurableIDs(unittest.TestCase):
         self.assertIn('Invalid fronius_controller_id', str(context.exception))
         self.assertIn('99', str(context.exception))
 
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_firmware_version')
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_battery_config')
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_powerunit_config')
+    @patch('batcontrol.inverter.fronius.FroniusWR.backup_time_of_use')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_solar_api_active')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_allow_grid_charging')
+    @patch('batcontrol.inverter.fronius.FroniusWR.send_request')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_time_of_use')
+    def test_set_mode_limit_battery_charge(self, mock_set_tou, mock_send_request,
+                                          mock_set_allow, mock_set_solar, mock_backup_tou,
+                                          mock_get_powerunit, mock_get_battery, mock_get_firmware):
+        """Test that limit battery charge mode sets correct TimeOfUse rule"""
+        self._setup_mocks(mock_get_firmware, mock_get_battery, mock_get_powerunit,
+                         mock_send_request, inverter_id='1', controller_id='0')
+        mock_set_tou.return_value = Mock()
+
+        inverter = FroniusWR(self.base_config)
+
+        # Set mode to limit battery charge with max rate 2000W
+        inverter.set_mode_limit_battery_charge(2000)
+
+        # Verify set_time_of_use was called with correct parameters
+        mock_set_tou.assert_called_once()
+        tou_list = mock_set_tou.call_args[0][0]
+
+        self.assertEqual(len(tou_list), 1)
+        self.assertEqual(tou_list[0]['Power'], 2000)
+        self.assertEqual(tou_list[0]['ScheduleType'], 'CHARGE_MAX')
+        self.assertTrue(tou_list[0]['Active'])
+
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_firmware_version')
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_battery_config')
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_powerunit_config')
+    @patch('batcontrol.inverter.fronius.FroniusWR.backup_time_of_use')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_solar_api_active')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_allow_grid_charging')
+    @patch('batcontrol.inverter.fronius.FroniusWR.send_request')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_time_of_use')
+    def test_set_mode_limit_battery_charge_zero(self, mock_set_tou, mock_send_request,
+                                                mock_set_allow, mock_set_solar, mock_backup_tou,
+                                                mock_get_powerunit, mock_get_battery, mock_get_firmware):
+        """Test that limit=0 blocks all charging"""
+        self._setup_mocks(mock_get_firmware, mock_get_battery, mock_get_powerunit,
+                         mock_send_request, inverter_id='1', controller_id='0')
+        mock_set_tou.return_value = Mock()
+
+        inverter = FroniusWR(self.base_config)
+
+        # Set mode to limit battery charge with limit=0 (no charging)
+        inverter.set_mode_limit_battery_charge(0)
+
+        # Verify set_time_of_use was called with Power=0
+        mock_set_tou.assert_called_once()
+        tou_list = mock_set_tou.call_args[0][0]
+
+        self.assertEqual(len(tou_list), 1)
+        self.assertEqual(tou_list[0]['Power'], 0)
+        self.assertEqual(tou_list[0]['ScheduleType'], 'CHARGE_MAX')
+
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_firmware_version')
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_battery_config')
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_powerunit_config')
+    @patch('batcontrol.inverter.fronius.FroniusWR.backup_time_of_use')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_solar_api_active')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_allow_grid_charging')
+    @patch('batcontrol.inverter.fronius.FroniusWR.send_request')
+    def test_set_mode_limit_battery_charge_negative_value_raises_error(
+        self, mock_send_request, mock_set_allow, mock_set_solar, mock_backup_tou,
+        mock_get_powerunit, mock_get_battery, mock_get_firmware):
+        """Test that negative values raise ValueError"""
+        self._setup_mocks(mock_get_firmware, mock_get_battery, mock_get_powerunit,
+                         mock_send_request, inverter_id='1', controller_id='0')
+
+        inverter = FroniusWR(self.base_config)
+
+        # Attempt to set negative limit
+        with self.assertRaises(ValueError) as context:
+            inverter.set_mode_limit_battery_charge(-100)
+
+        self.assertIn('must be >= 0', str(context.exception))
+
 
 if __name__ == '__main__':
     unittest.main()
+
