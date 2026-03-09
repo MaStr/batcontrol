@@ -45,11 +45,47 @@ def test_parse_hours_single_int():
     assert result == [5]
 
 
+def test_parse_hours_range_string():
+    result = TariffZones._parse_hours('0-5', 'zone_1_hours')
+    assert result == [0, 1, 2, 3, 4, 5]
+
+
+def test_parse_hours_range_full_day():
+    result = TariffZones._parse_hours('7-22', 'zone_1_hours')
+    assert result == list(range(7, 23))
+
+
+def test_parse_hours_mixed_range_and_singles():
+    result = TariffZones._parse_hours('0-5,6,7', 'zone_1_hours')
+    assert result == [0, 1, 2, 3, 4, 5, 6, 7]
+
+
+def test_parse_hours_range_single_element():
+    # "5-5" is a valid range that yields just [5]
+    result = TariffZones._parse_hours('5-5', 'zone_1_hours')
+    assert result == [5]
+
+
+def test_parse_hours_list_with_range_strings():
+    result = TariffZones._parse_hours(['0-3', '4', '5-6'], 'zone_1_hours')
+    assert result == [0, 1, 2, 3, 4, 5, 6]
+
+
+def test_parse_hours_rejects_inverted_range():
+    with pytest.raises(ValueError, match='start must be <= end'):
+        TariffZones._parse_hours('5-3', 'zone_1_hours')
+
+
 def test_parse_hours_rejects_out_of_range():
     with pytest.raises(ValueError, match='out of range'):
         TariffZones._parse_hours('0,24', 'zone_1_hours')
     with pytest.raises(ValueError, match='out of range'):
         TariffZones._parse_hours([-1], 'zone_1_hours')
+
+
+def test_parse_hours_rejects_range_out_of_bounds():
+    with pytest.raises(ValueError, match='out of range'):
+        TariffZones._parse_hours('20-25', 'zone_1_hours')
 
 
 def test_parse_hours_rejects_duplicate_within_zone():
@@ -211,9 +247,9 @@ def test_csv_string_hours_accepted():
     t = TariffZones(
         make_tz(),
         tariff_zone_1=0.27,
-        zone_1_hours='7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22',
+        zone_1_hours='7-22',
         tariff_zone_2=0.17,
-        zone_2_hours='0,1,2,3,4,5,6,23',
+        zone_2_hours='0-6,23',
     )
     prices = t._get_prices_native()
     assert len(prices) == 48
@@ -227,14 +263,16 @@ def test_factory_creates_tariff_zones():
     config = {
         'type': 'tariff_zones',
         'tariff_zone_1': 0.27,
-        'zone_1_hours': '7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22',
+        'zone_1_hours': '7-22',
         'tariff_zone_2': 0.17,
-        'zone_2_hours': '0,1,2,3,4,5,6,23',
+        'zone_2_hours': '0-6,23',
     }
     provider = DynamicTariff.create_tarif_provider(config, make_tz(), 0, 0)
     assert isinstance(provider, TariffZones)
     assert provider.tariff_zone_1 == pytest.approx(0.27)
     assert provider.tariff_zone_2 == pytest.approx(0.17)
+    assert provider.zone_1_hours == list(range(7, 23))
+    assert provider.zone_2_hours == list(range(0, 7)) + [23]
 
 
 def test_factory_three_zones():

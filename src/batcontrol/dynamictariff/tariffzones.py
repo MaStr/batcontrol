@@ -161,33 +161,72 @@ class TariffZones(DynamicTariffBaseclass):
 
     @staticmethod
     def _parse_hours(value, name: str) -> list:
-        """Parse a comma-separated string, list, or single int into a validated list of hours.
+        """Parse hour specifications into a validated list of hours.
 
-        Raises ValueError if any value is out of range [0, 23] or appears more than once
-        within the same zone.
+        Accepted formats (may be mixed):
+        - Single integer:           5
+        - Comma-separated values:   "0,1,2,3"
+        - Inclusive ranges:         "0-5"  →  [0, 1, 2, 3, 4, 5]
+        - Mixed:                    "0-5,6,7"  →  [0, 1, 2, 3, 4, 5, 6, 7]
+        - Python list/tuple of ints or range-strings: [0, '1-3', 4]
+
+        Raises ValueError if any hour is out of range [0, 23], if a range is
+        invalid (start > end), or if an hour appears more than once within the
+        same zone.
         """
+        def expand_token(token: str) -> list:
+            """Expand a single string token (range or integer) to a list of ints."""
+            if '-' in token:
+                parts = token.split('-', 1)
+                try:
+                    start, end = int(parts[0].strip()), int(parts[1].strip())
+                except (ValueError, TypeError) as exc:
+                    raise ValueError(
+                        f'[{name}] invalid range: {token!r}'
+                    ) from exc
+                if start > end:
+                    raise ValueError(
+                        f'[{name}] range start must be <= end, got {token!r}'
+                    )
+                return list(range(start, end + 1))
+            try:
+                return [int(token)]
+            except (ValueError, TypeError) as exc:
+                raise ValueError(
+                    f'[{name}] invalid hour value: {token!r}'
+                ) from exc
+
         if isinstance(value, int):
-            parts = [value]
+            raw_ints = [value]
+            tokens = []
         elif isinstance(value, str):
-            parts = [p.strip() for p in value.split(',') if p.strip()]
+            raw_ints = []
+            tokens = [p.strip() for p in value.split(',') if p.strip()]
         elif isinstance(value, (list, tuple)):
-            parts = list(value)
+            # split into direct integers (no range parsing) and string tokens
+            raw_ints = [p for p in value if isinstance(p, int)]
+            tokens = [str(p).strip() for p in value
+                      if not isinstance(p, int) and str(p).strip()]
         else:
             raise ValueError(
                 f'[{name}] must be a comma-separated string, list, or integer'
             )
 
         hours = []
-        for part in parts:
-            try:
-                h = int(part)
-            except (ValueError, TypeError) as exc:
-                raise ValueError(f'[{name}] invalid hour value: {part!r}') from exc
+        for h in raw_ints:
             if h < 0 or h > 23:
                 raise ValueError(f'[{name}] hour {h} is out of range [0, 23]')
             if h in hours:
                 raise ValueError(f'[{name}] hour {h} appears more than once')
             hours.append(h)
+
+        for token in tokens:
+            for h in expand_token(token):
+                if h < 0 or h > 23:
+                    raise ValueError(f'[{name}] hour {h} is out of range [0, 23]')
+                if h in hours:
+                    raise ValueError(f'[{name}] hour {h} appears more than once')
+                hours.append(h)
 
         return hours
 

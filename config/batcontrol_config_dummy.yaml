@@ -69,11 +69,11 @@ utility:
   fees: 0.015 # only required for awattar and energyforecast
   markup: 0.03 # only required for awattar and energyforecast
   # tariff_zone_1: 0.2733 # only required for tariff_zones, Euro/kWh incl. vat/fees (peak hours)
-  # zone_1_hours: 7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 # hours assigned to zone 1 (0-23, comma-separated)
+  # zone_1_hours: 7-22 # hours assigned to zone 1; supports ranges (7-22), singles (7), or mixed (0-5,6,7)
   # tariff_zone_2: 0.1734 # only required for tariff_zones, Euro/kWh incl. vat/fees (off-peak hours)
-  # zone_2_hours: 0,1,2,3,4,5,6,23 # hours assigned to zone 2 (must cover remaining hours)
+  # zone_2_hours: 0-6,23 # hours assigned to zone 2 (must cover remaining hours)
   # tariff_zone_3: 0.2100 # optional third zone price
-  # zone_3_hours: 17,18,19,20 # optional hours for zone 3 (must not overlap with zone 1 or 2)
+  # zone_3_hours: 17-20 # optional hours for zone 3 (must not overlap with zone 1 or 2)
   # apikey: YOUR_API_KEY # MANDATORY for energyforecast and tibber. Uncomment and set if using those providers.
 
 #--------------------------
