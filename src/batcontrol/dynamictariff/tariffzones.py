@@ -3,10 +3,13 @@
 Simple dynamic tariff provider that returns a repeating two zone tariff.
 Config options (in utility config for provider):
 - type: tariff_zones
-- tariff_zone_1: price for zone 1 hours (float)
-- tariff_zone_2: price for zone 2 hours (float)
+- tariff_zone_1: price for zone 1 hours (float, Euro/kWh incl. VAT/fees, required)
+- tariff_zone_2: price for zone 2 hours (float, Euro/kWh incl. VAT/fees, required)
 - zone_1_start: hour when tariff zone 1 starts (int, default 7)
 - zone_1_end: hour when tariff zone 1 ends (int, default 22)
+
+Wrap-around is supported: setting zone_1_start=22 and zone_1_end=6 means zone 1
+covers hours 22-23 and 0-5. When zone_1_start == zone_1_end, zone 1 covers 0 hours.
 
 The class produces hourly prices (native_resolution=60) for the next 48
 hours aligned to the current hour. The baseclass will handle conversion to
@@ -40,6 +43,10 @@ class TariffZones(DynamicTariffBaseclass):
             min_time_between_API_calls=0,
             delay_evaluation_by_seconds=0,
             target_resolution: int = 60,
+            tariff_zone_1: float = None,
+            tariff_zone_2: float = None,
+            zone_1_start: int = 7,
+            zone_1_end: int = 22,
     ):
         super().__init__(
             timezone,
@@ -49,11 +56,18 @@ class TariffZones(DynamicTariffBaseclass):
             native_resolution=60,
         )
 
-        # default zone boundaries
-        self._zone_1_start = 7
-        self._zone_1_end = 22
+        self._zone_1_start = self._validate_hour(zone_1_start, 'zone_1_start')
+        self._zone_1_end = self._validate_hour(zone_1_end, 'zone_1_end')
+        self._tariff_zone_1 = None
+        self._tariff_zone_2 = None
+        if tariff_zone_1 is not None:
+            self.tariff_zone_1 = tariff_zone_1
+        if tariff_zone_2 is not None:
+            self.tariff_zone_2 = tariff_zone_2
 
-
+    def get_raw_data_from_provider(self) -> dict:
+        """No external API — configuration is static."""
+        return {}
 
     def _get_prices_native(self) -> dict[int, float]:
         """Build hourly prices for the next 48 hours, hour-aligned.
@@ -61,45 +75,77 @@ class TariffZones(DynamicTariffBaseclass):
         Returns a dict mapping interval index (0 = start of current hour)
         to price (float).
         """
-        raw = self.get_raw_data()
-        # allow values from raw data (cache) if present
-        tariff_zone_1 = raw.get('tariff_zone_1', self.tariff_zone_1)
-        tariff_zone_2 = raw.get('tariff_zone_2', self.tariff_zone_2)
-        zone_1_start = int(raw.get('zone_1_start', self.zone_1_start))
-        zone_1_end = int(raw.get('zone_1_end', self.zone_1_end))
+        if self._tariff_zone_1 is None or self._tariff_zone_2 is None:
+            raise RuntimeError(
+                '[TariffZones] tariff_zone_1 and tariff_zone_2 must be set '
+                'before generating prices'
+            )
 
-        # validate hours are integers in range [0, 23]
-        zone_1_start = self._validate_hour(zone_1_start, 'zone_1_start')
-        zone_1_end = self._validate_hour(zone_1_end, 'zone_1_end')
+        zone_1_start = self._zone_1_start
+        zone_1_end = self._zone_1_end
+
+        if zone_1_start == zone_1_end:
+            logger.warning(
+                'tariffZones: zone_1_start == zone_1_end (%d): zone 1 covers 0 hours',
+                zone_1_start
+            )
 
         now = datetime.datetime.now().astimezone(self.timezone)
-        # Align to start of current hour
         current_hour_start = now.replace(minute=0, second=0, microsecond=0)
 
         prices = {}
-        # produce next 48 hours
-        for rel_hour in range(0, 48):
+        for rel_hour in range(48):
             ts = current_hour_start + datetime.timedelta(hours=rel_hour)
             h = ts.hour
-            if zone_1_start <= zone_1_end:
-                is_day = (h >= zone_1_start and h < zone_1_end)
+            if zone_1_start < zone_1_end:
+                is_zone_1 = zone_1_start <= h < zone_1_end
+            elif zone_1_start > zone_1_end:
+                # wrap-around (e.g., zone_1_start=22, zone_1_end=6)
+                is_zone_1 = h >= zone_1_start or h < zone_1_end
             else:
-                # wrap-around (e.g., zone_1_start=20, zone_1_end=6)
-                is_day = not (h >= zone_1_end and h < zone_1_start)
+                # zone_1_start == zone_1_end: no zone 1 hours
+                is_zone_1 = False
 
-            prices[rel_hour] = tariff_zone_1 if is_day else tariff_zone_2
+            prices[rel_hour] = self._tariff_zone_1 if is_zone_1 else self._tariff_zone_2
 
         logger.debug('tariffZones: Generated %d hourly prices', len(prices))
         return prices
 
-    def _validate_hour(self, val: int, name: str) -> int:
+    @staticmethod
+    def _validate_hour(val, name: str) -> int:
         try:
             ival = int(val)
-        except Exception:
-            raise ValueError(f'[{name}] must be an integer between 0 and 23')
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f'[{name}] must be an integer between 0 and 23') from exc
         if ival < 0 or ival > 23:
             raise ValueError(f'[{name}] must be between 0 and 23 (got {ival})')
         return ival
+
+    @staticmethod
+    def _validate_price(val, name: str) -> float:
+        try:
+            fval = float(val)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f'[{name}] must be a positive number') from exc
+        if fval <= 0:
+            raise ValueError(f'[{name}] must be positive (got {fval})')
+        return fval
+
+    @property
+    def tariff_zone_1(self) -> float:
+        return self._tariff_zone_1
+
+    @tariff_zone_1.setter
+    def tariff_zone_1(self, value: float) -> None:
+        self._tariff_zone_1 = self._validate_price(value, 'tariff_zone_1')
+
+    @property
+    def tariff_zone_2(self) -> float:
+        return self._tariff_zone_2
+
+    @tariff_zone_2.setter
+    def tariff_zone_2(self, value: float) -> None:
+        self._tariff_zone_2 = self._validate_price(value, 'tariff_zone_2')
 
     @property
     def zone_1_start(self) -> int:
