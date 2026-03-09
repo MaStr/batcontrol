@@ -10,7 +10,7 @@ To integrate batcontrol with Home Assistant, use the following repository: [batc
 ## Prerequisites:
 
 1. A PV installation with a BYD Battery and a Fronius Gen24 inverter.
-2. An EPEX Spot based contract with hourly electricity pricing, like Awattar, Tibber etc. (Get a €50 bonus on sign-up to Tibber using this [link](https://invite.tibber.com/x8ci52nj).)
+2. A zone based pricing, like Octopus, or an EPEX Spot based contract with hourly electricity pricing, like Awattar, Tibber etc. (Get a €50 bonus on sign-up to Tibber using this [link](https://invite.tibber.com/x8ci52nj).)
 3. Customer login details to the inverter.
 
 **OR** use the MQTT inverter driver to integrate any battery/inverter system - see [MQTT Inverter Integration](#mqtt-inverter-integration) below.
