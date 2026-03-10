@@ -14,11 +14,11 @@ class InverterInterface(ABC):
 
     @abstractmethod
     def set_mode_avoid_discharge(self):
-        """ Set the inverter to allow discharge mode """
+        """ Set the inverter to avoid discharge mode """
 
     @abstractmethod
     def set_mode_allow_discharge(self):
-        """ Set the inverter to avoid discharge mode """
+        """ Set the inverter to allow discharge mode """
 
     @abstractmethod
     def set_mode_limit_battery_charge(self, limit_charge_rate: int):
