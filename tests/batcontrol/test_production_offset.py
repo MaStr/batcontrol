@@ -165,6 +165,37 @@ class TestProductionOffset:
                 assert batcontrol.last_production[1] == pytest.approx(1000.0)
                 assert batcontrol.last_production[2] == pytest.approx(1500.0)
 
+    def test_production_offset_api_set_valid(self, mock_config):
+        """Test setting production offset via API with a valid mid-range value"""
+        with patch('batcontrol.core.tariff_factory'), \
+             patch('batcontrol.core.inverter_factory'), \
+             patch('batcontrol.core.solar_factory'), \
+             patch('batcontrol.core.consumption_factory'):
+
+            batcontrol = Batcontrol(mock_config)
+
+            # Set a typical valid value (70% of production)
+            batcontrol.api_set_production_offset(0.7)
+
+            # Should be updated
+            assert batcontrol.production_offset_percent == pytest.approx(0.7)
+
+    def test_production_offset_api_set_invalid_negative(self, mock_config):
+        """Test setting production offset via API with an invalid negative value"""
+        with patch('batcontrol.core.tariff_factory'), \
+             patch('batcontrol.core.inverter_factory'), \
+             patch('batcontrol.core.solar_factory'), \
+             patch('batcontrol.core.consumption_factory'):
+
+            batcontrol = Batcontrol(mock_config)
+            original_value = batcontrol.production_offset_percent
+
+            # Try to set invalid negative value
+            batcontrol.api_set_production_offset(-0.5)
+
+            # Should not be updated
+            assert batcontrol.production_offset_percent == original_value
+
     def test_production_offset_api_set_invalid_too_high(self, mock_config):
         """Test setting production offset via API with invalid high value"""
         with patch('batcontrol.core.tariff_factory'), \

@@ -579,12 +579,35 @@ class Batcontrol:
             self.allow_discharging()
             return
 
-        # Apply bounds from config
-        effective_limit = limit_charge_rate
+        # Always enforce a non-negative limit
+        effective_limit = max(0, limit_charge_rate)
+
         if self.max_pv_charge_rate > 0:
+            # Guard against misconfigured min/max values
+            if (
+                self.min_pv_charge_rate > 0
+                and self.min_pv_charge_rate > self.max_pv_charge_rate
+            ):
+                logger.warning(
+                    'Configured min_pv_charge_rate (%d W) is greater than '
+                    'max_pv_charge_rate (%d W). Adjusting minimum to max.',
+                    self.min_pv_charge_rate,
+                    self.max_pv_charge_rate,
+                )
+                min_bound = self.max_pv_charge_rate
+            else:
+                min_bound = self.min_pv_charge_rate
+
+            # First cap to the configured maximum
             effective_limit = min(effective_limit, self.max_pv_charge_rate)
-        if self.min_pv_charge_rate > 0 and limit_charge_rate > 0:
-            effective_limit = max(effective_limit, self.min_pv_charge_rate)
+
+            # Then enforce the (possibly adjusted) minimum, without exceeding max
+            if min_bound > 0 and effective_limit > 0:
+                effective_limit = min(max(effective_limit, min_bound), self.max_pv_charge_rate)
+        else:
+            # No max configured (<= 0): only enforce minimum if both are positive
+            if self.min_pv_charge_rate > 0 and effective_limit > 0:
+                effective_limit = max(effective_limit, self.min_pv_charge_rate)
 
         logger.info('Mode: Limit Battery Charge Rate to %d W, discharge allowed', effective_limit)
         self.inverter.set_mode_limit_battery_charge(effective_limit)

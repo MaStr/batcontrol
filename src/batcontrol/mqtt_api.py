@@ -200,8 +200,7 @@ class MqttApi:
         if self.client.is_connected():
             self.client.publish(
                 self.base_topic + '/limit_battery_charge_rate',
-                limit,
-                retain=True
+                limit
             )
 
     def publish_production(
