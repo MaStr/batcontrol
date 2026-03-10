@@ -14,7 +14,7 @@ class TestEvcc(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures"""
         self.timezone = pytz.timezone('Europe/Berlin')
-        self.url = 'http://test.example.com/api/prices'
+        self.url = 'https://demo.evcc.io/api/tariff/grid'
 
     def test_hourly_price_to_15min_intervals(self):
         """Test that hourly prices are mapped to 15-min interval indices"""
@@ -365,16 +365,20 @@ class TestEvcc(unittest.TestCase):
         }
         evcc.store_raw_data(raw_data)
 
-        with patch('batcontrol.dynamictariff.evcc.datetime') as mock_datetime:
-            mock_now = self.timezone.localize(datetime.datetime(2024, 6, 20, 10, 0, 0))
-            mock_datetime.datetime.now.return_value = mock_now
-            mock_datetime.datetime.fromisoformat = datetime.datetime.fromisoformat
+        # get_prices() triggers refresh_data() which calls get_raw_data_from_provider()
+        # on the first invocation (next_update_ts == 0). Mock it to return the same
+        # pre-loaded data so no real network request is made.
+        with patch.object(evcc, 'get_raw_data_from_provider', return_value=raw_data):
+            with patch('batcontrol.dynamictariff.evcc.datetime') as mock_datetime:
+                mock_now = self.timezone.localize(datetime.datetime(2024, 6, 20, 10, 0, 0))
+                mock_datetime.datetime.now.return_value = mock_now
+                mock_datetime.datetime.fromisoformat = datetime.datetime.fromisoformat
 
-            with patch('batcontrol.dynamictariff.baseclass.datetime') as mock_base_datetime:
-                mock_base_datetime.datetime.now.return_value = mock_now
-                mock_base_datetime.timezone = datetime.timezone
+                with patch('batcontrol.dynamictariff.baseclass.datetime') as mock_base_datetime:
+                    mock_base_datetime.datetime.now.return_value = mock_now
+                    mock_base_datetime.timezone = datetime.timezone
 
-                prices = evcc.get_prices()
+                    prices = evcc.get_prices()
 
         # When target_resolution=60, baseclass averages 15-min prices to hourly
         # Average of 0.20, 0.22, 0.24, 0.26 = 0.23
