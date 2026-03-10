@@ -168,8 +168,7 @@ class TestModeLimitBatteryChargeRate:
     def test_limit_battery_charge_rate_min_exceeds_max(
         self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
         mock_config):
-        """Test that when min_pv_charge_rate > max_pv_charge_rate, limit is clamped to max"""
-        # Misconfigured: min (500) > max (3000) - wait, let's use min>max: min=4000, max=3000
+        """Test that when min_pv_charge_rate > max_pv_charge_rate, min is clamped to max at init"""
         mock_config['inverter']['min_pv_charge_rate'] = 4000
 
         # Setup mocks
@@ -183,8 +182,11 @@ class TestModeLimitBatteryChargeRate:
         mock_solar.return_value = MagicMock()
         mock_consumption.return_value = MagicMock()
 
-        # Create Batcontrol instance
+        # Create Batcontrol instance — misconfiguration is corrected at init
         bc = Batcontrol(mock_config)
+
+        # min_pv_charge_rate should have been clamped to max_pv_charge_rate at init
+        assert bc.min_pv_charge_rate == 3000
 
         # Set any positive limit - should be clamped to max_pv_charge_rate (3000)
         bc.limit_battery_charge_rate(1000)
