@@ -162,15 +162,8 @@ class TestProductionOffset:
                 # Check that production was offset correctly
                 # Note: production[0] is adjusted for elapsed time in current interval
                 # so we only check indices [1] and [2] for exact values
-
-            batcontrol = Batcontrol(mock_config)
-            original_value = batcontrol.production_offset_percent
-
-            # Try to set invalid value
-            batcontrol.api_set_production_offset(-0.5)
-
-            # Should not be updated
-            assert batcontrol.production_offset_percent == original_value
+                assert batcontrol.last_production[1] == pytest.approx(1000.0)
+                assert batcontrol.last_production[2] == pytest.approx(1500.0)
 
     def test_production_offset_api_set_invalid_too_high(self, mock_config):
         """Test setting production offset via API with invalid high value"""

@@ -795,6 +795,12 @@ class Batcontrol:
             elif mode == MODE_AVOID_DISCHARGING:
                 self.avoid_discharging()
             elif mode == MODE_LIMIT_BATTERY_CHARGE_RATE:
+                if self._limit_battery_charge_rate < 0:
+                    logger.warning(
+                        'API: Mode %d (limit battery charge rate) set but no valid '
+                        'limit configured. Set a limit via api_set_limit_battery_charge_rate '
+                        'first. Falling back to allow-discharging mode.',
+                        mode)
                 self.limit_battery_charge_rate(self._limit_battery_charge_rate)
             elif mode == MODE_ALLOW_DISCHARGING:
                 self.allow_discharging()
