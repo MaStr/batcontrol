@@ -1,19 +1,10 @@
 """Tests for core batcontrol functionality including MODE_LIMIT_BATTERY_CHARGE_RATE"""
 import pytest
-import sys
-import os
 from unittest.mock import MagicMock, patch
-
-# Add the src directory to Python path for testing
-sys.path.insert(0, os.path.join(
-    os.path.dirname(__file__), '..', '..', 'src'))
 
 from batcontrol.core import (
     Batcontrol,
-    MODE_ALLOW_DISCHARGING,
-    MODE_AVOID_DISCHARGING,
     MODE_LIMIT_BATTERY_CHARGE_RATE,
-    MODE_FORCE_CHARGING
 )
 
 
@@ -169,6 +160,39 @@ class TestModeLimitBatteryChargeRate:
 
         # Verify it was set to 0 (charging blocked)
         mock_inverter.set_mode_limit_battery_charge.assert_called_once_with(0)
+
+    @patch('batcontrol.core.tariff_factory.create_tarif_provider')
+    @patch('batcontrol.core.inverter_factory.create_inverter')
+    @patch('batcontrol.core.solar_factory.create_solar_provider')
+    @patch('batcontrol.core.consumption_factory.create_consumption')
+    def test_limit_battery_charge_rate_min_exceeds_max(
+        self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
+        mock_config):
+        """Test that when min_pv_charge_rate > max_pv_charge_rate, min is clamped to max at init"""
+        mock_config['inverter']['min_pv_charge_rate'] = 4000
+
+        # Setup mocks
+        mock_inverter = MagicMock()
+        mock_inverter.max_pv_charge_rate = 3000
+        mock_inverter.set_mode_limit_battery_charge = MagicMock()
+        mock_inverter.get_max_capacity = MagicMock(return_value=10000)
+        mock_inverter_factory.return_value = mock_inverter
+
+        mock_tariff.return_value = MagicMock()
+        mock_solar.return_value = MagicMock()
+        mock_consumption.return_value = MagicMock()
+
+        # Create Batcontrol instance — misconfiguration is corrected at init
+        bc = Batcontrol(mock_config)
+
+        # min_pv_charge_rate should have been clamped to max_pv_charge_rate at init
+        assert bc.min_pv_charge_rate == 3000
+
+        # Set any positive limit - should be clamped to max_pv_charge_rate (3000)
+        bc.limit_battery_charge_rate(1000)
+
+        # Verify effective limit does not exceed max_pv_charge_rate
+        mock_inverter.set_mode_limit_battery_charge.assert_called_once_with(3000)
 
     @patch('batcontrol.core.tariff_factory.create_tarif_provider')
     @patch('batcontrol.core.inverter_factory.create_inverter')

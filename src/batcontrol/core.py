@@ -149,9 +149,27 @@ class Batcontrol:
         self.inverter = inverter_factory.create_inverter(
             config['inverter'])
 
-        # Get PV charge rate limits from inverter config (with defaults)
-        self.max_pv_charge_rate = getattr(self.inverter, 'max_pv_charge_rate', 0)
+        # Get PV charge rate limits from inverter config (with defaults),
+        # falling back to inverter attribute for backward compatibility
+        self.max_pv_charge_rate = config['inverter'].get(
+            'max_pv_charge_rate',
+            getattr(self.inverter, 'max_pv_charge_rate', 0),
+        )
         self.min_pv_charge_rate = config['inverter'].get('min_pv_charge_rate', 0)
+
+        # Validate min/max PV charge rate configuration at startup
+        if (
+            self.max_pv_charge_rate > 0
+            and self.min_pv_charge_rate > 0
+            and self.min_pv_charge_rate > self.max_pv_charge_rate
+        ):
+            logger.warning(
+                'Configured min_pv_charge_rate (%d W) is greater than '
+                'max_pv_charge_rate (%d W). Adjusting minimum to max.',
+                self.min_pv_charge_rate,
+                self.max_pv_charge_rate,
+            )
+            self.min_pv_charge_rate = self.max_pv_charge_rate
 
         self.pvsettings = config['pvinstallations']
         self.fc_solar = solar_factory.create_solar_provider(
@@ -579,12 +597,19 @@ class Batcontrol:
             self.allow_discharging()
             return
 
-        # Apply bounds from config
-        effective_limit = limit_charge_rate
+        # Always enforce a non-negative limit
+        effective_limit = max(0, limit_charge_rate)
+
         if self.max_pv_charge_rate > 0:
+            # Cap to the configured maximum
             effective_limit = min(effective_limit, self.max_pv_charge_rate)
-        if self.min_pv_charge_rate > 0 and limit_charge_rate > 0:
-            effective_limit = max(effective_limit, self.min_pv_charge_rate)
+            # Enforce minimum (guaranteed <= max_pv_charge_rate from init validation)
+            if self.min_pv_charge_rate > 0 and effective_limit > 0:
+                effective_limit = max(effective_limit, self.min_pv_charge_rate)
+        else:
+            # No max configured (<= 0): only enforce minimum if both are positive
+            if self.min_pv_charge_rate > 0 and effective_limit > 0:
+                effective_limit = max(effective_limit, self.min_pv_charge_rate)
 
         logger.info('Mode: Limit Battery Charge Rate to %d W, discharge allowed', effective_limit)
         self.inverter.set_mode_limit_battery_charge(effective_limit)
