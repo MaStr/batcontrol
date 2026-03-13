@@ -217,8 +217,17 @@ class NextLogic(LogicInterface):
         already allows discharge — meaning no upcoming high-price slots
         require preserving battery energy.
 
+        The algorithm has two components that are combined (stricter wins):
+        - Price-based: reserve battery capacity for upcoming cheap-price PV
+          slots so they can be absorbed fully (primary driver). Requires
+          peak_shaving_price_limit to be configured; disabled when None.
+        - Time-based: spread remaining capacity over slots until
+          allow_full_battery_after (secondary constraint).
+
         Skipped when:
+        - price_limit is not configured (peak shaving disabled)
         - No production right now (nighttime)
+        - Currently in a cheap slot (price <= price_limit) — charge freely
         - Past the target hour (allow_full_battery_after)
         - Battery is in always_allow_discharge region (high SOC)
         - Force charge from grid is active (MODE -1)
@@ -227,8 +236,22 @@ class NextLogic(LogicInterface):
         Note: EVCC checks (charging, connected+pv mode) are handled in
               core.py, not here.
         """
+        price_limit = self.calculation_parameters.peak_shaving_price_limit
+
+        # price_limit not configured → peak shaving is disabled
+        if price_limit is None:
+            logger.debug('[PeakShaving] Skipped: price_limit not configured')
+            return settings
+
         # No production right now: skip calculation (avoid unnecessary work at night)
         if calc_input.production[0] <= 0:
+            return settings
+
+        # Currently in a cheap slot — charge battery freely
+        if calc_input.prices[0] <= price_limit:
+            logger.debug('[PeakShaving] Skipped: currently in cheap-price slot '
+                         '(price %.3f <= limit %.3f)',
+                         calc_input.prices[0], price_limit)
             return settings
 
         # After target hour: no limit
@@ -252,31 +275,110 @@ class NextLogic(LogicInterface):
                          'battery preserved for high-price hours')
             return settings
 
-        charge_limit = self._calculate_peak_shaving_charge_limit(
-            calc_input, calc_timestamp)
+        # Compute both limits, take stricter (lower non-negative value)
+        price_limit_w = self._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        time_limit_w = self._calculate_peak_shaving_charge_limit(calc_input, calc_timestamp)
 
-        if charge_limit < 0:
-            logger.debug('[PeakShaving] Evaluated: no limit needed (surplus within capacity)')
+        if price_limit_w < 0 and time_limit_w < 0:
+            logger.debug('[PeakShaving] Evaluated: no limit needed')
             return settings
 
-        if charge_limit >= 0:
-            # Apply PV charge rate limit
-            if settings.limit_battery_charge_rate < 0:
-                # No existing limit — apply peak shaving limit
-                settings.limit_battery_charge_rate = charge_limit
-            else:
-                # Keep the more restrictive limit
-                settings.limit_battery_charge_rate = min(
-                    settings.limit_battery_charge_rate, charge_limit)
+        if price_limit_w >= 0 and time_limit_w >= 0:
+            charge_limit = min(price_limit_w, time_limit_w)
+        elif price_limit_w >= 0:
+            charge_limit = price_limit_w
+        else:
+            charge_limit = time_limit_w
 
-            # Note: allow_discharge is already True here (checked above).
-            # MODE 8 requires allow_discharge=True to work correctly.
+        # Apply PV charge rate limit
+        if settings.limit_battery_charge_rate < 0:
+            # No existing limit — apply peak shaving limit
+            settings.limit_battery_charge_rate = charge_limit
+        else:
+            # Keep the more restrictive limit
+            settings.limit_battery_charge_rate = min(
+                settings.limit_battery_charge_rate, charge_limit)
 
-            logger.info('[PeakShaving] PV charge limit: %d W (battery full by %d:00)',
-                        settings.limit_battery_charge_rate,
-                        self.calculation_parameters.peak_shaving_allow_full_after)
+        # Note: allow_discharge is already True here (checked above).
+        # MODE 8 requires allow_discharge=True to work correctly.
+
+        logger.info('[PeakShaving] PV charge limit: %d W '
+                    '(price-based=%s W, time-based=%s W, full by %d:00)',
+                    settings.limit_battery_charge_rate,
+                    price_limit_w if price_limit_w >= 0 else 'off',
+                    time_limit_w if time_limit_w >= 0 else 'off',
+                    self.calculation_parameters.peak_shaving_allow_full_after)
 
         return settings
+
+    def _calculate_peak_shaving_charge_limit_price_based(
+            self, calc_input: CalculationInput) -> int:
+        """Reserve battery free capacity for upcoming cheap-price PV slots.
+
+        Finds upcoming slots where price <= peak_shaving_price_limit and
+        calculates a charge rate limit that keeps enough free capacity to
+        absorb the expected PV surplus during those cheap slots fully.
+
+        Algorithm:
+            1. Find upcoming cheap slots (price <= price_limit).
+            2. Sum PV surplus during cheap slots → target_reserve_wh.
+            3. additional_charging_allowed = free_capacity - target_reserve_wh
+            4. If additional_charging_allowed <= 0: block PV charging (return 0).
+            5. Spread additional_charging_allowed evenly over slots before
+               the cheap window starts.
+
+        Returns:
+            int: charge rate limit in W, or -1 if no limit needed.
+        """
+        price_limit = self.calculation_parameters.peak_shaving_price_limit
+        prices = calc_input.prices
+        interval_hours = self.interval_minutes / 60.0
+
+        # Find all cheap slots
+        cheap_slots = [i for i, p in enumerate(prices)
+                       if p is not None and p <= price_limit]
+        if not cheap_slots:
+            return -1  # No cheap slots ahead
+
+        first_cheap_slot = cheap_slots[0]
+        if first_cheap_slot == 0:
+            return -1  # Already in cheap slot (caller checks this too)
+
+        # Calculate expected PV surplus during cheap slots
+        total_cheap_surplus_wh = 0.0
+        for i in cheap_slots:
+            if i < len(calc_input.production) and i < len(calc_input.consumption):
+                surplus = float(calc_input.production[i]) - float(calc_input.consumption[i])
+                if surplus > 0:
+                    total_cheap_surplus_wh += surplus * interval_hours
+
+        if total_cheap_surplus_wh <= 0:
+            return -1  # No PV surplus expected during cheap slots
+
+        # Reserve capacity (capped at full battery capacity)
+        target_reserve_wh = min(total_cheap_surplus_wh, self.common.max_capacity)
+
+        # How much more can we charge before the cheap window starts?
+        additional_charging_allowed = calc_input.free_capacity - target_reserve_wh
+
+        if additional_charging_allowed <= 0:
+            logger.debug(
+                '[PeakShaving] Price-based: battery full relative to cheap-window '
+                'reserve (free=%.0f Wh, reserve=%.0f Wh), blocking PV charge',
+                calc_input.free_capacity, target_reserve_wh)
+            return 0
+
+        # Spread allowed charging evenly over slots before cheap window
+        wh_per_slot = additional_charging_allowed / first_cheap_slot
+        charge_rate_w = wh_per_slot / interval_hours  # Convert Wh/slot → W
+
+        logger.debug(
+            '[PeakShaving] Price-based: cheap window at slot %d, '
+            'reserve=%.0f Wh, allowed=%.0f Wh → limit=%d W',
+            first_cheap_slot, target_reserve_wh, additional_charging_allowed,
+            int(charge_rate_w))
+
+        return int(charge_rate_w)
 
     def _calculate_peak_shaving_charge_limit(self, calc_input: CalculationInput,
                                              calc_timestamp: datetime.datetime) -> int:

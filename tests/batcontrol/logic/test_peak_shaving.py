@@ -210,6 +210,7 @@ class TestPeakShavingDecision(unittest.TestCase):
             max_capacity=self.max_capacity,
             peak_shaving_enabled=True,
             peak_shaving_allow_full_after=14,
+            peak_shaving_price_limit=0.05,  # required; tests use high prices so no cheap slots
         )
         self.logic.set_calculation_parameters(self.params)
 
@@ -224,7 +225,8 @@ class TestPeakShavingDecision(unittest.TestCase):
 
     def _make_input(self, production, consumption, stored_energy,
                     free_capacity):
-        prices = np.zeros(len(production))
+        # Use high prices (10.0) so no slot is "cheap" — only time-based limit applies.
+        prices = np.ones(len(production)) * 10.0
         return CalculationInput(
             production=np.array(production, dtype=float),
             consumption=np.array(consumption, dtype=float),
@@ -329,6 +331,43 @@ class TestPeakShavingDecision(unittest.TestCase):
         result = self.logic._apply_peak_shaving(settings, calc_input, ts)
         self.assertEqual(result.limit_battery_charge_rate, -1)
         self.assertFalse(result.allow_discharge)
+
+    def test_price_limit_none_disables_peak_shaving(self):
+        """price_limit=None → peak shaving disabled entirely."""
+        params = CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            peak_shaving_enabled=True,
+            peak_shaving_allow_full_after=14,
+            peak_shaving_price_limit=None,
+        )
+        self.logic.set_calculation_parameters(params)
+        settings = self._make_settings()
+        calc_input = self._make_input([5000] * 8, [500] * 8,
+                                      stored_energy=5000, free_capacity=5000)
+        ts = datetime.datetime(2025, 6, 20, 8, 0, 0,
+                               tzinfo=datetime.timezone.utc)
+        result = self.logic._apply_peak_shaving(settings, calc_input, ts)
+        self.assertEqual(result.limit_battery_charge_rate, -1)
+
+    def test_currently_in_cheap_slot_no_limit(self):
+        """Current slot is cheap (price <= price_limit) → charge freely."""
+        settings = self._make_settings()
+        prices = np.zeros(8)  # all slots cheap (price=0 <= 0.05)
+        calc_input = CalculationInput(
+            production=np.array([5000] * 8, dtype=float),
+            consumption=np.array([500] * 8, dtype=float),
+            prices=prices,
+            stored_energy=5000,
+            stored_usable_energy=4500,
+            free_capacity=5000,
+        )
+        ts = datetime.datetime(2025, 6, 20, 8, 0, 0,
+                               tzinfo=datetime.timezone.utc)
+        result = self.logic._apply_peak_shaving(settings, calc_input, ts)
+        self.assertEqual(result.limit_battery_charge_rate, -1)
 
 
 class TestPeakShavingDisabled(unittest.TestCase):
@@ -471,6 +510,200 @@ class TestCalculationParametersPeakShaving(unittest.TestCase):
                 peak_shaving_allow_full_after=-1,
             )
 
+    def test_price_limit_default_is_none(self):
+        """peak_shaving_price_limit defaults to None."""
+        params = CalculationParameters(
+            max_charging_from_grid_limit=0.8,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.1,
+            max_capacity=10000,
+        )
+        self.assertIsNone(params.peak_shaving_price_limit)
 
-if __name__ == '__main__':
-    unittest.main()
+    def test_price_limit_explicit_value(self):
+        """Explicit price_limit is stored."""
+        params = CalculationParameters(
+            max_charging_from_grid_limit=0.8,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.1,
+            max_capacity=10000,
+            peak_shaving_price_limit=0.05,
+        )
+        self.assertEqual(params.peak_shaving_price_limit, 0.05)
+
+    def test_price_limit_zero_allowed(self):
+        """price_limit=0 is valid (only free/negative prices count as cheap)."""
+        params = CalculationParameters(
+            max_charging_from_grid_limit=0.8,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.1,
+            max_capacity=10000,
+            peak_shaving_price_limit=0.0,
+        )
+        self.assertEqual(params.peak_shaving_price_limit, 0.0)
+
+    def test_price_limit_negative_raises(self):
+        """Negative price_limit raises ValueError."""
+        with self.assertRaises(ValueError):
+            CalculationParameters(
+                max_charging_from_grid_limit=0.8,
+                min_price_difference=0.05,
+                min_price_difference_rel=0.1,
+                max_capacity=10000,
+                peak_shaving_price_limit=-0.01,
+            )
+
+
+class TestPeakShavingPriceBased(unittest.TestCase):
+    """Tests for _calculate_peak_shaving_charge_limit_price_based."""
+
+    def setUp(self):
+        self.max_capacity = 10000
+        self.interval_minutes = 60
+        self.logic = NextLogic(timezone=datetime.timezone.utc,
+                               interval_minutes=self.interval_minutes)
+        self.common = CommonLogic.get_instance(
+            charge_rate_multiplier=1.1,
+            always_allow_discharge_limit=0.90,
+            max_capacity=self.max_capacity,
+        )
+        self.params = CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            peak_shaving_enabled=True,
+            peak_shaving_allow_full_after=14,
+            peak_shaving_price_limit=0.05,
+        )
+        self.logic.set_calculation_parameters(self.params)
+
+    def _make_input(self, production, prices, free_capacity, consumption=None):
+        """Helper to build CalculationInput for price-based tests."""
+        n = len(production)
+        if consumption is None:
+            consumption = [0.0] * n
+        return CalculationInput(
+            production=np.array(production, dtype=float),
+            consumption=np.array(consumption, dtype=float),
+            prices=np.array(prices, dtype=float),
+            stored_energy=self.max_capacity - free_capacity,
+            stored_usable_energy=(self.max_capacity - free_capacity) * 0.95,
+            free_capacity=free_capacity,
+        )
+
+    def test_surplus_exceeds_free_capacity_blocks_charging(self):
+        """
+        Cheap slots at index 5 and 6 (price=0 <= 0.05).
+        Surplus in cheap slots: 3000+3000 = 6000 Wh (interval=1h, consumption=0).
+        target_reserve = min(6000, 10000) = 6000 Wh.
+        free_capacity = 4000 Wh.
+        additional_allowed = 4000 - 6000 = -2000 → block charging (return 0).
+        """
+        prices = [10, 10, 10, 8, 3, 0, 0, 1]
+        production = [500, 500, 500, 500, 500, 3000, 3000, 500]
+        calc_input = self._make_input(production, prices, free_capacity=4000)
+        result = self.logic._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        self.assertEqual(result, 0)
+
+    def test_partial_reserve_spread_over_slots(self):
+        """
+        2 cheap slots with 3000 Wh PV surplus each = 6000 Wh total.
+        Battery has 8000 Wh free, target_reserve = min(6000, 10000) = 6000 Wh.
+        additional_allowed = 8000 - 6000 = 2000 Wh.
+        first_cheap_slot = 4 (4 slots before cheap window).
+        wh_per_slot = 2000 / 4 = 500 Wh → rate = 500 W (60 min intervals).
+        """
+        prices = [10, 10, 10, 10, 0, 0, 1, 2]
+        # cheap surplus slots 4,5: 3000W each, interval=1h → 3000 Wh each
+        production = [500, 500, 500, 500, 3000, 3000, 500, 500]
+        calc_input = self._make_input(production, prices, free_capacity=8000)
+        result = self.logic._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        self.assertEqual(result, 500)
+
+    def test_no_cheap_slots_returns_minus_one(self):
+        """No cheap slots in prices → -1."""
+        prices = [10, 10, 10, 10, 10, 10]
+        production = [3000] * 6
+        calc_input = self._make_input(production, prices, free_capacity=5000)
+        result = self.logic._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        self.assertEqual(result, -1)
+
+    def test_currently_in_cheap_slot_returns_minus_one(self):
+        """first_cheap_slot = 0 (current slot is cheap) → -1."""
+        prices = [0, 0, 10, 10]
+        production = [5000, 5000, 500, 500]
+        calc_input = self._make_input(production, prices, free_capacity=5000)
+        result = self.logic._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        self.assertEqual(result, -1)
+
+    def test_zero_pv_surplus_in_cheap_slots_returns_minus_one(self):
+        """Cheap slots have no PV surplus (consumption >= production) → -1."""
+        prices = [10, 10, 0, 0]
+        production = [500, 500, 200, 200]
+        consumption = [500, 500, 300, 300]  # net = 0 or negative in cheap slots
+        calc_input = self._make_input(production, prices, free_capacity=5000,
+                                      consumption=consumption)
+        result = self.logic._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        self.assertEqual(result, -1)
+
+    def test_free_capacity_well_above_reserve_gives_rate(self):
+        """
+        cheap surplus = 1000 Wh, target_reserve = 1000 Wh.
+        free_capacity = 6000 Wh → additional_allowed = 5000 Wh.
+        first_cheap_slot = 5 → wh_per_slot = 1000 W.
+        """
+        prices = [10, 10, 10, 10, 10, 0, 10]
+        production = [500, 500, 500, 500, 500, 1000, 500]
+        calc_input = self._make_input(production, prices, free_capacity=6000)
+        result = self.logic._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        self.assertEqual(result, 1000)
+
+    def test_consumption_reduces_cheap_surplus(self):
+        """
+        Cheap slot: production=5000W, consumption=3000W → surplus=2000 Wh.
+        target_reserve = 2000, free=5000 → additional=3000 Wh.
+        first_cheap_slot=2 → rate = 3000/2 = 1500 W.
+        """
+        prices = [10, 10, 0, 10]
+        production = [500, 500, 5000, 500]
+        consumption = [200, 200, 3000, 200]
+        calc_input = self._make_input(production, prices, free_capacity=5000,
+                                      consumption=consumption)
+        result = self.logic._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        self.assertEqual(result, 1500)
+
+    def test_combine_price_and_time_limits_stricter_wins(self):
+        """
+        Both limits active: time-based and price-based give different rates.
+        The stricter (lower) limit must be applied.
+        Setup at 08:00, target 14:00 (6 slots remaining).
+        High prices except slot 4 (cheap).
+        price-based: cheap surplus=4000Wh at 4, free=3000 → allowed=reserved-capped
+        Just check final result <= both individual limits.
+        """
+        logic = NextLogic(timezone=datetime.timezone.utc, interval_minutes=60)
+        logic.set_calculation_parameters(self.params)
+
+        ts = datetime.datetime(2025, 6, 20, 8, 0, 0, tzinfo=datetime.timezone.utc)
+        # prices: slots 0-3 high, slot 4 cheap, slots 5-7 high again
+        prices = np.array([10, 10, 10, 10, 0, 10, 10, 10], dtype=float)
+        production = np.array([500, 500, 500, 500, 5000, 5000, 500, 500], dtype=float)
+        calc_input = CalculationInput(
+            production=production,
+            consumption=np.ones(8) * 500,
+            prices=prices,
+            stored_energy=7000,
+            stored_usable_energy=6500,
+            free_capacity=3000,
+        )
+        settings = InverterControlSettings(
+            allow_discharge=True, charge_from_grid=False,
+            charge_rate=0, limit_battery_charge_rate=-1)
+        result = logic._apply_peak_shaving(settings, calc_input, ts)
+
+        # Both limits should be considered; combined must be <= each individually
+        price_lim = logic._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        time_lim = logic._calculate_peak_shaving_charge_limit(calc_input, ts)
+        expected = min(x for x in [price_lim, time_lim] if x >= 0)
+        self.assertEqual(result.limit_battery_charge_rate, expected)
