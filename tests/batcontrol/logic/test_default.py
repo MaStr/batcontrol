@@ -60,7 +60,7 @@ class TestDefaultLogic(unittest.TestCase):
         calc_input = CalculationInput(
             consumption=consumption,
             production=production,
-            prices={0: 0.25, 1: 0.30, 2: 0.35},  # Example prices in € per kWh
+            prices={0: 0.25, 1: 0.30, 2: 0.35},  # Example prices in EUR per kWh
             stored_energy=stored_energy,
             stored_usable_energy=stored_usable_energy,
             free_capacity=free_capacity,
