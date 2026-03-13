@@ -20,6 +20,16 @@ class CalculationParameters:
     min_price_difference: float
     min_price_difference_rel: float
     max_capacity: float # Maximum capacity of the battery in Wh (excludes MAX_SOC)
+    # Peak shaving parameters
+    peak_shaving_enabled: bool = False
+    peak_shaving_allow_full_after: int = 14  # Hour (0-23)
+
+    def __post_init__(self):
+        if not 0 <= self.peak_shaving_allow_full_after <= 23:
+            raise ValueError(
+                f"peak_shaving_allow_full_after must be 0-23, "
+                f"got {self.peak_shaving_allow_full_after}"
+            )
 
 @dataclass
 class CalculationOutput:

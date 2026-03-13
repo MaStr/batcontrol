@@ -444,6 +444,38 @@ class MqttApi:
                 f'{production_offset:.3f}'
             )
 
+    def publish_peak_shaving_enabled(self, enabled: bool) -> None:
+        """ Publish peak shaving enabled status to MQTT
+            /peak_shaving/enabled
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/peak_shaving/enabled',
+                str(enabled).lower(),
+                retain=True
+            )
+
+    def publish_peak_shaving_allow_full_after(self, hour: int) -> None:
+        """ Publish peak shaving target hour to MQTT
+            /peak_shaving/allow_full_battery_after
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/peak_shaving/allow_full_battery_after',
+                str(hour),
+                retain=True
+            )
+
+    def publish_peak_shaving_charge_limit(self, charge_limit: int) -> None:
+        """ Publish current peak shaving charge limit to MQTT
+            /peak_shaving/charge_limit
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/peak_shaving/charge_limit',
+                str(charge_limit)
+            )
+
     # For depended APIs like the Fronius Inverter classes, which is not
     # directly batcontrol.
     def generic_publish(self, topic: str, value: str) -> None:
@@ -539,6 +571,41 @@ class MqttApi:
             max_value=2.0,
             step_value=0.01,
             initial_value=1.0)
+
+        # peak shaving
+        self.publish_mqtt_discovery_message(
+            "Peak Shaving Enabled",
+            "batcontrol_peak_shaving_enabled",
+            "switch",
+            None,
+            None,
+            self.base_topic + "/peak_shaving/enabled",
+            self.base_topic + "/peak_shaving/enabled/set",
+            entity_category="config",
+            value_template="{% if value == 'true' %}ON{% else %}OFF{% endif %}",
+            command_template="{% if value == 'ON' %}true{% else %}false{% endif %}")
+
+        self.publish_mqtt_discovery_message(
+            "Peak Shaving Allow Full After",
+            "batcontrol_peak_shaving_allow_full_after",
+            "number",
+            None,
+            "h",
+            self.base_topic + "/peak_shaving/allow_full_battery_after",
+            self.base_topic + "/peak_shaving/allow_full_battery_after/set",
+            entity_category="config",
+            min_value=0,
+            max_value=23,
+            step_value=1,
+            initial_value=14)
+
+        self.publish_mqtt_discovery_message(
+            "Peak Shaving Charge Limit",
+            "batcontrol_peak_shaving_charge_limit",
+            "sensor",
+            "power",
+            "W",
+            self.base_topic + "/peak_shaving/charge_limit")
 
         # sensors
         self.publish_mqtt_discovery_message(
