@@ -126,6 +126,13 @@ def evcc_ev_expects_pv_surplus(self) -> bool:
 
 **`shutdown`:** Unsubscribe from mode and connected topics.
 
+**EVCC offline reset:** When EVCC goes offline (status message received), mode and connected state are reset to prevent stale values:
+```python
+for root in list(self.evcc_loadpoint_mode.keys()):
+    self.evcc_loadpoint_mode[root] = None
+    self.evcc_loadpoint_connected[root] = False
+```
+
 ### 2.4 Backward Compatibility
 
 - Topics not ending in `/charging`: warning logged, no mode/connected sub, existing behavior unchanged
@@ -254,14 +261,23 @@ return inverter_control_settings
 
 **`_apply_peak_shaving()`:**
 
+Peak shaving uses MODE 8 (`limit_battery_charge_rate` with `allow_discharge=True`). It is only applied when the main logic already allows discharge — meaning no upcoming high-price slots require preserving battery energy. This is the **price-based skip condition**: when the main logic set `allow_discharge=False`, the battery is being held for profitable future slots, and PV charging should not be throttled.
+
 ```python
 def _apply_peak_shaving(self, settings, calc_input, calc_timestamp):
     """Limit PV charge rate to spread battery charging until target hour.
 
+    Peak shaving uses MODE 8 (limit_battery_charge_rate with
+    allow_discharge=True). It is only applied when the main logic
+    already allows discharge — meaning no upcoming high-price slots
+    require preserving battery energy.
+
     Skipped when:
+    - No production right now (nighttime)
     - Past the target hour (allow_full_battery_after)
     - Battery is in always_allow_discharge region (high SOC)
     - Force charge from grid is active (MODE -1)
+    - Discharge not allowed (battery preserved for high-price hours)
 
     Note: EVCC checks (charging, connected+pv mode) are handled in core.py, not here.
     """
@@ -284,6 +300,12 @@ def _apply_peak_shaving(self, settings, calc_input, calc_timestamp):
                        'grid charging takes priority')
         return settings
 
+    # Battery preserved for high-price hours — don't limit PV charging
+    if not settings.allow_discharge:
+        logger.debug('[PeakShaving] Skipped: discharge not allowed, '
+                     'battery preserved for high-price hours')
+        return settings
+
     charge_limit = self._calculate_peak_shaving_charge_limit(
         calc_input, calc_timestamp)
 
@@ -296,6 +318,9 @@ def _apply_peak_shaving(self, settings, calc_input, calc_timestamp):
             # Keep the more restrictive limit
             settings.limit_battery_charge_rate = min(
                 settings.limit_battery_charge_rate, charge_limit)
+
+        # Note: allow_discharge is already True here (checked above).
+        # MODE 8 requires allow_discharge=True to work correctly.
 
         logger.info('[PeakShaving] PV charge limit: %d W (battery full by %d:00)',
                     settings.limit_battery_charge_rate,
@@ -319,6 +344,13 @@ class CalculationParameters:
     # Peak shaving parameters
     peak_shaving_enabled: bool = False
     peak_shaving_allow_full_after: int = 14  # Hour (0-23)
+
+    def __post_init__(self):
+        if not 0 <= self.peak_shaving_allow_full_after <= 23:
+            raise ValueError(
+                f"peak_shaving_allow_full_after must be 0-23, "
+                f"got {self.peak_shaving_allow_full_after}"
+            )
 ```
 
 **No changes needed to `CalculationInput`** — the existing fields (`production`, `consumption`, `free_capacity`, `stored_energy`) provide all data the algorithm needs.
@@ -332,17 +364,29 @@ The factory gains a new type `next`:
 ```python
 @staticmethod
 def create_logic(config: dict, timezone) -> LogicInterface:
-    request_type = config.get('type', 'default').lower()
+    battery_control = config.get('battery_control', {})
+    request_type = battery_control.get('type', 'default').lower()
     interval_minutes = config.get('time_resolution_minutes', 60)
 
     if request_type == 'default':
         logic = DefaultLogic(timezone, interval_minutes=interval_minutes)
-        # ... existing expert tuning ...
     elif request_type == 'next':
         logic = NextLogic(timezone, interval_minutes=interval_minutes)
-        # ... same expert tuning as default ...
     else:
-        raise RuntimeError(f'[Logic] Unknown logic type {config["type"]}')
+        raise RuntimeError(f'[Logic] Unknown logic type {request_type}')
+
+    # Apply expert tuning attributes (shared between default and next)
+    if config.get('battery_control_expert', None) is not None:
+        battery_control_expert = config.get('battery_control_expert', {})
+        attribute_list = [
+            'soften_price_difference_on_charging',
+            'soften_price_difference_on_charging_factor',
+            'round_price_digits',
+            'charge_rate_multiplier',
+        ]
+        for attribute in attribute_list:
+            if attribute in battery_control_expert:
+                setattr(logic, attribute, battery_control_expert[attribute])
     return logic
 ```
 
@@ -418,7 +462,9 @@ Home Assistant discovery:
 - `peak_shaving/allow_full_battery_after` → number entity (min: 0, max: 23, step: 1)
 - `peak_shaving/charge_limit` → sensor entity (unit: W)
 
-QoS: 1 for all topics (consistent with existing MQTT API).
+QoS: default (0) for all topics (consistent with existing MQTT API).
+
+`charge_limit` is only published when peak shaving is enabled, to avoid unnecessary MQTT traffic.
 
 ---
 
@@ -439,6 +485,7 @@ QoS: 1 for all topics (consistent with existing MQTT API).
 - `peak_shaving_enabled = False` → no change to settings
 - Current production = 0 (nighttime) → peak shaving skipped
 - `charge_from_grid = True` → peak shaving skipped, warning logged
+- `allow_discharge = False` (battery preserved for high-price hours) → peak shaving skipped
 - Battery in always_allow_discharge region → peak shaving skipped
 - Before target hour, limit calculated → `limit_battery_charge_rate` set
 - After target hour → no change
@@ -458,7 +505,14 @@ QoS: 1 for all topics (consistent with existing MQTT API).
 - Multi-loadpoint: one connected+pv is enough to return True
 - Mode change from pv to now → `evcc_ev_expects_pv_surplus` changes to False
 
-### 7.3 Config Tests
+### 7.3 Core EVCC Guard Tests (`tests/batcontrol/test_core.py`)
+
+- EVCC actively charging + charge limit active → limit cleared to -1
+- EV connected in PV mode + charge limit active → limit cleared to -1
+- EVCC not charging and no PV mode → charge limit preserved
+- No charge limit active (-1) + EVCC charging → no change (stays -1)
+
+### 7.4 Config Tests
 
 - `type: next` → creates `NextLogic` instance
 - `type: default` → creates `DefaultLogic` instance (unchanged)
@@ -494,7 +548,8 @@ QoS: 1 for all topics (consistent with existing MQTT API).
 | `src/batcontrol/mqtt_api.py` | Peak shaving MQTT topics + HA discovery |
 | `tests/batcontrol/logic/test_peak_shaving.py` | New — algorithm + decision tests |
 | `tests/batcontrol/test_evcc_mode.py` | New — mode/connected topic tests |
-| `docs/peak_shaving.md` | New — feature documentation |
+| `tests/batcontrol/test_core.py` | Add EVCC peak shaving guard tests |
+| `docs/WIKI_peak_shaving.md` | New — feature documentation |
 
 **Not modified:** `default.py` (untouched — peak shaving is in `next.py`)
 
@@ -513,6 +568,8 @@ QoS: 1 for all topics (consistent with existing MQTT API).
 5. **High SOC handling:** When battery is in `always_allow_discharge` region, peak shaving is skipped entirely. This avoids toggling at near-full SOC.
 
 6. **Algorithm uses net PV surplus:** The charge limit calculation uses `production - consumption` (positive only), not raw production. This prevents over-throttling when household consumption absorbs most of the PV.
+
+7. **Price-based skip (discharge not allowed):** When the main logic set `allow_discharge=False`, the battery is being preserved for upcoming high-price slots. In this case peak shaving is skipped — the battery needs to charge from PV as fast as possible. This also means `_apply_peak_shaving` does not need to force `allow_discharge=True`; it only applies when discharge is already allowed.
 
 ## 11. Known Limitations (v1)
 

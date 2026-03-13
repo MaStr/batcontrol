@@ -569,7 +569,8 @@ class Batcontrol:
                 inverter_settings.limit_battery_charge_rate = -1
 
         # Publish peak shaving charge limit (after EVCC guard may have cleared it)
-        if self.mqtt_api is not None:
+        peak_shaving_enabled = peak_shaving_config.get('enabled', False)
+        if self.mqtt_api is not None and peak_shaving_enabled:
             self.mqtt_api.publish_peak_shaving_charge_limit(
                 inverter_settings.limit_battery_charge_rate)
 
