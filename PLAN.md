@@ -1,14 +1,14 @@
-# Peak Shaving Feature — Implementation Plan
+# Peak Shaving Feature - Implementation Plan
 
 ## Overview
 
 Add peak shaving to batcontrol: manage PV battery charging rate so the battery fills up gradually, reaching full capacity by a target hour (`allow_full_battery_after`). This prevents the battery from being full too early in the day.
 
-**Problem:** All PV systems in the country produce peak power around midday. Most batteries are full by then, causing excess PV to be fed into the grid at a time when grid prices are lowest and — for newer installations — feed-in may not be compensated at all. Peak shaving spreads battery charging over time so the system absorbs as much solar energy as possible into the battery, rather than feeding it into the grid during peak hours.
+**Problem:** All PV systems in the country produce peak power around midday. Most batteries are full by then, causing excess PV to be fed into the grid at a time when grid prices are lowest and - for newer installations - feed-in may not be compensated at all. Peak shaving spreads battery charging over time so the system absorbs as much solar energy as possible into the battery, rather than feeding it into the grid during peak hours.
 
 **EVCC interaction:**
-- When an EV is actively charging (`charging=true`), peak shaving is disabled — the EV consumes the excess PV.
-- When an EV is connected and the loadpoint mode is `pv`, peak shaving is also disabled — EVCC+EV will naturally absorb excessive PV energy once the surplus threshold is reached.
+- When an EV is actively charging (`charging=true`), peak shaving is disabled - the EV consumes the excess PV.
+- When an EV is connected and the loadpoint mode is `pv`, peak shaving is also disabled - EVCC+EV will naturally absorb excessive PV energy once the surplus threshold is reached.
 - If the EV disconnects or the mode changes away from `pv`, peak shaving is re-enabled.
 
 Uses the existing **MODE 8 (limit_battery_charge_rate)** to throttle PV charging.
@@ -24,20 +24,27 @@ Uses the existing **MODE 8 (limit_battery_charge_rate)** to throttle PV charging
 ```yaml
 peak_shaving:
   enabled: false
-  allow_full_battery_after: 14   # Hour (0-23) — battery should be full by this hour
-  price_limit: 0.05              # Euro/kWh — keep free capacity for slots at or below this price
+  mode: combined               # 'time' | 'price' | 'combined'
+  allow_full_battery_after: 14   # Hour (0-23) - battery should be full by this hour
+  price_limit: 0.05              # Euro/kWh - keep free capacity for slots at or below this price
 ```
 
-**`allow_full_battery_after`** — Target hour for the battery to be full:
+**`mode`** - selects which algorithm components are active:
+- **`time`** - time-based only: spread free capacity evenly until `allow_full_battery_after`. `price_limit` is not required and is ignored.
+- **`price`** - price-based only: reserve capacity for cheap-price PV slots. Requires `price_limit`.
+- **`combined`** (default) - both components active; stricter limit wins. Requires `price_limit`.
+
+**`allow_full_battery_after`** - Target hour for the battery to be full:
 - **Before this hour:** PV charge rate is limited to spread charging evenly. The battery fills gradually instead of reaching 100% early and overflowing PV to grid.
 - **At/after this hour:** No PV charge limit. Battery is allowed to be 100% full. PV overflow to grid is acceptable (e.g., EV arrives home and the charger absorbs excess).
 - **During EV charging or EV connected in PV mode:** Peak shaving disabled entirely.
 
-**`price_limit`** (optional) — Keep free battery capacity reserved for upcoming cheap-price time slots:
+**`price_limit`** (optional for `mode: time`, required for `price`/`combined`) - Keep free battery capacity reserved for upcoming cheap-price time slots:
 - When set, the algorithm identifies upcoming slots where `price <= price_limit` and reserves enough free capacity to absorb the full PV surplus during those cheap hours.
-- **During a cheap slot** (`price[0] <= price_limit`): No charge limit — absorb as much PV as possible.
-- **When `price_limit` is not set (default):** Peak shaving is **disabled entirely**. This means peak shaving only activates when a `price_limit` is explicitly configured, making the price-based algorithm the primary enabler.
-- When both `price_limit` and `allow_full_battery_after` are configured, the stricter limit ( lower W) wins.
+- **During a cheap slot** and surplus > free capacity: charging is spread evenly over the remaining cheap slots.
+- **During a cheap slot** and surplus <= free capacity: no limit - absorb freely.
+- Accepts any numeric value including -1 (which disables cheap-slot detection since no price <= -1); `None` disables the price component.
+- When both `price_limit` and `allow_full_battery_after` are configured (mode `combined`), the stricter limit wins.
 
 ### 1.2 Logic Type Selection
 
@@ -50,23 +57,23 @@ The `type: next` logic includes all existing `DefaultLogic` behavior plus peak s
 
 ---
 
-## 2. EVCC Integration — Loadpoint Mode & Connected State
+## 2. EVCC Integration - Loadpoint Mode & Connected State
 
 ### 2.1 Approach
 
 Peak shaving is disabled when **any** of the following EVCC conditions are true:
-1. **`charging = true`** — EV is actively charging (already tracked)
-2. **`connected = true` AND `mode = pv`** — EV is plugged in and waiting for PV surplus
+1. **`charging = true`** - EV is actively charging (already tracked)
+2. **`connected = true` AND `mode = pv`** - EV is plugged in and waiting for PV surplus
 
 The EVCC check is handled in `core.py`, **not** in the logic layer. EVCC is an external integration concern, same pattern as `discharge_blocked`.
 
-### 2.2 New EVCC Topics — Derived from `loadpoint_topic`
+### 2.2 New EVCC Topics - Derived from `loadpoint_topic`
 
 The `mode` and `connected` topics are derived from the existing `loadpoint_topic` config by stripping `/charging` and appending the relevant suffix:
 
 ```
-evcc/loadpoints/1/charging   → evcc/loadpoints/1/mode
-                             → evcc/loadpoints/1/connected
+evcc/loadpoints/1/charging   -> evcc/loadpoints/1/mode
+                             -> evcc/loadpoints/1/connected
 ```
 
 Topics not ending in `/charging`: log warning, skip mode/connected subscription.
@@ -75,8 +82,8 @@ Topics not ending in `/charging`: log warning, skip mode/connected subscription.
 
 **New state:**
 ```python
-self.evcc_loadpoint_mode = {}       # topic_root → mode string ("pv", "now", "minpv", "off")
-self.evcc_loadpoint_connected = {}  # topic_root → bool
+self.evcc_loadpoint_mode = {}       # topic_root -> mode string ("pv", "now", "minpv", "off")
+self.evcc_loadpoint_connected = {}  # topic_root -> bool
 self.list_topics_mode = []          # derived mode topics
 self.list_topics_connected = []     # derived connected topics
 ```
@@ -106,7 +113,7 @@ def handle_mode_message(self, message):
     mode = message.payload.decode('utf-8').strip().lower()
     old_mode = self.evcc_loadpoint_mode.get(root)
     if old_mode != mode:
-        logger.info('Loadpoint %s mode changed: %s → %s', root, old_mode, mode)
+        logger.info('Loadpoint %s mode changed: %s -> %s', root, old_mode, mode)
         self.evcc_loadpoint_mode[root] = mode
 
 def handle_connected_message(self, message):
@@ -148,7 +155,7 @@ for root in list(self.evcc_loadpoint_mode.keys()):
 
 ---
 
-## 3. New Logic Class — `NextLogic`
+## 3. New Logic Class - `NextLogic`
 
 ### 3.1 Architecture
 
@@ -183,7 +190,7 @@ else:
 
 When `price_limit` is not configured: this component returns -1 (no limit), effectively **disabling peak shaving entirely** since both components must be configured for any limit to apply.
 
-When the current slot is cheap (`prices[0] <= price_limit`): no limit — absorb as much PV as possible.
+When the current slot is cheap (`prices[0] <= price_limit`): no limit - absorb as much PV as possible.
 
 #### Component 2: Time-Based (Secondary)
 
@@ -195,14 +202,14 @@ free_capacity = battery free capacity in Wh
 pv_surplus = sum of max(production - consumption, 0) for remaining slots (Wh)
 
 if pv_surplus > free_capacity:
-    charge_limit = free_capacity / slots_remaining  (Wh per slot → W)
+    charge_limit = free_capacity / slots_remaining  (Wh per slot -> W)
 ```
 
 #### Combining Both Limits
 
 Both limits are computed independently. The final limit is `min(price_limit_w, time_limit_w)` where only non-negative values are considered. If only one component produces a limit, that limit is used.
 
-**Note:** When `price_limit` is not set, the price-based component returns -1 (no limit) and the time-based component is also bypassed — peak shaving is fully disabled. This design ensures peak shaving only activates when `price_limit` is explicitly configured, giving operators control over when the feature is active.
+**Note:** When `price_limit` is not set, the price-based component returns -1 (no limit) and the time-based component is also bypassed - peak shaving is fully disabled. This design ensures peak shaving only activates when `price_limit` is explicitly configured, giving operators control over when the feature is active.
 
 ### 3.3 Algorithm Implementation
 
@@ -212,7 +219,7 @@ Both limits are computed independently. The final limit is `min(price_limit_w, t
 def _calculate_peak_shaving_charge_limit(self, calc_input, calc_timestamp):
     """Calculate PV charge rate limit to fill battery by target hour.
 
-    Returns: int — charge rate limit in W, or -1 if no limit needed
+    Returns: int - charge rate limit in W, or -1 if no limit needed
     """
     slot_start = calc_timestamp.replace(
         minute=(calc_timestamp.minute // self.interval_minutes) * self.interval_minutes,
@@ -234,7 +241,7 @@ def _calculate_peak_shaving_charge_limit(self, calc_input, calc_timestamp):
     if slots_remaining <= 0:
         return -1
 
-    # Calculate PV surplus per slot (only count positive surplus — when PV > consumption)
+    # Calculate PV surplus per slot (only count positive surplus - when PV > consumption)
     pv_surplus = calc_input.production[:slots_remaining] - calc_input.consumption[:slots_remaining]
     pv_surplus = np.clip(pv_surplus, 0, None)  # Only positive surplus counts
 
@@ -252,7 +259,7 @@ def _calculate_peak_shaving_charge_limit(self, calc_input, calc_timestamp):
 
     # Spread charging evenly across remaining slots
     wh_per_slot = free_capacity / slots_remaining
-    charge_rate_w = wh_per_slot / interval_hours  # Convert Wh/slot → W
+    charge_rate_w = wh_per_slot / interval_hours  # Convert Wh/slot -> W
 
     return int(charge_rate_w)
 ```
@@ -263,55 +270,51 @@ def _calculate_peak_shaving_charge_limit(self, calc_input, calc_timestamp):
 def _calculate_peak_shaving_charge_limit_price_based(self, calc_input):
     """Reserve free capacity for upcoming cheap-price PV slots.
 
-    Returns: int — charge rate limit in W, or -1 if no limit needed.
+    When inside cheap window (first_cheap_slot == 0):
+      If surplus > free capacity: spread free_capacity over cheap slots.
+      If surplus <= free capacity: return -1 (no limit needed).
+
+    When before cheap window:
+      Reserve capacity so the window can be absorbed fully.
+      additional_allowed = free_capacity - target_reserve_wh.
+      Spread additional_allowed evenly over slots before the window.
+      If additional_allowed <= 0: block charging (return 0).
+
+    Returns: int - charge rate limit in W, or -1 if no limit needed.
     """
     price_limit = self.calculation_parameters.peak_shaving_price_limit
-    prices = calc_input.prices
-    interval_hours = self.interval_minutes / 60.0
-
-    # Find cheap slots
-    cheap_slots = [i for i, p in enumerate(prices)
-                   if p is not None and p <= price_limit]
+    ...
+    cheap_slots = [i for i, p in enumerate(prices) if p is not None and p <= price_limit]
     if not cheap_slots:
-        return -1  # No cheap slots ahead
+        return -1
 
     first_cheap_slot = cheap_slots[0]
-    if first_cheap_slot == 0:
-        return -1  # Already in cheap slot
 
-    # Sum expected PV surplus during cheap slots
-    total_cheap_surplus_wh = 0.0
-    for i in cheap_slots:
-        if i < len(calc_input.production) and i < len(calc_input.consumption):
-            surplus = float(calc_input.production[i]) - float(calc_input.consumption[i])
-            if surplus > 0:
-                total_cheap_surplus_wh += surplus * interval_hours
+    if first_cheap_slot == 0:  # Inside cheap window
+        total_surplus = sum_pv_surplus(cheap_slots)
+        if total_surplus <= calc_input.free_capacity:
+            return -1  # Battery can absorb everything
+        # Spread free capacity evenly over cheap slots
+        return int(calc_input.free_capacity / len(cheap_slots) / interval_hours)
 
-    if total_cheap_surplus_wh <= 0:
-        return -1  # No PV surplus expected during cheap slots
-
-    # Reserve capacity (capped at full battery capacity)
-    target_reserve_wh = min(total_cheap_surplus_wh, self.common.max_capacity)
-
-    additional_charging_allowed = calc_input.free_capacity - target_reserve_wh
-
-    if additional_charging_allowed <= 0:
-        return 0  # Block PV charging — battery already too full
-
-    # Spread allowed charging evenly over slots before cheap window
-    wh_per_slot = additional_charging_allowed / first_cheap_slot
-    charge_rate_w = wh_per_slot / interval_hours  # Convert Wh/slot → W
-
-    return int(charge_rate_w)
+    # Before cheap window
+    total_surplus = sum_pv_surplus(cheap_slots)
+    if total_surplus <= 0:
+        return -1
+    target_reserve = min(total_surplus, max_capacity)
+    additional_allowed = calc_input.free_capacity - target_reserve
+    if additional_allowed <= 0:
+        return 0  # Block charging
+    return int(additional_allowed / first_cheap_slot / interval_hours)
 ```
 
 ### 3.4 Always-Allow-Discharge Region Skips Peak Shaving
 
-When `stored_energy >= max_capacity * always_allow_discharge_limit`, the battery is in the "always allow discharge" region. In this region, peak shaving is **not applied** — the system is already at high SOC and the normal discharge logic takes over. This also avoids toggling issues when SOC fluctuates near 100%.
+When `stored_energy >= max_capacity * always_allow_discharge_limit`, the battery is in the "always allow discharge" region. In this region, peak shaving is **not applied** - the system is already at high SOC and the normal discharge logic takes over. This also avoids toggling issues when SOC fluctuates near 100%.
 
 ### 3.5 Force Charge (MODE -1) Takes Priority Over Peak Shaving
 
-If the price-based logic decides to force charge from grid (`charge_from_grid=True`), this overrides peak shaving. The force charge decision means energy is cheap enough to justify grid charging — peak shaving should not interfere.
+If the price-based logic decides to force charge from grid (`charge_from_grid=True`), this overrides peak shaving. The force charge decision means energy is cheap enough to justify grid charging - peak shaving should not interfere.
 
 When this occurs, a warning is logged:
 ```
@@ -338,75 +341,82 @@ return inverter_control_settings
 
 **`_apply_peak_shaving()`:**
 
-Peak shaving uses MODE 8 (`limit_battery_charge_rate` with `allow_discharge=True`). It is only applied when the main logic already allows discharge — meaning no upcoming high-price slots require preserving battery energy. This is the **price-based skip condition**: when the main logic set `allow_discharge=False`, the battery is being held for profitable future slots, and PV charging should not be throttled.
+Peak shaving uses MODE 8 (`limit_battery_charge_rate` with `allow_discharge=True`). It is only applied when the main logic already allows discharge - meaning no upcoming high-price slots require preserving battery energy.
+
+The method dispatches to the appropriate sub-algorithms based on `peak_shaving_mode`.  The **target-hour check** (`allow_full_battery_after`) applies to all modes and is checked early so no computation occurs past that hour.
 
 ```python
 def _apply_peak_shaving(self, settings, calc_input, calc_timestamp):
-    """Limit PV charge rate using price-based and time-based algorithms.
+    """Limit PV charge rate based on the configured peak shaving mode.
+
+    Mode behaviour (peak_shaving_mode):
+      'time'     - spread remaining capacity until allow_full_battery_after
+      'price'    - reserve capacity for upcoming cheap-price PV slots;
+                   inside cheap window, spread if surplus > free capacity
+      'combined' - both limits active, stricter one wins
 
     Skipped when:
-    - price_limit is None (primary disable condition)
-    - No production right now (nighttime)
-    - Currently in a cheap slot (prices[0] <= price_limit) — charge freely
-    - Past the target hour (allow_full_battery_after)
-    - Battery is in always_allow_discharge region (high SOC)
-    - Force charge from grid is active (MODE -1)
+    - 'price'/'combined' mode and price_limit is not configured
+    - No PV production right now (nighttime)
+    - Past allow_full_battery_after hour (all modes)
+    - Battery in always_allow_discharge region (high SOC)
+    - Force-charge from grid active (MODE -1)
     - Discharge not allowed (battery preserved for high-price hours)
 
     Note: EVCC checks (charging, connected+pv mode) are handled in core.py.
     """
+    mode = self.calculation_parameters.peak_shaving_mode
     price_limit = self.calculation_parameters.peak_shaving_price_limit
 
-    # price_limit not configured → peak shaving disabled entirely
-    if price_limit is None:
+    # Price component needs price_limit configured
+    if mode in ('price', 'combined') and price_limit is None:
         return settings
 
-    # No production right now: skip calculation
+    # No production right now: skip
     if calc_input.production[0] <= 0:
         return settings
 
-    # Currently in cheap slot: charge freely to absorb PV surplus
-    if calc_input.prices[0] <= price_limit:
-        logger.debug('[PeakShaving] Skipped: currently in cheap slot (price=%.4f <= limit=%.4f)',
-                     calc_input.prices[0], price_limit)
-        return settings
-
-    # After target hour: no limit
+    # Past target hour: skip (applies to all modes)
     if calc_timestamp.hour >= self.calculation_parameters.peak_shaving_allow_full_after:
         return settings
 
-    # In always_allow_discharge region: skip peak shaving
+    # In always_allow_discharge region: skip
     if self.common.is_discharge_always_allowed_capacity(calc_input.stored_energy):
         return settings
 
-    # Force charge takes priority over peak shaving
+    # Force charge takes priority
     if settings.charge_from_grid:
-        logger.warning('[PeakShaving] Skipped: force_charge (MODE -1) active')
         return settings
 
-    # Battery preserved for high-price hours — don't limit PV charging
+    # Battery preserved for high-price hours
     if not settings.allow_discharge:
-        logger.debug('[PeakShaving] Skipped: discharge not allowed')
         return settings
 
-    # Calculate both limits; take the stricter (lower non-negative) one
-    price_limit_w = self._calculate_peak_shaving_charge_limit_price_based(calc_input)
-    time_limit_w = self._calculate_peak_shaving_charge_limit(calc_input, calc_timestamp)
+    # Compute limits according to mode; price-based handles both before-cheap
+    # and in-cheap-window-overflow cases
+    price_limit_w = -1
+    time_limit_w = -1
+
+    if mode in ('price', 'combined'):
+        price_limit_w = self._calculate_peak_shaving_charge_limit_price_based(calc_input)
+    if mode in ('time', 'combined'):
+        time_limit_w = self._calculate_peak_shaving_charge_limit(calc_input, calc_timestamp)
 
     candidates = [v for v in (price_limit_w, time_limit_w) if v >= 0]
-    charge_limit = min(candidates) if candidates else -1
+    if not candidates:
+        return settings
 
-    if charge_limit >= 0:
-        if settings.limit_battery_charge_rate < 0:
-            settings.limit_battery_charge_rate = charge_limit
-        else:
-            settings.limit_battery_charge_rate = min(
-                settings.limit_battery_charge_rate, charge_limit)
+    charge_limit = min(candidates)
+    if settings.limit_battery_charge_rate < 0:
+        settings.limit_battery_charge_rate = charge_limit
+    else:
+        settings.limit_battery_charge_rate = min(
+            settings.limit_battery_charge_rate, charge_limit)
 
     return settings
 ```
 
-### 3.7 Data Flow — Extended `CalculationParameters`
+### 3.7 Data Flow - Extended `CalculationParameters`
 
 Peak shaving configuration is passed via the existing `CalculationParameters` dataclass (consistent with existing interface pattern):
 
@@ -421,26 +431,26 @@ class CalculationParameters:
     # Peak shaving parameters
     peak_shaving_enabled: bool = False
     peak_shaving_allow_full_after: int = 14  # Hour (0-23)
-    peak_shaving_price_limit: Optional[float] = None  # Euro/kWh; None → peak shaving disabled
+    # 'time': target hour only | 'price': cheap-slot reservation | 'combined': both
+    peak_shaving_mode: str = 'combined'
+    peak_shaving_price_limit: Optional[float] = None  # Euro/kWh; any numeric or None
 
     def __post_init__(self):
         if not 0 <= self.peak_shaving_allow_full_after <= 23:
-            raise ValueError(
-                f"peak_shaving_allow_full_after must be 0-23, "
-                f"got {self.peak_shaving_allow_full_after}"
-            )
-        if self.peak_shaving_price_limit is not None and self.peak_shaving_price_limit < 0:
-            raise ValueError(
-                f"peak_shaving_price_limit must be >= 0, "
-                f"got {self.peak_shaving_price_limit}"
-            )
+            raise ValueError(...)
+        valid_modes = ('time', 'price', 'combined')
+        if self.peak_shaving_mode not in valid_modes:
+            raise ValueError(...)
+        if (self.peak_shaving_price_limit is not None
+                and not isinstance(self.peak_shaving_price_limit, (int, float))):
+            raise ValueError(...)  # must be numeric or None
 ```
 
-**No changes needed to `CalculationInput`** — the existing fields (`production`, `consumption`, `free_capacity`, `stored_energy`) provide all data the algorithm needs.
+**No changes needed to `CalculationInput`** - the existing fields (`production`, `consumption`, `free_capacity`, `stored_energy`) provide all data the algorithm needs.
 
 ---
 
-## 4. Logic Factory — `logic.py`
+## 4. Logic Factory - `logic.py`
 
 The factory gains a new type `next`:
 
@@ -477,7 +487,7 @@ The `NextLogic` supports the same expert tuning attributes as `DefaultLogic`.
 
 ---
 
-## 5. Core Integration — `core.py`
+## 5. Core Integration - `core.py`
 
 ### 5.1 Init
 
@@ -497,6 +507,7 @@ calc_parameters = CalculationParameters(
     self.get_max_capacity(),
     peak_shaving_enabled=peak_shaving_config.get('enabled', False),
     peak_shaving_allow_full_after=peak_shaving_config.get('allow_full_battery_after', 14),
+    peak_shaving_mode=peak_shaving_config.get('mode', 'combined'),
     peak_shaving_price_limit=peak_shaving_config.get('price_limit', None),
 )
 ```
@@ -526,25 +537,25 @@ if self.evcc_api is not None:
 
 ### 5.4 Mode Selection
 
-In the mode selection block (after `logic.calculate()`), `limit_battery_charge_rate >= 0` already triggers MODE 8 via `self.limit_battery_charge_rate()`. No changes needed — peak shaving sets the limit in `InverterControlSettings` and the existing dispatch handles it.
+In the mode selection block (after `logic.calculate()`), `limit_battery_charge_rate >= 0` already triggers MODE 8 via `self.limit_battery_charge_rate()`. No changes needed - peak shaving sets the limit in `InverterControlSettings` and the existing dispatch handles it.
 
 ---
 
-## 6. MQTT API — Publish Peak Shaving State
+## 6. MQTT API - Publish Peak Shaving State
 
 Publish topics:
-- `{base}/peak_shaving/enabled` — boolean (`true`/`false`, plain text, retained)
-- `{base}/peak_shaving/allow_full_battery_after` — integer hour 0-23 (plain text, retained)
-- `{base}/peak_shaving/charge_limit` — current calculated charge limit in W (plain text, not retained, -1 if inactive)
+- `{base}/peak_shaving/enabled` - boolean (`true`/`false`, plain text, retained)
+- `{base}/peak_shaving/allow_full_battery_after` - integer hour 0-23 (plain text, retained)
+- `{base}/peak_shaving/charge_limit` - current calculated charge limit in W (plain text, not retained, -1 if inactive)
 
 Settable topics:
-- `{base}/peak_shaving/enabled/set` — accepts `true`/`false`
-- `{base}/peak_shaving/allow_full_battery_after/set` — accepts integer 0-23
+- `{base}/peak_shaving/enabled/set` - accepts `true`/`false`
+- `{base}/peak_shaving/allow_full_battery_after/set` - accepts integer 0-23
 
 Home Assistant discovery:
-- `peak_shaving/enabled` → switch entity
-- `peak_shaving/allow_full_battery_after` → number entity (min: 0, max: 23, step: 1)
-- `peak_shaving/charge_limit` → sensor entity (unit: W)
+- `peak_shaving/enabled` -> switch entity
+- `peak_shaving/allow_full_battery_after` -> number entity (min: 0, max: 23, step: 1)
+- `peak_shaving/charge_limit` -> sensor entity (unit: W)
 
 QoS: default (0) for all topics (consistent with existing MQTT API).
 
@@ -557,36 +568,36 @@ QoS: default (0) for all topics (consistent with existing MQTT API).
 ### 7.1 Logic Tests (`tests/batcontrol/logic/test_peak_shaving.py`)
 
 **Algorithm tests (`_calculate_peak_shaving_charge_limit`):**
-- High PV surplus, small free capacity → low charge limit
-- Low PV surplus, large free capacity → no limit (-1)
-- PV surplus exactly matches free capacity → no limit (-1)
-- Battery full (`free_capacity = 0`) → charge limit = 0
-- Past target hour → no limit (-1)
-- 1 slot remaining → rate for that single slot
-- Consumption reduces effective PV — e.g., 3kW PV, 2kW consumption = 1kW surplus
+- High PV surplus, small free capacity -> low charge limit
+- Low PV surplus, large free capacity -> no limit (-1)
+- PV surplus exactly matches free capacity -> no limit (-1)
+- Battery full (`free_capacity = 0`) -> charge limit = 0
+- Past target hour -> no limit (-1)
+- 1 slot remaining -> rate for that single slot
+- Consumption reduces effective PV - e.g., 3kW PV, 2kW consumption = 1kW surplus
 
 **Decision tests (`_apply_peak_shaving`):**
-- `peak_shaving_enabled = False` → no change to settings
-- `price_limit = None` → peak shaving disabled entirely
-- Current production = 0 (nighttime) → peak shaving skipped
-- Currently in cheap slot (`prices[0] <= price_limit`) → no charge limit applied
-- `charge_from_grid = True` → peak shaving skipped, warning logged
-- `allow_discharge = False` (battery preserved for high-price hours) → peak shaving skipped
-- Battery in always_allow_discharge region → peak shaving skipped
-- Before target hour, limit calculated → `limit_battery_charge_rate` set
-- After target hour → no change
-- Existing tighter limit from other logic → kept (more restrictive wins)
-- Peak shaving limit tighter than existing → peak shaving limit applied
+- `peak_shaving_enabled = False` -> no change to settings
+- `price_limit = None` -> peak shaving disabled entirely
+- Current production = 0 (nighttime) -> peak shaving skipped
+- Currently in cheap slot (`prices[0] <= price_limit`) -> no charge limit applied
+- `charge_from_grid = True` -> peak shaving skipped, warning logged
+- `allow_discharge = False` (battery preserved for high-price hours) -> peak shaving skipped
+- Battery in always_allow_discharge region -> peak shaving skipped
+- Before target hour, limit calculated -> `limit_battery_charge_rate` set
+- After target hour -> no change
+- Existing tighter limit from other logic -> kept (more restrictive wins)
+- Peak shaving limit tighter than existing -> peak shaving limit applied
 
 **Price-based algorithm tests (`_calculate_peak_shaving_charge_limit_price_based`):**
-- No cheap slots → -1
-- Currently in cheap slot → -1
-- PV surplus in cheap slots ≤ 0 → -1
-- Cheap-slot surplus exceeds free capacity → block (0)
-- Partial reserve spreads over remaining slots → rate calculation
-- Free capacity well above reserve → charge rate returned
+- No cheap slots -> -1
+- Currently in cheap slot -> -1
+- PV surplus in cheap slots <= 0 -> -1
+- Cheap-slot surplus exceeds free capacity -> block (0)
+- Partial reserve spreads over remaining slots -> rate calculation
+- Free capacity well above reserve -> charge rate returned
 - Consumption reduces cheap-slot surplus
-- Both price-based and time-based configured → stricter limit wins
+- Both price-based and time-based configured -> stricter limit wins
 
 **`CalculationParameters` tests:**
 - `peak_shaving_price_limit` defaults to `None`
@@ -596,44 +607,44 @@ QoS: default (0) for all topics (consistent with existing MQTT API).
 
 ### 7.2 EVCC Tests (`tests/batcontrol/test_evcc_mode.py`)
 
-- Topic derivation: `evcc/loadpoints/1/charging` → mode: `evcc/loadpoints/1/mode`, connected: `evcc/loadpoints/1/connected`
-- Non-standard topic (not ending in `/charging`) → warning, no mode/connected sub
+- Topic derivation: `evcc/loadpoints/1/charging` -> mode: `evcc/loadpoints/1/mode`, connected: `evcc/loadpoints/1/connected`
+- Non-standard topic (not ending in `/charging`) -> warning, no mode/connected sub
 - `handle_mode_message` parses mode string correctly
 - `handle_connected_message` parses boolean correctly
-- `evcc_ev_expects_pv_surplus`: connected=true + mode=pv → True
-- `evcc_ev_expects_pv_surplus`: connected=true + mode=now → False
-- `evcc_ev_expects_pv_surplus`: connected=false + mode=pv → False
-- `evcc_ev_expects_pv_surplus`: no data received → False
+- `evcc_ev_expects_pv_surplus`: connected=true + mode=pv -> True
+- `evcc_ev_expects_pv_surplus`: connected=true + mode=now -> False
+- `evcc_ev_expects_pv_surplus`: connected=false + mode=pv -> False
+- `evcc_ev_expects_pv_surplus`: no data received -> False
 - Multi-loadpoint: one connected+pv is enough to return True
-- Mode change from pv to now → `evcc_ev_expects_pv_surplus` changes to False
+- Mode change from pv to now -> `evcc_ev_expects_pv_surplus` changes to False
 
 ### 7.3 Core EVCC Guard Tests (`tests/batcontrol/test_core.py`)
 
-- EVCC actively charging + charge limit active → limit cleared to -1
-- EV connected in PV mode + charge limit active → limit cleared to -1
-- EVCC not charging and no PV mode → charge limit preserved
-- No charge limit active (-1) + EVCC charging → no change (stays -1)
+- EVCC actively charging + charge limit active -> limit cleared to -1
+- EV connected in PV mode + charge limit active -> limit cleared to -1
+- EVCC not charging and no PV mode -> charge limit preserved
+- No charge limit active (-1) + EVCC charging -> no change (stays -1)
 
 ### 7.4 Config Tests
 
-- `type: next` → creates `NextLogic` instance
-- `type: default` → creates `DefaultLogic` instance (unchanged)
-- With `peak_shaving` section → `CalculationParameters` fields set correctly
-- Without `peak_shaving` section → `peak_shaving_enabled = False` (default)
+- `type: next` -> creates `NextLogic` instance
+- `type: default` -> creates `DefaultLogic` instance (unchanged)
+- With `peak_shaving` section -> `CalculationParameters` fields set correctly
+- Without `peak_shaving` section -> `peak_shaving_enabled = False` (default)
 
 ---
 
 ## 8. Implementation Order
 
-1. **Config** — Add `peak_shaving` section to dummy config, add `type: next` option
-2. **Data model** — Extend `CalculationParameters` with peak shaving fields
-3. **EVCC** — Add mode and connected topic subscriptions, `evcc_ev_expects_pv_surplus` property
-4. **NextLogic** — New file `next.py`: copy DefaultLogic, add `_calculate_peak_shaving_charge_limit()`, `_apply_peak_shaving()`
-5. **Logic factory** — Add `type: next` → `NextLogic` in `logic.py`
-6. **Core** — Wire peak shaving config into `CalculationParameters`, EVCC peak shaving guard
-7. **MQTT** — Publish topics + settable topics + HA discovery
+1. **Config** - Add `peak_shaving` section to dummy config, add `type: next` option
+2. **Data model** - Extend `CalculationParameters` with peak shaving fields
+3. **EVCC** - Add mode and connected topic subscriptions, `evcc_ev_expects_pv_surplus` property
+4. **NextLogic** - New file `next.py`: copy DefaultLogic, add `_calculate_peak_shaving_charge_limit()`, `_apply_peak_shaving()`
+5. **Logic factory** - Add `type: next` -> `NextLogic` in `logic.py`
+6. **Core** - Wire peak shaving config into `CalculationParameters`, EVCC peak shaving guard
+7. **MQTT** - Publish topics + settable topics + HA discovery
 8. **Tests**
-9. **Documentation** — Write `docs/peak_shaving.md` covering feature overview, configuration, EVCC interaction, algorithm explanation, and known limitations
+9. **Documentation** - Write `docs/peak_shaving.md` covering feature overview, configuration, EVCC interaction, algorithm explanation, and known limitations
 
 ---
 
@@ -643,17 +654,17 @@ QoS: default (0) for all topics (consistent with existing MQTT API).
 |------|--------|
 | `config/batcontrol_config_dummy.yaml` | Add `peak_shaving` section |
 | `src/batcontrol/logic/logic_interface.py` | Add peak shaving fields to `CalculationParameters` |
-| `src/batcontrol/logic/next.py` | **New** — `NextLogic` class with peak shaving |
-| `src/batcontrol/logic/logic.py` | Add `type: next` → `NextLogic` |
+| `src/batcontrol/logic/next.py` | **New** - `NextLogic` class with peak shaving |
+| `src/batcontrol/logic/logic.py` | Add `type: next` -> `NextLogic` |
 | `src/batcontrol/evcc_api.py` | Add mode + connected topic subscriptions, `evcc_ev_expects_pv_surplus` |
 | `src/batcontrol/core.py` | Wire peak shaving config into `CalculationParameters`, EVCC peak shaving guard |
 | `src/batcontrol/mqtt_api.py` | Peak shaving MQTT topics + HA discovery |
-| `tests/batcontrol/logic/test_peak_shaving.py` | New — algorithm + decision tests |
-| `tests/batcontrol/test_evcc_mode.py` | New — mode/connected topic tests |
+| `tests/batcontrol/logic/test_peak_shaving.py` | New - algorithm + decision tests |
+| `tests/batcontrol/test_evcc_mode.py` | New - mode/connected topic tests |
 | `tests/batcontrol/test_core.py` | Add EVCC peak shaving guard tests |
-| `docs/WIKI_peak_shaving.md` | New — feature documentation |
+| `docs/WIKI_peak_shaving.md` | New - feature documentation |
 
-**Not modified:** `default.py` (untouched — peak shaving is in `next.py`)
+**Not modified:** `default.py` (untouched - peak shaving is in `next.py`)
 
 ---
 
@@ -661,7 +672,7 @@ QoS: default (0) for all topics (consistent with existing MQTT API).
 
 1. **New independent logic class:** Peak shaving lives in `NextLogic` (`type: next`), not as a modification to `DefaultLogic`. This keeps the stable default path untouched and allows the next logic to evolve independently. `NextLogic` is a full copy of `DefaultLogic` with peak shaving added.
 
-2. **EVCC integration:** Handled in `core.py` (not logic layer). Peak shaving is disabled when `evcc_is_charging` OR (`connected=true` AND `mode=pv`). The mode and connected topics are derived from the existing `loadpoint_topic` config by stripping `/charging`. No `chargePower` subscription — it was reported as unreliable.
+2. **EVCC integration:** Handled in `core.py` (not logic layer). Peak shaving is disabled when `evcc_is_charging` OR (`connected=true` AND `mode=pv`). The mode and connected topics are derived from the existing `loadpoint_topic` config by stripping `/charging`. No `chargePower` subscription - it was reported as unreliable.
 
 3. **Grid charging interaction (MODE -1 vs MODE 8):** `force_charge` takes priority. If price logic triggers grid charging during peak shaving hours, a warning is logged but grid charging proceeds.
 
@@ -673,7 +684,7 @@ QoS: default (0) for all topics (consistent with existing MQTT API).
 
 7. **Price-based algorithm is the primary driver:** Peak shaving is **disabled** when `price_limit` is `None`. This makes the operator opt in explicitly by setting a price threshold. The price-based algorithm identifies upcoming cheap-price slots and reserves enough free capacity to absorb their full PV surplus. This is the economically motivated core of peak shaving: buy cheap energy via full PV absorption, not by throttling charging arbitrarily.
 
-8. **Currently-in-cheap-slot skip:** When the current slot is cheap (`prices[0] <= price_limit`), no charge limit is applied — the battery should absorb as much PV as possible during this window. This is checked in `_apply_peak_shaving` before calling either sub-algorithm.
+8. **Currently-in-cheap-slot skip:** When the current slot is cheap (`prices[0] <= price_limit`), no charge limit is applied - the battery should absorb as much PV as possible during this window. This is checked in `_apply_peak_shaving` before calling either sub-algorithm.
 
 9. **Two-limit combination (stricter wins):** The price-based and time-based components are independent. When both are configured, the final limit is `min(price_limit_w, time_limit_w)` over non-negative values. This ensures neither algorithm can inadvertently allow more charging than the other intends.
 

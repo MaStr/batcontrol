@@ -1,4 +1,4 @@
-"""NextLogic — Extended battery control logic with peak shaving.
+"""NextLogic - Extended battery control logic with peak shaving.
 
 This module provides the NextLogic class, which extends the DefaultLogic
 behavior with a peak shaving post-processing step. Peak shaving manages
@@ -210,55 +210,42 @@ class NextLogic(LogicInterface):
                             calc_input: CalculationInput,
                             calc_timestamp: datetime.datetime
                             ) -> InverterControlSettings:
-        """Limit PV charge rate to spread battery charging until target hour.
+        """Limit PV charge rate based on the configured peak shaving mode.
 
-        Peak shaving uses MODE 8 (limit_battery_charge_rate with
-        allow_discharge=True). It is only applied when the main logic
-        already allows discharge — meaning no upcoming high-price slots
-        require preserving battery energy.
-
-        The algorithm has two components that are combined (stricter wins):
-        - Price-based: reserve battery capacity for upcoming cheap-price PV
-          slots so they can be absorbed fully (primary driver). Requires
-          peak_shaving_price_limit to be configured; disabled when None.
-        - Time-based: spread remaining capacity over slots until
-          allow_full_battery_after (secondary constraint).
+        Mode behaviour (peak_shaving_mode):
+          'time'     - spread remaining capacity until allow_full_battery_after
+          'price'    - reserve capacity for upcoming cheap-price PV slots;
+                       inside cheap window, spread if surplus > free capacity
+          'combined' - both limits active, stricter one wins
 
         Skipped when:
-        - price_limit is not configured (peak shaving disabled)
-        - No production right now (nighttime)
-        - Currently in a cheap slot (price <= price_limit) — charge freely
-        - Past the target hour (allow_full_battery_after)
-        - Battery is in always_allow_discharge region (high SOC)
-        - Force charge from grid is active (MODE -1)
+        - 'price'/'combined' mode and price_limit is not configured
+        - No PV production right now (nighttime)
+        - Past allow_full_battery_after hour (all modes)
+        - Battery in always_allow_discharge region (high SOC)
+        - Force-charge from grid active (MODE -1)
         - Discharge not allowed (battery preserved for high-price hours)
 
         Note: EVCC checks (charging, connected+pv mode) are handled in
               core.py, not here.
         """
+        mode = self.calculation_parameters.peak_shaving_mode
         price_limit = self.calculation_parameters.peak_shaving_price_limit
 
-        # price_limit not configured → peak shaving is disabled
-        if price_limit is None:
-            logger.debug('[PeakShaving] Skipped: price_limit not configured')
+        # Price component needs price_limit configured
+        if mode in ('price', 'combined') and price_limit is None:
+            logger.debug('[PeakShaving] Skipped: price_limit not configured for mode %s', mode)
             return settings
 
-        # No production right now: skip calculation (avoid unnecessary work at night)
+        # No production right now: skip
         if calc_input.production[0] <= 0:
             return settings
 
-        # Currently in a cheap slot — charge battery freely
-        if calc_input.prices[0] <= price_limit:
-            logger.debug('[PeakShaving] Skipped: currently in cheap-price slot '
-                         '(price %.3f <= limit %.3f)',
-                         calc_input.prices[0], price_limit)
-            return settings
-
-        # After target hour: no limit
+        # Past target hour: skip (applies to all modes)
         if calc_timestamp.hour >= self.calculation_parameters.peak_shaving_allow_full_after:
             return settings
 
-        # In always_allow_discharge region: skip peak shaving
+        # In always_allow_discharge region: skip
         if self.common.is_discharge_always_allowed_capacity(calc_input.stored_energy):
             logger.debug('[PeakShaving] Skipped: battery in always_allow_discharge region')
             return settings
@@ -269,42 +256,41 @@ class NextLogic(LogicInterface):
                            'grid charging takes priority')
             return settings
 
-        # Battery preserved for high-price hours — don't limit PV charging
+        # Battery preserved for high-price hours -- don't limit PV charging
         if not settings.allow_discharge:
             logger.debug('[PeakShaving] Skipped: discharge not allowed, '
                          'battery preserved for high-price hours')
             return settings
 
-        # Compute both limits, take stricter (lower non-negative value)
-        price_limit_w = self._calculate_peak_shaving_charge_limit_price_based(calc_input)
-        time_limit_w = self._calculate_peak_shaving_charge_limit(calc_input, calc_timestamp)
+        # Compute limits according to mode
+        price_limit_w = -1
+        time_limit_w = -1
 
-        if price_limit_w < 0 and time_limit_w < 0:
+        if mode in ('price', 'combined'):
+            price_limit_w = self._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        if mode in ('time', 'combined'):
+            time_limit_w = self._calculate_peak_shaving_charge_limit(calc_input, calc_timestamp)
+
+        candidates = [v for v in (price_limit_w, time_limit_w) if v >= 0]
+        if not candidates:
             logger.debug('[PeakShaving] Evaluated: no limit needed')
             return settings
 
-        if price_limit_w >= 0 and time_limit_w >= 0:
-            charge_limit = min(price_limit_w, time_limit_w)
-        elif price_limit_w >= 0:
-            charge_limit = price_limit_w
-        else:
-            charge_limit = time_limit_w
+        charge_limit = min(candidates)
 
-        # Apply PV charge rate limit
+        # Apply charge rate limit (keep more restrictive if one already exists)
         if settings.limit_battery_charge_rate < 0:
-            # No existing limit — apply peak shaving limit
             settings.limit_battery_charge_rate = charge_limit
         else:
-            # Keep the more restrictive limit
             settings.limit_battery_charge_rate = min(
                 settings.limit_battery_charge_rate, charge_limit)
 
         # Note: allow_discharge is already True here (checked above).
         # MODE 8 requires allow_discharge=True to work correctly.
 
-        logger.info('[PeakShaving] PV charge limit: %d W '
+        logger.info('[PeakShaving] mode=%s, PV limit: %d W '
                     '(price-based=%s W, time-based=%s W, full by %d:00)',
-                    settings.limit_battery_charge_rate,
+                    mode, settings.limit_battery_charge_rate,
                     price_limit_w if price_limit_w >= 0 else 'off',
                     time_limit_w if time_limit_w >= 0 else 'off',
                     self.calculation_parameters.peak_shaving_allow_full_after)
@@ -315,17 +301,17 @@ class NextLogic(LogicInterface):
             self, calc_input: CalculationInput) -> int:
         """Reserve battery free capacity for upcoming cheap-price PV slots.
 
-        Finds upcoming slots where price <= peak_shaving_price_limit and
-        calculates a charge rate limit that keeps enough free capacity to
-        absorb the expected PV surplus during those cheap slots fully.
+        When currently inside a cheap window (first cheap slot == 0):
+          If total PV surplus in the window exceeds free capacity, spread
+          the free capacity evenly over all remaining cheap slots so the
+          battery fills gradually rather than hitting 100% in the first slot.
+          If surplus <= free capacity no limit is needed.
 
-        Algorithm:
-            1. Find upcoming cheap slots (price <= price_limit).
-            2. Sum PV surplus during cheap slots → target_reserve_wh.
-            3. additional_charging_allowed = free_capacity - target_reserve_wh
-            4. If additional_charging_allowed <= 0: block PV charging (return 0).
-            5. Spread additional_charging_allowed evenly over slots before
-               the cheap window starts.
+        When before the cheap window:
+          1. Sum PV surplus during cheap slots -> target_reserve_wh.
+          2. additional_allowed = free_capacity - target_reserve_wh.
+          3. If additional_allowed <= 0: block PV charging (return 0).
+          4. Spread additional_allowed evenly over slots before the window.
 
         Returns:
             int: charge rate limit in W, or -1 if no limit needed.
@@ -334,17 +320,37 @@ class NextLogic(LogicInterface):
         prices = calc_input.prices
         interval_hours = self.interval_minutes / 60.0
 
-        # Find all cheap slots
         cheap_slots = [i for i, p in enumerate(prices)
                        if p is not None and p <= price_limit]
         if not cheap_slots:
-            return -1  # No cheap slots ahead
+            return -1  # No cheap slots in the forecast
 
         first_cheap_slot = cheap_slots[0]
-        if first_cheap_slot == 0:
-            return -1  # Already in cheap slot (caller checks this too)
 
-        # Calculate expected PV surplus during cheap slots
+        # -- Currently inside cheap window -------------------------------- #
+        if first_cheap_slot == 0:
+            total_cheap_surplus_wh = 0.0
+            for i in cheap_slots:
+                if i < len(calc_input.production) and i < len(calc_input.consumption):
+                    surplus = (float(calc_input.production[i])
+                               - float(calc_input.consumption[i]))
+                    if surplus > 0:
+                        total_cheap_surplus_wh += surplus * interval_hours
+
+            if total_cheap_surplus_wh <= calc_input.free_capacity:
+                return -1  # Battery can absorb everything, no limit needed
+
+            # Surplus exceeds free capacity: spread evenly over cheap slots
+            charge_rate_w = (calc_input.free_capacity
+                             / len(cheap_slots) / interval_hours)
+            logger.debug(
+                '[PeakShaving] In cheap window: surplus %.0f Wh > free %.0f Wh, '
+                'spreading over %d slots -> %d W',
+                total_cheap_surplus_wh, calc_input.free_capacity,
+                len(cheap_slots), int(charge_rate_w))
+            return int(charge_rate_w)
+
+        # -- Before cheap window: reserve capacity for it ----------------- #
         total_cheap_surplus_wh = 0.0
         for i in cheap_slots:
             if i < len(calc_input.production) and i < len(calc_input.consumption):
@@ -358,23 +364,22 @@ class NextLogic(LogicInterface):
         # Reserve capacity (capped at full battery capacity)
         target_reserve_wh = min(total_cheap_surplus_wh, self.common.max_capacity)
 
-        # How much more can we charge before the cheap window starts?
         additional_charging_allowed = calc_input.free_capacity - target_reserve_wh
 
         if additional_charging_allowed <= 0:
             logger.debug(
-                '[PeakShaving] Price-based: battery full relative to cheap-window '
+                '[PeakShaving] Price-based: battery too full for cheap-window '
                 'reserve (free=%.0f Wh, reserve=%.0f Wh), blocking PV charge',
                 calc_input.free_capacity, target_reserve_wh)
             return 0
 
         # Spread allowed charging evenly over slots before cheap window
         wh_per_slot = additional_charging_allowed / first_cheap_slot
-        charge_rate_w = wh_per_slot / interval_hours  # Convert Wh/slot → W
+        charge_rate_w = wh_per_slot / interval_hours  # Wh/slot -> W
 
         logger.debug(
             '[PeakShaving] Price-based: cheap window at slot %d, '
-            'reserve=%.0f Wh, allowed=%.0f Wh → limit=%d W',
+            'reserve=%.0f Wh, allowed=%.0f Wh -> %d W',
             first_cheap_slot, target_reserve_wh, additional_charging_allowed,
             int(charge_rate_w))
 
@@ -426,7 +431,7 @@ class NextLogic(LogicInterface):
 
         # Spread charging evenly across remaining slots
         wh_per_slot = free_capacity / slots_remaining
-        charge_rate_w = wh_per_slot / interval_hours  # Convert Wh/slot → W
+        charge_rate_w = wh_per_slot / interval_hours  # Wh/slot -> W
 
         return int(charge_rate_w)
 
