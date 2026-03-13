@@ -318,6 +318,18 @@ class TestPeakShavingDecision(unittest.TestCase):
         result = self.logic._apply_peak_shaving(settings, calc_input, ts)
         self.assertEqual(result.limit_battery_charge_rate, 500)
 
+    def test_discharge_not_allowed_skips_peak_shaving(self):
+        """Discharge not allowed (battery preserved for high-price hours) → skip."""
+        settings = self._make_settings(allow_discharge=False)
+        calc_input = self._make_input(
+            [5000] * 8, [500] * 8,
+            stored_energy=5000, free_capacity=5000)
+        ts = datetime.datetime(2025, 6, 20, 8, 0, 0,
+                               tzinfo=datetime.timezone.utc)
+        result = self.logic._apply_peak_shaving(settings, calc_input, ts)
+        self.assertEqual(result.limit_battery_charge_rate, -1)
+        self.assertFalse(result.allow_discharge)
+
 
 class TestPeakShavingDisabled(unittest.TestCase):
     """Test that peak shaving does nothing when disabled."""

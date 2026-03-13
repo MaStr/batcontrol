@@ -212,11 +212,17 @@ class NextLogic(LogicInterface):
                             ) -> InverterControlSettings:
         """Limit PV charge rate to spread battery charging until target hour.
 
+        Peak shaving uses MODE 8 (limit_battery_charge_rate with
+        allow_discharge=True). It is only applied when the main logic
+        already allows discharge — meaning no upcoming high-price slots
+        require preserving battery energy.
+
         Skipped when:
+        - No production right now (nighttime)
         - Past the target hour (allow_full_battery_after)
         - Battery is in always_allow_discharge region (high SOC)
         - Force charge from grid is active (MODE -1)
-        - No production right now (nighttime)
+        - Discharge not allowed (battery preserved for high-price hours)
 
         Note: EVCC checks (charging, connected+pv mode) are handled in
               core.py, not here.
@@ -240,6 +246,12 @@ class NextLogic(LogicInterface):
                            'grid charging takes priority')
             return settings
 
+        # Battery preserved for high-price hours — don't limit PV charging
+        if not settings.allow_discharge:
+            logger.debug('[PeakShaving] Skipped: discharge not allowed, '
+                         'battery preserved for high-price hours')
+            return settings
+
         charge_limit = self._calculate_peak_shaving_charge_limit(
             calc_input, calc_timestamp)
 
@@ -257,8 +269,8 @@ class NextLogic(LogicInterface):
                 settings.limit_battery_charge_rate = min(
                     settings.limit_battery_charge_rate, charge_limit)
 
-            # Ensure discharge is allowed alongside the charge limit (MODE 8)
-            settings.allow_discharge = True
+            # Note: allow_discharge is already True here (checked above).
+            # MODE 8 requires allow_discharge=True to work correctly.
 
             logger.info('[PeakShaving] PV charge limit: %d W (battery full by %d:00)',
                         settings.limit_battery_charge_rate,

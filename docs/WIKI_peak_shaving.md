@@ -53,7 +53,7 @@ if pv_surplus > free_capacity:
     charge_limit = free_capacity / slots_remaining  (Wh per slot, converted to W)
 ```
 
-The charge limit is applied using **MODE 8** (`limit_battery_charge_rate`), which limits PV charging while still allowing battery discharge.
+The charge limit is applied using **MODE 8** (`limit_battery_charge_rate`), which limits PV charging while still allowing battery discharge. Peak shaving only applies when discharge is already allowed by the main price-based logic.
 
 ### Skip Conditions
 
@@ -63,8 +63,9 @@ Peak shaving is automatically skipped when:
 2. **Past the target hour** — battery is allowed to be full
 3. **Battery in always_allow_discharge region** — SOC is already high
 4. **Grid charging active (MODE -1)** — force charge takes priority
-5. **EVCC is actively charging** — EV consumes the excess PV
-6. **EV connected in PV mode** — EVCC will absorb PV surplus
+5. **Discharge not allowed** — battery is being preserved for upcoming high-price hours; PV charging should not be throttled so the battery can charge as fast as possible
+6. **EVCC is actively charging** — EV consumes the excess PV
+7. **EV connected in PV mode** — EVCC will absorb PV surplus
 
 ### EVCC Interaction
 
