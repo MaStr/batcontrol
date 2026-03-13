@@ -85,7 +85,7 @@ class TariffZones(DynamicTariffBaseclass):
             self.zone_3_hours = zone_3_hours
 
     def get_raw_data_from_provider(self) -> dict:
-        """No external API — configuration is static."""
+        """No external API - configuration is static."""
         return {}
 
     def _validate_configuration(self) -> None:
@@ -166,8 +166,8 @@ class TariffZones(DynamicTariffBaseclass):
         Accepted formats (may be mixed):
         - Single integer:           5
         - Comma-separated values:   "0,1,2,3"
-        - Inclusive ranges:         "0-5"  →  [0, 1, 2, 3, 4, 5]
-        - Mixed:                    "0-5,6,7"  →  [0, 1, 2, 3, 4, 5, 6, 7]
+        - Inclusive ranges:         "0-5"  ->  [0, 1, 2, 3, 4, 5]
+        - Mixed:                    "0-5,6,7"  ->  [0, 1, 2, 3, 4, 5, 6, 7]
         - Python list/tuple of ints or range-strings: [0, '1-3', 4]
 
         Raises ValueError if any hour is out of range [0, 23], if a range is

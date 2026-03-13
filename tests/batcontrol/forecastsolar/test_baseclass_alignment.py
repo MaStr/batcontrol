@@ -193,7 +193,7 @@ class TestCurrentIntervalShifting:
             result = provider._shift_to_current_interval(hour_aligned)
 
         # At 10:20, current_interval_in_hour = 20//15 = 1
-        # Should shift by 1: drop [0], renumber [1]→[0], [2]→[1], etc.
+        # Should shift by 1: drop [0], renumber [1]->[0], [2]->[1], etc.
         expected = {
             0: 300,   # Was [1]: 10:15-10:30 (current)
             1: 350,   # Was [2]: 10:30-10:45
@@ -226,7 +226,7 @@ class TestCurrentIntervalShifting:
             result = provider._shift_to_current_interval(hour_aligned)
 
         # At 10:35, current_interval_in_hour = 35//15 = 2
-        # Should shift by 2: drop [0] and [1], renumber [2]→[0], [3]→[1], etc.
+        # Should shift by 2: drop [0] and [1], renumber [2]->[0], [3]->[1], etc.
         expected = {
             0: 350,   # Was [2]: 10:30-10:45 (current)
             1: 400,   # Was [3]: 10:45-11:00

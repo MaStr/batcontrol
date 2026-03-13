@@ -50,13 +50,13 @@ class TestEvccModeConnected(unittest.TestCase):
     # ---- Topic derivation ----
 
     def test_topic_derivation_single(self):
-        """charging topic → mode and connected topics derived."""
+        """charging topic -> mode and connected topics derived."""
         api = self._create_evcc_api(['evcc/loadpoints/1/charging'])
         self.assertIn('evcc/loadpoints/1/mode', api.list_topics_mode)
         self.assertIn('evcc/loadpoints/1/connected', api.list_topics_connected)
 
     def test_topic_derivation_multiple(self):
-        """Multiple loadpoints → all mode/connected topics derived."""
+        """Multiple loadpoints -> all mode/connected topics derived."""
         api = self._create_evcc_api([
             'evcc/loadpoints/1/charging',
             'evcc/loadpoints/2/charging',
@@ -68,7 +68,7 @@ class TestEvccModeConnected(unittest.TestCase):
                       api.list_topics_connected)
 
     def test_non_standard_topic_warning(self):
-        """Topic not ending in /charging → warning, no mode/connected sub."""
+        """Topic not ending in /charging -> warning, no mode/connected sub."""
         with self.assertLogs('batcontrol.evcc_api', level='WARNING') as cm:
             api = self._create_evcc_api(['evcc/loadpoints/1/status'])
         self.assertEqual(len(api.list_topics_mode), 0)
@@ -131,33 +131,33 @@ class TestEvccModeConnected(unittest.TestCase):
     # ---- evcc_ev_expects_pv_surplus ----
 
     def test_expects_pv_surplus_connected_pv_mode(self):
-        """connected=true + mode=pv → True."""
+        """connected=true + mode=pv -> True."""
         api = self._create_evcc_api()
         api.evcc_loadpoint_connected['evcc/loadpoints/1'] = True
         api.evcc_loadpoint_mode['evcc/loadpoints/1'] = 'pv'
         self.assertTrue(api.evcc_ev_expects_pv_surplus)
 
     def test_expects_pv_surplus_connected_now_mode(self):
-        """connected=true + mode=now → False."""
+        """connected=true + mode=now -> False."""
         api = self._create_evcc_api()
         api.evcc_loadpoint_connected['evcc/loadpoints/1'] = True
         api.evcc_loadpoint_mode['evcc/loadpoints/1'] = 'now'
         self.assertFalse(api.evcc_ev_expects_pv_surplus)
 
     def test_expects_pv_surplus_disconnected_pv_mode(self):
-        """connected=false + mode=pv → False."""
+        """connected=false + mode=pv -> False."""
         api = self._create_evcc_api()
         api.evcc_loadpoint_connected['evcc/loadpoints/1'] = False
         api.evcc_loadpoint_mode['evcc/loadpoints/1'] = 'pv'
         self.assertFalse(api.evcc_ev_expects_pv_surplus)
 
     def test_expects_pv_surplus_no_data(self):
-        """No data received → False."""
+        """No data received -> False."""
         api = self._create_evcc_api()
         self.assertFalse(api.evcc_ev_expects_pv_surplus)
 
     def test_multi_loadpoint_one_pv(self):
-        """Multi-loadpoint: one connected+pv is enough → True."""
+        """Multi-loadpoint: one connected+pv is enough -> True."""
         api = self._create_evcc_api([
             'evcc/loadpoints/1/charging',
             'evcc/loadpoints/2/charging',
@@ -169,7 +169,7 @@ class TestEvccModeConnected(unittest.TestCase):
         self.assertTrue(api.evcc_ev_expects_pv_surplus)
 
     def test_mode_change_pv_to_now(self):
-        """Mode change from pv to now → evcc_ev_expects_pv_surplus changes to False."""
+        """Mode change from pv to now -> evcc_ev_expects_pv_surplus changes to False."""
         api = self._create_evcc_api()
         api.evcc_loadpoint_connected['evcc/loadpoints/1'] = True
         api.evcc_loadpoint_mode['evcc/loadpoints/1'] = 'pv'

@@ -182,7 +182,7 @@ class TestModeLimitBatteryChargeRate:
         mock_solar.return_value = MagicMock()
         mock_consumption.return_value = MagicMock()
 
-        # Create Batcontrol instance — misconfiguration is corrected at init
+        # Create Batcontrol instance - misconfiguration is corrected at init
         bc = Batcontrol(mock_config)
 
         # min_pv_charge_rate should have been clamped to max_pv_charge_rate at init
