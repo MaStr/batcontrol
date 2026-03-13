@@ -265,6 +265,10 @@ def _apply_peak_shaving(self, settings, calc_input, calc_timestamp):
 
     Note: EVCC checks (charging, connected+pv mode) are handled in core.py, not here.
     """
+    # No production right now: skip calculation (avoid unnecessary work at night)
+    if calc_input.production[0] <= 0:
+        return settings
+
     # After target hour: no limit
     if calc_timestamp.hour >= self.calculation_parameters.peak_shaving_allow_full_after:
         return settings
@@ -433,6 +437,7 @@ QoS: 1 for all topics (consistent with existing MQTT API).
 
 **Decision tests (`_apply_peak_shaving`):**
 - `peak_shaving_enabled = False` → no change to settings
+- Current production = 0 (nighttime) → peak shaving skipped
 - `charge_from_grid = True` → peak shaving skipped, warning logged
 - Battery in always_allow_discharge region → peak shaving skipped
 - Before target hour, limit calculated → `limit_battery_charge_rate` set
@@ -472,6 +477,7 @@ QoS: 1 for all topics (consistent with existing MQTT API).
 6. **Core** — Wire peak shaving config into `CalculationParameters`, EVCC peak shaving guard
 7. **MQTT** — Publish topics + settable topics + HA discovery
 8. **Tests**
+9. **Documentation** — Write `docs/peak_shaving.md` covering feature overview, configuration, EVCC interaction, algorithm explanation, and known limitations
 
 ---
 
@@ -488,6 +494,7 @@ QoS: 1 for all topics (consistent with existing MQTT API).
 | `src/batcontrol/mqtt_api.py` | Peak shaving MQTT topics + HA discovery |
 | `tests/batcontrol/logic/test_peak_shaving.py` | New — algorithm + decision tests |
 | `tests/batcontrol/test_evcc_mode.py` | New — mode/connected topic tests |
+| `docs/peak_shaving.md` | New — feature documentation |
 
 **Not modified:** `default.py` (untouched — peak shaving is in `next.py`)
 
