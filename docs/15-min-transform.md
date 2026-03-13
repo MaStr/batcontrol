@@ -533,7 +533,7 @@ class FCSolar(ForecastSolarBase):
 from .baseclass import ForecastSolarBase
 
 class EvccSolar(ForecastSolarBase):
-    """EVCC solar provider - returns 15-minute data."""
+    """evcc solar provider - returns 15-minute data."""
     
     def __init__(self, config: dict):
         super().__init__(config)
@@ -541,7 +541,7 @@ class EvccSolar(ForecastSolarBase):
         # ... rest of init ...
     
     def _fetch_forecast(self) -> Dict[int, float]:
-        """Fetch 15-minute forecast from EVCC API."""
+        """Fetch 15-minute forecast from evcc API."""
         # Existing API call logic
         # Returns: {0: 250, 1: 300, 2: 350, ...}  # Wh per 15-min
         response = self._call_evcc_api()
@@ -712,7 +712,7 @@ from .baseclass import ForecastSolarBase
 class EvccSolar(ForecastSolarBase):
     def __init__(self, config: dict):
         super().__init__(config)
-        self.native_resolution = 15  # EVCC provides 15-min data
+        self.native_resolution = 15  # evcc provides 15-min data
     
     def _fetch_forecast(self) -> dict[int, float]:
         # Return native 15-minute data
@@ -976,10 +976,10 @@ class Tibber(DynamicTariffBase):
 class EvccTariff(DynamicTariffBase):
     def __init__(self, config: dict):
         super().__init__(config)
-        self.native_resolution = 15  # EVCC provides 15-min data
+        self.native_resolution = 15  # evcc provides 15-min data
     
     def _fetch_prices(self) -> Dict[int, float]:
-        """Fetch 15-minute prices from EVCC API."""
+        """Fetch 15-minute prices from evcc API."""
         # Existing API logic
         # Old code averaged to hourly - now returns native 15-min
         return self._parse_15min_data()
@@ -1032,7 +1032,7 @@ class Energyforecast(DynamicTariffBase):
 **API Documentation**:
 - **Awattar API**: https://www.awattar.de/services/api
 - **Tibber API**: https://developer.tibber.com/docs/guides/pricing
-- **EVCC API**: https://docs.evcc.io/docs/reference/configuration/messaging#grid-tariff
+- **evcc API**: https://docs.evcc.io/docs/reference/configuration/messaging#grid-tariff
 - **Energyforecast API**: https://www.energyforecast.de/api/v1/predictions/next_48_hours
 
 **Price Handling Note**: 
@@ -2328,7 +2328,7 @@ def upsample_forecast(hourly_data: dict, interval_minutes: int,
 - **Q**: Which electricity tariff provider(s) do you currently use?
   - [ ] Awattar (Germany/Austria)
   - [ ] Tibber (Nordic countries, Germany, Netherlands)
-  - [ ] EVCC integration
+  - [ ] evcc integration
   - [ ] Other: _______________
   
 - **Q**: What is your tariff's price update frequency?
@@ -2754,7 +2754,7 @@ Instead of each provider implementing upsampling/downsampling logic, we use a **
     │               │               │
     ├─────┬─────┬───┼───┬───────┬───┼────┬────┐
     │     │     │   │   │       │   │    │    │
-FCSolar │  EVCC│ Awattar Tibber EVCC│  CSV  │  HA
+FCSolar │  evcc│ Awattar Tibber evcc│  CSV  │  HA
      Prognose Solar              Tariff Profile Forecast
 ```
 

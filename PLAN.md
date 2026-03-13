@@ -6,9 +6,9 @@ Add peak shaving to batcontrol: manage PV battery charging rate so the battery f
 
 **Problem:** All PV systems in the country produce peak power around midday. Most batteries are full by then, causing excess PV to be fed into the grid at a time when grid prices are lowest and - for newer installations - feed-in may not be compensated at all. Peak shaving spreads battery charging over time so the system absorbs as much solar energy as possible into the battery, rather than feeding it into the grid during peak hours.
 
-**EVCC interaction:**
+**evcc interaction:**
 - When an EV is actively charging (`charging=true`), peak shaving is disabled - the EV consumes the excess PV.
-- When an EV is connected and the loadpoint mode is `pv`, peak shaving is also disabled - EVCC+EV will naturally absorb excessive PV energy once the surplus threshold is reached.
+- When an EV is connected and the loadpoint mode is `pv`, peak shaving is also disabled - evcc+EV will naturally absorb excessive PV energy once the surplus threshold is reached.
 - If the EV disconnects or the mode changes away from `pv`, peak shaving is re-enabled.
 
 Uses the existing **MODE 8 (limit_battery_charge_rate)** to throttle PV charging.
@@ -57,17 +57,17 @@ The `type: next` logic includes all existing `DefaultLogic` behavior plus peak s
 
 ---
 
-## 2. EVCC Integration - Loadpoint Mode & Connected State
+## 2. evcc Integration - Loadpoint Mode & Connected State
 
 ### 2.1 Approach
 
-Peak shaving is disabled when **any** of the following EVCC conditions are true:
+Peak shaving is disabled when **any** of the following evcc conditions are true:
 1. **`charging = true`** - EV is actively charging (already tracked)
 2. **`connected = true` AND `mode = pv`** - EV is plugged in and waiting for PV surplus
 
-The EVCC check is handled in `core.py`, **not** in the logic layer. EVCC is an external integration concern, same pattern as `discharge_blocked`.
+The evcc check is handled in `core.py`, **not** in the logic layer. evcc is an external integration concern, same pattern as `discharge_blocked`.
 
-### 2.2 New EVCC Topics - Derived from `loadpoint_topic`
+### 2.2 New evcc Topics - Derived from `loadpoint_topic`
 
 The `mode` and `connected` topics are derived from the existing `loadpoint_topic` config by stripping `/charging` and appending the relevant suffix:
 
@@ -140,7 +140,7 @@ def evcc_ev_expects_pv_surplus(self) -> bool:
 
 **`shutdown`:** Unsubscribe from mode and connected topics.
 
-**EVCC offline reset:** When EVCC goes offline (status message received), mode and connected state are reset to prevent stale values:
+**evcc offline reset:** When evcc goes offline (status message received), mode and connected state are reset to prevent stale values:
 ```python
 for root in list(self.evcc_loadpoint_mode.keys()):
     self.evcc_loadpoint_mode[root] = None
@@ -363,7 +363,7 @@ def _apply_peak_shaving(self, settings, calc_input, calc_timestamp):
     - Force-charge from grid active (MODE -1)
     - Discharge not allowed (battery preserved for high-price hours)
 
-    Note: EVCC checks (charging, connected+pv mode) are handled in core.py.
+    Note: evcc checks (charging, connected+pv mode) are handled in core.py.
     """
     mode = self.calculation_parameters.peak_shaving_mode
     price_limit = self.calculation_parameters.peak_shaving_price_limit
@@ -512,14 +512,14 @@ calc_parameters = CalculationParameters(
 )
 ```
 
-### 5.3 EVCC Peak Shaving Guard
+### 5.3 evcc Peak Shaving Guard
 
-The EVCC check is handled in `core.py`, keeping EVCC concerns out of the logic layer. This follows the same pattern as `discharge_blocked` (line 536-541 in current code).
+The evcc check is handled in `core.py`, keeping evcc concerns out of the logic layer. This follows the same pattern as `discharge_blocked` (line 536-541 in current code).
 
-After `logic.calculate()` returns and before mode dispatch, peak shaving is overridden if EVCC conditions require it:
+After `logic.calculate()` returns and before mode dispatch, peak shaving is overridden if evcc conditions require it:
 
 ```python
-# EVCC disables peak shaving (handled in core, not logic)
+# evcc disables peak shaving (handled in core, not logic)
 if self.evcc_api is not None:
     evcc_disable_peak_shaving = (
         self.evcc_api.evcc_is_charging or
@@ -527,7 +527,7 @@ if self.evcc_api is not None:
     )
     if evcc_disable_peak_shaving and inverter_settings.limit_battery_charge_rate >= 0:
         if self.evcc_api.evcc_is_charging:
-            logger.debug('[PeakShaving] Disabled: EVCC is actively charging')
+            logger.debug('[PeakShaving] Disabled: evcc is actively charging')
         else:
             logger.debug('[PeakShaving] Disabled: EV connected in PV mode')
         inverter_settings.limit_battery_charge_rate = -1
@@ -605,7 +605,7 @@ QoS: default (0) for all topics (consistent with existing MQTT API).
 - Zero allowed (free price slots)
 - Negative value raises `ValueError`
 
-### 7.2 EVCC Tests (`tests/batcontrol/test_evcc_mode.py`)
+### 7.2 evcc Tests (`tests/batcontrol/test_evcc_mode.py`)
 
 - Topic derivation: `evcc/loadpoints/1/charging` -> mode: `evcc/loadpoints/1/mode`, connected: `evcc/loadpoints/1/connected`
 - Non-standard topic (not ending in `/charging`) -> warning, no mode/connected sub
@@ -618,12 +618,12 @@ QoS: default (0) for all topics (consistent with existing MQTT API).
 - Multi-loadpoint: one connected+pv is enough to return True
 - Mode change from pv to now -> `evcc_ev_expects_pv_surplus` changes to False
 
-### 7.3 Core EVCC Guard Tests (`tests/batcontrol/test_core.py`)
+### 7.3 Core evcc Guard Tests (`tests/batcontrol/test_core.py`)
 
-- EVCC actively charging + charge limit active -> limit cleared to -1
+- evcc actively charging + charge limit active -> limit cleared to -1
 - EV connected in PV mode + charge limit active -> limit cleared to -1
-- EVCC not charging and no PV mode -> charge limit preserved
-- No charge limit active (-1) + EVCC charging -> no change (stays -1)
+- evcc not charging and no PV mode -> charge limit preserved
+- No charge limit active (-1) + evcc charging -> no change (stays -1)
 
 ### 7.4 Config Tests
 
@@ -638,13 +638,13 @@ QoS: default (0) for all topics (consistent with existing MQTT API).
 
 1. **Config** - Add `peak_shaving` section to dummy config, add `type: next` option
 2. **Data model** - Extend `CalculationParameters` with peak shaving fields
-3. **EVCC** - Add mode and connected topic subscriptions, `evcc_ev_expects_pv_surplus` property
+3. **evcc** - Add mode and connected topic subscriptions, `evcc_ev_expects_pv_surplus` property
 4. **NextLogic** - New file `next.py`: copy DefaultLogic, add `_calculate_peak_shaving_charge_limit()`, `_apply_peak_shaving()`
 5. **Logic factory** - Add `type: next` -> `NextLogic` in `logic.py`
-6. **Core** - Wire peak shaving config into `CalculationParameters`, EVCC peak shaving guard
+6. **Core** - Wire peak shaving config into `CalculationParameters`, evcc peak shaving guard
 7. **MQTT** - Publish topics + settable topics + HA discovery
 8. **Tests**
-9. **Documentation** - Write `docs/peak_shaving.md` covering feature overview, configuration, EVCC interaction, algorithm explanation, and known limitations
+9. **Documentation** - Write `docs/peak_shaving.md` covering feature overview, configuration, evcc interaction, algorithm explanation, and known limitations
 
 ---
 
@@ -657,11 +657,11 @@ QoS: default (0) for all topics (consistent with existing MQTT API).
 | `src/batcontrol/logic/next.py` | **New** - `NextLogic` class with peak shaving |
 | `src/batcontrol/logic/logic.py` | Add `type: next` -> `NextLogic` |
 | `src/batcontrol/evcc_api.py` | Add mode + connected topic subscriptions, `evcc_ev_expects_pv_surplus` |
-| `src/batcontrol/core.py` | Wire peak shaving config into `CalculationParameters`, EVCC peak shaving guard |
+| `src/batcontrol/core.py` | Wire peak shaving config into `CalculationParameters`, evcc peak shaving guard |
 | `src/batcontrol/mqtt_api.py` | Peak shaving MQTT topics + HA discovery |
 | `tests/batcontrol/logic/test_peak_shaving.py` | New - algorithm + decision tests |
 | `tests/batcontrol/test_evcc_mode.py` | New - mode/connected topic tests |
-| `tests/batcontrol/test_core.py` | Add EVCC peak shaving guard tests |
+| `tests/batcontrol/test_core.py` | Add evcc peak shaving guard tests |
 | `docs/WIKI_peak_shaving.md` | New - feature documentation |
 
 **Not modified:** `default.py` (untouched - peak shaving is in `next.py`)
@@ -672,7 +672,7 @@ QoS: default (0) for all topics (consistent with existing MQTT API).
 
 1. **New independent logic class:** Peak shaving lives in `NextLogic` (`type: next`), not as a modification to `DefaultLogic`. This keeps the stable default path untouched and allows the next logic to evolve independently. `NextLogic` is a full copy of `DefaultLogic` with peak shaving added.
 
-2. **EVCC integration:** Handled in `core.py` (not logic layer). Peak shaving is disabled when `evcc_is_charging` OR (`connected=true` AND `mode=pv`). The mode and connected topics are derived from the existing `loadpoint_topic` config by stripping `/charging`. No `chargePower` subscription - it was reported as unreliable.
+2. **evcc integration:** Handled in `core.py` (not logic layer). Peak shaving is disabled when `evcc_is_charging` OR (`connected=true` AND `mode=pv`). The mode and connected topics are derived from the existing `loadpoint_topic` config by stripping `/charging`. No `chargePower` subscription - it was reported as unreliable.
 
 3. **Grid charging interaction (MODE -1 vs MODE 8):** `force_charge` takes priority. If price logic triggers grid charging during peak shaving hours, a warning is logged but grid charging proceeds.
 

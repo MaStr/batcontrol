@@ -61,6 +61,7 @@ class Batcontrol:
         self.last_mode = None
         self.last_charge_rate = 0
         self._limit_battery_charge_rate = -1  # Dynamic battery charge rate limit (-1 = no limit)
+        self._evcc_peak_shaving_disabled = False  # Tracks last evcc-disable state for log messages
         self.last_prices = None
         self.last_consumption = None
         self.last_production = None
@@ -557,20 +558,26 @@ class Batcontrol:
             logger.debug('Discharge blocked due to external lock')
             inverter_settings.allow_discharge = False
 
-        # EVCC disables peak shaving (handled in core, not logic)
+        # evcc disables peak shaving (handled in core, not logic)
         if self.evcc_api is not None:
             evcc_disable_peak_shaving = (
                 self.evcc_api.evcc_is_charging or
                 self.evcc_api.evcc_ev_expects_pv_surplus
             )
-            if evcc_disable_peak_shaving and inverter_settings.limit_battery_charge_rate >= 0:
-                if self.evcc_api.evcc_is_charging:
-                    logger.debug('[PeakShaving] Disabled: EVCC is actively charging')
-                else:
-                    logger.debug('[PeakShaving] Disabled: EV connected in PV mode')
-                inverter_settings.limit_battery_charge_rate = -1
+            if evcc_disable_peak_shaving:
+                if inverter_settings.limit_battery_charge_rate >= 0:
+                    if self.evcc_api.evcc_is_charging:
+                        logger.debug('[PeakShaving] Disabled: evcc is actively charging')
+                    else:
+                        logger.debug('[PeakShaving] Disabled: EV connected in PV mode')
+                    inverter_settings.limit_battery_charge_rate = -1
+            else:
+                if self._evcc_peak_shaving_disabled:
+                    logger.debug('[PeakShaving] Re-enabled: evcc no longer blocking '
+                                 '(EV disconnected or mode changed away from pv)')
+            self._evcc_peak_shaving_disabled = evcc_disable_peak_shaving
 
-        # Publish peak shaving charge limit (after EVCC guard may have cleared it)
+        # Publish peak shaving charge limit (after evcc guard may have cleared it)
         peak_shaving_enabled = peak_shaving_config.get('enabled', False)
         if self.mqtt_api is not None and peak_shaving_enabled:
             self.mqtt_api.publish_peak_shaving_charge_limit(

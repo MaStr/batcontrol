@@ -288,7 +288,7 @@ class TestModeLimitBatteryChargeRate:
 
 
 class TestEvccPeakShavingGuard:
-    """Test EVCC peak shaving guard in core.py run loop."""
+    """Test evcc peak shaving guard in core.py run loop."""
 
     @pytest.fixture
     def mock_config(self):
@@ -347,11 +347,11 @@ class TestEvccPeakShavingGuard:
     def test_evcc_charging_clears_charge_limit(
         self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
         mock_config):
-        """When EVCC is actively charging, peak shaving charge limit is cleared."""
+        """When evcc is actively charging, peak shaving charge limit is cleared."""
         bc = self._create_bc(mock_config, mock_inverter_factory, mock_tariff,
                              mock_solar, mock_consumption)
 
-        # Simulate EVCC API
+        # Simulate evcc API
         mock_evcc = MagicMock()
         mock_evcc.evcc_is_charging = True
         mock_evcc.evcc_ev_expects_pv_surplus = False
@@ -366,7 +366,7 @@ class TestEvccPeakShavingGuard:
             limit_battery_charge_rate=500
         )
 
-        # Apply the EVCC guard logic (same block as in core.py run loop)
+        # Apply the evcc guard logic (same block as in core.py run loop)
         evcc_disable_peak_shaving = (
             bc.evcc_api.evcc_is_charging or
             bc.evcc_api.evcc_ev_expects_pv_surplus
@@ -416,7 +416,7 @@ class TestEvccPeakShavingGuard:
     def test_evcc_not_charging_preserves_charge_limit(
         self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
         mock_config):
-        """When EVCC is not charging and no PV mode, charge limit is preserved."""
+        """When evcc is not charging and no PV mode, charge limit is preserved."""
         bc = self._create_bc(mock_config, mock_inverter_factory, mock_tariff,
                              mock_solar, mock_consumption)
 
@@ -449,7 +449,7 @@ class TestEvccPeakShavingGuard:
     def test_evcc_no_limit_active_no_change(
         self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
         mock_config):
-        """When no charge limit is active (=-1), EVCC guard doesn't modify it."""
+        """When no charge limit is active (=-1), evcc guard doesn't modify it."""
         bc = self._create_bc(mock_config, mock_inverter_factory, mock_tariff,
                              mock_solar, mock_consumption)
 

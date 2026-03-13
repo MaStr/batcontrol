@@ -63,7 +63,7 @@ class EvccSolar(ForecastSolarBaseclass):
         """
         super().__init__(pvinstallations, timezone, min_time_between_api_calls, api_delay,
                          target_resolution=target_resolution,
-                         native_resolution=15)  # EVCC provides 15-minute data
+                         native_resolution=15)  # evcc provides 15-minute data
 
         # Extract URL from pvinstallations config
         if not pvinstallations or not isinstance(pvinstallations, list):

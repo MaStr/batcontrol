@@ -1,4 +1,4 @@
-"""Tests for EVCC mode and connected topic handling for peak shaving.
+"""Tests for evcc mode and connected topic handling for peak shaving.
 
 Tests cover:
 - Topic derivation from loadpoint /charging topics
@@ -23,7 +23,7 @@ class MockMessage:
 
 
 class TestEvccModeConnected(unittest.TestCase):
-    """Tests for mode/connected EVCC topic handling."""
+    """Tests for mode/connected evcc topic handling."""
 
     def _create_evcc_api(self, loadpoint_topics=None):
         """Create an EvccApi instance with mocked MQTT client."""
