@@ -31,21 +31,16 @@ peak_shaving:
 
 ### 2.1 Approach
 
-Peak shaving uses the **existing** `evcc_is_charging` boolean from `evcc_api.py` to decide whether to apply PV charge limiting. No new EVCC subscriptions or topics are needed.
+The EVCC check is handled in `core.py`, **not** in the logic layer. EVCC is an external integration concern independent of the calculation logic — similar to how `discharge_blocked` is handled in `core.py` today.
 
-- `evcc_is_charging = True` → peak shaving disabled (EV is consuming energy)
+- `evcc_is_charging = True` → `core.py` skips peak shaving entirely (does not pass it to logic)
 - `evcc_is_charging = False` → peak shaving may apply
 
 **Note:** We intentionally do **not** subscribe to or rely on `chargePower`. The existing `charging` topic is sufficient for the peak shaving decision.
 
-### 2.2 No Changes to `evcc_api.py`
+### 2.2 No Changes to `evcc_api.py` or Logic Layer
 
-The existing EVCC integration already provides:
-- `self.evcc_is_charging` — whether any loadpoint is actively charging
-- Discharge blocking during EV charging
-- Battery halt SOC management
-
-Peak shaving only needs the `evcc_is_charging` boolean, which is already available in `core.py` via `self.evcc_api.evcc_is_charging`.
+The existing EVCC integration already provides `self.evcc_is_charging` in `core.py` via `self.evcc_api.evcc_is_charging`. The logic layer (`default.py`) does not need to know about EVCC — the decision to skip peak shaving during EV charging is made in `core.py` before/after calling the logic.
 
 ---
 
@@ -127,15 +122,11 @@ def _calculate_peak_shaving_charge_limit(self, calc_input, calc_timestamp):
     return int(charge_rate_w)
 ```
 
-### 3.3 EVCC Charging Disables Peak Shaving
-
-When EVCC reports `charging=true`, peak shaving is disabled. All energy goes to EV.
-
-### 3.4 Always-Allow-Discharge Region Skips Peak Shaving
+### 3.3 Always-Allow-Discharge Region Skips Peak Shaving
 
 When `stored_energy >= max_capacity * always_allow_discharge_limit`, the battery is in the "always allow discharge" region. In this region, peak shaving is **not applied** — the system is already at high SOC and the normal discharge logic takes over. This also avoids toggling issues when SOC fluctuates near 100%.
 
-### 3.5 Force Charge (MODE -1) Takes Priority Over Peak Shaving
+### 3.4 Force Charge (MODE -1) Takes Priority Over Peak Shaving
 
 If the price-based logic decides to force charge from grid (`charge_from_grid=True`), this overrides peak shaving. The force charge decision means energy is cheap enough to justify grid charging — peak shaving should not interfere.
 
@@ -149,7 +140,7 @@ In practice, force charge should rarely trigger during peak shaving hours becaus
 - Prices are typically low during peak PV (no incentive to grid-charge)
 - There should be enough PV to fill the battery by the target hour
 
-### 3.6 Implementation in `default.py`
+### 3.5 Implementation in `default.py`
 
 **Post-processing step** in `calculate_inverter_mode()`, after existing logic returns `inverter_control_settings`:
 
@@ -169,8 +160,9 @@ def _apply_peak_shaving(self, settings, calc_input, calc_timestamp):
     Skipped when:
     - Past the target hour (allow_full_battery_after)
     - Battery is in always_allow_discharge region (high SOC)
-    - EVCC is actively charging an EV
     - Force charge from grid is active (MODE -1)
+
+    Note: EVCC charging check is handled in core.py, not here.
     """
     # After target hour: no limit
     if calc_timestamp.hour >= self.calculation_parameters.peak_shaving_allow_full_after:
@@ -179,11 +171,6 @@ def _apply_peak_shaving(self, settings, calc_input, calc_timestamp):
     # In always_allow_discharge region: skip peak shaving
     if self.common.is_discharge_always_allowed_capacity(calc_input.stored_energy):
         logger.debug('[PeakShaving] Skipped: battery in always_allow_discharge region')
-        return settings
-
-    # EVCC charging: skip peak shaving
-    if self.calculation_parameters.evcc_is_charging:
-        logger.debug('[PeakShaving] Skipped: EVCC is charging')
         return settings
 
     # Force charge takes priority over peak shaving
@@ -212,7 +199,7 @@ def _apply_peak_shaving(self, settings, calc_input, calc_timestamp):
     return settings
 ```
 
-### 3.7 Data Flow — Extended `CalculationParameters`
+### 3.6 Data Flow — Extended `CalculationParameters`
 
 Peak shaving configuration is passed via the existing `CalculationParameters` dataclass (consistent with existing interface pattern):
 
@@ -227,16 +214,11 @@ class CalculationParameters:
     # Peak shaving parameters
     peak_shaving_enabled: bool = False
     peak_shaving_allow_full_after: int = 14  # Hour (0-23)
-    evcc_is_charging: bool = False  # Whether any EVCC loadpoint is actively charging
 ```
 
 In `core.py`, the `CalculationParameters` constructor is extended:
 
 ```python
-evcc_is_charging = False
-if self.evcc_api is not None:
-    evcc_is_charging = self.evcc_api.evcc_is_charging
-
 peak_shaving_config = self.config.get('peak_shaving', {})
 
 calc_parameters = CalculationParameters(
@@ -246,7 +228,6 @@ calc_parameters = CalculationParameters(
     self.get_max_capacity(),
     peak_shaving_enabled=peak_shaving_config.get('enabled', False),
     peak_shaving_allow_full_after=peak_shaving_config.get('allow_full_battery_after', 14),
-    evcc_is_charging=evcc_is_charging,
 )
 ```
 
@@ -264,9 +245,25 @@ No new instance vars needed. Peak shaving config is read from `self.config` each
 
 ### 4.2 Run Loop
 
-Extend `CalculationParameters` construction (see Section 3.7). No other changes to the run loop.
+Extend `CalculationParameters` construction (see Section 3.6).
 
-### 4.3 Mode Selection
+### 4.3 EVCC Charging Check
+
+The EVCC charging check is handled in `core.py`, keeping EVCC concerns out of the logic layer. This follows the same pattern as `discharge_blocked` (line 536-541 in current code).
+
+After `logic.calculate()` returns and before mode dispatch, if EVCC is charging and peak shaving produced a charge limit, the limit is cleared:
+
+```python
+# EVCC charging disables peak shaving (handled in core, not logic)
+evcc_is_charging = (self.evcc_api is not None and self.evcc_api.evcc_is_charging)
+if evcc_is_charging and inverter_settings.limit_battery_charge_rate >= 0:
+    logger.debug('[PeakShaving] Skipped: EVCC is charging')
+    inverter_settings.limit_battery_charge_rate = -1
+```
+
+**Note:** This is a simple approach. If `limit_battery_charge_rate` was set by non-peak-shaving logic, this would also clear it. However, in the current codebase, MODE 8 with `allow_discharge=True` is only set by peak shaving (the existing logic uses MODE 8 only in combination with `allow_discharge=False` for the "avoid discharge" path). If this changes in the future, a more targeted approach (e.g., a flag on the settings) would be needed.
+
+### 4.4 Mode Selection
 
 In the mode selection block (after `logic.calculate()`), `limit_battery_charge_rate >= 0` already triggers MODE 8 via `self.limit_battery_charge_rate()`. No changes needed — peak shaving sets the limit in `InverterControlSettings` and the existing dispatch handles it.
 
@@ -307,7 +304,6 @@ QoS: 1 for all topics (consistent with existing MQTT API).
 
 **Decision tests (`_apply_peak_shaving`):**
 - `peak_shaving_enabled = False` → no change to settings
-- `evcc_is_charging = True` → peak shaving skipped
 - `charge_from_grid = True` → peak shaving skipped, warning logged
 - Battery in always_allow_discharge region → peak shaving skipped
 - Before target hour, limit calculated → `limit_battery_charge_rate` set
@@ -339,9 +335,9 @@ QoS: 1 for all topics (consistent with existing MQTT API).
 | File | Change |
 |------|--------|
 | `config/batcontrol_config_dummy.yaml` | Add `peak_shaving` section |
-| `src/batcontrol/logic/logic_interface.py` | Add peak shaving fields + `evcc_is_charging` to `CalculationParameters` |
+| `src/batcontrol/logic/logic_interface.py` | Add peak shaving fields to `CalculationParameters` |
 | `src/batcontrol/logic/default.py` | `_calculate_peak_shaving_charge_limit()`, `_apply_peak_shaving()` |
-| `src/batcontrol/core.py` | Wire EVCC state + peak shaving config into `CalculationParameters` |
+| `src/batcontrol/core.py` | Wire peak shaving config into `CalculationParameters`, EVCC charging guard |
 | `src/batcontrol/mqtt_api.py` | Peak shaving MQTT topics + HA discovery |
 | `tests/batcontrol/logic/test_peak_shaving.py` | New — algorithm + decision tests |
 
@@ -351,7 +347,7 @@ QoS: 1 for all topics (consistent with existing MQTT API).
 
 ## 9. Resolved Design Decisions
 
-1. **EVCC integration:** Use existing `evcc_is_charging` boolean only. No `chargePower` subscription — it was reported as unreliable and is not needed for the on/off peak shaving decision.
+1. **EVCC integration:** Use existing `evcc_is_charging` boolean only, checked in `core.py` (not in logic layer). No `chargePower` subscription — it was reported as unreliable and is not needed for the on/off peak shaving decision. EVCC is an external integration concern and stays in `core.py`, following the same pattern as `discharge_blocked`.
 
 2. **Grid charging interaction (MODE -1 vs MODE 8):** `force_charge` takes priority. If price logic triggers grid charging during peak shaving hours, a warning is logged but grid charging proceeds. This should rarely occur in practice because PV-heavy hours have low prices.
 
