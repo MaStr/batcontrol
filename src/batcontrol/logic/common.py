@@ -120,7 +120,7 @@ class CommonLogic:
             charge_rate (float): The initial charge rate in W.
         Returns:
             int: The adjusted charge rate in W."""
-        logger.debug('Calculating charge rate: %s', charge_rate)
+        logger.debug('Calculating charge rate: %.1f W', charge_rate)
         adjusted_charge_rate = charge_rate * self.charge_rate_multiplier
         if adjusted_charge_rate < MIN_CHARGE_RATE:
             logger.debug(
