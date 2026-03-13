@@ -24,9 +24,14 @@ class CalculationParameters:
     # Peak shaving parameters
     peak_shaving_enabled: bool = False
     peak_shaving_allow_full_after: int = 14  # Hour (0-23)
-    # Slots where price <= this limit (€/kWh) are treated as cheap PV windows.
-    # Battery capacity is reserved so those slots can be absorbed fully.
-    # When None, peak shaving is disabled regardless of the enabled flag.
+    # Operating mode:
+    #   'time'     - limit by target hour only (allow_full_battery_after)
+    #   'price'    - limit by cheap-slot reservation only (price_limit required)
+    #   'combined' - both limits active, stricter one wins
+    peak_shaving_mode: str = 'combined'
+    # Slots where price (Euro/kWh) is at or below this value are treated as
+    # cheap PV windows.  -1 or any numeric value accepted; None disables
+    # price-based component.
     peak_shaving_price_limit: Optional[float] = None
 
     def __post_init__(self):
@@ -35,11 +40,17 @@ class CalculationParameters:
                 f"peak_shaving_allow_full_after must be 0-23, "
                 f"got {self.peak_shaving_allow_full_after}"
             )
-        if (self.peak_shaving_price_limit is not None
-                and self.peak_shaving_price_limit < 0):
+        valid_modes = ('time', 'price', 'combined')
+        if self.peak_shaving_mode not in valid_modes:
             raise ValueError(
-                f"peak_shaving_price_limit must be >= 0, "
-                f"got {self.peak_shaving_price_limit}"
+                f"peak_shaving_mode must be one of {valid_modes}, "
+                f"got '{self.peak_shaving_mode}'"
+            )
+        if (self.peak_shaving_price_limit is not None
+                and not isinstance(self.peak_shaving_price_limit, (int, float))):
+            raise ValueError(
+                f"peak_shaving_price_limit must be numeric or None, "
+                f"got {type(self.peak_shaving_price_limit).__name__}"
             )
 
 @dataclass

@@ -528,6 +528,7 @@ class Batcontrol:
             peak_shaving_enabled=peak_shaving_config.get('enabled', False),
             peak_shaving_allow_full_after=peak_shaving_config.get(
                 'allow_full_battery_after', 14),
+            peak_shaving_mode=peak_shaving_config.get('mode', 'combined'),
             peak_shaving_price_limit=peak_shaving_config.get('price_limit', None),
         )
 
