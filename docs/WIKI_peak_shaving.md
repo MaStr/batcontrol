@@ -99,22 +99,22 @@ Peak shaving is automatically skipped when:
 4. **Battery in always_allow_discharge region** - SOC is already high
 5. **Grid charging active (MODE -1)** - force charge takes priority
 6. **Discharge not allowed** - battery is being preserved for upcoming high-price hours
-7. **EVCC is actively charging** - EV consumes the excess PV
-8. **EV connected in PV mode** - EVCC will absorb PV surplus
+7. **evcc is actively charging** - EV consumes the excess PV
+8. **EV connected in PV mode** - evcc will absorb PV surplus
 
 The price-based component also returns no limit when:
 - No cheap slots exist in the forecast
 - Inside cheap window and total surplus fits in free capacity (absorb freely)
 
-### EVCC Interaction
+### evcc Interaction
 
-When an EV charger is managed by EVCC:
+When an EV charger is managed by evcc:
 
 - **EV actively charging** (`charging=true`): Peak shaving is disabled - the EV consumes the excess PV
-- **EV connected in PV mode** (`connected=true` AND `mode=pv`): Peak shaving is disabled - EVCC will naturally absorb surplus PV when the threshold is reached
+- **EV connected in PV mode** (`connected=true` AND `mode=pv`): Peak shaving is disabled - evcc will naturally absorb surplus PV when the threshold is reached
 - **EV disconnects or mode changes**: Peak shaving is re-enabled
 
-The EVCC integration derives `mode` and `connected` topics automatically from the configured `loadpoint_topic` by replacing `/charging` with `/mode` and `/connected`.
+The evcc integration derives `mode` and `connected` topics automatically from the configured `loadpoint_topic` by replacing `/charging` with `/mode` and `/connected`.
 
 ## MQTT API
 

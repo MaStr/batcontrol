@@ -77,8 +77,8 @@ class EvccApi():
         self.evcc_is_charging = False
 
         self.evcc_loadpoint_status = {}
-        self.evcc_loadpoint_mode = {}       # topic_root → mode string ("pv", "now", "minpv", "off")
-        self.evcc_loadpoint_connected = {}  # topic_root → bool
+        self.evcc_loadpoint_mode = {}       # topic_root -> mode string ("pv", "now", "minpv", "off")
+        self.evcc_loadpoint_connected = {}  # topic_root -> bool
         self.list_topics_mode = []          # derived mode topics
         self.list_topics_connected = []     # derived connected topics
 
@@ -367,7 +367,7 @@ class EvccApi():
         mode = message.payload.decode('utf-8').strip().lower()
         old_mode = self.evcc_loadpoint_mode.get(root)
         if old_mode != mode:
-            logger.info('Loadpoint %s mode changed: %s → %s', root, old_mode, mode)
+            logger.info('Loadpoint %s mode changed: %s -> %s', root, old_mode, mode)
             self.evcc_loadpoint_mode[root] = mode
 
     def handle_connected_message(self, message):

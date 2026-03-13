@@ -1,6 +1,6 @@
-"""Tests for EVCC dynamic tariff provider with 15-minute native resolution.
+"""Tests for evcc dynamic tariff provider with 15-minute native resolution.
 
-The EVCC provider has native_resolution=15 and returns 15-minute interval prices directly.
+The evcc provider has native_resolution=15 and returns 15-minute interval prices directly.
 Averaging to hourly is done by the baseclass when target_resolution=60.
 """
 import unittest
@@ -239,7 +239,7 @@ class TestEvcc(unittest.TestCase):
         self.assertEqual(prices[8], 0.28)
 
     def test_native_resolution_is_15min(self):
-        """Test that EVCC provider has native 15-min resolution"""
+        """Test that evcc provider has native 15-min resolution"""
         evcc = Evcc(self.timezone, self.url)
         self.assertEqual(evcc.native_resolution, 15)
 

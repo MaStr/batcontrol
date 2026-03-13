@@ -226,7 +226,7 @@ class NextLogic(LogicInterface):
         - Force-charge from grid active (MODE -1)
         - Discharge not allowed (battery preserved for high-price hours)
 
-        Note: EVCC checks (charging, connected+pv mode) are handled in
+        Note: evcc checks (charging, connected+pv mode) are handled in
               core.py, not here.
         """
         mode = self.calculation_parameters.peak_shaving_mode

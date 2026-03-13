@@ -35,13 +35,13 @@ class Evcc(DynamicTariffBaseclass):
         Inherits from DynamicTariffBaseclass
 
         Native resolution: 15 minutes
-        EVCC provides 15-minute price data natively.
+        evcc provides 15-minute price data natively.
         Baseclass handles averaging to hourly if target_resolution=60.
     """
 
     def __init__(self, timezone, url, min_time_between_API_calls=60,
                  target_resolution: int = 60):
-        # EVCC provides native 15-minute data
+        # evcc provides native 15-minute data
         super().__init__(
             timezone,
             min_time_between_API_calls,
@@ -118,7 +118,7 @@ class Evcc(DynamicTariffBaseclass):
                 prices[rel_interval] = price
 
         logger.debug(
-            'EVCC: Retrieved %d prices at 15-min resolution (hour-aligned)',
+            'evcc: Retrieved %d prices at 15-min resolution (hour-aligned)',
             len(prices)
         )
         return prices
