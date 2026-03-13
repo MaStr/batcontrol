@@ -19,17 +19,17 @@ class Logic:
         logic = None
         if request_type == 'default':
             if Logic.print_class_message:
-                logger.info('Using default logic')
+                logger.info('Using "default" logic')
                 Logic.print_class_message = False
             logic = DefaultLogic(timezone, interval_minutes=interval_minutes)
         elif request_type == 'next':
             if Logic.print_class_message:
-                logger.info('Using next logic (with peak shaving support)')
+                logger.info('Using "next" logic (with peak shaving support)')
                 Logic.print_class_message = False
             logic = NextLogic(timezone, interval_minutes=interval_minutes)
         else:
             raise RuntimeError(
-                f'[Logic] Unknown logic type {request_type}')
+                f'[Logic] Unknown logic type "{request_type}" specified in configuration')
 
         # Apply expert tuning attributes (shared between default and next)
         if config.get('battery_control_expert', None) is not None:
