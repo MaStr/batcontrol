@@ -16,6 +16,9 @@ import os
 import logging
 import platform
 
+from dataclasses import dataclass
+from typing import Optional
+
 import pytz
 import numpy as np
 
@@ -48,6 +51,27 @@ MODE_AVOID_DISCHARGING = 0
 MODE_FORCE_CHARGING = -1
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PeakShavingConfig:
+    """ Holds peak shaving configuration parameters, initialized from the config dict. """
+    enabled: bool = False
+    mode: str = 'combined'
+    allow_full_battery_after: int = 14
+    price_limit: Optional[float] = None
+
+    @classmethod
+    def from_config(cls, config: dict) -> 'PeakShavingConfig':
+        """ Create a PeakShavingConfig instance from a configuration dict. """
+        ps = config.get('peak_shaving', {})
+        price_limit_raw = ps.get('price_limit', None)
+        return cls(
+            enabled=ps.get('enabled', False),
+            mode=ps.get('mode', 'combined'),
+            allow_full_battery_after=ps.get('allow_full_battery_after', 14),
+            price_limit=float(price_limit_raw) if price_limit_raw is not None else None,
+        )
 
 
 class Batcontrol:
@@ -191,6 +215,8 @@ class Batcontrol:
 
         self.batconfig = config['battery_control']
         self.time_at_forecast_error = -1
+
+        self.peak_shaving_config = PeakShavingConfig.from_config(config)
 
         self.max_charging_from_grid_limit = self.batconfig.get(
             'max_charging_from_grid_limit', 0.8)
@@ -519,18 +545,37 @@ class Batcontrol:
             self.get_stored_usable_energy(),
             self.get_free_capacity()
         )
-        peak_shaving_config = self.config.get('peak_shaving', {})
+        peak_shaving_config_enabled = self.peak_shaving_config.enabled
+
+        if peak_shaving_config_enabled:
+            # Determine whether evcc conditions require peak shaving to be disabled.
+            # This must happen before building calc_parameters so the logic never
+            # runs peak shaving unnecessarily.
+            evcc_disable_peak_shaving = False
+            if self.evcc_api is not None:
+                evcc_disable_peak_shaving = (
+                    self.evcc_api.evcc_is_charging or
+                    self.evcc_api.evcc_ev_expects_pv_surplus
+                )
+                if evcc_disable_peak_shaving:
+                    if self.evcc_api.evcc_is_charging:
+                        logger.debug('[PeakShaving] Disabled: evcc is actively charging')
+                    else:
+                        logger.debug('[PeakShaving] Disabled: EV connected in PV mode')
+                elif self._evcc_peak_shaving_disabled:
+                    logger.debug('[PeakShaving] Re-enabled: evcc no longer blocking '
+                                '(EV disconnected or mode changed away from pv)')
+                self._evcc_peak_shaving_disabled = evcc_disable_peak_shaving
 
         calc_parameters = CalculationParameters(
             self.max_charging_from_grid_limit,
             self.min_price_difference,
             self.min_price_difference_rel,
             self.get_max_capacity(),
-            peak_shaving_enabled=peak_shaving_config.get('enabled', False),
-            peak_shaving_allow_full_after=peak_shaving_config.get(
-                'allow_full_battery_after', 14),
-            peak_shaving_mode=peak_shaving_config.get('mode', 'combined'),
-            peak_shaving_price_limit=peak_shaving_config.get('price_limit', None),
+            peak_shaving_enabled=peak_shaving_config_enabled and not evcc_disable_peak_shaving,
+            peak_shaving_allow_full_after=self.peak_shaving_config.allow_full_battery_after,
+            peak_shaving_mode=self.peak_shaving_config.mode,
+            peak_shaving_price_limit=self.peak_shaving_config.price_limit,
         )
 
         self.last_logic_instance = this_logic_run
@@ -558,28 +603,8 @@ class Batcontrol:
             logger.debug('Discharge blocked due to external lock')
             inverter_settings.allow_discharge = False
 
-        # evcc disables peak shaving (handled in core, not logic)
-        if self.evcc_api is not None:
-            evcc_disable_peak_shaving = (
-                self.evcc_api.evcc_is_charging or
-                self.evcc_api.evcc_ev_expects_pv_surplus
-            )
-            if evcc_disable_peak_shaving:
-                if inverter_settings.limit_battery_charge_rate >= 0:
-                    if self.evcc_api.evcc_is_charging:
-                        logger.debug('[PeakShaving] Disabled: evcc is actively charging')
-                    else:
-                        logger.debug('[PeakShaving] Disabled: EV connected in PV mode')
-                    inverter_settings.limit_battery_charge_rate = -1
-            else:
-                if self._evcc_peak_shaving_disabled:
-                    logger.debug('[PeakShaving] Re-enabled: evcc no longer blocking '
-                                 '(EV disconnected or mode changed away from pv)')
-            self._evcc_peak_shaving_disabled = evcc_disable_peak_shaving
-
         # Publish peak shaving charge limit (after evcc guard may have cleared it)
-        peak_shaving_enabled = peak_shaving_config.get('enabled', False)
-        if self.mqtt_api is not None and peak_shaving_enabled:
+        if self.mqtt_api is not None and peak_shaving_config_enabled:
             self.mqtt_api.publish_peak_shaving_charge_limit(
                 inverter_settings.limit_battery_charge_rate)
 
@@ -841,11 +866,10 @@ class Batcontrol:
             #
             self.mqtt_api.publish_discharge_blocked(self.discharge_blocked)
             # Peak shaving
-            peak_shaving_config = self.config.get('peak_shaving', {})
             self.mqtt_api.publish_peak_shaving_enabled(
-                peak_shaving_config.get('enabled', False))
+                self.peak_shaving_config.enabled)
             self.mqtt_api.publish_peak_shaving_allow_full_after(
-                peak_shaving_config.get('allow_full_battery_after', 14))
+                self.peak_shaving_config.allow_full_battery_after)
             # Trigger Inverter
             self.inverter.refresh_api_values()
 
@@ -982,8 +1006,7 @@ class Batcontrol:
         """
         enabled = enabled_str.strip().lower() in ('true', 'on', '1')
         logger.info('API: Setting peak shaving enabled to %s', enabled)
-        peak_shaving = self.config.setdefault('peak_shaving', {})
-        peak_shaving['enabled'] = enabled
+        self.peak_shaving_config.enabled = enabled
         if self.mqtt_api is not None:
             self.mqtt_api.publish_peak_shaving_enabled(enabled)
 
@@ -998,7 +1021,6 @@ class Batcontrol:
             return
         logger.info(
             'API: Setting peak shaving allow_full_battery_after to %d', hour)
-        peak_shaving = self.config.setdefault('peak_shaving', {})
-        peak_shaving['allow_full_battery_after'] = hour
+        self.peak_shaving_config.allow_full_battery_after = hour
         if self.mqtt_api is not None:
             self.mqtt_api.publish_peak_shaving_allow_full_after(hour)

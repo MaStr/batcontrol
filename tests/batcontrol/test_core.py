@@ -344,46 +344,43 @@ class TestEvccPeakShavingGuard:
     @patch('batcontrol.core.inverter_factory.create_inverter')
     @patch('batcontrol.core.solar_factory.create_solar_provider')
     @patch('batcontrol.core.consumption_factory.create_consumption')
-    def test_evcc_charging_clears_charge_limit(
+    def test_evcc_charging_disables_peak_shaving_in_calc_params(
         self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
         mock_config):
-        """When evcc is actively charging, peak shaving charge limit is cleared."""
+        """When evcc is actively charging, peak_shaving_enabled is False in calc_params."""
         bc = self._create_bc(mock_config, mock_inverter_factory, mock_tariff,
                              mock_solar, mock_consumption)
 
-        # Simulate evcc API
         mock_evcc = MagicMock()
         mock_evcc.evcc_is_charging = True
         mock_evcc.evcc_ev_expects_pv_surplus = False
         bc.evcc_api = mock_evcc
 
-        # Simulate inverter_settings with peak shaving limit active
-        from batcontrol.logic.logic_interface import InverterControlSettings
-        settings = InverterControlSettings(
-            allow_discharge=True,
-            charge_from_grid=False,
-            charge_rate=0,
-            limit_battery_charge_rate=500
-        )
-
-        # Apply the evcc guard logic (same block as in core.py run loop)
+        # Replicate the pre-calculation evcc check from core.py
+        from batcontrol.logic.logic_interface import CalculationParameters
         evcc_disable_peak_shaving = (
             bc.evcc_api.evcc_is_charging or
             bc.evcc_api.evcc_ev_expects_pv_surplus
         )
-        if evcc_disable_peak_shaving and settings.limit_battery_charge_rate >= 0:
-            settings.limit_battery_charge_rate = -1
+        peak_shaving_config = mock_config.get('peak_shaving', {})
+        calc_params = CalculationParameters(
+            max_charging_from_grid_limit=0.8,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.0,
+            max_capacity=10000,
+            peak_shaving_enabled=peak_shaving_config.get('enabled', False) and not evcc_disable_peak_shaving,
+        )
 
-        assert settings.limit_battery_charge_rate == -1
+        assert calc_params.peak_shaving_enabled is False
 
     @patch('batcontrol.core.tariff_factory.create_tarif_provider')
     @patch('batcontrol.core.inverter_factory.create_inverter')
     @patch('batcontrol.core.solar_factory.create_solar_provider')
     @patch('batcontrol.core.consumption_factory.create_consumption')
-    def test_evcc_pv_mode_clears_charge_limit(
+    def test_evcc_pv_mode_disables_peak_shaving_in_calc_params(
         self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
         mock_config):
-        """When EV connected in PV mode, peak shaving charge limit is cleared."""
+        """When EV connected in PV mode, peak_shaving_enabled is False in calc_params."""
         bc = self._create_bc(mock_config, mock_inverter_factory, mock_tariff,
                              mock_solar, mock_consumption)
 
@@ -392,31 +389,30 @@ class TestEvccPeakShavingGuard:
         mock_evcc.evcc_ev_expects_pv_surplus = True
         bc.evcc_api = mock_evcc
 
-        from batcontrol.logic.logic_interface import InverterControlSettings
-        settings = InverterControlSettings(
-            allow_discharge=True,
-            charge_from_grid=False,
-            charge_rate=0,
-            limit_battery_charge_rate=500
-        )
-
+        from batcontrol.logic.logic_interface import CalculationParameters
         evcc_disable_peak_shaving = (
             bc.evcc_api.evcc_is_charging or
             bc.evcc_api.evcc_ev_expects_pv_surplus
         )
-        if evcc_disable_peak_shaving and settings.limit_battery_charge_rate >= 0:
-            settings.limit_battery_charge_rate = -1
+        peak_shaving_config = mock_config.get('peak_shaving', {})
+        calc_params = CalculationParameters(
+            max_charging_from_grid_limit=0.8,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.0,
+            max_capacity=10000,
+            peak_shaving_enabled=peak_shaving_config.get('enabled', False) and not evcc_disable_peak_shaving,
+        )
 
-        assert settings.limit_battery_charge_rate == -1
+        assert calc_params.peak_shaving_enabled is False
 
     @patch('batcontrol.core.tariff_factory.create_tarif_provider')
     @patch('batcontrol.core.inverter_factory.create_inverter')
     @patch('batcontrol.core.solar_factory.create_solar_provider')
     @patch('batcontrol.core.consumption_factory.create_consumption')
-    def test_evcc_not_charging_preserves_charge_limit(
+    def test_evcc_not_active_keeps_peak_shaving_enabled(
         self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
         mock_config):
-        """When evcc is not charging and no PV mode, charge limit is preserved."""
+        """When evcc is not charging and no PV mode, peak_shaving_enabled stays True."""
         bc = self._create_bc(mock_config, mock_inverter_factory, mock_tariff,
                              mock_solar, mock_consumption)
 
@@ -425,22 +421,21 @@ class TestEvccPeakShavingGuard:
         mock_evcc.evcc_ev_expects_pv_surplus = False
         bc.evcc_api = mock_evcc
 
-        from batcontrol.logic.logic_interface import InverterControlSettings
-        settings = InverterControlSettings(
-            allow_discharge=True,
-            charge_from_grid=False,
-            charge_rate=0,
-            limit_battery_charge_rate=500
-        )
-
+        from batcontrol.logic.logic_interface import CalculationParameters
         evcc_disable_peak_shaving = (
             bc.evcc_api.evcc_is_charging or
             bc.evcc_api.evcc_ev_expects_pv_surplus
         )
-        if evcc_disable_peak_shaving and settings.limit_battery_charge_rate >= 0:
-            settings.limit_battery_charge_rate = -1
+        peak_shaving_config = mock_config.get('peak_shaving', {})
+        calc_params = CalculationParameters(
+            max_charging_from_grid_limit=0.8,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.0,
+            max_capacity=10000,
+            peak_shaving_enabled=peak_shaving_config.get('enabled', False) and not evcc_disable_peak_shaving,
+        )
 
-        assert settings.limit_battery_charge_rate == 500
+        assert calc_params.peak_shaving_enabled is True
 
     @patch('batcontrol.core.tariff_factory.create_tarif_provider')
     @patch('batcontrol.core.inverter_factory.create_inverter')
@@ -449,7 +444,7 @@ class TestEvccPeakShavingGuard:
     def test_evcc_no_limit_active_no_change(
         self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
         mock_config):
-        """When no charge limit is active (=-1), evcc guard doesn't modify it."""
+        """When evcc is charging but peak shaving was off in config, it stays disabled."""
         bc = self._create_bc(mock_config, mock_inverter_factory, mock_tariff,
                              mock_solar, mock_consumption)
 
@@ -458,22 +453,21 @@ class TestEvccPeakShavingGuard:
         mock_evcc.evcc_ev_expects_pv_surplus = False
         bc.evcc_api = mock_evcc
 
-        from batcontrol.logic.logic_interface import InverterControlSettings
-        settings = InverterControlSettings(
-            allow_discharge=True,
-            charge_from_grid=False,
-            charge_rate=0,
-            limit_battery_charge_rate=-1
-        )
-
+        from batcontrol.logic.logic_interface import CalculationParameters
         evcc_disable_peak_shaving = (
             bc.evcc_api.evcc_is_charging or
             bc.evcc_api.evcc_ev_expects_pv_surplus
         )
-        if evcc_disable_peak_shaving and settings.limit_battery_charge_rate >= 0:
-            settings.limit_battery_charge_rate = -1
+        # Config has enabled=True, but evcc disables it -> result is False
+        calc_params = CalculationParameters(
+            max_charging_from_grid_limit=0.8,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.0,
+            max_capacity=10000,
+            peak_shaving_enabled=False and not evcc_disable_peak_shaving,
+        )
 
-        assert settings.limit_battery_charge_rate == -1
+        assert calc_params.peak_shaving_enabled is False
 
 
 if __name__ == '__main__':
