@@ -38,10 +38,16 @@ battery_control_expert:
 #  Manages PV battery charging rate so the battery fills up gradually,
 #  reaching full capacity by a target hour (allow_full_battery_after).
 #  Requires logic type 'next' in battery_control section.
+#
+#  price_limit: slots where price (Euro/kWh) is at or below this value are
+#  treated as cheap PV windows. Battery capacity is reserved so the PV
+#  surplus during those cheap slots can be fully absorbed. When price_limit
+#  is not set (commented out), peak shaving is disabled.
 #--------------------------
 peak_shaving:
   enabled: false
   allow_full_battery_after: 14   # Hour (0-23) — battery should be full by this hour
+  price_limit: 0.05              # Euro/kWh — keep battery empty for slots at or below this price
 
 #--------------------------
 #  Inverter

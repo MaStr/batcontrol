@@ -25,6 +25,7 @@ battery_control:
 peak_shaving:
   enabled: false
   allow_full_battery_after: 14   # Hour (0-23) — battery should be full by this hour
+  price_limit: 0.05              # Euro/kWh — keep free capacity for cheap-price slots
 ```
 
 ### Parameters
@@ -33,39 +34,65 @@ peak_shaving:
 |-----------|------|---------|-------------|
 | `enabled` | bool | `false` | Enable/disable peak shaving |
 | `allow_full_battery_after` | int | `14` | Target hour (0-23) for the battery to be full |
+| `price_limit` | float | `null` | Price threshold (€/kWh); slots at or below this price are "cheap". **Required** — peak shaving is disabled when not set |
 
 **`allow_full_battery_after`** controls when the battery is allowed to be 100% full:
-- **Before this hour:** PV charge rate is limited to spread charging evenly
+- **Before this hour:** PV charge rate may be limited to prevent early fill
 - **At/after this hour:** No PV charge limit, battery is allowed to reach full charge
+
+**`price_limit`** controls when cheap slots are recognised:
+- **Not set (default):** Peak shaving is completely disabled — no charge limit is ever applied
+- **During a cheap slot** (`current price <= price_limit`): No limit is applied — absorb as much PV as possible during these valuable hours
+- **Before cheap slots:** PV charging is throttled so the battery has free capacity ready to absorb the cheap-slot PV surplus
 
 ## How It Works
 
 ### Algorithm
 
-The algorithm calculates the expected PV surplus (production minus consumption) for all time slots until the target hour. If the expected surplus would fill the battery before the target hour, it calculates a charge rate limit:
+Peak shaving uses two independent components that each compute a PV charge rate limit. The **stricter (lower non-negative)** limit wins.
+
+**Component 1: Price-Based (primary)**
+
+This is the main driver. Before cheap-price hours arrive, the battery is kept partially empty so the cheap slots' PV surplus fills it completely:
 
 ```
-slots_remaining = slots from now until allow_full_battery_after
-free_capacity = battery free capacity in Wh
+cheap_slots = slots where price <= price_limit
+target_reserve = min(sum of PV surplus in cheap slots, battery max capacity)
+additional_allowed = free_capacity - target_reserve
+
+if additional_allowed <= 0:       → block PV charging (rate = 0)
+else:                              → spread additional_allowed over slots before cheap window
+```
+
+Example: prices = [10, 10, 5, 3, 0, 0], production peak at slots 4 and 5 → reserve free capacity now so slots 4 and 5 can fill the battery completely from PV.
+
+**Component 2: Time-Based (secondary)**
+
+Ensures the battery does not fill before `allow_full_battery_after`, independent of pricing:
+
+```
+slots_remaining = slots until allow_full_battery_after
 pv_surplus = sum of max(production - consumption, 0) for remaining slots
 
 if pv_surplus > free_capacity:
-    charge_limit = free_capacity / slots_remaining  (Wh per slot, converted to W)
+    charge_limit = free_capacity / slots_remaining  (Wh/slot → W)
 ```
 
-The charge limit is applied using **MODE 8** (`limit_battery_charge_rate`), which limits PV charging while still allowing battery discharge. Peak shaving only applies when discharge is already allowed by the main price-based logic.
+Both limits are computed and the stricter one is applied using **MODE 8** (`limit_battery_charge_rate`). Peak shaving only applies when discharge is already allowed by the main price-based logic.
 
 ### Skip Conditions
 
 Peak shaving is automatically skipped when:
 
-1. **No PV production** — nighttime, no action needed
-2. **Past the target hour** — battery is allowed to be full
-3. **Battery in always_allow_discharge region** — SOC is already high
-4. **Grid charging active (MODE -1)** — force charge takes priority
-5. **Discharge not allowed** — battery is being preserved for upcoming high-price hours; PV charging should not be throttled so the battery can charge as fast as possible
-6. **EVCC is actively charging** — EV consumes the excess PV
-7. **EV connected in PV mode** — EVCC will absorb PV surplus
+1. **`price_limit` not configured** — peak shaving is disabled entirely (primary disable condition)
+2. **Currently in a cheap slot** (`prices[0] <= price_limit`) — battery should absorb PV freely
+3. **No PV production** — nighttime, no action needed
+4. **Past the target hour** — battery is allowed to be full
+5. **Battery in always_allow_discharge region** — SOC is already high
+6. **Grid charging active (MODE -1)** — force charge takes priority
+7. **Discharge not allowed** — battery is being preserved for upcoming high-price hours; PV charging should not be throttled so the battery can charge as fast as possible
+8. **EVCC is actively charging** — EV consumes the excess PV
+9. **EV connected in PV mode** — EVCC will absorb PV surplus
 
 ### EVCC Interaction
 

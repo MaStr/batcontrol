@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Optional
 import datetime
 import numpy as np
 
@@ -23,12 +24,22 @@ class CalculationParameters:
     # Peak shaving parameters
     peak_shaving_enabled: bool = False
     peak_shaving_allow_full_after: int = 14  # Hour (0-23)
+    # Slots where price <= this limit (€/kWh) are treated as cheap PV windows.
+    # Battery capacity is reserved so those slots can be absorbed fully.
+    # When None, peak shaving is disabled regardless of the enabled flag.
+    peak_shaving_price_limit: Optional[float] = None
 
     def __post_init__(self):
         if not 0 <= self.peak_shaving_allow_full_after <= 23:
             raise ValueError(
                 f"peak_shaving_allow_full_after must be 0-23, "
                 f"got {self.peak_shaving_allow_full_after}"
+            )
+        if (self.peak_shaving_price_limit is not None
+                and self.peak_shaving_price_limit < 0):
+            raise ValueError(
+                f"peak_shaving_price_limit must be >= 0, "
+                f"got {self.peak_shaving_price_limit}"
             )
 
 @dataclass
