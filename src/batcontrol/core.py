@@ -187,6 +187,17 @@ class Batcontrol:
             config['consumption_forecast'],
             target_resolution=self.time_resolution
         )
+        # TODO
+        # self.load_profile = config['consumption_forecast']['load_profile']
+        # self.solar_web_export = config['consumption_forecast']['solar_web_export']
+        # try:
+        #     annual_consumption = config['consumption_forecast']['annual_consumption']
+        # except KeyError:
+        #     # default setting
+        #     annual_consumption = 0
+        #
+        # self.fc_consumption = forecastconsumption.ForecastConsumption(
+        #     self.load_profile, timezone, annual_consumption )
 
         self.batconfig = config['battery_control']
         self.time_at_forecast_error = -1
@@ -333,6 +344,46 @@ class Batcontrol:
                 del self.evcc_api
         except Exception as exc:
             logger.exception("Error during Batcontrol shutdown: %s", exc)
+
+    # TODO
+    # Check if solar_web_export is provided and if the load_profile file does not exist
+    #         if 'solar_web_export' in config['consumption_forecast']:
+    #             solar_web_export_path = 'config/' + config['consumption_forecast'][
+    #                 'solar_web_export']
+    #
+    #             load_profile_path = config['consumption_forecast']['load_profile']
+    #
+    #             if os.path.isfile(solar_web_export_path) and not os.path.isfile(load_profile_path):
+    #                 forecastconsumption.SolarWebExportProcessor(solar_web_export_path,load_profile_path)
+    #
+    #         if not os.path.isfile(config['consumption_forecast']['load_profile']):
+    #             raise RuntimeError(
+    #                 "[Config] Specified Load Profile file " +
+    #                 f"'{config['consumption_forecast']['load_profile']}' not found"
+    #             )
+    #
+    #         try:
+    #             config['consumption_forecast']['solar_web_export'] = 'config/' + \
+    #                 config['consumption_forecast']['solar_web_export']
+    #         except:
+    #             logger.info(
+    #                 "[Config] No Solar Web Export provided.")
+    #
+    #         # # Check if the load profile exists
+    #         # if not os.path.isfile(config['consumption_forecast']['solar_web_export']):
+    #         #     logger.info(f"[Config] Load profile '{self.load_profile}' not found.")
+    #         #     solar_web_export = config['consumption_forecast'].get('solar_web_export')
+    #         #     if solar_web_export and os.path.isfile(solar_web_export):
+    #         #         # Generate the load profile from Solar Web export
+    #         #         logger.info(
+    #         #             f"[Config] Generating load profile from Solar Web export: {solar_web_export}")
+    #         #         self.generate_load_profile_from_solar_web(solar_web_export, load_profile)
+    #         #     else:
+    #         #         raise RuntimeError(
+    #         #             f"[Config] No load profile found and no valid SolarWeb export file provided. "
+    #         #             f"Could not create '{load_profile}'"
+    #         #         )
+    #         #
 
     def reset_forecast_error(self):
         """ Reset the forecast error timer """
