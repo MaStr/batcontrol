@@ -72,20 +72,10 @@ def _create_homeassistant_forecast(
     base_url = ha_config['base_url']
     api_token = ha_config['apitoken']
     entity_id = ha_config['entity_id']
+    # history_days/history_weights are already parsed by Pydantic validation:
+    # semicolon-separated strings are converted to int lists at config load time
     history_days = ha_config.get('history_days', [-7, -14, -21])
     history_weights = ha_config.get('history_weights', [1, 1, 1])
-
-    # Configure String -1;-2;-3 to a list and remove spaces
-    if isinstance(history_days, str):
-        history_days = [x.strip() for x in history_days.split(';')]
-    if isinstance(history_weights, str):
-        history_weights = [x.strip() for x in history_weights.split(';')]
-
-    # Convert string lists to int/float lists (HomeAssistant config quirk)
-    if isinstance(history_days, list):
-        history_days = [int(x) for x in history_days]
-    if isinstance(history_weights, list):
-        history_weights = [int(x) for x in history_weights]
 
     cache_ttl_hours = ha_config.get('cache_ttl_hours', 48.0)
     multiplier = ha_config.get('multiplier', 1.0)

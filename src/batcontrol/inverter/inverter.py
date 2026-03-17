@@ -18,14 +18,9 @@ class Inverter:
     @staticmethod
     def create_inverter(config: dict) -> InverterInterface:
         """ Select and configure an inverter based on the given configuration """
-        # renaming of parameters max_charge_rate -> max_grid_charge_rate
-        if not 'max_grid_charge_rate' in config.keys():
-            config['max_grid_charge_rate'] = config['max_charge_rate']
-
-        # introducing parameter max_pv_charge_rate. Assign default value here,
-        # in case there is no value defined in the config file to avoid a KeyError
-        if not 'max_pv_charge_rate' in config.keys():
-            config['max_pv_charge_rate'] = 0
+        # Legacy rename max_charge_rate -> max_grid_charge_rate and
+        # default for max_pv_charge_rate are now handled by Pydantic
+        # InverterConfig model_validator in config_model.py
 
         inverter = None
 
