@@ -75,6 +75,7 @@ class InverterConfig(BaseModel):
         """Support legacy config key max_charge_rate -> max_grid_charge_rate."""
         if isinstance(data, dict):
             if 'max_charge_rate' in data and 'max_grid_charge_rate' not in data:
+                data = dict(data)
                 data['max_grid_charge_rate'] = data.pop('max_charge_rate')
         return data
 

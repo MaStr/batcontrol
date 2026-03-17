@@ -163,6 +163,12 @@ class TestInverterConfig:
         cfg = InverterConfig()
         assert cfg.cache_ttl == 120
 
+    def test_legacy_rename_does_not_mutate_input(self):
+        """Test that model_validator doesn't mutate the caller's dict."""
+        data = {'max_charge_rate': 4000}
+        InverterConfig(**data)
+        assert 'max_charge_rate' in data
+
 
 class TestUtilityConfig:
     """Tests for UtilityConfig."""
