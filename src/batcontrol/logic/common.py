@@ -16,6 +16,8 @@ MIN_CHARGE_RATE = 500
 logger = logging.getLogger(__name__)
 
 # Singleton pattern to ensure only one instance of CommonLogic exists
+
+
 class CommonLogic:
     """ General logic for battery control that is not specific to control strategies. """
 
@@ -23,7 +25,8 @@ class CommonLogic:
     charge_rate_multiplier: float
     always_allow_discharge_limit: float
     max_capacity: float  # Maximum capacity of the battery in Wh
-    min_charge_energy: float = 100  # Minimum amount of energy before charging from grid in Wh
+    # Minimum amount of energy before charging from grid in Wh
+    min_charge_energy: float = 100
 
     @classmethod
     def get_instance(cls, charge_rate_multiplier=1.1,
@@ -34,9 +37,9 @@ class CommonLogic:
         if cls._instance is None:
             cls._instance = cls.__new__(cls)
             cls._instance.initialize(charge_rate_multiplier,
-                                 always_allow_discharge_limit,
-                                 max_capacity,
-                                 min_charge_energy)
+                                     always_allow_discharge_limit,
+                                     max_capacity,
+                                     min_charge_energy)
         return cls._instance
 
     def __init__(self, *args, **kwargs):
@@ -47,25 +50,41 @@ class CommonLogic:
         self.initialize(*args, **kwargs)
 
     def initialize(self, charge_rate_multiplier=1.1,
-               always_allow_discharge_limit=0.9,
-               max_capacity=10000,
-               min_charge_energy=100):
+                   always_allow_discharge_limit=0.9,
+                   max_capacity=10000,
+                   min_charge_energy=100):
         """ Private initialization method. """
-        self.charge_rate_multiplier = charge_rate_multiplier
-        self.always_allow_discharge_limit = always_allow_discharge_limit
-        self.max_capacity = max_capacity
-        self.min_charge_energy = min_charge_energy
+        self.charge_rate_multiplier = float(charge_rate_multiplier)
+        self.always_allow_discharge_limit = self._to_float(
+            always_allow_discharge_limit)
+        self.max_capacity = float(max_capacity)
+        self.min_charge_energy = float(min_charge_energy)
 
     def set_charge_rate_multiplier(self, multiplier: float):
         """ Set the charge rate multiplier. """
         logger.debug('Setting charge rate multiplier to %s', multiplier)
         self.charge_rate_multiplier = multiplier
 
+    @staticmethod
+    def _to_float(value) -> float:
+        """ Convert a value to float, handling European comma decimal notation.
+        Args:
+            value: The value to convert. Can be a float, int, or string
+                   (including European notation like '0,9').
+        Returns:
+            float: The converted value.
+        Raises:
+            ValueError: If the value cannot be converted to float.
+        """
+        if isinstance(value, str):
+            return float(value.replace(',', '.'))
+        return float(value)
+
     def set_always_allow_discharge_limit(self, limit: float):
         """ Set the always allowed discharge limit. """
         logger.debug(
             'Setting always allowed discharge limit to %s', limit)
-        self.always_allow_discharge_limit = limit
+        self.always_allow_discharge_limit = self._to_float(limit)
 
     def get_always_allow_discharge_limit(self) -> float:
         """ Get the always allowed discharge limit. """
@@ -92,11 +111,11 @@ class CommonLogic:
 
         if capacity >= self.max_capacity * self.always_allow_discharge_limit:
             logger.debug(
-                'Discharge is \'always allowed\' for current capacity: %.0f Wh', round(capacity,0))
+                'Discharge is \'always allowed\' for current capacity: %.0f Wh', round(capacity, 0))
             return True
 
         logger.debug(
-            'Discharge is NOT \'always allowed\' for current capacity: %.0f Wh', round(capacity,0))
+            'Discharge is NOT \'always allowed\' for current capacity: %.0f Wh', round(capacity, 0))
         return False
 
     def is_charging_above_minimum(self, needed_energy: float) -> bool:

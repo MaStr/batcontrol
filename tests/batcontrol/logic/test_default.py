@@ -4,6 +4,7 @@ import datetime
 import numpy as np
 
 from batcontrol.logic.default import DefaultLogic
+from batcontrol.logic.logic import Logic as LogicFactory
 from batcontrol.logic.logic_interface import CalculationInput, CalculationParameters, InverterControlSettings
 from batcontrol.logic.common import CommonLogic
 
@@ -45,6 +46,19 @@ class TestDefaultLogic(unittest.TestCase):
     def test_set_calculation_parameters(self):
         """Test setting calculation parameters"""
         self.assertEqual(self.logic.calculation_parameters, self.calculation_parameters)
+
+    def test_interval_minutes_is_int(self):
+        """Test that interval_minutes is always an int even when config provides a string"""
+        logic = LogicFactory.create_logic({'time_resolution_minutes': '60'}, datetime.timezone.utc)
+        self.assertIsInstance(logic.interval_minutes, int)
+        self.assertEqual(logic.interval_minutes, 60)
+
+    def test_interval_minutes_is_int_default(self):
+        """Test that interval_minutes defaults to int 60 when not in config"""
+        CommonLogic._instance = None
+        logic = LogicFactory.create_logic({}, datetime.timezone.utc)
+        self.assertIsInstance(logic.interval_minutes, int)
+        self.assertEqual(logic.interval_minutes, 60)
 
     def test_calculate_inverter_mode_high_soc(self):
         """Test calculate_inverter_mode with high SOC should allow discharge"""

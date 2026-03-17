@@ -43,6 +43,25 @@ class TestCommonLogic(unittest.TestCase):
         self.assertEqual(self.logic.always_allow_discharge_limit, new_limit)
         self.assertEqual(self.logic.get_always_allow_discharge_limit(), new_limit)
 
+    def test_set_always_allowed_discharge_limit_string(self):
+        """Test setting the always allowed discharge limit with a string value (dot notation)"""
+        self.logic.set_always_allow_discharge_limit('0.85')
+        self.assertIsInstance(self.logic.always_allow_discharge_limit, float)
+        self.assertAlmostEqual(self.logic.always_allow_discharge_limit, 0.85)
+
+    def test_set_always_allowed_discharge_limit_european_comma(self):
+        """Test setting the always allowed discharge limit with European comma notation"""
+        self.logic.set_always_allow_discharge_limit('0,85')
+        self.assertIsInstance(self.logic.always_allow_discharge_limit, float)
+        self.assertAlmostEqual(self.logic.always_allow_discharge_limit, 0.85)
+
+    def test_initialize_always_allow_discharge_limit_from_string(self):
+        """Test that initialize converts always_allow_discharge_limit string to float"""
+        CommonLogic._instance = None
+        logic = CommonLogic.get_instance(always_allow_discharge_limit='0,75')
+        self.assertIsInstance(logic.always_allow_discharge_limit, float)
+        self.assertAlmostEqual(logic.always_allow_discharge_limit, 0.75)
+
     def test_is_discharge_always_allowed_soc(self):
         """Test discharge always allowed when SOC is above threshold"""
         # SOC above the threshold (90%)
