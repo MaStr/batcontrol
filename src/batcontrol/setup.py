@@ -69,6 +69,9 @@ def load_config(configfile:str) -> dict:
 
     config = yaml.safe_load(config_str)
 
+    if not isinstance(config, dict):
+        raise RuntimeError(f'Configfile {configfile} is empty or not a valid YAML mapping')
+
     # Validate and coerce types via Pydantic before any other checks
     config = validate_config(config)
 

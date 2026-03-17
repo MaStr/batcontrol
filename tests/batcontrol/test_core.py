@@ -289,11 +289,11 @@ class TestModeLimitBatteryChargeRate:
         mock_inverter.set_mode_limit_battery_charge.assert_called_once_with(2000)
 
 
-class TestTimeResolutionString:
-    """Test that time_resolution_minutes coercion is handled by Pydantic config validation.
+class TestTimeResolutionValidation:
+    """Test that time_resolution_minutes values are accepted by Batcontrol.
 
     Since Pydantic validates and coerces types in load_config() before Batcontrol
-    receives the config dict, Batcontrol.__init__() expects properly typed values.
+    receives the config dict, Batcontrol.__init__() expects properly typed int values.
     String-to-int coercion is tested in test_config_model.py.
     """
 
