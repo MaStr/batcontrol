@@ -46,7 +46,7 @@ pythonpath = ["src"]
 # For testing
 [project.optional-dependencies]
 mcp = [
-    "mcp>=1.0",
+    "mcp>=1.0; python_version>='3.10'",
 ]
 test = [
     "pytest>=7.0.0",

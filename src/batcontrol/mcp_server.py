@@ -47,7 +47,7 @@ VALID_MODES = set(MODE_NAMES.keys())
 
 def _format_forecast_array(arr, run_time: float, interval_minutes: int,
                            digits: int = 1) -> list:
-    """Format a numpy array forecast into a list of {time, value} dicts.
+    """Format a numpy array forecast into a list of {slot, time_start, value} dicts.
 
     Args:
         arr: Numpy array of values.
@@ -363,6 +363,38 @@ class BatcontrolMcpServer:
                     - production_offset (0.0-2.0, multiplier)
                 value: New value for the parameter
             """
+            # Validate ranges before calling the API (mirrors core.py validation)
+            PARAM_VALIDATORS = {
+                'always_allow_discharge_limit': (
+                    lambda v: 0.0 <= v <= 1.0,
+                    "must be between 0.0 and 1.0"),
+                'max_charging_from_grid_limit': (
+                    lambda v: 0.0 <= v <= 1.0,
+                    "must be between 0.0 and 1.0"),
+                'min_price_difference': (
+                    lambda v: v >= 0.0,
+                    "must be >= 0.0"),
+                'min_price_difference_rel': (
+                    lambda v: v >= 0.0,
+                    "must be >= 0.0"),
+                'production_offset': (
+                    lambda v: 0.0 <= v <= 2.0,
+                    "must be between 0.0 and 2.0"),
+            }
+
+            if parameter not in PARAM_VALIDATORS:
+                return {
+                    'error': "Unknown parameter '%s'. Valid: %s" % (
+                        parameter, sorted(PARAM_VALIDATORS.keys()))
+                }
+
+            validator, constraint = PARAM_VALIDATORS[parameter]
+            if not validator(value):
+                return {
+                    'error': "Invalid value %.4g for '%s': %s" % (
+                        value, parameter, constraint)
+                }
+
             bc = self._bc
             handlers = {
                 'always_allow_discharge_limit': bc.api_set_always_allow_discharge_limit,
@@ -371,13 +403,6 @@ class BatcontrolMcpServer:
                 'min_price_difference_rel': bc.api_set_min_price_difference_rel,
                 'production_offset': bc.api_set_production_offset,
             }
-
-            if parameter not in handlers:
-                return {
-                    'error': "Unknown parameter '%s'. Valid: %s" % (
-                        parameter, sorted(handlers.keys()))
-                }
-
             handlers[parameter](value)
             return {
                 'success': True,

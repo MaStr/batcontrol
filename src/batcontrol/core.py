@@ -862,7 +862,7 @@ class Batcontrol:
             self.avoid_discharging()
         elif mode == MODE_LIMIT_BATTERY_CHARGE_RATE:
             if self._limit_battery_charge_rate < 0:
-                logger.warning(
+                logger.debug(
                     'Override: Mode %d (limit battery charge rate) set but no valid '
                     'limit configured. Falling back to allow-discharging mode.',
                     mode)
