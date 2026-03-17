@@ -143,6 +143,12 @@ class TestInverterConfig:
         )
         assert cfg.max_grid_charge_rate == 3000.0
 
+    def test_cache_ttl_coercion(self):
+        """Test that cache_ttl string is coerced to int (MQTT inverter)."""
+        cfg = InverterConfig(cache_ttl='120')
+        assert cfg.cache_ttl == 120
+        assert isinstance(cfg.cache_ttl, int)
+
 
 class TestUtilityConfig:
     """Tests for UtilityConfig."""
