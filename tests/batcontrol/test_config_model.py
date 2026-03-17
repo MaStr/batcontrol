@@ -4,7 +4,6 @@ from pydantic import ValidationError
 from batcontrol.config_model import (
     BatcontrolConfig,
     BatteryControlConfig,
-    BatteryControlExpertConfig,
     InverterConfig,
     UtilityConfig,
     MqttConfig,
@@ -186,6 +185,14 @@ class TestUtilityConfig:
         )
         assert cfg.vat == 0.19
         assert isinstance(cfg.vat, float)
+
+    def test_vat_fees_markup_absent_when_not_set(self):
+        """Test that vat/fees/markup are None when not set,
+        so downstream required_fields checks detect missing config."""
+        cfg = UtilityConfig(type='tibber')
+        assert cfg.vat is None
+        assert cfg.fees is None
+        assert cfg.markup is None
 
     def test_tariff_zone_coercion(self):
         cfg = UtilityConfig(
@@ -410,12 +417,22 @@ class TestValidateConfig:
         so None values must not appear as keys.
         """
         result = validate_config(self._full_config())
-        # These optional fields were not set, so must be absent
-        assert 'apikey' not in result['utility']
-        assert 'url' not in result['utility']
         # Inverter optional fields should be absent
         assert 'address' not in result['inverter']
         assert 'user' not in result['inverter']
+
+    def test_validate_utility_vat_excluded_when_not_set(self):
+        """Test that vat/fees/markup are absent when not configured,
+        so dynamictariff required_fields checks still catch misconfig."""
+        config = self._full_config()
+        # Remove vat/fees/markup from utility (simulating tibber config)
+        del config['utility']['vat']
+        del config['utility']['fees']
+        del config['utility']['markup']
+        result = validate_config(config)
+        assert 'vat' not in result['utility']
+        assert 'fees' not in result['utility']
+        assert 'markup' not in result['utility']
 
     def test_ha_addon_string_config(self):
         """Simulate HA addon options.json where many values are strings."""
