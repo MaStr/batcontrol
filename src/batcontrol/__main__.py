@@ -1,7 +1,7 @@
 from .core import Batcontrol
 from .setup import setup_logging, load_config
 from .inverter import InverterOutageError
-from .mcp_server import BatcontrolMcpServer
+from . import mcp_server as mcp_module
 import argparse
 import time
 import datetime
@@ -88,8 +88,15 @@ def main() -> int:
 
     # Handle --mcp-stdio: run MCP server in stdio mode (blocking)
     if args.mcp_stdio:
+        if not mcp_module.is_available():
+            logger.error(
+                'MCP server requires the "mcp" package (Python >=3.10). '
+                'Install with: pip install batcontrol[mcp]')
+            bc.shutdown()
+            del bc
+            return 1
         logger.info("Running MCP server in stdio mode")
-        mcp = BatcontrolMcpServer(bc, config.get('mcp', {}))
+        mcp = mcp_module.BatcontrolMcpServer(bc, config.get('mcp', {}))
         try:
             mcp.run_stdio()
         except KeyboardInterrupt:

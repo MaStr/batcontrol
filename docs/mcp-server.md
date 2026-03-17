@@ -111,4 +111,10 @@ python -m batcontrol --mcp-stdio --config config/batcontrol_config.yaml
 ## Dependencies
 
 - `mcp>=1.0` — Official MCP Python SDK (includes FastMCP, uvicorn, starlette)
+- **Requires Python >=3.10** (MCP SDK constraint)
+- `mcp` is an **optional dependency** — batcontrol itself runs on Python >=3.9
+- Install with: `pip install batcontrol[mcp]`
+- Docker image (Python 3.13) installs MCP automatically
+- On Python <3.10: MCP features are unavailable, a warning is logged if
+  `mcp.enabled: true` is set in config, and everything else works normally
 - Docker: port 8081 exposed in Dockerfile

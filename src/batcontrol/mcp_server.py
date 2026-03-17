@@ -5,6 +5,11 @@ battery info, and manage overrides.
 
 Runs in-process as a thread alongside the main batcontrol evaluation loop.
 Supports Streamable HTTP transport (for Docker/HA addon) and stdio transport.
+
+Requires the optional 'mcp' dependency (Python >=3.10):
+    pip install batcontrol[mcp]
+
+Use `is_available()` to check at runtime before instantiation.
 """
 import json
 import time
@@ -12,7 +17,17 @@ import logging
 import threading
 from typing import Optional
 
-from mcp.server.fastmcp import FastMCP
+try:
+    from mcp.server.fastmcp import FastMCP
+    MCP_AVAILABLE = True
+except ImportError:
+    MCP_AVAILABLE = False
+    FastMCP = None
+
+
+def is_available() -> bool:
+    """Check whether the MCP SDK is installed and importable."""
+    return MCP_AVAILABLE
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +70,11 @@ class BatcontrolMcpServer:
     """
 
     def __init__(self, batcontrol_instance, config: dict):
+        if not MCP_AVAILABLE:
+            raise ImportError(
+                "MCP server requires the 'mcp' package (Python >=3.10). "
+                "Install with: pip install batcontrol[mcp]"
+            )
         self._bc = batcontrol_instance
         self._config = config
         self._thread: Optional[threading.Thread] = None

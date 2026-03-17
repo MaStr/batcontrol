@@ -33,7 +33,7 @@ from .forecastsolar import ForecastSolar as solar_factory
 
 from .forecastconsumption import Consumption as consumption_factory
 from .override_manager import OverrideManager
-from .mcp_server import BatcontrolMcpServer
+from . import mcp_server as mcp_module
 
 ERROR_IGNORE_TIME = 600  # 10 Minutes
 EVALUATIONS_EVERY_MINUTES = 3  # Every x minutes on the clock
@@ -305,18 +305,25 @@ class Batcontrol:
                 self.evcc_api.wait_ready()
                 logger.info('evcc Connection ready')
 
-        # Initialize MCP server
+        # Initialize MCP server (optional, requires Python >=3.10 + mcp package)
         self.mcp_server = None
         mcp_config = config.get('mcp', {})
         if mcp_config.get('enabled', False):
-            logger.info('MCP Server enabled')
-            self.mcp_server = BatcontrolMcpServer(self, mcp_config)
-            transport = mcp_config.get('transport', 'http')
-            if transport == 'http':
-                host = mcp_config.get('host', '0.0.0.0')
-                port = mcp_config.get('port', 8081)
-                self.mcp_server.start_http(host=host, port=port)
-            # stdio transport is handled in __main__.py
+            if not mcp_module.is_available():
+                logger.warning(
+                    'MCP server is enabled in config but the "mcp" package '
+                    'is not installed (requires Python >=3.10). '
+                    'Install with: pip install batcontrol[mcp]')
+            else:
+                logger.info('MCP Server enabled')
+                self.mcp_server = mcp_module.BatcontrolMcpServer(
+                    self, mcp_config)
+                transport = mcp_config.get('transport', 'http')
+                if transport == 'http':
+                    host = mcp_config.get('host', '0.0.0.0')
+                    port = mcp_config.get('port', 8081)
+                    self.mcp_server.start_http(host=host, port=port)
+                # stdio transport is handled in __main__.py
 
         # Initialize scheduler thread
         self.scheduler = SchedulerThread()

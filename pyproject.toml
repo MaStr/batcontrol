@@ -17,8 +17,7 @@ dependencies = [
     "cachetools>=5.0",
     "websockets>=11.0",
     "schedule>=1.2.0",
-    "pytz>=2024.2",
-    "mcp>=1.0"
+    "pytz>=2024.2"
 ]
 
 # Config for the build system
@@ -46,6 +45,9 @@ pythonpath = ["src"]
 
 # For testing
 [project.optional-dependencies]
+mcp = [
+    "mcp>=1.0",
+]
 test = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",

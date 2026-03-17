@@ -1,7 +1,19 @@
-"""Tests for the MCP server implementation"""
+"""Tests for the MCP server implementation
+
+Requires the optional 'mcp' dependency (Python >=3.10).
+Tests are skipped automatically when the mcp package is not installed.
+"""
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch, PropertyMock
+
+from batcontrol.mcp_server import is_available as mcp_is_available
+
+if not mcp_is_available():
+    pytest.skip(
+        "MCP SDK not installed (requires Python >=3.10)",
+        allow_module_level=True
+    )
 
 from batcontrol.mcp_server import BatcontrolMcpServer, _format_forecast_array, MODE_NAMES
 from batcontrol.override_manager import OverrideManager, OverrideState

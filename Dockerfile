@@ -28,7 +28,8 @@ LABEL maintainer="matthias.strubel@aod-rpg.de"
 COPY --from=builder /wheels /wheels
 
 # Update pip and install runtime dependencies
-RUN pip install --no-cache-dir --extra-index-url https://piwheels.org/simple --prefer-binary /wheels/*.whl && rm -rf /wheels
+# Install the wheel with the optional MCP dependency (Python 3.13 supports it)
+RUN pip install --no-cache-dir --extra-index-url https://piwheels.org/simple --prefer-binary "/wheels/*.whl[mcp]" && rm -rf /wheels
 
 ENV BATCONTROL_VERSION=${VERSION}
 ENV BATCONTROL_GIT_SHA=${GIT_SHA}
