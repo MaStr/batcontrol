@@ -210,12 +210,12 @@ class Batcontrol:
         self.batconfig = config['battery_control']
         self.time_at_forecast_error = -1
 
-        self.max_charging_from_grid_limit = self.batconfig.get(
-            'max_charging_from_grid_limit', 0.8)
-        self.min_price_difference = self.batconfig.get(
-            'min_price_difference', 0.05)
-        self.min_price_difference_rel = self.batconfig.get(
-            'min_price_difference_rel', 0)
+        self.max_charging_from_grid_limit = _to_float(self.batconfig.get(
+            'max_charging_from_grid_limit', 0.8))
+        self.min_price_difference = _to_float(self.batconfig.get(
+            'min_price_difference', 0.05))
+        self.min_price_difference_rel = _to_float(self.batconfig.get(
+            'min_price_difference_rel', 0))
 
         self.round_price_digits = 4
         self.production_offset_percent = 1.0  # Default: no offset
@@ -231,12 +231,13 @@ class Batcontrol:
                 self.production_offset_percent)
 
         self.general_logic = CommonLogic.get_instance(
-            charge_rate_multiplier=self.batconfig.get(
-                'charge_rate_multiplier', 1.1),
+            charge_rate_multiplier=_to_float(self.batconfig.get(
+                'charge_rate_multiplier', 1.1)),
             always_allow_discharge_limit=_to_float(self.batconfig.get(
                 'always_allow_discharge_limit', 0.9)),
             max_capacity=self.inverter.get_max_capacity(),
-            min_charge_energy=self.batconfig.get('min_recharge_amount', 100.0)
+            min_charge_energy=_to_float(
+                self.batconfig.get('min_recharge_amount', 100.0))
         )
 
         self.mqtt_api = None
