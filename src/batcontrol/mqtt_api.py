@@ -22,6 +22,9 @@ The following topics are published:
 - /min_price_difference : minimum price difference in EUR
 - /discharge_blocked        : bool  # Discharge is blocked by other sources
 - /production_offset: production offset percentage (1.0 = 100%, 0.8 = 80%, etc.)
+- /override_active          : bool  # Override is currently active
+- /override_remaining_minutes: float # Minutes remaining on active override
+- /override_duration        : float # Configured override duration for next mode/set call (minutes)
 
 The following statistical arrays are published as JSON arrays:
 - /FCST/production: forecasted production in W
@@ -37,6 +40,8 @@ Implemented Input-API:
 - /max_charging_from_grid_limit/set: set charge limit in 0-1
 - /min_price_difference/set: set minimum price difference in EUR
 - /production_offset/set: set production offset percentage (0.0-2.0)
+- /override_duration/set: set override duration in minutes (1-1440, 0=reset to default 30 min)
+- /clear_override/set: clear active override (any value triggers the clear)
 
 The module uses the paho-mqtt library for MQTT communication and numpy for handling arrays.
 """
@@ -434,6 +439,33 @@ class MqttApi:
                 '/discharge_blocked',
                 str(discharge_blocked))
 
+    def publish_override_active(self, active: bool) -> None:
+        """ Publish override active status to MQTT
+            /override_active
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/override_active',
+                str(active))
+
+    def publish_override_remaining(self, remaining_minutes: float) -> None:
+        """ Publish override remaining minutes to MQTT
+            /override_remaining_minutes
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/override_remaining_minutes',
+                f'{remaining_minutes:.1f}')
+
+    def publish_override_duration(self, duration_minutes: float) -> None:
+        """ Publish the configured override duration in minutes to MQTT
+            /override_duration
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/override_duration',
+                f'{duration_minutes:.0f}')
+
     def publish_production_offset(self, production_offset: float) -> None:
         """ Publish the production offset percentage to MQTT
             /production_offset
@@ -586,6 +618,42 @@ class MqttApi:
             None,
             self.base_topic +
             "/min_dynamic_price_difference")
+
+        # override
+        self.publish_mqtt_discovery_message(
+            "Override Active",
+            "batcontrol_override_active",
+            "sensor",
+            None,
+            None,
+            self.base_topic +
+            "/override_active",
+            value_template="{% if value | lower == 'true' %}active{% else %}inactive{% endif %}")
+
+        self.publish_mqtt_discovery_message(
+            "Override Remaining Minutes",
+            "batcontrol_override_remaining_minutes",
+            "sensor",
+            "duration",
+            "min",
+            self.base_topic +
+            "/override_remaining_minutes")
+
+        self.publish_mqtt_discovery_message(
+            "Override Duration",
+            "batcontrol_override_duration",
+            "number",
+            "duration",
+            "min",
+            self.base_topic +
+            "/override_duration",
+            self.base_topic +
+            "/override_duration/set",
+            entity_category="config",
+            min_value=0,
+            max_value=1440,
+            step_value=5,
+            initial_value=30)
 
         # diagnostic
         self.publish_mqtt_discovery_message(

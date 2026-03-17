@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import datetime
+from typing import List
 import numpy as np
 
 @dataclass
@@ -27,6 +28,7 @@ class CalculationOutput:
     reserved_energy: float = 0.0
     required_recharge_energy: float = 0.0
     min_dynamic_price_difference: float = 0.05
+    explanation: List[str] = field(default_factory=list)
 
 @dataclass
 class InverterControlSettings:

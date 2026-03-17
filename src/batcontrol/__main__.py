@@ -1,6 +1,7 @@
 from .core import Batcontrol
 from .setup import setup_logging, load_config
 from .inverter import InverterOutageError
+from . import mcp_server as mcp_module
 import argparse
 import time
 import datetime
@@ -29,6 +30,11 @@ def parse_arguments():
         '--config', '-c',
         default=CONFIGFILE,
         help=f'Path to configuration file (default: {CONFIGFILE})'
+    )
+    parser.add_argument(
+        '--mcp-stdio',
+        action='store_true',
+        help='Run MCP server with stdio transport (for direct integration with AI tools)'
     )
     return parser.parse_args()
 
@@ -78,7 +84,32 @@ def main() -> int:
         logging.getLogger("batcontrol.forecastconsumption.forecast_homeassistant.details").setLevel(logging.INFO)
         logging.getLogger("batcontrol.forecastconsumption.forecast_homeassistant.communication").setLevel(logging.INFO)
 
+    # When using stdio transport, prevent core.py from starting an HTTP MCP server.
+    # Both would share the same Batcontrol instance and compete for the port.
+    if args.mcp_stdio:
+        config.setdefault('mcp', {})['enabled'] = False
+
     bc = Batcontrol(config)
+
+    # Handle --mcp-stdio: run MCP server in stdio mode (blocking)
+    if args.mcp_stdio:
+        if not mcp_module.is_available():
+            logger.error(
+                'MCP server requires the "mcp" package (Python >=3.10). '
+                'Install with: pip install batcontrol[mcp]')
+            bc.shutdown()
+            del bc
+            return 1
+        logger.info("Running MCP server in stdio mode")
+        mcp = mcp_module.BatcontrolMcpServer(bc, config.get('mcp', {}))
+        try:
+            mcp.run_stdio()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            bc.shutdown()
+            del bc
+        return 0
 
     try:
         while True:
