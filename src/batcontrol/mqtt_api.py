@@ -434,6 +434,24 @@ class MqttApi:
                 '/discharge_blocked',
                 str(discharge_blocked))
 
+    def publish_override_active(self, active: bool) -> None:
+        """ Publish override active status to MQTT
+            /override_active
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/override_active',
+                str(active))
+
+    def publish_override_remaining(self, remaining_minutes: float) -> None:
+        """ Publish override remaining minutes to MQTT
+            /override_remaining_minutes
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/override_remaining_minutes',
+                f'{remaining_minutes:.1f}')
+
     def publish_production_offset(self, production_offset: float) -> None:
         """ Publish the production offset percentage to MQTT
             /production_offset
@@ -586,6 +604,26 @@ class MqttApi:
             None,
             self.base_topic +
             "/min_dynamic_price_difference")
+
+        # override
+        self.publish_mqtt_discovery_message(
+            "Override Active",
+            "batcontrol_override_active",
+            "sensor",
+            None,
+            None,
+            self.base_topic +
+            "/override_active",
+            value_template="{% if value | lower == 'true' %}active{% else %}inactive{% endif %}")
+
+        self.publish_mqtt_discovery_message(
+            "Override Remaining Minutes",
+            "batcontrol_override_remaining_minutes",
+            "sensor",
+            "duration",
+            "min",
+            self.base_topic +
+            "/override_remaining_minutes")
 
         # diagnostic
         self.publish_mqtt_discovery_message(

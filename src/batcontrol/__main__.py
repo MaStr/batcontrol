@@ -1,6 +1,7 @@
 from .core import Batcontrol
 from .setup import setup_logging, load_config
 from .inverter import InverterOutageError
+from .mcp_server import BatcontrolMcpServer
 import argparse
 import time
 import datetime
@@ -29,6 +30,11 @@ def parse_arguments():
         '--config', '-c',
         default=CONFIGFILE,
         help=f'Path to configuration file (default: {CONFIGFILE})'
+    )
+    parser.add_argument(
+        '--mcp-stdio',
+        action='store_true',
+        help='Run MCP server with stdio transport (for direct integration with AI tools)'
     )
     return parser.parse_args()
 
@@ -79,6 +85,19 @@ def main() -> int:
         logging.getLogger("batcontrol.forecastconsumption.forecast_homeassistant.communication").setLevel(logging.INFO)
 
     bc = Batcontrol(config)
+
+    # Handle --mcp-stdio: run MCP server in stdio mode (blocking)
+    if args.mcp_stdio:
+        logger.info("Running MCP server in stdio mode")
+        mcp = BatcontrolMcpServer(bc, config.get('mcp', {}))
+        try:
+            mcp.run_stdio()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            bc.shutdown()
+            del bc
+        return 0
 
     try:
         while True:

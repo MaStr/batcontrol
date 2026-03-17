@@ -52,6 +52,9 @@ COPY config ./config_template
 # Set the scripts as executable
 RUN chmod +x entrypoint.sh
 
+# Expose MCP server port (only used when mcp.enabled=true in config)
+EXPOSE 8081
+
 VOLUME ["/app/logs", "/app/config"]
 
 CMD ["/bin/sh", "/app/entrypoint.sh"]

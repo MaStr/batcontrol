@@ -226,7 +226,7 @@ class TestModeLimitBatteryChargeRate:
 
         # Verify mode was set
         assert bc.last_mode == MODE_LIMIT_BATTERY_CHARGE_RATE
-        assert bc.api_overwrite is True
+        assert bc.override_manager.is_active()
 
     @patch('batcontrol.core.tariff_factory.create_tarif_provider')
     @patch('batcontrol.core.inverter_factory.create_inverter')
