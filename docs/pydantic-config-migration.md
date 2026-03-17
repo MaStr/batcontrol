@@ -16,13 +16,13 @@ that was scattered across the codebase is now centralized in `config_model.py`.
 - `src/batcontrol/setup.py` — Calls `validate_config()` after YAML load
 - `src/batcontrol/core.py` — Removed manual `time_resolution_minutes` string-to-int conversion and validation
 - `src/batcontrol/dynamictariff/dynamictariff.py` — Removed `float()` casts on `vat`, `markup`, `fees`, `tariff_zone_*`
-- `src/batcontrol/forecastconsumption/consumption.py` — Removed manual semicolon-string parsing for `history_days`/`history_weights`
+- `src/batcontrol/forecastconsumption/consumption.py` — Pydantic handles semicolon-string parsing for flat HA addon config; factory retains parsing for nested `homeassistant_api` dict case
 - `src/batcontrol/inverter/inverter.py` — Removed manual `max_charge_rate` rename and `max_pv_charge_rate` default; added `cache_ttl` passthrough
 - `pyproject.toml` — Added `pydantic>=2.0,<3.0` dependency
 
 ### Design Decisions
 - All models use `extra='allow'` so unknown config keys are preserved (forward compat)
-- `validate_config()` returns a plain `dict` (via `model_dump()`) so downstream code needs zero changes
+- `validate_config()` returns a plain `dict` (via `model_dump(exclude_none=True)`) so downstream key-presence checks work unchanged
 - Validation happens once in `setup.py:load_config()`, not scattered per-module
 - Legacy key rename (`max_charge_rate` -> `max_grid_charge_rate`) handled by `model_validator`
 
@@ -85,7 +85,7 @@ BatcontrolConfig (top-level)
   │     └── production_offset_percent: float = 1.0
   │
   ├── inverter: InverterConfig
-  │     ├── type: str = 'dummy'  [fronius_gen24, sungrow, huawei, mqtt, dummy]
+  │     ├── type: str = 'dummy'  [fronius_gen24, mqtt, dummy]
   │     ├── address, user, password: Optional[str]
   │     ├── max_grid_charge_rate: float = 5000  [alias: max_charge_rate]
   │     ├── max_pv_charge_rate: float = 0
@@ -96,10 +96,10 @@ BatcontrolConfig (top-level)
   │     └── capacity, min_soc, max_soc, base_topic, cache_ttl: Optional (MQTT)
   │
   ├── utility: UtilityConfig (required)
-  │     ├── type: str  [awattar_at, awattar_de, entsoe, evcc, tariff_zones]
-  │     ├── vat: float = 0.0
-  │     ├── fees: float = 0.0
-  │     ├── markup: float = 0.0
+  │     ├── type: str  [tibber, awattar_at, awattar_de, evcc, energyforecast, tariff_zones]
+  │     ├── vat: Optional[float] = None  [excluded from output when not set]
+  │     ├── fees: Optional[float] = None  [excluded from output when not set]
+  │     ├── markup: Optional[float] = None  [excluded from output when not set]
   │     └── tariff_zone_1/2/3, zone_1/2/3_hours: Optional
   │
   ├── mqtt: MqttConfig (optional)
