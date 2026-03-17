@@ -69,11 +69,10 @@ def load_config(configfile:str) -> dict:
 
     config = yaml.safe_load(config_str)
 
-    if config['pvinstallations']:
-        pass
-    else:
-        raise RuntimeError('No PV Installation found')
-
+    # Validate and coerce types via Pydantic before any other checks
     config = validate_config(config)
+
+    if not config.get('pvinstallations'):
+        raise RuntimeError('No PV Installation found')
 
     return config
