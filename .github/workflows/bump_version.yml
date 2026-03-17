@@ -80,7 +80,19 @@ jobs:
           echo "Version was bumped from ${{ steps.bump.outputs.previous-version }} to ${{ steps.bump.outputs.current-version }}!"
 
       - name: Push changes
-        if: steps.bump.outputs.bumped == 'true'
+        if: steps.bump.outputs.bumped == 'true' && github.ref_name != 'main'
         run: |
           git push
           git push --tags
+
+      - name: Create Pull Request
+        if: steps.bump.outputs.bumped == 'true' && github.ref_name == 'main'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          title: "chore: bump version to ${{ steps.bump.outputs.current-version }}"
+          body: |
+            Automated version bump from `${{ steps.bump.outputs.previous-version }}` to `${{ steps.bump.outputs.current-version }}`.
+
+            Bump type: `${{ inputs.bump-type }}`
+          branch: bump-version/${{ steps.bump.outputs.current-version }}
+          base: main
