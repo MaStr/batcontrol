@@ -71,6 +71,28 @@ class TestBatcontrolConfig:
         cfg = BatcontrolConfig(**data)
         assert cfg.custom_field == 'custom_value'
 
+    def test_loglevel_valid_values(self):
+        """Test all valid loglevel values."""
+        for level in ['debug', 'info', 'warning', 'error', 'DEBUG', 'Info']:
+            data = self._minimal_config()
+            data['loglevel'] = level
+            cfg = BatcontrolConfig(**data)
+            assert cfg.loglevel == level.lower()
+
+    def test_loglevel_invalid_value(self):
+        """Test that invalid loglevel raises error."""
+        data = self._minimal_config()
+        data['loglevel'] = 'verbose'
+        with pytest.raises(ValidationError, match='loglevel'):
+            BatcontrolConfig(**data)
+
+    def test_loglevel_normalized_to_lowercase(self):
+        """Test that loglevel is normalized to lowercase."""
+        data = self._minimal_config()
+        data['loglevel'] = 'DEBUG'
+        cfg = BatcontrolConfig(**data)
+        assert cfg.loglevel == 'debug'
+
 
 class TestBatteryControlConfig:
     """Tests for BatteryControlConfig."""
@@ -107,6 +129,19 @@ class TestInverterConfig:
         )
         assert cfg.max_grid_charge_rate == 3000.0
         assert cfg.outage_tolerance_minutes == 30.0
+
+    def test_legacy_max_charge_rate_rename(self):
+        """Test backward compat: max_charge_rate -> max_grid_charge_rate."""
+        cfg = InverterConfig(max_charge_rate=4000)
+        assert cfg.max_grid_charge_rate == 4000.0
+
+    def test_max_grid_charge_rate_takes_precedence(self):
+        """Test that max_grid_charge_rate is used when both are present."""
+        cfg = InverterConfig(
+            max_charge_rate=4000,
+            max_grid_charge_rate=3000,
+        )
+        assert cfg.max_grid_charge_rate == 3000.0
 
 
 class TestUtilityConfig:
@@ -210,6 +245,32 @@ class TestConsumptionForecastConfig:
     def test_annual_consumption_coercion(self):
         cfg = ConsumptionForecastConfig(annual_consumption='4500')
         assert cfg.annual_consumption == 4500.0
+
+    def test_history_days_semicolon_string(self):
+        """Test HA addon semicolon-separated string parsing."""
+        cfg = ConsumptionForecastConfig(history_days='-7;-14;-21')
+        assert cfg.history_days == [-7, -14, -21]
+        assert all(isinstance(x, int) for x in cfg.history_days)
+
+    def test_history_weights_semicolon_string(self):
+        """Test HA addon semicolon-separated string parsing."""
+        cfg = ConsumptionForecastConfig(history_weights='1;1;1')
+        assert cfg.history_weights == [1, 1, 1]
+
+    def test_history_days_list_passthrough(self):
+        """Test that regular lists are preserved and items coerced to int."""
+        cfg = ConsumptionForecastConfig(history_days=[-7, -14, -21])
+        assert cfg.history_days == [-7, -14, -21]
+
+    def test_history_days_string_list_coercion(self):
+        """Test that list of strings is coerced to list of ints."""
+        cfg = ConsumptionForecastConfig(history_days=['-7', '-14', '-21'])
+        assert cfg.history_days == [-7, -14, -21]
+
+    def test_history_days_none(self):
+        """Test that None is preserved."""
+        cfg = ConsumptionForecastConfig(history_days=None)
+        assert cfg.history_days is None
 
 
 class TestValidateConfig:

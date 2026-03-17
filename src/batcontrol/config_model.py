@@ -5,7 +5,23 @@ eliminating scattered type conversion code throughout the codebase.
 They also fix HA addon issues where numeric values arrive as strings.
 """
 from typing import List, Optional, Union
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+
+
+def _parse_semicolon_int_list(v):
+    """Parse a semicolon-separated string into a list of ints.
+
+    Handles HA addon config where lists are passed as strings like
+    "-7;-14;-21". Also accepts regular lists and converts items to int.
+    Returns None if input is None.
+    """
+    if v is None:
+        return None
+    if isinstance(v, str):
+        return [int(x.strip()) for x in v.split(';')]
+    if isinstance(v, list):
+        return [int(x) for x in v]
+    return v
 
 
 class BatteryControlConfig(BaseModel):
@@ -51,6 +67,15 @@ class InverterConfig(BaseModel):
     min_soc: Optional[int] = None
     max_soc: Optional[int] = None
     base_topic: Optional[str] = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def handle_max_charge_rate_rename(cls, data):
+        """Support legacy config key max_charge_rate -> max_grid_charge_rate."""
+        if isinstance(data, dict):
+            if 'max_charge_rate' in data and 'max_grid_charge_rate' not in data:
+                data['max_grid_charge_rate'] = data.pop('max_charge_rate')
+        return data
 
 
 class UtilityConfig(BaseModel):
@@ -159,6 +184,18 @@ class ConsumptionForecastConfig(BaseModel):
     multiplier: Optional[float] = None
     sensor_unit: Optional[str] = None
 
+    @field_validator('history_days', mode='before')
+    @classmethod
+    def parse_history_days(cls, v):
+        """Parse semicolon-separated string to list of ints."""
+        return _parse_semicolon_int_list(v)
+
+    @field_validator('history_weights', mode='before')
+    @classmethod
+    def parse_history_weights(cls, v):
+        """Parse semicolon-separated string to list of ints."""
+        return _parse_semicolon_int_list(v)
+
 
 class BatcontrolConfig(BaseModel):
     """Top-level Batcontrol configuration model.
@@ -197,6 +234,17 @@ class BatcontrolConfig(BaseModel):
                 f"time_resolution_minutes must be 15 or 60, got {v}"
             )
         return v
+
+    @field_validator('loglevel')
+    @classmethod
+    def validate_loglevel(cls, v):
+        """Validate loglevel is a recognized level."""
+        valid = ('debug', 'info', 'warning', 'error')
+        if v.lower() not in valid:
+            raise ValueError(
+                f"loglevel must be one of {valid}, got '{v}'"
+            )
+        return v.lower()
 
 
 def validate_config(config_dict: dict) -> dict:
