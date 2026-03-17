@@ -67,7 +67,7 @@ class InverterConfig(BaseModel):
     min_soc: Optional[int] = None
     max_soc: Optional[int] = None
     base_topic: Optional[str] = None
-    cache_ttl: Optional[int] = None
+    cache_ttl: int = 120
 
     @model_validator(mode='before')
     @classmethod
@@ -221,7 +221,7 @@ class BatcontrolConfig(BaseModel):
     utility: UtilityConfig
     mqtt: Optional[MqttConfig] = None
     evcc: Optional[EvccConfig] = None
-    pvinstallations: List[PvInstallationConfig] = []
+    pvinstallations: List[PvInstallationConfig]
     consumption_forecast: ConsumptionForecastConfig = (
         ConsumptionForecastConfig()
     )
@@ -261,4 +261,4 @@ def validate_config(config_dict: dict) -> dict:
         pydantic.ValidationError: If validation fails.
     """
     validated = BatcontrolConfig(**config_dict)
-    return validated.model_dump()
+    return validated.model_dump(exclude_none=True)

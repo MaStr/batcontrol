@@ -93,6 +93,15 @@ class TestBatcontrolConfig:
         cfg = BatcontrolConfig(**data)
         assert cfg.loglevel == 'debug'
 
+    def test_pvinstallations_required(self):
+        """Test that pvinstallations is required (no default)."""
+        data = {
+            'timezone': 'Europe/Berlin',
+            'utility': {'type': 'awattar_de'},
+        }
+        with pytest.raises(ValidationError, match='pvinstallations'):
+            BatcontrolConfig(**data)
+
 
 class TestBatteryControlConfig:
     """Tests for BatteryControlConfig."""
@@ -148,6 +157,11 @@ class TestInverterConfig:
         cfg = InverterConfig(cache_ttl='120')
         assert cfg.cache_ttl == 120
         assert isinstance(cfg.cache_ttl, int)
+
+    def test_cache_ttl_default(self):
+        """Test that cache_ttl has a real default, not None."""
+        cfg = InverterConfig()
+        assert cfg.cache_ttl == 120
 
 
 class TestUtilityConfig:
@@ -382,6 +396,20 @@ class TestValidateConfig:
         config['time_resolution_minutes'] = 45
         with pytest.raises(ValidationError):
             validate_config(config)
+
+    def test_validate_excludes_none_fields(self):
+        """Test that None optional fields are excluded from output dict.
+
+        Downstream code checks key presence (e.g. 'csv' in config),
+        so None values must not appear as keys.
+        """
+        result = validate_config(self._full_config())
+        # These optional fields were not set, so must be absent
+        assert 'apikey' not in result['utility']
+        assert 'url' not in result['utility']
+        # Inverter optional fields should be absent
+        assert 'address' not in result['inverter']
+        assert 'user' not in result['inverter']
 
     def test_ha_addon_string_config(self):
         """Simulate HA addon options.json where many values are strings."""

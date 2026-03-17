@@ -3,6 +3,7 @@ import os
 import tempfile
 import pytest
 import yaml
+from pydantic import ValidationError
 from batcontrol.setup import load_config
 
 
@@ -59,6 +60,16 @@ class TestLoadConfigIntegration:
         config['pvinstallations'] = []
         path = self._write_config(config, str(tmp_path))
         with pytest.raises(RuntimeError, match='No PV Installation'):
+            load_config(path)
+
+    def test_load_config_missing_pvinstallations_key(self, tmp_path):
+        """Test that missing pvinstallations key fails Pydantic validation."""
+        config = {
+            'timezone': 'Europe/Berlin',
+            'utility': {'type': 'awattar_de'},
+        }
+        path = self._write_config(config, str(tmp_path))
+        with pytest.raises(ValidationError, match='pvinstallations'):
             load_config(path)
 
     def test_load_config_with_dummy_config_file(self):
