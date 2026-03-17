@@ -497,7 +497,9 @@ class Batcontrol:
             1 - elapsed_in_current
         )
 
-        this_logic_run = LogicFactory.create_logic(self.config, self.timezone)
+        this_logic_run = LogicFactory.create_logic(self.time_resolution,
+                                                   self.config,
+                                                   self.timezone)
 
         # Create input for calculation
         calc_input = CalculationInput(
