@@ -90,7 +90,7 @@ utility:
 mcp:
   enabled: false
   transport: http          # 'http' for network access (Docker/HA addon), 'stdio' for direct pipe
-  host: 0.0.0.0            # Bind address (0.0.0.0 for all interfaces)
+  host: 127.0.0.1          # Bind address (127.0.0.1 = local only; 0.0.0.0 = all interfaces)
   port: 8081               # HTTP port for MCP server
 
 #--------------------------

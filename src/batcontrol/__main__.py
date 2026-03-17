@@ -84,6 +84,11 @@ def main() -> int:
         logging.getLogger("batcontrol.forecastconsumption.forecast_homeassistant.details").setLevel(logging.INFO)
         logging.getLogger("batcontrol.forecastconsumption.forecast_homeassistant.communication").setLevel(logging.INFO)
 
+    # When using stdio transport, prevent core.py from starting an HTTP MCP server.
+    # Both would share the same Batcontrol instance and compete for the port.
+    if args.mcp_stdio:
+        config.setdefault('mcp', {})['enabled'] = False
+
     bc = Batcontrol(config)
 
     # Handle --mcp-stdio: run MCP server in stdio mode (blocking)

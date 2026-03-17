@@ -1,7 +1,6 @@
 """Tests for the OverrideManager"""
 import time
 import pytest
-from unittest.mock import patch
 
 from batcontrol.override_manager import OverrideManager, OverrideState
 

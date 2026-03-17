@@ -5,7 +5,7 @@ Tests are skipped automatically when the mcp package is not installed.
 """
 import pytest
 import numpy as np
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
 from batcontrol.mcp_server import is_available as mcp_is_available
 
@@ -16,7 +16,7 @@ if not mcp_is_available():
     )
 
 from batcontrol.mcp_server import BatcontrolMcpServer, _format_forecast_array, MODE_NAMES
-from batcontrol.override_manager import OverrideManager, OverrideState
+from batcontrol.override_manager import OverrideManager
 
 
 class TestFormatForecastArray:

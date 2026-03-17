@@ -320,7 +320,7 @@ class Batcontrol:
                     self, mcp_config)
                 transport = mcp_config.get('transport', 'http')
                 if transport == 'http':
-                    host = mcp_config.get('host', '0.0.0.0')
+                    host = mcp_config.get('host', '127.0.0.1')
                     port = mcp_config.get('port', 8081)
                     self.mcp_server.start_http(host=host, port=port)
                 # stdio transport is handled in __main__.py
@@ -910,9 +910,9 @@ class Batcontrol:
             duration_minutes: Override duration. None uses the MQTT-configured
                 override_duration.
         """
-        if charge_rate < 0:
+        if charge_rate <= 0:
             logger.warning(
-                'API: Invalid charge rate %d W', charge_rate)
+                'API: Invalid charge rate %d W (must be > 0)', charge_rate)
             return
 
         # Use MQTT-configured duration if no explicit duration given

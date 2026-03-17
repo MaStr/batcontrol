@@ -11,8 +11,6 @@ Requires the optional 'mcp' dependency (Python >=3.10):
 
 Use `is_available()` to check at runtime before instantiation.
 """
-import json
-import time
 import logging
 import threading
 from typing import Optional
@@ -47,8 +45,17 @@ MODE_NAMES = {
 VALID_MODES = set(MODE_NAMES.keys())
 
 
-def _format_forecast_array(arr, run_time: float, interval_minutes: int) -> list:
-    """Format a numpy array forecast into a list of {time, value} dicts."""
+def _format_forecast_array(arr, run_time: float, interval_minutes: int,
+                           digits: int = 1) -> list:
+    """Format a numpy array forecast into a list of {time, value} dicts.
+
+    Args:
+        arr: Numpy array of values.
+        run_time: Current epoch timestamp.
+        interval_minutes: Slot width in minutes.
+        digits: Decimal places to round values to. Use 1 for power/energy (W/Wh),
+                4 for prices (EUR/kWh) to preserve meaningful precision.
+    """
     if arr is None:
         return []
     interval_seconds = interval_minutes * 60
@@ -58,7 +65,7 @@ def _format_forecast_array(arr, run_time: float, interval_minutes: int) -> list:
         result.append({
             'slot': i,
             'time_start': base_time + i * interval_seconds,
-            'value': round(float(val), 1),
+            'value': round(float(val), digits),
         })
     return result
 
@@ -131,7 +138,7 @@ class BatcontrolMcpServer:
             return {
                 'interval_minutes': bc.time_resolution,
                 'prices': _format_forecast_array(
-                    bc.last_prices, bc.last_run_time, bc.time_resolution),
+                    bc.last_prices, bc.last_run_time, bc.time_resolution, digits=4),
                 'current_price': round(float(bc.last_prices[0]), 4) if bc.last_prices is not None and len(bc.last_prices) > 0 else None,
             }
 
@@ -277,7 +284,7 @@ class BatcontrolMcpServer:
             if mode not in VALID_MODES:
                 return {'error': "Invalid mode %s. Valid: %s" % (mode, sorted(VALID_MODES))}
             if duration_minutes <= 0 or duration_minutes > 1440:
-                return {'error': "duration_minutes must be between 0 and 1440 (24h)"}
+                return {'error': "duration_minutes must be between 1 and 1440 (24h)"}
 
             bc = self._bc
             override = bc.override_manager.set_override(
@@ -323,7 +330,7 @@ class BatcontrolMcpServer:
             if charge_rate_w <= 0:
                 return {'error': "charge_rate_w must be positive"}
             if duration_minutes <= 0 or duration_minutes > 1440:
-                return {'error': "duration_minutes must be between 0 and 1440 (24h)"}
+                return {'error': "duration_minutes must be between 1 and 1440 (24h)"}
 
             bc = self._bc
             override = bc.override_manager.set_override(
@@ -401,7 +408,11 @@ class BatcontrolMcpServer:
         self.mcp.run(transport="stdio")
 
     def shutdown(self):
-        """Shutdown the MCP server."""
-        logger.info("MCP server shutdown requested")
-        # The daemon thread will be cleaned up automatically on process exit.
-        # For stdio mode, the process is already blocking on it.
+        """Request MCP server shutdown.
+
+        Note: The MCP SDK (FastMCP/uvicorn) does not expose a programmatic
+        stop API. The HTTP server runs as a daemon thread and will be cleaned
+        up automatically when the process exits. If you need clean mid-process
+        shutdown, use a dedicated process/subprocess for the MCP server instead.
+        """
+        logger.info("MCP server shutdown requested (daemon thread will exit with process)")
