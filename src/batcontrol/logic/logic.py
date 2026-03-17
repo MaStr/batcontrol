@@ -10,7 +10,7 @@ class Logic:
     """ Factory for logic classes. """
     print_class_message = True
     @staticmethod
-    def create_logic(time_resolution_minutes: int,config: dict, timezone) -> LogicInterface:
+    def create_logic(time_resolution_minutes: int, config: dict, timezone) -> LogicInterface:
         """ Select and configure a logic class based on the given configuration """
         request_type = config.get('type', 'default').lower()
         logic = None
