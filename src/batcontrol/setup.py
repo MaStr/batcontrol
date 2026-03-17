@@ -4,6 +4,9 @@ import os
 import yaml
 from logging.handlers import RotatingFileHandler
 
+from .config_model import validate_config
+
+
 def setup_logging(level=logging.INFO, logfile=None, max_logfile_size_kb=200):
     """Configure root logger with consistent formatting.
     
@@ -66,9 +69,13 @@ def load_config(configfile:str) -> dict:
 
     config = yaml.safe_load(config_str)
 
-    if config['pvinstallations']:
-        pass
-    else:
+    if not isinstance(config, dict):
+        raise RuntimeError(f'Configfile {configfile} is empty or not a valid YAML mapping')
+
+    # Validate and coerce types via Pydantic before any other checks
+    config = validate_config(config)
+
+    if not config.get('pvinstallations'):
         raise RuntimeError('No PV Installation found')
-    
+
     return config
