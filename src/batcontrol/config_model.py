@@ -67,6 +67,7 @@ class InverterConfig(BaseModel):
     min_soc: Optional[int] = None
     max_soc: Optional[int] = None
     base_topic: Optional[str] = None
+    cache_ttl: Optional[int] = None
 
     @model_validator(mode='before')
     @classmethod
