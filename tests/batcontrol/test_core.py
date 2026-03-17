@@ -287,5 +287,84 @@ class TestModeLimitBatteryChargeRate:
         mock_inverter.set_mode_limit_battery_charge.assert_called_once_with(2000)
 
 
+class TestAlwaysAllowDischargeLimitConversion:
+    """Tests that always_allow_discharge_limit is always a float in core.py"""
+
+    @pytest.fixture
+    def mock_inverter(self):
+        """Create a mock inverter"""
+        inv = MagicMock()
+        inv.max_pv_charge_rate = 3000
+        inv.set_mode_limit_battery_charge = MagicMock()
+        inv.get_max_capacity = MagicMock(return_value=10000)
+        return inv
+
+    def _make_batcontrol(self, mock_inverter, always_allow_discharge_limit):
+        """Helper to create a Batcontrol instance with a given discharge limit config"""
+        config = {
+            'timezone': 'Europe/Berlin',
+            'time_resolution_minutes': 60,
+            'inverter': {
+                'type': 'dummy',
+                'max_grid_charge_rate': 5000,
+                'max_pv_charge_rate': 3000,
+                'min_pv_charge_rate': 100
+            },
+            'utility': {'type': 'tibber', 'token': 'test_token'},
+            'pvinstallations': [],
+            'consumption_forecast': {'type': 'simple', 'value': 500},
+            'battery_control': {
+                'max_charging_from_grid_limit': 0.5,
+                'min_price_difference': 0.05,
+                'always_allow_discharge_limit': always_allow_discharge_limit,
+            },
+            'mqtt': {'enabled': False}
+        }
+        with patch('batcontrol.core.tariff_factory.create_tarif_provider'), \
+             patch('batcontrol.core.inverter_factory.create_inverter',
+                   return_value=mock_inverter), \
+             patch('batcontrol.core.solar_factory.create_solar_provider'), \
+             patch('batcontrol.core.consumption_factory.create_consumption'):
+            from batcontrol.logic.common import CommonLogic
+            CommonLogic._instance = None
+            return Batcontrol(config)
+
+    def test_config_string_dot_notation(self, mock_inverter):
+        """Config value '0.9' (string) is converted to float 0.9"""
+        bc = self._make_batcontrol(mock_inverter, '0.9')
+        result = bc.get_always_allow_discharge_limit()
+        assert isinstance(result, float)
+        assert abs(result - 0.9) < 1e-9
+
+    def test_config_european_comma_notation(self, mock_inverter):
+        """Config value '0,9' (European decimal) is converted to float 0.9"""
+        bc = self._make_batcontrol(mock_inverter, '0,9')
+        result = bc.get_always_allow_discharge_limit()
+        assert isinstance(result, float)
+        assert abs(result - 0.9) < 1e-9
+
+    def test_setter_string_dot_notation(self, mock_inverter):
+        """Setter with string '0.85' is converted to float"""
+        bc = self._make_batcontrol(mock_inverter, 0.9)
+        bc.set_always_allow_discharge_limit('0.85')
+        result = bc.get_always_allow_discharge_limit()
+        assert isinstance(result, float)
+        assert abs(result - 0.85) < 1e-9
+
+    def test_setter_european_comma_notation(self, mock_inverter):
+        """Setter with European '0,85' is converted to float"""
+        bc = self._make_batcontrol(mock_inverter, 0.9)
+        bc.set_always_allow_discharge_limit('0,85')
+        result = bc.get_always_allow_discharge_limit()
+        assert isinstance(result, float)
+        assert abs(result - 0.85) < 1e-9
+
+    def test_getter_always_returns_float(self, mock_inverter):
+        """get_always_allow_discharge_limit always returns a float"""
+        bc = self._make_batcontrol(mock_inverter, 0.9)
+        result = bc.get_always_allow_discharge_limit()
+        assert isinstance(result, float)
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

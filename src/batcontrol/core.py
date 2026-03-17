@@ -38,6 +38,23 @@ EVALUATIONS_EVERY_MINUTES = 3  # Every x minutes on the clock
 DELAY_EVALUATION_BY_SECONDS = 15  # Delay evaluation for x seconds at every trigger
 # Interval between evaluations in seconds
 TIME_BETWEEN_EVALUATIONS = EVALUATIONS_EVERY_MINUTES * 60
+
+
+def _to_float(value) -> float:
+    """ Convert a config or API value to float, handling European comma decimal notation.
+    Args:
+        value: The value to convert. Can be a float, int, or string
+               (including European notation like '0,9').
+    Returns:
+        float: The converted value.
+    Raises:
+        ValueError: If the value cannot be converted to float.
+    """
+    if isinstance(value, str):
+        return float(value.replace(',', '.'))
+    return float(value)
+
+
 TIME_BETWEEN_UTILITY_API_CALLS = 900  # 15 Minutes
 MIN_FORECAST_HOURS = 1  # Minimum required forecast hours
 FORECAST_TOLERANCE = 3  # Acceptable tolerance for forecast hours
@@ -60,7 +77,8 @@ class Batcontrol:
         # -1 = charge from grid , 0 = avoid discharge , 8 = limit battery charge, 10 = discharge allowed
         self.last_mode = None
         self.last_charge_rate = 0
-        self._limit_battery_charge_rate = -1  # Dynamic battery charge rate limit (-1 = no limit)
+        # Dynamic battery charge rate limit (-1 = no limit)
+        self._limit_battery_charge_rate = -1
         self.last_prices = None
         self.last_consumption = None
         self.last_production = None
@@ -155,7 +173,8 @@ class Batcontrol:
             'max_pv_charge_rate',
             getattr(self.inverter, 'max_pv_charge_rate', 0),
         )
-        self.min_pv_charge_rate = config['inverter'].get('min_pv_charge_rate', 0)
+        self.min_pv_charge_rate = config['inverter'].get(
+            'min_pv_charge_rate', 0)
 
         # Validate min/max PV charge rate configuration at startup
         if (
@@ -214,8 +233,8 @@ class Batcontrol:
         self.general_logic = CommonLogic.get_instance(
             charge_rate_multiplier=self.batconfig.get(
                 'charge_rate_multiplier', 1.1),
-            always_allow_discharge_limit=self.batconfig.get(
-                'always_allow_discharge_limit', 0.9),
+            always_allow_discharge_limit=_to_float(self.batconfig.get(
+                'always_allow_discharge_limit', 0.9)),
             max_capacity=self.inverter.get_max_capacity(),
             min_charge_energy=self.batconfig.get('min_recharge_amount', 100.0)
         )
@@ -363,7 +382,8 @@ class Batcontrol:
 
     def run(self):
         """ Main calculation & control loop """
-        logger.debug('Timeslots are in %d-minute intervals', self.time_resolution)
+        logger.debug('Timeslots are in %d-minute intervals',
+                     self.time_resolution)
 
         # Reset some values
         self.__reset_run_data()
@@ -542,7 +562,8 @@ class Batcontrol:
 
         if inverter_settings.allow_discharge:
             if inverter_settings.limit_battery_charge_rate >= 0:
-                self.limit_battery_charge_rate(inverter_settings.limit_battery_charge_rate)
+                self.limit_battery_charge_rate(
+                    inverter_settings.limit_battery_charge_rate)
             else:
                 self.allow_discharging()
         elif inverter_settings.charge_from_grid:
@@ -611,7 +632,8 @@ class Batcontrol:
             if self.min_pv_charge_rate > 0 and effective_limit > 0:
                 effective_limit = max(effective_limit, self.min_pv_charge_rate)
 
-        logger.info('Mode: Limit Battery Charge Rate to %d W, discharge allowed', effective_limit)
+        logger.info(
+            'Mode: Limit Battery Charge Rate to %d W, discharge allowed', effective_limit)
         self.inverter.set_mode_limit_battery_charge(effective_limit)
         self.__set_mode(MODE_LIMIT_BATTERY_CHARGE_RATE)
 
@@ -723,11 +745,10 @@ class Batcontrol:
     def set_always_allow_discharge_limit(
             self, always_allow_discharge_limit: float) -> None:
         """ Set the always allow discharge limit for battery control """
-        self.general_logic.set_always_allow_discharge_limit(
-            always_allow_discharge_limit)
+        limit = _to_float(always_allow_discharge_limit)
+        self.general_logic.set_always_allow_discharge_limit(limit)
         if self.mqtt_api is not None:
-            self.mqtt_api.publish_always_allow_discharge_limit(
-                always_allow_discharge_limit)
+            self.mqtt_api.publish_always_allow_discharge_limit(limit)
 
     def get_always_allow_discharge_limit(self) -> float:
         """ Get the always allow discharge limit for battery control """
@@ -848,7 +869,8 @@ class Batcontrol:
             limit: Maximum battery charge rate in W (0 = no charging, -1 = no limit)
         """
         if limit < -1:
-            logger.warning('API: Invalid limit_battery_charge_rate %d W', limit)
+            logger.warning(
+                'API: Invalid limit_battery_charge_rate %d W', limit)
             return
 
         logger.info('API: Setting limit_battery_charge_rate to %d W', limit)
