@@ -4,6 +4,9 @@ import os
 import yaml
 from logging.handlers import RotatingFileHandler
 
+from .config_model import validate_config
+
+
 def setup_logging(level=logging.INFO, logfile=None, max_logfile_size_kb=200):
     """Configure root logger with consistent formatting.
     
@@ -70,5 +73,7 @@ def load_config(configfile:str) -> dict:
         pass
     else:
         raise RuntimeError('No PV Installation found')
-    
+
+    config = validate_config(config)
+
     return config

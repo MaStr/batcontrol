@@ -290,7 +290,12 @@ class TestModeLimitBatteryChargeRate:
 
 
 class TestTimeResolutionString:
-    """Test that time_resolution_minutes provided as string (e.g. from Home Assistant) is handled correctly"""
+    """Test that time_resolution_minutes coercion is handled by Pydantic config validation.
+
+    Since Pydantic validates and coerces types in load_config() before Batcontrol
+    receives the config dict, Batcontrol.__init__() expects properly typed values.
+    String-to-int coercion is tested in test_config_model.py.
+    """
 
     @pytest.fixture
     def base_mock_config(self):
@@ -321,16 +326,16 @@ class TestTimeResolutionString:
             }
         }
 
-    @pytest.mark.parametrize('resolution_str,expected_int', [('60', 60), ('15', 15)])
+    @pytest.mark.parametrize('resolution_int', [60, 15])
     @patch('batcontrol.core.tariff_factory.create_tarif_provider')
     @patch('batcontrol.core.inverter_factory.create_inverter')
     @patch('batcontrol.core.solar_factory.create_solar_provider')
     @patch('batcontrol.core.consumption_factory.create_consumption')
-    def test_string_time_resolution_initialises_without_error(
+    def test_time_resolution_initialises_without_error(
         self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
-        base_mock_config, resolution_str, expected_int
+        base_mock_config, resolution_int
     ):
-        """Batcontrol must not crash when time_resolution_minutes is a string"""
+        """Batcontrol initialises correctly with validated int time_resolution_minutes"""
         mock_inverter = MagicMock()
         mock_inverter.get_max_capacity = MagicMock(return_value=10000)
         mock_inverter_factory.return_value = mock_inverter
@@ -338,22 +343,22 @@ class TestTimeResolutionString:
         mock_solar.return_value = MagicMock()
         mock_consumption.return_value = MagicMock()
 
-        base_mock_config['time_resolution_minutes'] = resolution_str
+        base_mock_config['time_resolution_minutes'] = resolution_int
         bc = Batcontrol(base_mock_config)
 
         assert isinstance(bc.time_resolution, int)
-        assert bc.time_resolution == expected_int
+        assert bc.time_resolution == resolution_int
 
-    @pytest.mark.parametrize('resolution_str', ['60', '15'])
-    def test_logic_factory_accepts_string_resolution_as_int(self, resolution_str):
+    @pytest.mark.parametrize('resolution_int', [60, 15])
+    def test_logic_factory_accepts_resolution_as_int(self, resolution_int):
         """Logic factory must produce a valid logic instance when given an int resolution"""
         logic = LogicFactory.create_logic(
-            int(resolution_str),
+            resolution_int,
             {'type': 'default'},
             datetime.timezone.utc
         )
         assert logic is not None
-        assert logic.interval_minutes == int(resolution_str)
+        assert logic.interval_minutes == resolution_int
 
 
 if __name__ == '__main__':

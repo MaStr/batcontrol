@@ -89,23 +89,9 @@ class Batcontrol:
         self.config = configdict
         config = configdict
 
-        # Extract and validate time resolution (15 or 60 minutes)
-        # Get time resolution from config, convert string to int if needed
-        # (HomeAssistant form fields may provide string values)
-        time_resolution_raw = config.get('time_resolution_minutes', 60)
-        if isinstance(time_resolution_raw, str):
-            self.time_resolution = int(time_resolution_raw)
-        else:
-            self.time_resolution = time_resolution_raw
-
-        if self.time_resolution not in [15, 60]:
-            # Note: Python3.11 had issue with f-strings and multiline. Using format() here.
-            error_message = "time_resolution_minutes must be either " + \
-                "15 (quarter-hourly) or 60 (hourly), " + \
-                " got '%s'.".format(self.time_resolution) + \
-                " Please update your configuration file."
-
-            raise ValueError(error_message)
+        # time_resolution_minutes is validated and coerced by Pydantic
+        # in config_model.py (must be int, must be 15 or 60)
+        self.time_resolution = config.get('time_resolution_minutes', 60)
 
         self.intervals_per_hour = 60 // self.time_resolution
         logger.info(
