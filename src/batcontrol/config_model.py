@@ -87,9 +87,12 @@ class UtilityConfig(BaseModel):
     type: str
     apikey: Optional[str] = None
     url: Optional[str] = None
-    vat: float = 0.0
-    fees: float = 0.0
-    markup: float = 0.0
+    # vat/fees/markup are Optional so that downstream required_fields checks
+    # (in dynamictariff.py) can detect missing config for providers that need them.
+    # With exclude_none=True, absent keys won't appear in the output dict.
+    vat: Optional[float] = None
+    fees: Optional[float] = None
+    markup: Optional[float] = None
     # Tariff zone fields
     tariff_zone_1: Optional[float] = None
     zone_1_hours: Optional[str] = None

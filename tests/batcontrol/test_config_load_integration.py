@@ -1,6 +1,5 @@
 """Integration tests for load_config with Pydantic validation."""
 import os
-import tempfile
 import pytest
 import yaml
 from pydantic import ValidationError
