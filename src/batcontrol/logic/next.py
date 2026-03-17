@@ -99,7 +99,7 @@ class NextLogic(LogicInterface):
         return self.inverter_control_settings
 
     # ------------------------------------------------------------------ #
-    #  Main control logic (same as DefaultLogic)                          #
+    #  Main control logic (same as DefaultLogic)                         #
     # ------------------------------------------------------------------ #
 
     def calculate_inverter_mode(self, calc_input: CalculationInput,
