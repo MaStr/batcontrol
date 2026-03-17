@@ -59,6 +59,7 @@ class Batcontrol:
     def __init__(self, configdict: dict):
         # For API
         self.override_manager = OverrideManager()
+        self._mqtt_override_duration = self.override_manager.default_duration_minutes
         # -1 = charge from grid , 0 = avoid discharge , 8 = limit battery charge, 10 = discharge allowed
         self.last_mode = None
         self.last_charge_rate = 0
@@ -271,6 +272,16 @@ class Batcontrol:
                     'production_offset',
                     self.api_set_production_offset,
                     float
+                )
+                self.mqtt_api.register_set_callback(
+                    'override_duration',
+                    self.api_set_override_duration,
+                    float
+                )
+                self.mqtt_api.register_set_callback(
+                    'clear_override',
+                    self.api_clear_override,
+                    int
                 )
                 # Inverter Callbacks
                 self.inverter.activate_mqtt(self.mqtt_api)
@@ -823,6 +834,8 @@ class Batcontrol:
             self.mqtt_api.publish_override_active(override is not None)
             self.mqtt_api.publish_override_remaining(
                 override.remaining_minutes if override else 0.0)
+            self.mqtt_api.publish_override_duration(
+                self._mqtt_override_duration)
             #
             self.mqtt_api.publish_discharge_blocked(self.discharge_blocked)
             # Trigger Inverter
@@ -856,7 +869,9 @@ class Batcontrol:
         Uses the OverrideManager for time-bounded overrides.
         Args:
             mode: Inverter mode (-1, 0, 8, 10)
-            duration_minutes: Override duration. None uses OverrideManager default.
+            duration_minutes: Override duration. None uses the MQTT-configured
+                override_duration (set via override_duration/set), which defaults
+                to the OverrideManager default (30 min).
         """
         # Check if mode is valid
         if mode not in [
@@ -867,7 +882,11 @@ class Batcontrol:
             logger.warning('API: Invalid mode %s', mode)
             return
 
-        logger.info('API: Setting mode to %s', mode)
+        # Use MQTT-configured duration if no explicit duration given
+        if duration_minutes is None:
+            duration_minutes = self._mqtt_override_duration
+
+        logger.info('API: Setting mode to %s for %.1f min', mode, duration_minutes)
         override = self.override_manager.set_override(
             mode=mode,
             duration_minutes=duration_minutes,
@@ -881,13 +900,19 @@ class Batcontrol:
         Uses the OverrideManager for time-bounded overrides.
         Args:
             charge_rate: Charge rate in W
-            duration_minutes: Override duration. None uses OverrideManager default.
+            duration_minutes: Override duration. None uses the MQTT-configured
+                override_duration.
         """
         if charge_rate < 0:
             logger.warning(
                 'API: Invalid charge rate %d W', charge_rate)
             return
-        logger.info('API: Setting charge rate to %d W', charge_rate)
+
+        # Use MQTT-configured duration if no explicit duration given
+        if duration_minutes is None:
+            duration_minutes = self._mqtt_override_duration
+
+        logger.info('API: Setting charge rate to %d W for %.1f min', charge_rate, duration_minutes)
         override = self.override_manager.set_override(
             mode=MODE_FORCE_CHARGING,
             charge_rate=charge_rate,
@@ -895,6 +920,44 @@ class Batcontrol:
             reason="MQTT API charge_rate/set"
         )
         self._apply_override(override)
+
+    def api_set_override_duration(self, duration_minutes: float):
+        """ Set the duration (in minutes) for subsequent mode/charge_rate overrides via MQTT.
+
+        This acts like a "pre-set" — the next mode/set or charge_rate/set will use
+        this duration. Analogous to how limit_battery_charge_rate/set works for mode 8.
+
+        Args:
+            duration_minutes: Duration in minutes (1-1440). 0 resets to default.
+        """
+        if duration_minutes == 0:
+            duration_minutes = self.override_manager.default_duration_minutes
+            logger.info('API: Reset override duration to default (%.1f min)',
+                        duration_minutes)
+        elif duration_minutes < 1 or duration_minutes > 1440:
+            logger.warning(
+                'API: Invalid override duration %.1f min (must be 1-1440, or 0 to reset)',
+                duration_minutes)
+            return
+        else:
+            logger.info('API: Setting override duration to %.1f min',
+                        duration_minutes)
+
+        self._mqtt_override_duration = duration_minutes
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_override_duration(duration_minutes)
+
+    def api_clear_override(self, _value: int = 0):
+        """ Clear any active override and resume autonomous control.
+
+        The value parameter is ignored (any value triggers the clear).
+        This follows the MQTT /set pattern where a message triggers the action.
+        """
+        logger.info('API: Clearing override')
+        self.override_manager.clear_override()
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_override_active(False)
+            self.mqtt_api.publish_override_remaining(0.0)
 
     def api_set_limit_battery_charge_rate(self, limit: int):
         """ Set dynamic battery charge rate limit from external call
