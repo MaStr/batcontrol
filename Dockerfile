@@ -1,5 +1,5 @@
 # Stage 1: Build Stage
-FROM python:3.13-alpine AS builder
+FROM python:3.14-alpine AS builder
 
 # Copy only whats needed for dependencies first
 COPY pyproject.toml LICENSE README.MD ./
@@ -14,7 +14,7 @@ COPY ./src ./src
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir=/wheels .
 
 # Stage 2: Build the final image
-FROM python:3.13-alpine
+FROM python:3.14-alpine
 
 ARG VERSION
 ARG GIT_SHA
