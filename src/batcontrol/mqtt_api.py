@@ -155,8 +155,11 @@ class MqttApi:
         logger.debug('Received message on %s', message.topic)
         if message.topic in self.callbacks:
             try:
+                payload = message.payload
+                if isinstance(payload, bytes):
+                    payload = payload.decode('utf-8')
                 self.callbacks[message.topic]['function'](
-                    self.callbacks[message.topic]['convert'](message.payload)
+                    self.callbacks[message.topic]['convert'](payload)
                 )
             except (ValueError, TypeError) as e:
                 logger.error('Error in callback %s : %s', message.topic, e)
