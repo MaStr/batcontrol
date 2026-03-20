@@ -60,12 +60,13 @@ class TestPeakShavingAlgorithm(unittest.TestCase):
         )
 
     def test_high_surplus_small_free_capacity(self):
-        """High PV surplus, small free capacity -> low charge limit."""
+        """High PV surplus, small free capacity -> low charge limit (counter-linear ramp)."""
         # 8 hours until 14:00 starting from 06:00
         # 5000 W PV per slot, 500 W consumption -> 4500 W surplus per slot
         # 8 slots * 4500 Wh = 36000 Wh surplus total
         # free_capacity = 2000 Wh
-        # charge limit = 2000 / 8 = 250 Wh/slot -> 250 W (60 min intervals)
+        # counter-linear ramp: current slot weight=1, total weight=8*9/2=36
+        # wh_current = 2 * 2000 / (8 * 9) = 55.5 Wh -> 55 W (60 min intervals)
         production = [5000] * 8 + [0] * 4
         consumption = [500] * 8 + [0] * 4
         calc_input = self._make_input(production, consumption,
@@ -75,7 +76,7 @@ class TestPeakShavingAlgorithm(unittest.TestCase):
                                tzinfo=datetime.timezone.utc)
         limit = self.logic._calculate_peak_shaving_charge_limit(
             calc_input, ts)
-        self.assertEqual(limit, 250)
+        self.assertEqual(limit, 55)
 
     def test_low_surplus_large_free_capacity(self):
         """Low PV surplus, large free capacity -> no limit (-1)."""
@@ -154,7 +155,7 @@ class TestPeakShavingAlgorithm(unittest.TestCase):
         # 3000 W PV, 2000 W consumption -> 1000 W surplus
         # 8 slots * 1000 Wh = 8000 Wh surplus
         # free_capacity = 4000 Wh -> surplus > free
-        # limit = 4000 / 8 = 500 Wh/slot -> 500 W
+        # counter-linear ramp: wh_current = 2*4000/(8*9) = 111.1 Wh -> 111 W
         production = [3000] * 8 + [0] * 4
         consumption = [2000] * 8 + [0] * 4
         calc_input = self._make_input(production, consumption,
@@ -164,10 +165,10 @@ class TestPeakShavingAlgorithm(unittest.TestCase):
                                tzinfo=datetime.timezone.utc)
         limit = self.logic._calculate_peak_shaving_charge_limit(
             calc_input, ts)
-        self.assertEqual(limit, 500)
+        self.assertEqual(limit, 111)
 
     def test_15min_intervals(self):
-        """Test with 15-minute intervals."""
+        """Test counter-linear ramp with 15-minute intervals."""
         logic_15 = NextLogic(timezone=datetime.timezone.utc,
                              interval_minutes=15)
         logic_15.set_calculation_parameters(self.params)
@@ -177,8 +178,9 @@ class TestPeakShavingAlgorithm(unittest.TestCase):
         # surplus Wh per slot = 4000 * 0.25 = 1000 Wh
         # total surplus = 4 * 1000 = 4000 Wh
         # free_capacity = 1000 Wh -> surplus > free
-        # wh_per_slot = 1000 / 4 = 250 Wh
-        # charge_rate_w = 250 / 0.25 = 1000 W
+        # counter-linear ramp (n=4, ih=0.25):
+        #   wh_current = 2*1000/(4*5) = 100 Wh
+        #   charge_rate = 100 / 0.25 = 400 W
         production = [4500] * 4
         consumption = [500] * 4
         calc_input = self._make_input(production, consumption,
@@ -188,7 +190,7 @@ class TestPeakShavingAlgorithm(unittest.TestCase):
                                tzinfo=datetime.timezone.utc)
         limit = logic_15._calculate_peak_shaving_charge_limit(
             calc_input, ts)
-        self.assertEqual(limit, 1000)
+        self.assertEqual(limit, 400)
 
 
 class TestPeakShavingDecision(unittest.TestCase):
@@ -287,9 +289,10 @@ class TestPeakShavingDecision(unittest.TestCase):
     def test_peak_shaving_applies_limit(self):
         """Before target hour, limit calculated -> limit set."""
         settings = self._make_settings()
-        # 6 slots (6..14), 5000W PV, 500W consumption -> 4500W surplus
+        # 6 slots (08..14), 5000W PV, 500W consumption -> 4500W surplus
         # surplus Wh = 6 * 4500 = 27000 > free 3000
-        # limit = 3000 / 6 = 500 W
+        # counter-linear ramp: wh_current = 2*3000/(6*7) = 142.8 Wh -> 142 W
+        # 142 W < MIN_CHARGE_RATE (500 W) -> enforced to 500 W
         calc_input = self._make_input(
             [5000] * 8, [500] * 8,
             stored_energy=7000, free_capacity=3000)
@@ -394,7 +397,7 @@ class TestPeakShavingDecision(unittest.TestCase):
         ts = datetime.datetime(2025, 6, 20, 8, 0, 0,
                                tzinfo=datetime.timezone.utc)
         result = self.logic._apply_peak_shaving(settings, calc_input, ts)
-        self.assertEqual(result.limit_battery_charge_rate, 625)
+        self.assertEqual(result.limit_battery_charge_rate, 500)
 
     def test_mode_time_only_ignores_price_limit(self):
         """Mode 'time': price_limit=None does not disable peak shaving."""
@@ -415,7 +418,7 @@ class TestPeakShavingDecision(unittest.TestCase):
         ts = datetime.datetime(2025, 6, 20, 8, 0, 0,
                                tzinfo=datetime.timezone.utc)
         result = self.logic._apply_peak_shaving(settings, calc_input, ts)
-        # time-based: 6 slots, surplus=6*4500=27000>3000 -> limit=3000/6=500 W
+        # time-based (n=6): raw = 2*3000/(6*7) = 142 W < MIN_CHARGE_RATE -> enforced to 500 W
         self.assertEqual(result.limit_battery_charge_rate, 500)
 
     def test_mode_price_only_no_time_limit(self):
@@ -976,14 +979,19 @@ class TestPeakShavingMinChargeRate(unittest.TestCase):
         self.assertEqual(result.limit_battery_charge_rate, MIN_CHARGE_RATE)
 
     def test_limit_above_min_charge_rate_kept_unchanged(self):
-        """A computed limit already above MIN_CHARGE_RATE must not be altered."""
+        """A computed limit already above MIN_CHARGE_RATE must not be altered.
+
+        Use n=2 (12:00->14:00) with 2000 Wh free:
+          raw = 2*2000/(2*3) / 1h = 4000/6 = 666.6 -> 666 W > MIN_CHARGE_RATE (500 W).
+        """
         from batcontrol.logic.common import MIN_CHARGE_RATE
         logic = self._make_logic()
-        # 8 slots, 5000 Wh free -> raw limit = 5000/8 = 625 W (above 500 W)
-        production = [5000] * 8 + [0] * 4
-        consumption = [500] * 8 + [0] * 4
-        calc_input = self._make_input(production, consumption, free_capacity=5000)
-        ts = datetime.datetime(2025, 6, 20, 6, 0, 0, tzinfo=datetime.timezone.utc)
+        # 2 slots remaining (12:00 -> 14:00), free_capacity=2000 Wh
+        # raw counter-linear limit = 2*2000/(2*3) = 666 W > MIN_CHARGE_RATE
+        production = [5000] * 2 + [0] * 4
+        consumption = [500] * 2 + [0] * 4
+        calc_input = self._make_input(production, consumption, free_capacity=2000)
+        ts = datetime.datetime(2025, 6, 20, 12, 0, 0, tzinfo=datetime.timezone.utc)
         settings = InverterControlSettings(
             allow_discharge=True, charge_from_grid=False,
             charge_rate=0, limit_battery_charge_rate=-1)
@@ -991,7 +999,7 @@ class TestPeakShavingMinChargeRate(unittest.TestCase):
         result = logic._apply_peak_shaving(settings, calc_input, ts)
 
         self.assertGreater(result.limit_battery_charge_rate, MIN_CHARGE_RATE)
-        self.assertEqual(result.limit_battery_charge_rate, 625)
+        self.assertEqual(result.limit_battery_charge_rate, 666)
 
     def test_zero_limit_not_raised(self):
         """A computed limit of 0 (block charging) must stay 0."""

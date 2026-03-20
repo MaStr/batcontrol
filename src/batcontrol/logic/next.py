@@ -405,7 +405,17 @@ class NextLogic(LogicInterface):
 
     def _calculate_peak_shaving_charge_limit(self, calc_input: CalculationInput,
                                              calc_timestamp: datetime.datetime) -> int:
-        """Calculate PV charge rate limit to fill battery by target hour.
+        """Calculate PV charge rate limit (counter-linear ramp) to fill battery by target hour.
+
+        Assigns weight k+1 to slot k (k=0 = now, k=n-1 = last slot before target),
+        so the allowed charge rate *increases* linearly as the target hour approaches.
+        The current slot gets the lowest allocation; the last slot gets the highest.
+
+        Weight of current slot: 1
+        Total weight:           n*(n+1)/2
+        Wh for current slot:    free_capacity * 1 / (n*(n+1)/2)
+                              = 2 * free_capacity / (n*(n+1))
+        Charge rate [W]:        wh_current / interval_hours
 
         Returns:
             int: charge rate limit in W, or -1 if no limit needed.
@@ -447,9 +457,15 @@ class NextLogic(LogicInterface):
         if free_capacity <= 0:
             return 0  # Battery is full, block PV charging
 
-        # Spread charging evenly across remaining slots
-        wh_per_slot = free_capacity / slots_remaining
-        charge_rate_w = wh_per_slot / interval_hours  # Wh/slot -> W
+        # Counter-linear ramp: current slot gets weight 1, last slot before
+        # target gets weight n.  This lifts the charge limit progressively
+        # as the target hour approaches instead of applying a flat cap.
+        # Total weight = n*(n+1)/2, so current-slot allocation:
+        #   wh_current = free_capacity * 1 / (n*(n+1)/2)
+        #              = 2 * free_capacity / (n * (n+1))
+        n = slots_remaining
+        wh_current_slot = 2.0 * free_capacity / (n * (n + 1))
+        charge_rate_w = wh_current_slot / interval_hours  # Wh -> W
 
         return int(charge_rate_w)
 
