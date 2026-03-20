@@ -55,27 +55,42 @@ Peak shaving uses one or two components depending on `mode`. The stricter (lower
 
 **Component 1: Time-Based** (modes `time` and `combined`)
 
-Spreads remaining free capacity evenly until `allow_full_battery_after`:
+Uses a **counter-linear ramp** so the allowed charge rate rises as the target hour approaches. Slot 0 (now) gets the smallest allocation; each later slot gets progressively more, reaching its largest value in the last slot before the target. This mirrors actual PV production curves that rise towards midday.
 
 ```
-slots_remaining = slots until allow_full_battery_after
-pv_surplus = sum of max(production - consumption, 0) for remaining slots
+slots_remaining  = n  (slots until allow_full_battery_after)
+pv_surplus       = sum of max(production - consumption, 0) for remaining slots
 
 if pv_surplus > free_capacity:
-    charge_limit = free_capacity / slots_remaining  (Wh/slot -> W)
+    # Weight of current slot = 1, weight of slot k = k+1
+    # Total weight = n*(n+1)/2
+    wh_current = 2 * free_capacity / (n * (n+1))
+    charge_limit = wh_current / interval_hours  (Wh -> W)
 ```
 
+Example with free_capacity = 2000 Wh and 1 h intervals:
+
+| Hours to target (n) | Allowed rate |
+|---|---|
+| 8 | 55 W |
+| 4 | 200 W |
+| 2 | 666 W |
+| 1 | 2000 W (full send) |
+
 **Component 2: Price-Based** (modes `price` and `combined`)
+
+Only slots within the **production window** are considered. The production window ends at the first slot where forecast production is zero; nighttime cheap slots beyond that point are ignored because there is no PV to charge from. This prevents reserving capacity for e.g. a cheap slot at 03:00 that would never produce energy.
 
 Before cheap window - reserves free capacity so cheap-slot PV surplus fills battery completely:
 
 ```
-cheap_slots = slots where price <= price_limit
+production_end = index of first slot with production = 0
+cheap_slots    = slots where price <= price_limit AND slot < production_end
 target_reserve = min(sum of PV surplus in cheap slots, max_capacity)
 additional_allowed = free_capacity - target_reserve
 
 if additional_allowed <= 0:  -> block charging (rate = 0)
-else:                         -> spread additional_allowed over slots before window
+else:                         -> spread additional_allowed evenly over slots before window
 ```
 
 Inside cheap window - if total PV surplus in the window exceeds free capacity, the battery cannot fully absorb everything. Charging is spread evenly over the cheap slots so the battery fills gradually instead of hitting 100% in the first slot:
@@ -143,8 +158,6 @@ The following HA entities are automatically created:
 
 ## Known Limitations
 
-1. **Flat charge distribution:** The charge rate limit is uniform across all time slots, but PV production peaks at midday. The battery may not reach exactly 100% by the target hour.
+1. **No intra-day adjustment:** If clouds reduce PV significantly, the limit stays as calculated until the next evaluation cycle (every 3 minutes). The counter-linear ramp self-corrects automatically: high free capacity at the next cycle produces a higher allowed rate.
 
-2. **No intra-day adjustment:** If clouds reduce PV significantly, the limit stays as calculated until the next evaluation cycle (every 3 minutes). The system self-corrects because free capacity stays high, which increases the allowed charge rate.
-
-3. **Code duplication:** `NextLogic` is a copy of `DefaultLogic` with peak shaving added. Once stable, the two could be merged or refactored.
+2. **Code duplication:** `NextLogic` is a copy of `DefaultLogic` with peak shaving added. Once stable, the two could be merged or refactored.
