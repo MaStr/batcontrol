@@ -849,6 +849,62 @@ class TestPeakShavingPriceBased(unittest.TestCase):
         expected = min(x for x in [price_lim, time_lim] if x >= 0)
         self.assertEqual(result.limit_battery_charge_rate, expected)
 
+    def test_cheap_slot_beyond_production_window_ignored(self):
+        """Regression: cheap slots with zero production must NOT trigger a reserve.
+
+        Scenario mirrors the real-world bug message:
+          [PeakShaving] Price-based: cheap window at slot 27, reserve=4376 Wh ...
+
+        Slot 27 is nighttime (after the production window ends).  The prices
+        array has a cheap slot there, but production is 0 from slot 8 onwards.
+        The algorithm must ignore all slots at or beyond the first zero-production
+        slot and therefore find no cheap window -> return -1 (no limit).
+        """
+        # 8 slots with production, then 24 night slots with production=0
+        n_day = 8
+        n_night = 24
+        production = [2000.0] * n_day + [0.0] * n_night
+        # Make ONLY the night slots cheap; day slots have high prices
+        prices = [10.0] * n_day + [0.0] * n_night
+        n = n_day + n_night
+        calc_input = CalculationInput(
+            production=np.array(production, dtype=float),
+            consumption=np.zeros(n, dtype=float),
+            prices=np.array(prices, dtype=float),
+            stored_energy=self.max_capacity - 5000,
+            stored_usable_energy=(self.max_capacity - 5000) * 0.95,
+            free_capacity=5000,
+        )
+        result = self.logic._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        self.assertEqual(result, -1,
+                         "Cheap slots after production window end must be ignored")
+
+    def test_cheap_slot_within_production_window_still_triggers_reserve(self):
+        """After the bug-fix the production-window limit must not suppress legitimate
+        cheap windows that fall inside the production window.
+
+        Cheap slot 4 has production=3000 W (within the window that ends at slot 8).
+        The algorithm must still compute a reserve for that slot.
+        """
+        n_day = 8
+        n_night = 16
+        production = [500.0] * n_day + [0.0] * n_night
+        prices = [10.0] * 4 + [0.0] + [10.0] * (n_day - 5) + [10.0] * n_night
+        production[4] = 3000.0  # cheap slot inside production window
+        n = n_day + n_night
+        calc_input = CalculationInput(
+            production=np.array(production, dtype=float),
+            consumption=np.zeros(n, dtype=float),
+            prices=np.array(prices, dtype=float),
+            stored_energy=self.max_capacity - 8000,
+            stored_usable_energy=(self.max_capacity - 8000) * 0.95,
+            free_capacity=8000,
+        )
+        result = self.logic._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        # A limit > 0 must be produced (not -1 and not some invalid value)
+        self.assertGreater(result, 0,
+                           "Cheap slot inside production window must still trigger a limit")
+
 
 class TestPeakShavingMinChargeRate(unittest.TestCase):
     """Tests for the minimum charge rate enforcement in _apply_peak_shaving.

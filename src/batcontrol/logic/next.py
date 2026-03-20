@@ -305,6 +305,11 @@ class NextLogic(LogicInterface):
             self, calc_input: CalculationInput) -> int:
         """Reserve battery free capacity for upcoming cheap-price PV slots.
 
+        Only slots within the production window are considered as cheap slots.
+        The production window ends at the first slot where production is zero;
+        beyond that there is no PV generation so no capacity needs to be
+        reserved.
+
         When currently inside a cheap window (first cheap slot == 0):
           If total PV surplus in the window exceeds free capacity, spread
           the free capacity evenly over all remaining cheap slots so the
@@ -324,10 +329,19 @@ class NextLogic(LogicInterface):
         prices = calc_input.prices
         interval_hours = self.interval_minutes / 60.0
 
+        # Limit cheap-slot search to the production window.
+        # The production window ends at the first slot with zero production;
+        # beyond that there is no PV generation and no need to reserve capacity.
+        production_end = len(prices)
+        for i, prod in enumerate(calc_input.production):
+            if float(prod) == 0:
+                production_end = i
+                break
+
         cheap_slots = [i for i, p in enumerate(prices)
-                       if p is not None and p <= price_limit]
+                       if i < production_end and p is not None and p <= price_limit]
         if not cheap_slots:
-            return -1  # No cheap slots in the forecast
+            return -1  # No cheap slots in the production window
 
         first_cheap_slot = cheap_slots[0]
 
