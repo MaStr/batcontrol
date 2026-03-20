@@ -97,3 +97,20 @@ class TestCommonLogic(unittest.TestCase):
         self.assertEqual(custom_logic.charge_rate_multiplier, 1.2)
         self.assertEqual(custom_logic.always_allow_discharge_limit, 0.8)
         self.assertEqual(custom_logic.max_capacity, 12000)
+
+    def test_enforce_min_pv_charge_rate_raises_low_positive(self):
+        """A positive limit below MIN_CHARGE_RATE must be raised to MIN_CHARGE_RATE."""
+        logic = CommonLogic.get_instance()
+        self.assertEqual(logic.enforce_min_pv_charge_rate(1), MIN_CHARGE_RATE)
+        self.assertEqual(logic.enforce_min_pv_charge_rate(MIN_CHARGE_RATE - 1), MIN_CHARGE_RATE)
+
+    def test_enforce_min_pv_charge_rate_keeps_high_value(self):
+        """A limit at or above MIN_CHARGE_RATE must pass through unchanged."""
+        logic = CommonLogic.get_instance()
+        self.assertEqual(logic.enforce_min_pv_charge_rate(MIN_CHARGE_RATE), MIN_CHARGE_RATE)
+        self.assertEqual(logic.enforce_min_pv_charge_rate(MIN_CHARGE_RATE + 100), MIN_CHARGE_RATE + 100)
+
+    def test_enforce_min_pv_charge_rate_keeps_zero(self):
+        """A limit of 0 (block charging entirely) must not be raised."""
+        logic = CommonLogic.get_instance()
+        self.assertEqual(logic.enforce_min_pv_charge_rate(0), 0)

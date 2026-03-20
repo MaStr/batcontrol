@@ -278,6 +278,10 @@ class NextLogic(LogicInterface):
 
         charge_limit = min(candidates)
 
+        # Enforce minimum charge rate: avoid inefficient low-power scenarios.
+        # 0 is kept as-is (means block charging entirely).
+        charge_limit = self.common.enforce_min_pv_charge_rate(charge_limit)
+
         # Apply charge rate limit (keep more restrictive if one already exists)
         if settings.limit_battery_charge_rate < 0:
             settings.limit_battery_charge_rate = charge_limit

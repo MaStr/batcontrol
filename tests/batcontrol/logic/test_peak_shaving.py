@@ -848,3 +848,108 @@ class TestPeakShavingPriceBased(unittest.TestCase):
         time_lim = logic._calculate_peak_shaving_charge_limit(calc_input, ts)
         expected = min(x for x in [price_lim, time_lim] if x >= 0)
         self.assertEqual(result.limit_battery_charge_rate, expected)
+
+
+class TestPeakShavingMinChargeRate(unittest.TestCase):
+    """Tests for the minimum charge rate enforcement in _apply_peak_shaving.
+
+    The enforcement uses CommonLogic.enforce_min_pv_charge_rate() which applies
+    the module-level MIN_CHARGE_RATE constant from common.py.
+    A computed limit of 0 (block charging entirely) must never be raised.
+    """
+
+    _MAX_CAPACITY = 10000  # Wh
+
+    def _make_logic(self):
+        CommonLogic.get_instance(
+            charge_rate_multiplier=1.1,
+            always_allow_discharge_limit=0.90,
+            max_capacity=self._MAX_CAPACITY,
+        )
+        logic = NextLogic(timezone=datetime.timezone.utc, interval_minutes=60)
+        params = CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self._MAX_CAPACITY,
+            peak_shaving_enabled=True,
+            peak_shaving_allow_full_after=14,
+            peak_shaving_mode='time',
+        )
+        logic.set_calculation_parameters(params)
+        return logic
+
+    def _make_input(self, production, consumption, free_capacity,
+                    stored_energy=None):
+        """Helper - prices unused for time-mode tests.
+
+        stored_energy defaults to half of max_capacity so it stays well below
+        the always_allow_discharge threshold (90% * 10 000 = 9 000 Wh),
+        allowing _apply_peak_shaving to proceed without being skipped.
+        free_capacity and stored_energy are intentionally decoupled here
+        to isolate the charge-limit computation from the guard check.
+        """
+        if stored_energy is None:
+            stored_energy = self._MAX_CAPACITY * 0.5  # 5 000 Wh – below gate
+        n = len(production)
+        return CalculationInput(
+            production=np.array(production, dtype=float),
+            consumption=np.array(consumption, dtype=float),
+            prices=np.zeros(n),
+            stored_energy=float(stored_energy),
+            stored_usable_energy=float(stored_energy),
+            free_capacity=float(free_capacity),
+        )
+
+    def test_low_positive_limit_raised_to_min_charge_rate(self):
+        """A computed limit below MIN_CHARGE_RATE must be raised to MIN_CHARGE_RATE."""
+        from batcontrol.logic.common import MIN_CHARGE_RATE
+        logic = self._make_logic()
+        # 8 slots until 14:00 from 06:00, small free capacity (200 Wh)
+        # -> raw limit = 200 / 8 = 25 W, well below MIN_CHARGE_RATE (500 W)
+        production = [5000] * 8 + [0] * 4
+        consumption = [500] * 8 + [0] * 4
+        calc_input = self._make_input(production, consumption, free_capacity=200)
+        ts = datetime.datetime(2025, 6, 20, 6, 0, 0, tzinfo=datetime.timezone.utc)
+        settings = InverterControlSettings(
+            allow_discharge=True, charge_from_grid=False,
+            charge_rate=0, limit_battery_charge_rate=-1)
+
+        result = logic._apply_peak_shaving(settings, calc_input, ts)
+
+        self.assertEqual(result.limit_battery_charge_rate, MIN_CHARGE_RATE)
+
+    def test_limit_above_min_charge_rate_kept_unchanged(self):
+        """A computed limit already above MIN_CHARGE_RATE must not be altered."""
+        from batcontrol.logic.common import MIN_CHARGE_RATE
+        logic = self._make_logic()
+        # 8 slots, 5000 Wh free -> raw limit = 5000/8 = 625 W (above 500 W)
+        production = [5000] * 8 + [0] * 4
+        consumption = [500] * 8 + [0] * 4
+        calc_input = self._make_input(production, consumption, free_capacity=5000)
+        ts = datetime.datetime(2025, 6, 20, 6, 0, 0, tzinfo=datetime.timezone.utc)
+        settings = InverterControlSettings(
+            allow_discharge=True, charge_from_grid=False,
+            charge_rate=0, limit_battery_charge_rate=-1)
+
+        result = logic._apply_peak_shaving(settings, calc_input, ts)
+
+        self.assertGreater(result.limit_battery_charge_rate, MIN_CHARGE_RATE)
+        self.assertEqual(result.limit_battery_charge_rate, 625)
+
+    def test_zero_limit_not_raised(self):
+        """A computed limit of 0 (block charging) must stay 0."""
+        logic = self._make_logic()
+        production = [5000] * 8 + [0] * 4
+        consumption = [500] * 8 + [0] * 4
+        # free_capacity = 0 -> battery full -> raw limit = 0
+        calc_input = self._make_input(production, consumption, free_capacity=0)
+        ts = datetime.datetime(2025, 6, 20, 6, 0, 0, tzinfo=datetime.timezone.utc)
+        settings = InverterControlSettings(
+            allow_discharge=True, charge_from_grid=False,
+            charge_rate=0, limit_battery_charge_rate=-1)
+
+        result = logic._apply_peak_shaving(settings, calc_input, ts)
+
+        self.assertEqual(result.limit_battery_charge_rate, 0)
+
