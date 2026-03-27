@@ -4,11 +4,14 @@ This module provides solar forecasting using ML-based forecast data from
 HomeAssistant Solar Forecast ML integration (HACS).
 
 Based on HACS integration: https://zara-toorox.github.io/
-Sensor: sensor.solar_forecast_ml_prognose_nachste_stunde
+Supported sensors:
+  - sensor.solar_forecast_ml_prognose_nachste_stunde  (hours_list / hour_N format)
+  - sensor.solar_forecast_ml_evcc_solar_prognose      (forecast list with start/end/value)
 
 """
 
 import asyncio
+import datetime
 import json
 import logging
 from typing import Dict, Optional
@@ -224,6 +227,16 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
                     "Unit is kWh, will multiply values by 1000 to convert to Wh")
                 return 1000.0
 
+            if unit is None:
+                logger.warning(
+                    "Entity '%s' has no unit_of_measurement. "
+                    "Assuming values are already in Wh "
+                    "(typical for evcc Solar-Prognose sensor). "
+                    "Set 'sensor_unit: Wh' in config to suppress this warning.",
+                    self.entity_id
+                )
+                return 1.0
+
             raise ValueError(
                 f"Unsupported unit_of_measurement '{unit}' for entity "
                 f"'{self.entity_id}'. Only 'Wh' and 'kWh' are supported.")
@@ -407,10 +420,10 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
 
         # Parse forecast data from attributes
         attributes = raw_data.get("attributes", {})
-        
+
         try:
             forecast_dict = self._parse_forecast_from_attributes(attributes)
-            
+
             if forecast_dict:
                 values = list(forecast_dict.values())
                 logger.debug(
@@ -422,7 +435,8 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
                 )
             else:
                 logger.error("Parsed empty forecast from attributes")
-                raise RuntimeError("No solar forecast data available in entity attributes")
+                raise RuntimeError(
+                    "No solar forecast data available in entity attributes")
 
             return forecast_dict
 
@@ -437,8 +451,12 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
         """Parse forecast data from sensor attributes
 
         Supports multiple formats:
-        1. Primary: hours_list array with {time, kwh} objects
-        2. Fallback: hour_1, hour_2, ... attributes with times
+        1. Primary: forecast array with {start, end, value} objects (evcc Solar Forecast style)
+           - Uses absolute timestamps; values are mapped to hour offsets from now
+           - Typically used with sensor.solar_forecast_ml_evcc_solar_prognose
+        2. Secondary: hours_list array with {time, kwh} objects
+           - Used with sensor.solar_forecast_ml_prognose_nachste_stunde
+        3. Fallback: hour_1, hour_2, ... attributes
 
         Args:
             attributes: Sensor attributes dict from HomeAssistant
@@ -451,6 +469,72 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
         """
         forecast_dict: Dict[int, float] = {}
 
+        # Format 1: forecast list with {start, end, value} - evcc Solar Forecast style
+        forecast_list = attributes.get("forecast")
+        if forecast_list and isinstance(forecast_list, list):
+            first = forecast_list[0] if forecast_list else {}
+            if isinstance(first, dict) and "start" in first and "value" in first:
+                logger_ha_details.debug(
+                    "Parsing forecast from 'forecast' list (%d entries)",
+                    len(forecast_list)
+                )
+                now = datetime.datetime.now(self.timezone)
+                current_hour = now.replace(minute=0, second=0, microsecond=0)
+
+                for entry in forecast_list:
+                    if not isinstance(entry, dict):
+                        continue
+
+                    start_str = entry.get("start")
+                    value = entry.get("value")
+
+                    if start_str is None or value is None:
+                        continue
+
+                    try:
+                        entry_start = datetime.datetime.fromisoformat(
+                            start_str)
+                        # If the timestamp is naive, assume it is in the local timezone
+                        if entry_start.tzinfo is None:
+                            entry_start = self.timezone.localize(entry_start)
+                        else:
+                            entry_start = entry_start.astimezone(self.timezone)
+
+                        delta = entry_start - current_hour
+                        hour_offset = int(delta.total_seconds() / 3600)
+
+                        if hour_offset < 0:
+                            # Past hour - skip
+                            continue
+
+                        wh_value = float(value) * self.unit_conversion_factor
+                        forecast_dict[hour_offset] = wh_value
+                        logger_ha_details.debug(
+                            "Offset %d (start=%s): %.2f Wh",
+                            hour_offset, start_str, wh_value
+                        )
+                    except (ValueError, TypeError, OverflowError) as exc:
+                        logger_ha_details.debug(
+                            "Skipping entry with start=%s: %s", start_str, exc
+                        )
+                        continue
+
+                if forecast_dict:
+                    values = list(forecast_dict.values())
+                    logger.debug(
+                        "Parsed %d slots from 'forecast' list: "
+                        "avg=%.1f Wh, min=%.1f Wh, max=%.1f Wh",
+                        len(forecast_dict),
+                        sum(values) / len(values),
+                        min(values),
+                        max(values)
+                    )
+                    return forecast_dict
+
+                logger_ha_details.warning(
+                    "'forecast' list present but no valid future entries found")
+
+        # Format 2: hours_list (existing primary format)
         # Try primary format: hours_list
         hours_list = attributes.get("hours_list")
         if hours_list and isinstance(hours_list, list) and len(hours_list) > 0:
