@@ -150,7 +150,8 @@ consumption_forecast:
   type: csv # Options: 'csv' or 'homeassistant-api'
   csv:
     annual_consumption: 4500 # total consumption in kWh p.a. the load profile
-    load_profile: load_profile.csv #name of the load profile file within the config folder
+    load_profile: load_profile.csv # name of the load profile file within the config folder
+  solar_web_export: SolarWeb.xlsx # Excel export from Solar Web, if file exists & load_profile doesn't, then a new one is generated from the export
 
   # Uncomment to use HomeAssistant API for consumption forecasting
   # homeassistant_api:
