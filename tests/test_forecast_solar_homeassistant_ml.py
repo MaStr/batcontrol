@@ -572,10 +572,16 @@ class TestEvccForecastFormat:
         )
 
     def _hour_str(self, tz, offset_hours: int) -> str:
-        """Return an ISO timestamp string for current-hour + offset_hours in local tz."""
-        now = datetime.datetime.now(tz)
-        hour_start = now.replace(minute=0, second=0, microsecond=0)
-        target = hour_start + datetime.timedelta(hours=offset_hours)
+        """Return an ISO timestamp string for current-hour + offset_hours in local tz.
+
+        Caches a single base-hour per instance to avoid flakiness when tests
+        run near an hour boundary (successive calls to datetime.now() could
+        return different hours otherwise).
+        """
+        if not hasattr(self, "_base_hour_start"):
+            now = datetime.datetime.now(tz)
+            self._base_hour_start = now.replace(minute=0, second=0, microsecond=0)
+        target = self._base_hour_start + datetime.timedelta(hours=offset_hours)
         # Return naive local time (as the sensor provides)
         return target.strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -733,8 +739,9 @@ class TestEvccForecastFormat:
             }
         }
 
-        # Build a provider with explicit Wh unit, then directly test the async
-        # unit-check by calling _check_sensor_unit_async with a mocked WebSocket.
+        # Build a provider with explicit Wh unit, then directly exercise
+        # _check_sensor_unit_async() to verify that a None unit_of_measurement
+        # is handled gracefully (returns 1.0 with a warning instead of raising).
         provider = ForecastSolarHomeAssistantML(
             pvinstallations=pv_installations,
             timezone=timezone,

@@ -472,8 +472,11 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
         # Format 1: forecast list with {start, end, value} - evcc Solar Forecast style
         forecast_list = attributes.get("forecast")
         if forecast_list and isinstance(forecast_list, list):
-            first = forecast_list[0] if forecast_list else {}
-            if isinstance(first, dict) and "start" in first and "value" in first:
+            has_expected_entry = any(
+                isinstance(entry, dict) and "start" in entry and "value" in entry
+                for entry in forecast_list
+            )
+            if has_expected_entry:
                 logger_ha_details.debug(
                     "Parsing forecast from 'forecast' list (%d entries)",
                     len(forecast_list)
@@ -492,8 +495,11 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
                         continue
 
                     try:
-                        entry_start = datetime.datetime.fromisoformat(
-                            start_str)
+                        # Normalize UTC timestamps with trailing 'Z' for Python 3.9/3.10
+                        if isinstance(start_str, str) and start_str.endswith("Z"):
+                            start_str = start_str[:-1] + "+00:00"
+
+                        entry_start = datetime.datetime.fromisoformat(start_str)
                         # If the timestamp is naive, assume it is in the local timezone
                         if entry_start.tzinfo is None:
                             entry_start = self.timezone.localize(entry_start)
@@ -501,7 +507,8 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
                             entry_start = entry_start.astimezone(self.timezone)
 
                         delta = entry_start - current_hour
-                        hour_offset = int(delta.total_seconds() / 3600)
+                        # Use floor division so negative deltas stay negative
+                        hour_offset = int(delta.total_seconds() // 3600)
 
                         if hour_offset < 0:
                             # Past hour - skip
