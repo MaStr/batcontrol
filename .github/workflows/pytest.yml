@@ -30,7 +30,7 @@ jobs:
       run: |
         python -m pytest tests/ --cov=src/batcontrol --cov-report=xml
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v6
       with:
         files: ./coverage.xml
         fail_ci_if_error: false
