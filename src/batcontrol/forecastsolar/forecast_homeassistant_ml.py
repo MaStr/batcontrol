@@ -528,6 +528,14 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
             )
 
         if forecast_dict:
+            # Fill missing offsets with 0.0 so the dict has consecutive keys
+            # 0..max_offset. This ensures the baseclass length validation
+            # (requires >= 12 consecutive intervals) works correctly.
+            max_offset = max(forecast_dict.keys())
+            for gap in range(max_offset + 1):
+                if gap not in forecast_dict:
+                    forecast_dict[gap] = 0.0
+
             values = list(forecast_dict.values())
             logger.debug(
                 "Parsed %d slots from 'forecast' list: avg=%.1f Wh, min=%.1f Wh, max=%.1f Wh",

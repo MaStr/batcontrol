@@ -650,8 +650,9 @@ class TestEvccForecastFormat:
     def test_parse_forecast_list_multi_day(self, pv_installations, timezone):
         """Test that forecast entries 12 and 24 hours ahead map to correct offsets.
 
-        Uses naive local timestamps so wall-clock hour offsets match exactly.
-        Avoids offsets that span DST transitions to keep offset arithmetic simple.
+        The parser zero-fills gaps between valid entries so the resulting dict has
+        consecutive keys 0..max_offset. This satisfies the baseclass minimum-length
+        check (>= 12 intervals) even when the source only provides sparse entries.
         """
         provider = self._make_provider_wh(pv_installations, timezone)
 
@@ -668,9 +669,17 @@ class TestEvccForecastFormat:
 
         forecast = provider._parse_forecast_from_attributes(attributes)
 
+        # Explicit values must map to the right offsets
         assert forecast[0] == 0.0
         assert forecast[12] == 5000.0
         assert forecast[24] == 3000.0
+
+        # All intermediate offsets must be filled with 0.0
+        assert len(forecast) == 25  # consecutive keys 0..24
+        for hour in range(25):
+            assert hour in forecast
+            if hour not in (0, 12, 24):
+                assert forecast[hour] == 0.0
 
     def test_parse_forecast_list_wh_no_conversion(self, pv_installations, timezone):
         """Test that Wh values from forecast list are NOT multiplied (factor=1.0)"""
@@ -713,10 +722,11 @@ class TestEvccForecastFormat:
         forecast = provider._parse_forecast_from_attributes(attributes)
 
         assert forecast[0] == 1000.0   # valid entry at offset 0
+        assert forecast[1] == 0.0      # zero-filled gap between 0 and 2
         assert forecast[2] == 2000.0   # valid entry at offset 2
-        assert 4 not in forecast        # no value
-        # no start entries must not appear
-        assert len([k for k in forecast if k >= 0]) == 2
+        assert 4 not in forecast        # missing value → not in result, beyond max_offset
+        # offsets 0..2 (max valid offset) are present; offset 4 is never added
+        assert len([k for k in forecast if k >= 0]) == 3
 
     def test_parse_forecast_list_priority_over_hours_list(self, pv_installations, timezone):
         """Test that 'forecast' list takes priority over 'hours_list' when both are present"""
