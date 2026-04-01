@@ -3,6 +3,7 @@
 Comprehensive test coverage for HomeAssistant Solar Forecast ML integration.
 """
 
+import asyncio
 import datetime
 import json
 from unittest.mock import AsyncMock, patch
@@ -738,6 +739,99 @@ class TestEvccForecastFormat:
         assert forecast[0] == 111.0
         assert len(forecast) == 1
 
+    def test_parse_forecast_list_utc_z_timestamps(self, pv_installations, timezone):
+        """Test that UTC timestamps ending in 'Z' are parsed correctly on Python 3.9/3.10.
+
+        Verifies the Z-normalization path (replacing 'Z' with '+00:00') so that
+        fromisoformat() works on all supported Python versions.
+
+        Reference: Europe/Berlin is UTC+2 on 2026-04-02 (after DST spring-forward).
+        2026-04-02T08:00:00Z == 2026-04-02T10:00:00+02:00 → offset 0 (current hour).
+        2026-04-02T09:00:00Z == 2026-04-02T11:00:00+02:00 → offset 1.
+        """
+        provider = self._make_provider_wh(pv_installations, timezone)
+
+        attributes = {
+            "forecast": [
+                {"start": "2026-04-02T08:00:00Z", "end": "2026-04-02T09:00:00Z",
+                 "value": 4200.0},
+                {"start": "2026-04-02T09:00:00Z", "end": "2026-04-02T10:00:00Z",
+                 "value": 5100.0},
+                # Past entry (before current hour in UTC)
+                {"start": "2026-04-02T07:00:00Z", "end": "2026-04-02T08:00:00Z",
+                 "value": 9999.0},
+            ]
+        }
+
+        forecast = provider._parse_forecast_from_attributes(attributes)
+
+        assert forecast[0] == 4200.0
+        assert forecast[1] == 5100.0
+        assert -1 not in forecast
+        assert len(forecast) == 2
+
+    def test_parse_forecast_list_timezone_aware_timestamps(self, pv_installations, timezone):
+        """Test that timezone-aware ISO timestamps with explicit UTC offset are handled.
+
+        Uses '+02:00' offset (Europe/Berlin summer time) directly in the timestamp.
+        2026-04-02T10:00:00+02:00 → offset 0 (current hour).
+        2026-04-02T11:00:00+02:00 → offset 1.
+        2026-04-02T10:00:00+00:00 → same UTC instant as 12:00 local → offset 2.
+        """
+        provider = self._make_provider_wh(pv_installations, timezone)
+
+        attributes = {
+            "forecast": [
+                # Explicit local +02:00 timestamps
+                {"start": "2026-04-02T10:00:00+02:00", "end": "2026-04-02T11:00:00+02:00",
+                 "value": 3000.0},
+                {"start": "2026-04-02T11:00:00+02:00", "end": "2026-04-02T12:00:00+02:00",
+                 "value": 3500.0},
+                # UTC+00:00 → 12:00 local → offset 2
+                {"start": "2026-04-02T10:00:00+00:00", "end": "2026-04-02T11:00:00+00:00",
+                 "value": 2800.0},
+                # Past entry
+                {"start": "2026-04-02T09:00:00+02:00", "end": "2026-04-02T10:00:00+02:00",
+                 "value": 9999.0},
+            ]
+        }
+
+        forecast = provider._parse_forecast_from_attributes(attributes)
+
+        assert forecast[0] == 3000.0
+        assert forecast[1] == 3500.0
+        assert forecast[2] == 2800.0
+        assert -1 not in forecast
+        assert len(forecast) == 3
+
+    def test_sensor_unit_auto_init_none_unit_defaults_to_wh(self, pv_installations, timezone):
+        """Test that provider init with sensor_unit='auto' stores factor 1.0 when
+        auto-detection returns 1.0 (Wh, e.g. unit_of_measurement=None).
+
+        The actual detection logic (None unit → 1.0) is covered in
+        test_check_sensor_unit_async_none_unit_defaults_to_wh. Here we verify
+        that __init__ correctly calls _check_sensor_unit() and stores its result
+        in unit_conversion_factor. We patch _check_sensor_unit at the sync level
+        to avoid event-loop state leaking from other async tests.
+        """
+        with patch.object(
+            ForecastSolarHomeAssistantML,
+            '_check_sensor_unit',
+            return_value=1.0
+        ):
+            provider = ForecastSolarHomeAssistantML(
+                pvinstallations=pv_installations,
+                timezone=timezone,
+                base_url="http://homeassistant.local:8123",
+                api_token="test_token",
+                entity_id="sensor.solar_forecast_ml_evcc_solar_prognose",
+                sensor_unit="auto"
+            )
+
+        # auto-detect returned 1.0 (Wh) → stored correctly
+        assert provider.unit_conversion_factor == 1.0
+        assert provider.sensor_unit == "auto"
+
     def test_check_sensor_unit_async_none_unit_defaults_to_wh(self, pv_installations, timezone):
         """Test that _check_sensor_unit_async() returns 1.0 when unit_of_measurement is None.
 
@@ -783,7 +877,6 @@ class TestEvccForecastFormat:
             new_callable=AsyncMock,
             return_value=mock_ws
         ):
-            import asyncio
             factor = asyncio.run(provider._check_sensor_unit_async())
 
         # unit_of_measurement is None → should default to 1.0 (Wh) with a warning
