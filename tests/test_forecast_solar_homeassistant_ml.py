@@ -880,6 +880,7 @@ class TestEvccForecastFormat:
             json.dumps({"type": "result", "id": 1, "success": True,
                         "result": [provider_state]}),
         ])
+        mock_ws.send = AsyncMock()
         mock_ws.close = AsyncMock()
 
         with patch(
