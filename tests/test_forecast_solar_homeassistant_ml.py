@@ -3,6 +3,8 @@
 Comprehensive test coverage for HomeAssistant Solar Forecast ML integration.
 """
 
+import asyncio
+import datetime
 import json
 from unittest.mock import AsyncMock, patch
 
@@ -542,6 +544,354 @@ class TestEdgeCases:
 
         assert forecast[0] == 100000.0  # 100 * 1000
         assert forecast[1] == 50500.0
+
+
+# Tests for evcc Solar Forecast format (start/end/value with absolute timestamps)
+
+class TestEvccForecastFormat:
+    """Tests for the evcc Solar Forecast sensor format with absolute timestamps.
+
+    The sensor sensor.solar_forecast_ml_evcc_solar_prognose provides data as:
+    {
+        "forecast": [
+            {"start": "2026-03-21T14:00:00", "end": "2026-03-21T15:00:00", "value": 3613.0},
+            ...
+        ]
+    }
+    Values are in Wh (no unit_of_measurement on the sensor).
+    """
+
+    # Fixed local reference hour for all tests — avoids flakiness at hour/DST boundaries.
+    # April 2, 2026 is safely after the DST transition (March 29) in Europe/Berlin.
+    _FIXED_LOCAL_HOUR = datetime.datetime(2026, 4, 2, 10, 0, 0)
+
+    @pytest.fixture(autouse=True)
+    def _freeze_module_datetime(self, timezone):
+        """Freeze datetime.datetime.now() inside the parser to _FIXED_LOCAL_HOUR.
+
+        This ensures the test-generated timestamps and the parser's own
+        current_hour computation use the exact same reference instant,
+        eliminating flakiness when tests run near an hour or DST boundary.
+        """
+        fixed_now = timezone.localize(self._FIXED_LOCAL_HOUR)
+        with patch(
+            'src.batcontrol.forecastsolar.forecast_homeassistant_ml.datetime'
+        ) as mock_dt:
+            mock_dt.datetime.now.return_value = fixed_now
+            # Keep fromisoformat working with the real implementation
+            mock_dt.datetime.fromisoformat = datetime.datetime.fromisoformat
+            yield
+
+    def _make_provider_wh(self, pv_installations, timezone):
+        """Helper: create a provider configured for Wh (evcc sensor)"""
+        return ForecastSolarHomeAssistantML(
+            pvinstallations=pv_installations,
+            timezone=timezone,
+            base_url="http://homeassistant.local:8123",
+            api_token="test_token",
+            entity_id="sensor.solar_forecast_ml_evcc_solar_prognose",
+            sensor_unit="Wh"
+        )
+
+    def _hour_str(self, _tz, offset_hours: int) -> str:
+        """Return a naive ISO timestamp string for _FIXED_LOCAL_HOUR + offset_hours."""
+        target = self._FIXED_LOCAL_HOUR + datetime.timedelta(hours=offset_hours)
+        return target.strftime("%Y-%m-%dT%H:%M:%S")
+
+    def test_parse_forecast_list_basic(self, pv_installations, timezone):
+        """Test parsing evcc-style forecast list - current and future entries mapped correctly"""
+        provider = self._make_provider_wh(pv_installations, timezone)
+
+        attributes = {
+            "forecast": [
+                {"start": self._hour_str(timezone, 0), "end": self._hour_str(timezone, 1),
+                 "value": 3613.0},
+                {"start": self._hour_str(timezone, 1), "end": self._hour_str(timezone, 2),
+                 "value": 1540.0},
+                {"start": self._hour_str(timezone, 2), "end": self._hour_str(timezone, 3),
+                 "value": 800.0},
+            ]
+        }
+
+        forecast = provider._parse_forecast_from_attributes(attributes)
+
+        assert forecast[0] == 3613.0
+        assert forecast[1] == 1540.0
+        assert forecast[2] == 800.0
+
+    def test_parse_forecast_list_skips_past_entries(self, pv_installations, timezone):
+        """Test that past entries (before current hour) are skipped"""
+        provider = self._make_provider_wh(pv_installations, timezone)
+
+        attributes = {
+            "forecast": [
+                # Past entries
+                {"start": self._hour_str(timezone, -3), "end": self._hour_str(timezone, -2),
+                 "value": 9999.0},
+                {"start": self._hour_str(timezone, -1), "end": self._hour_str(timezone, 0),
+                 "value": 8888.0},
+                # Current and future
+                {"start": self._hour_str(timezone, 0), "end": self._hour_str(timezone, 1),
+                 "value": 800.0},
+                {"start": self._hour_str(timezone, 1), "end": self._hour_str(timezone, 2),
+                 "value": 200.0},
+            ]
+        }
+
+        forecast = provider._parse_forecast_from_attributes(attributes)
+
+        assert forecast[0] == 800.0
+        assert forecast[1] == 200.0
+        # Past hours must not appear
+        assert -3 not in forecast
+        assert -1 not in forecast
+        assert len(forecast) == 2
+
+    def test_parse_forecast_list_multi_day(self, pv_installations, timezone):
+        """Test that forecast entries 12 and 24 hours ahead map to correct offsets.
+
+        The parser zero-fills gaps between valid entries so the resulting dict has
+        consecutive keys 0..max_offset. This satisfies the baseclass minimum-length
+        check (>= 12 intervals) even when the source only provides sparse entries.
+        """
+        provider = self._make_provider_wh(pv_installations, timezone)
+
+        attributes = {
+            "forecast": [
+                {"start": self._hour_str(timezone, 0),  "end": self._hour_str(timezone, 1),
+                 "value": 0.0},
+                {"start": self._hour_str(timezone, 12), "end": self._hour_str(timezone, 13),
+                 "value": 5000.0},
+                {"start": self._hour_str(timezone, 24), "end": self._hour_str(timezone, 25),
+                 "value": 3000.0},
+            ]
+        }
+
+        forecast = provider._parse_forecast_from_attributes(attributes)
+
+        # Explicit values must map to the right offsets
+        assert forecast[0] == 0.0
+        assert forecast[12] == 5000.0
+        assert forecast[24] == 3000.0
+
+        # All intermediate offsets must be filled with 0.0
+        assert len(forecast) == 25  # consecutive keys 0..24
+        for hour in range(25):
+            assert hour in forecast
+            if hour not in (0, 12, 24):
+                assert forecast[hour] == 0.0
+
+    def test_parse_forecast_list_wh_no_conversion(self, pv_installations, timezone):
+        """Test that Wh values from forecast list are NOT multiplied (factor=1.0)"""
+        provider = self._make_provider_wh(pv_installations, timezone)
+
+        attributes = {
+            "forecast": [
+                {"start": self._hour_str(timezone, 0), "end": self._hour_str(timezone, 1),
+                 "value": 7835.0},
+            ]
+        }
+
+        forecast = provider._parse_forecast_from_attributes(attributes)
+
+        # sensor_unit=Wh → unit_conversion_factor=1.0 → no multiplication
+        assert forecast[0] == 7835.0
+
+    def test_parse_forecast_list_invalid_entries_skipped(self, pv_installations, timezone):
+        """Test that entries with invalid start timestamps or missing values are skipped"""
+        provider = self._make_provider_wh(pv_installations, timezone)
+
+        attributes = {
+            "forecast": [
+                # Valid
+                {"start": self._hour_str(timezone, 0), "end": self._hour_str(timezone, 1),
+                 "value": 1000.0},
+                # Invalid start timestamp
+                {"start": "not-a-date",
+                    "end": self._hour_str(timezone, 2), "value": 500.0},
+                # Valid (no 'end' key is fine)
+                {"start": self._hour_str(timezone, 2), "value": 2000.0},
+                # Missing start → skipped
+                {"end": self._hour_str(timezone, 3), "value": 300.0},
+                # Missing value → skipped
+                {"start": self._hour_str(timezone, 4),
+                 "end": self._hour_str(timezone, 5)},
+            ]
+        }
+
+        forecast = provider._parse_forecast_from_attributes(attributes)
+
+        assert forecast[0] == 1000.0   # valid entry at offset 0
+        assert forecast[1] == 0.0      # zero-filled gap between 0 and 2
+        assert forecast[2] == 2000.0   # valid entry at offset 2
+        assert 4 not in forecast        # missing value → not in result, beyond max_offset
+        # offsets 0..2 (max valid offset) are present; offset 4 is never added
+        assert len([k for k in forecast if k >= 0]) == 3
+
+    def test_parse_forecast_list_priority_over_hours_list(self, pv_installations, timezone):
+        """Test that 'forecast' list takes priority over 'hours_list' when both are present"""
+        provider = self._make_provider_wh(pv_installations, timezone)
+
+        attributes = {
+            "forecast": [
+                {"start": self._hour_str(timezone, 0), "end": self._hour_str(timezone, 1),
+                 "value": 111.0},
+            ],
+            "hours_list": [
+                {"time": "10:00", "kwh": 9.0},
+                {"time": "11:00", "kwh": 9.0},
+            ]
+        }
+
+        forecast = provider._parse_forecast_from_attributes(attributes)
+
+        # forecast list wins
+        assert forecast[0] == 111.0
+        assert len(forecast) == 1
+
+    def test_parse_forecast_list_utc_z_timestamps(self, pv_installations, timezone):
+        """Test that UTC timestamps ending in 'Z' are parsed correctly on Python 3.9/3.10.
+
+        Verifies the Z-normalization path (replacing 'Z' with '+00:00') so that
+        fromisoformat() works on all supported Python versions.
+
+        Reference: Europe/Berlin is UTC+2 on 2026-04-02 (after DST spring-forward).
+        2026-04-02T08:00:00Z == 2026-04-02T10:00:00+02:00 → offset 0 (current hour).
+        2026-04-02T09:00:00Z == 2026-04-02T11:00:00+02:00 → offset 1.
+        """
+        provider = self._make_provider_wh(pv_installations, timezone)
+
+        attributes = {
+            "forecast": [
+                {"start": "2026-04-02T08:00:00Z", "end": "2026-04-02T09:00:00Z",
+                 "value": 4200.0},
+                {"start": "2026-04-02T09:00:00Z", "end": "2026-04-02T10:00:00Z",
+                 "value": 5100.0},
+                # Past entry (before current hour in UTC)
+                {"start": "2026-04-02T07:00:00Z", "end": "2026-04-02T08:00:00Z",
+                 "value": 9999.0},
+            ]
+        }
+
+        forecast = provider._parse_forecast_from_attributes(attributes)
+
+        assert forecast[0] == 4200.0
+        assert forecast[1] == 5100.0
+        assert -1 not in forecast
+        assert len(forecast) == 2
+
+    def test_parse_forecast_list_timezone_aware_timestamps(self, pv_installations, timezone):
+        """Test that timezone-aware ISO timestamps with explicit UTC offset are handled.
+
+        Uses '+02:00' offset (Europe/Berlin summer time) directly in the timestamp.
+        2026-04-02T10:00:00+02:00 → offset 0 (current hour).
+        2026-04-02T11:00:00+02:00 → offset 1.
+        2026-04-02T10:00:00+00:00 → same UTC instant as 12:00 local → offset 2.
+        """
+        provider = self._make_provider_wh(pv_installations, timezone)
+
+        attributes = {
+            "forecast": [
+                # Explicit local +02:00 timestamps
+                {"start": "2026-04-02T10:00:00+02:00", "end": "2026-04-02T11:00:00+02:00",
+                 "value": 3000.0},
+                {"start": "2026-04-02T11:00:00+02:00", "end": "2026-04-02T12:00:00+02:00",
+                 "value": 3500.0},
+                # UTC+00:00 → 12:00 local → offset 2
+                {"start": "2026-04-02T10:00:00+00:00", "end": "2026-04-02T11:00:00+00:00",
+                 "value": 2800.0},
+                # Past entry
+                {"start": "2026-04-02T09:00:00+02:00", "end": "2026-04-02T10:00:00+02:00",
+                 "value": 9999.0},
+            ]
+        }
+
+        forecast = provider._parse_forecast_from_attributes(attributes)
+
+        assert forecast[0] == 3000.0
+        assert forecast[1] == 3500.0
+        assert forecast[2] == 2800.0
+        assert -1 not in forecast
+        assert len(forecast) == 3
+
+    def test_sensor_unit_auto_init_none_unit_defaults_to_wh(self, pv_installations, timezone):
+        """Test that provider init with sensor_unit='auto' stores factor 1.0 when
+        auto-detection returns 1.0 (Wh, e.g. unit_of_measurement=None).
+
+        The actual detection logic (None unit → 1.0) is covered in
+        test_check_sensor_unit_async_none_unit_defaults_to_wh. Here we verify
+        that __init__ correctly calls _check_sensor_unit() and stores its result
+        in unit_conversion_factor. We patch _check_sensor_unit at the sync level
+        to avoid event-loop state leaking from other async tests.
+        """
+        with patch.object(
+            ForecastSolarHomeAssistantML,
+            '_check_sensor_unit',
+            return_value=1.0
+        ):
+            provider = ForecastSolarHomeAssistantML(
+                pvinstallations=pv_installations,
+                timezone=timezone,
+                base_url="http://homeassistant.local:8123",
+                api_token="test_token",
+                entity_id="sensor.solar_forecast_ml_evcc_solar_prognose",
+                sensor_unit="auto"
+            )
+
+        # auto-detect returned 1.0 (Wh) → stored correctly
+        assert provider.unit_conversion_factor == 1.0
+        assert provider.sensor_unit == "auto"
+
+    def test_check_sensor_unit_async_none_unit_defaults_to_wh(self, pv_installations, timezone):
+        """Test that _check_sensor_unit_async() returns 1.0 when unit_of_measurement is None.
+
+        Directly calls the async method with a mocked WebSocket that returns a
+        sensor state with no unit_of_measurement key, verifying the graceful
+        fallback to Wh (factor=1.0) instead of raising a ValueError.
+        """
+        provider_state = {
+            "entity_id": "sensor.solar_forecast_ml_evcc_solar_prognose",
+            "state": "69 slots",
+            "attributes": {
+                "forecast": [],
+                "friendly_name": "Solar Forecast ML evcc Solar-Prognose"
+                # no unit_of_measurement key → evaluates to None
+            }
+        }
+
+        # Build a provider with explicit Wh unit, then directly exercise
+        # _check_sensor_unit_async() to verify that a None unit_of_measurement
+        # is handled gracefully (returns 1.0 with a warning instead of raising).
+        provider = ForecastSolarHomeAssistantML(
+            pvinstallations=pv_installations,
+            timezone=timezone,
+            base_url="http://homeassistant.local:8123",
+            api_token="test_token",
+            entity_id="sensor.solar_forecast_ml_evcc_solar_prognose",
+            sensor_unit="Wh"   # start with an explicit unit; we'll override below
+        )
+
+        # Patch _websocket_connect and the subsequent recv messages so that the
+        # async unit-check path returns an entity with no unit_of_measurement.
+        mock_ws = AsyncMock()
+        mock_ws.recv = AsyncMock(side_effect=[
+            json.dumps({"type": "auth_required", "ha_version": "2026.3.0"}),
+            json.dumps({"type": "auth_ok", "ha_version": "2026.3.0"}),
+            json.dumps({"type": "result", "id": 1, "success": True,
+                        "result": [provider_state]}),
+        ])
+        mock_ws.send = AsyncMock()
+        mock_ws.close = AsyncMock()
+
+        with patch(
+            'src.batcontrol.forecastsolar.forecast_homeassistant_ml.connect',
+            new_callable=AsyncMock,
+            return_value=mock_ws
+        ):
+            factor = asyncio.run(provider._check_sensor_unit_async())
+
+        # unit_of_measurement is None → should default to 1.0 (Wh) with a warning
+        assert factor == 1.0
 
 
 if __name__ == "__main__":
