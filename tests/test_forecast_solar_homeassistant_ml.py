@@ -560,6 +560,27 @@ class TestEvccForecastFormat:
     Values are in Wh (no unit_of_measurement on the sensor).
     """
 
+    # Fixed local reference hour for all tests — avoids flakiness at hour/DST boundaries.
+    # April 2, 2026 is safely after the DST transition (March 29) in Europe/Berlin.
+    _FIXED_LOCAL_HOUR = datetime.datetime(2026, 4, 2, 10, 0, 0)
+
+    @pytest.fixture(autouse=True)
+    def _freeze_module_datetime(self, timezone):
+        """Freeze datetime.datetime.now() inside the parser to _FIXED_LOCAL_HOUR.
+
+        This ensures the test-generated timestamps and the parser's own
+        current_hour computation use the exact same reference instant,
+        eliminating flakiness when tests run near an hour or DST boundary.
+        """
+        fixed_now = timezone.localize(self._FIXED_LOCAL_HOUR)
+        with patch(
+            'src.batcontrol.forecastsolar.forecast_homeassistant_ml.datetime'
+        ) as mock_dt:
+            mock_dt.datetime.now.return_value = fixed_now
+            # Keep fromisoformat working with the real implementation
+            mock_dt.datetime.fromisoformat = datetime.datetime.fromisoformat
+            yield
+
     def _make_provider_wh(self, pv_installations, timezone):
         """Helper: create a provider configured for Wh (evcc sensor)"""
         return ForecastSolarHomeAssistantML(
@@ -571,18 +592,9 @@ class TestEvccForecastFormat:
             sensor_unit="Wh"
         )
 
-    def _hour_str(self, tz, offset_hours: int) -> str:
-        """Return an ISO timestamp string for current-hour + offset_hours in local tz.
-
-        Caches a single base-hour per instance to avoid flakiness when tests
-        run near an hour boundary (successive calls to datetime.now() could
-        return different hours otherwise).
-        """
-        if not hasattr(self, "_base_hour_start"):
-            now = datetime.datetime.now(tz)
-            self._base_hour_start = now.replace(minute=0, second=0, microsecond=0)
-        target = self._base_hour_start + datetime.timedelta(hours=offset_hours)
-        # Return naive local time (as the sensor provides)
+    def _hour_str(self, _tz, offset_hours: int) -> str:
+        """Return a naive ISO timestamp string for _FIXED_LOCAL_HOUR + offset_hours."""
+        target = self._FIXED_LOCAL_HOUR + datetime.timedelta(hours=offset_hours)
         return target.strftime("%Y-%m-%dT%H:%M:%S")
 
     def test_parse_forecast_list_basic(self, pv_installations, timezone):
@@ -637,9 +649,8 @@ class TestEvccForecastFormat:
     def test_parse_forecast_list_multi_day(self, pv_installations, timezone):
         """Test that forecast entries 12 and 24 hours ahead map to correct offsets.
 
-        We deliberately avoid 48h offsets here because the test date (March 27)
-        is 2 days before the DST transition (March 29) in Europe/Berlin,
-        which would cause wall-clock vs absolute-time discrepancy.
+        Uses naive local timestamps so wall-clock hour offsets match exactly.
+        Avoids offsets that span DST transitions to keep offset arithmetic simple.
         """
         provider = self._make_provider_wh(pv_installations, timezone)
 
@@ -727,8 +738,13 @@ class TestEvccForecastFormat:
         assert forecast[0] == 111.0
         assert len(forecast) == 1
 
-    def test_auto_detect_none_unit_defaults_to_wh(self, pv_installations, timezone):
-        """Test that auto-detecting a sensor with unit_of_measurement=None defaults to Wh"""
+    def test_check_sensor_unit_async_none_unit_defaults_to_wh(self, pv_installations, timezone):
+        """Test that _check_sensor_unit_async() returns 1.0 when unit_of_measurement is None.
+
+        Directly calls the async method with a mocked WebSocket that returns a
+        sensor state with no unit_of_measurement key, verifying the graceful
+        fallback to Wh (factor=1.0) instead of raising a ValueError.
+        """
         provider_state = {
             "entity_id": "sensor.solar_forecast_ml_evcc_solar_prognose",
             "state": "69 slots",
