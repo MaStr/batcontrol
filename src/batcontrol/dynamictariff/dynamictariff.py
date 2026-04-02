@@ -42,6 +42,8 @@ class DynamicTariff:
         """
         selected_tariff = None
         provider = config.get('type')
+        # Note: required-field checks below are secondary safety guards.
+        # Primary validation happens at config load time via Pydantic (config_model.py).
 
         if provider.lower() == 'awattar_at':
             required_fields = ['vat', 'markup', 'fees']
