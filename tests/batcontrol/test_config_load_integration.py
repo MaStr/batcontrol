@@ -19,7 +19,7 @@ class TestLoadConfigIntegration:
         """Return a minimal valid config."""
         return {
             'timezone': 'Europe/Berlin',
-            'utility': {'type': 'awattar_de'},
+            'utility': {'type': 'awattar_de', 'vat': 0.19, 'markup': 0.03, 'fees': 0.01},
             'pvinstallations': [{'name': 'Test', 'kWp': 10.0}],
         }
 
@@ -64,7 +64,7 @@ class TestLoadConfigIntegration:
         """Test that missing pvinstallations key fails Pydantic validation."""
         config = {
             'timezone': 'Europe/Berlin',
-            'utility': {'type': 'awattar_de'},
+            'utility': {'type': 'awattar_de', 'vat': 0.19, 'markup': 0.03, 'fees': 0.01},
         }
         path = self._write_config(config, str(tmp_path))
         with pytest.raises(RuntimeError, match='pvinstallations'):

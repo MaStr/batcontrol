@@ -119,6 +119,39 @@ class UtilityConfig(BaseModel):
     tariff_zone_3: Optional[float] = None
     zone_3_hours: Optional[str] = None
 
+    @model_validator(mode='after')
+    def validate_provider_required_fields(self):
+        """Enforce provider-specific required fields at config load time."""
+        provider = (self.type or '').lower()
+        if provider in ('awattar_at', 'awattar_de'):
+            missing = [f for f in ('vat', 'markup', 'fees') if getattr(self, f) is None]
+            if missing:
+                raise ValueError(
+                    f"{provider} requires: {', '.join(missing)}"
+                )
+        elif provider in ('energyforecast', 'energyforecast_96'):
+            missing = [f for f in ('vat', 'markup', 'fees', 'apikey') if getattr(self, f) is None]
+            if missing:
+                raise ValueError(
+                    f"{provider} requires: {', '.join(missing)}"
+                )
+        elif provider == 'tibber':
+            if self.apikey is None:
+                raise ValueError("tibber requires: apikey")
+        elif provider == 'evcc':
+            if self.url is None:
+                raise ValueError("evcc utility requires: url")
+        elif provider == 'tariff_zones':
+            missing = [
+                f for f in ('tariff_zone_1', 'zone_1_hours', 'tariff_zone_2', 'zone_2_hours')
+                if getattr(self, f) is None
+            ]
+            if missing:
+                raise ValueError(
+                    f"tariff_zones requires: {', '.join(missing)}"
+                )
+        return self
+
 
 class MqttConfig(BaseModel):
     """MQTT API configuration."""
@@ -185,6 +218,14 @@ class PvInstallationConfig(BaseModel):
     entity_id: Optional[str] = None
     sensor_unit: Optional[str] = None
     cache_ttl_hours: Optional[float] = None
+
+    @field_validator('name')
+    @classmethod
+    def validate_name_nonempty(cls, v):
+        """Reject empty/whitespace names — used as cache keys in forecastsolar."""
+        if not v.strip():
+            raise ValueError("PV installation name must not be empty or whitespace")
+        return v.strip()
 
 
 class ConsumptionForecastConfig(BaseModel):

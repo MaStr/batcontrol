@@ -21,7 +21,7 @@ class TestBatcontrolConfig:
         """Return a minimal valid config dict."""
         return {
             'timezone': 'Europe/Berlin',
-            'utility': {'type': 'awattar_de'},
+            'utility': {'type': 'awattar_de', 'vat': 0.19, 'markup': 0.03, 'fees': 0.01},
             'pvinstallations': [{'name': 'Test PV', 'kWp': 10.0}],
         }
 
@@ -96,7 +96,7 @@ class TestBatcontrolConfig:
         """Test that pvinstallations is required (no default)."""
         data = {
             'timezone': 'Europe/Berlin',
-            'utility': {'type': 'awattar_de'},
+            'utility': {'type': 'awattar_de', 'vat': 0.19, 'markup': 0.03, 'fees': 0.01},
         }
         with pytest.raises(ValidationError, match='pvinstallations'):
             BatcontrolConfig(**data)
@@ -222,7 +222,7 @@ class TestUtilityConfig:
     def test_vat_fees_markup_absent_when_not_set(self):
         """Test that vat/fees/markup are None when not set,
         so downstream required_fields checks detect missing config."""
-        cfg = UtilityConfig(type='tibber')
+        cfg = UtilityConfig(type='tibber', apikey='test_key')
         assert cfg.vat is None
         assert cfg.fees is None
         assert cfg.markup is None
@@ -231,10 +231,27 @@ class TestUtilityConfig:
         cfg = UtilityConfig(
             type='tariff_zones',
             tariff_zone_1='0.2733',
+            zone_1_hours='0-8',
             tariff_zone_2='0.1734',
+            zone_2_hours='8-24',
         )
         assert cfg.tariff_zone_1 == 0.2733
         assert isinstance(cfg.tariff_zone_1, float)
+
+    def test_awattar_requires_vat_fees_markup(self):
+        """Test that awattar providers require vat/fees/markup at validation time."""
+        with pytest.raises(ValidationError, match='awattar_de requires'):
+            UtilityConfig(type='awattar_de')
+
+    def test_tibber_requires_apikey(self):
+        """Test that tibber requires apikey at validation time."""
+        with pytest.raises(ValidationError, match='tibber requires: apikey'):
+            UtilityConfig(type='tibber')
+
+    def test_evcc_requires_url(self):
+        """Test that evcc utility requires url at validation time."""
+        with pytest.raises(ValidationError, match='evcc utility requires: url'):
+            UtilityConfig(type='evcc')
 
 
 class TestMqttConfig:
@@ -289,6 +306,16 @@ class TestPvInstallationConfig:
         """Test that name is required (no default) to avoid empty-string cache key collisions."""
         with pytest.raises(ValidationError, match='name'):
             PvInstallationConfig(kWp=10.0)
+
+    def test_name_empty_string_rejected(self):
+        """Test that empty/whitespace name is rejected (would cause cache key collisions)."""
+        with pytest.raises(ValidationError, match='must not be empty'):
+            PvInstallationConfig(name='   ', kWp=10.0)
+
+    def test_name_stripped(self):
+        """Test that leading/trailing whitespace is stripped from name."""
+        cfg = PvInstallationConfig(name='  My PV  ', kWp=10.0)
+        assert cfg.name == 'My PV'
 
     def test_float_coercion(self):
         """Test that numeric PV fields are coerced from strings."""
@@ -461,12 +488,11 @@ class TestValidateConfig:
 
     def test_validate_utility_vat_excluded_when_not_set(self):
         """Test that vat/fees/markup are absent when not configured,
-        so dynamictariff required_fields checks still catch misconfig."""
+        so downstream checks still catch misconfig (for providers that need them)."""
         config = self._full_config()
-        # Remove vat/fees/markup from utility (simulating tibber config)
-        del config['utility']['vat']
-        del config['utility']['fees']
-        del config['utility']['markup']
+        # Switch to tibber (which doesn't need vat/fees/markup) to test
+        # that these optional fields are absent when not provided.
+        config['utility'] = {'type': 'tibber', 'apikey': 'test_key'}
         result = validate_config(config)
         assert 'vat' not in result['utility']
         assert 'fees' not in result['utility']
