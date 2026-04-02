@@ -145,7 +145,7 @@ def _create_csv_forecast(
     consumption = ForecastConsumptionCsv(
         'config/' + csv_config['load_profile'],
         tz,
-        float(csv_config.get('annual_consumption', 0)),
+        float(csv_config.get('annual_consumption') or 0),
         target_resolution=target_resolution
     )
     return consumption

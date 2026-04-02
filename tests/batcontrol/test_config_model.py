@@ -182,9 +182,19 @@ class TestInverterConfig:
         assert cfg.address == '192.168.1.1'
 
     def test_mqtt_requires_capacity(self):
-        """Test that mqtt type requires capacity."""
-        with pytest.raises(ValidationError, match='mqtt inverter requires: capacity'):
+        """Test that mqtt type requires positive capacity."""
+        with pytest.raises(ValidationError, match='mqtt inverter requires positive capacity'):
             InverterConfig(type='mqtt')
+
+    def test_mqtt_rejects_zero_capacity(self):
+        """Test that mqtt type rejects capacity=0 (invalid for downstream calculations)."""
+        with pytest.raises(ValidationError, match='mqtt inverter requires positive capacity'):
+            InverterConfig(type='mqtt', capacity=0)
+
+    def test_fronius_rejects_empty_string_fields(self):
+        """Test that fronius_gen24 rejects empty-string address/user/password."""
+        with pytest.raises(ValidationError, match='fronius_gen24 inverter requires non-empty'):
+            InverterConfig(type='fronius_gen24', address='', user='admin', password='secret')
 
     def test_mqtt_valid_with_capacity(self):
         """Test that mqtt validates OK when capacity is present."""

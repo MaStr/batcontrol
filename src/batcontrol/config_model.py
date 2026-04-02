@@ -84,14 +84,17 @@ class InverterConfig(BaseModel):
         """Enforce type-dependent required fields so KeyErrors can't occur at runtime."""
         inverter_type = (self.type or '').lower()
         if inverter_type == 'fronius_gen24':
-            missing = [f for f in ('address', 'user', 'password') if getattr(self, f) is None]
+            missing = [
+                f for f in ('address', 'user', 'password')
+                if getattr(self, f) is None or not str(getattr(self, f)).strip()
+            ]
             if missing:
                 raise ValueError(
-                    f"fronius_gen24 inverter requires: {', '.join(missing)}"
+                    f"fronius_gen24 inverter requires non-empty values for: {', '.join(missing)}"
                 )
         elif inverter_type == 'mqtt':
-            if self.capacity is None:
-                raise ValueError("mqtt inverter requires: capacity")
+            if self.capacity is None or self.capacity <= 0:
+                raise ValueError("mqtt inverter requires positive capacity (> 0)")
         return self
 
 
