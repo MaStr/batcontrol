@@ -83,6 +83,17 @@ utility:
   # apikey: YOUR_API_KEY # MANDATORY for energyforecast and tibber. Uncomment and set if using those providers.
 
 #--------------------------
+#  MCP Server (Model Context Protocol)
+#  Exposes batcontrol as AI-accessible tools for querying status,
+#  forecasts, and managing overrides via Claude Desktop or other MCP clients.
+#--------------------------
+mcp:
+  enabled: false
+  transport: http          # 'http' for network access (Docker/HA addon), 'stdio' for direct pipe
+  host: 127.0.0.1          # Bind address (127.0.0.1 = local only; 0.0.0.0 = all interfaces)
+  port: 8081               # HTTP port for MCP server
+
+#--------------------------
 #  MQTT API
 #  See more Details in: https://github.com/MaStr/batcontrol/wiki/MQTT-API
 #--------------------------

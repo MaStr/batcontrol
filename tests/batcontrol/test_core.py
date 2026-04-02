@@ -226,7 +226,7 @@ class TestModeLimitBatteryChargeRate:
 
         # Verify mode was set
         assert bc.last_mode == MODE_LIMIT_BATTERY_CHARGE_RATE
-        assert bc.api_overwrite is True
+        assert bc.override_manager.is_active()
 
     @patch('batcontrol.core.tariff_factory.create_tarif_provider')
     @patch('batcontrol.core.inverter_factory.create_inverter')
@@ -354,6 +354,157 @@ class TestTimeResolutionString:
         )
         assert logic is not None
         assert logic.interval_minutes == int(resolution_str)
+
+
+class TestApiSetModeAndChargeDuration:
+    """Tests for explicit duration_minutes in api_set_mode / api_set_charge_rate."""
+
+    @pytest.fixture
+    def bc(self):
+        """Minimal Batcontrol instance with external deps mocked."""
+        with patch('batcontrol.core.tariff_factory.create_tarif_provider'), \
+             patch('batcontrol.core.inverter_factory.create_inverter') as mock_inv, \
+             patch('batcontrol.core.solar_factory.create_solar_provider'), \
+             patch('batcontrol.core.consumption_factory.create_consumption'):
+            mock_inverter = MagicMock()
+            mock_inverter.max_pv_charge_rate = 3000
+            mock_inverter.max_grid_charge_rate = 5000
+            mock_inverter.get_max_capacity = MagicMock(return_value=10000)
+            mock_inv.return_value = mock_inverter
+            config = {
+                'timezone': 'Europe/Berlin',
+                'time_resolution_minutes': 60,
+                'inverter': {
+                    'type': 'dummy',
+                    'max_grid_charge_rate': 5000,
+                    'max_pv_charge_rate': 3000,
+                    'min_pv_charge_rate': 100,
+                },
+                'utility': {'type': 'tibber', 'token': 'test_token'},
+                'pvinstallations': [],
+                'consumption_forecast': {'type': 'simple', 'value': 500},
+                'battery_control': {
+                    'max_charging_from_grid_limit': 0.8,
+                    'min_price_difference': 0.05,
+                },
+                'mqtt': {'enabled': False},
+            }
+            yield Batcontrol(config)
+
+    def test_api_set_mode_explicit_duration_stored(self, bc):
+        """Explicit duration_minutes is used when provided."""
+        bc.api_set_mode(0, duration_minutes=90)
+        override = bc.override_manager.get_override()
+        assert override is not None
+        assert override.duration_minutes == 90
+
+    def test_api_set_mode_invalid_duration_rejects(self, bc):
+        """Duration below 1 min is rejected; no override is created."""
+        bc.api_set_mode(0, duration_minutes=0.5)
+        assert not bc.override_manager.is_active()
+
+    def test_api_set_mode_none_duration_uses_mqtt_default(self, bc):
+        """None duration falls back to _mqtt_override_duration."""
+        bc._mqtt_override_duration = 45.0
+        bc.api_set_mode(0)
+        override = bc.override_manager.get_override()
+        assert override is not None
+        assert override.duration_minutes == 45.0
+
+    def test_api_set_charge_rate_explicit_duration_stored(self, bc):
+        """Explicit duration is passed through to the override."""
+        bc.api_set_charge_rate(2000, duration_minutes=20)
+        override = bc.override_manager.get_override()
+        assert override is not None
+        assert override.duration_minutes == 20
+
+    def test_api_set_charge_rate_invalid_duration_rejects(self, bc):
+        """Duration above 1440 min is rejected; no override is created."""
+        bc.api_set_charge_rate(2000, duration_minutes=1441)
+        assert not bc.override_manager.is_active()
+
+
+class TestOverrideDurationAndClear:
+    """Tests for api_set_override_duration() and api_clear_override()."""
+
+    @pytest.fixture
+    def bc(self):
+        """Minimal Batcontrol instance with all external dependencies mocked."""
+        with patch('batcontrol.core.tariff_factory.create_tarif_provider') as mock_tariff, \
+             patch('batcontrol.core.inverter_factory.create_inverter') as mock_inv, \
+             patch('batcontrol.core.solar_factory.create_solar_provider') as mock_solar, \
+             patch('batcontrol.core.consumption_factory.create_consumption') as mock_cons:
+            mock_inverter = MagicMock()
+            mock_inverter.max_pv_charge_rate = 3000
+            mock_inverter.get_max_capacity = MagicMock(return_value=10000)
+            mock_inv.return_value = mock_inverter
+            mock_tariff.return_value = MagicMock()
+            mock_solar.return_value = MagicMock()
+            mock_cons.return_value = MagicMock()
+            config = {
+                'timezone': 'Europe/Berlin',
+                'time_resolution_minutes': 60,
+                'inverter': {
+                    'type': 'dummy',
+                    'max_grid_charge_rate': 5000,
+                    'max_pv_charge_rate': 3000,
+                    'min_pv_charge_rate': 100,
+                },
+                'utility': {'type': 'tibber', 'token': 'test_token'},
+                'pvinstallations': [],
+                'consumption_forecast': {'type': 'simple', 'value': 500},
+                'battery_control': {
+                    'max_charging_from_grid_limit': 0.8,
+                    'min_price_difference': 0.05,
+                },
+                'mqtt': {'enabled': False},
+            }
+            yield Batcontrol(config)
+
+    def test_set_override_duration_valid(self, bc):
+        """Valid duration is stored and returned."""
+        bc.api_set_override_duration(60.0)
+        assert bc._mqtt_override_duration == 60.0
+
+    def test_set_override_duration_resets_to_default_on_zero(self, bc):
+        """Duration of 0 resets to the manager default."""
+        default = bc.override_manager.default_duration_minutes
+        bc.api_set_override_duration(90.0)
+        bc.api_set_override_duration(0)
+        assert bc._mqtt_override_duration == default
+
+    def test_set_override_duration_rejects_negative(self, bc):
+        """Negative duration is rejected; stored value is unchanged."""
+        bc.api_set_override_duration(45.0)
+        bc.api_set_override_duration(-10.0)
+        assert bc._mqtt_override_duration == 45.0
+
+    def test_set_override_duration_rejects_above_1440(self, bc):
+        """Duration above 1440 minutes is rejected."""
+        bc.api_set_override_duration(30.0)
+        bc.api_set_override_duration(1441.0)
+        assert bc._mqtt_override_duration == 30.0
+
+    def test_clear_override_removes_active_override(self, bc):
+        """api_clear_override() stops an active override."""
+        bc.override_manager.set_override(mode=-1, duration_minutes=30, reason="test")
+        assert bc.override_manager.is_active()
+        bc.api_clear_override()
+        assert not bc.override_manager.is_active()
+
+    def test_clear_override_is_idempotent(self, bc):
+        """Calling api_clear_override() when nothing is active does not raise."""
+        assert not bc.override_manager.is_active()
+        bc.api_clear_override()  # should not raise
+        assert not bc.override_manager.is_active()
+
+    def test_clear_override_publishes_mqtt_when_api_present(self, bc):
+        """Override clear publishes updated status via MQTT when mqtt_api is set."""
+        bc.mqtt_api = MagicMock()
+        bc.override_manager.set_override(mode=0, duration_minutes=10, reason="test")
+        bc.api_clear_override()
+        bc.mqtt_api.publish_override_active.assert_called_once_with(False)
+        bc.mqtt_api.publish_override_remaining.assert_called_once_with(0.0)
 
 
 if __name__ == '__main__':
