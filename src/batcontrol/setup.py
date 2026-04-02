@@ -4,6 +4,11 @@ import os
 import yaml
 from logging.handlers import RotatingFileHandler
 
+from pydantic import ValidationError
+
+from .config_model import validate_config
+
+
 def setup_logging(level=logging.INFO, logfile=None, max_logfile_size_kb=200):
     """Configure root logger with consistent formatting.
     
@@ -55,7 +60,7 @@ def load_config(configfile:str) -> dict:
         dict: The loaded configuration
         
     Raises:
-        RuntimeError: If the config file is not found or no PV installations are found
+        RuntimeError: If the config file is not found, config is invalid/malformed, or no PV installations are found
 
     """
     if not os.path.isfile(configfile):
@@ -64,11 +69,28 @@ def load_config(configfile:str) -> dict:
     with open(configfile, 'r', encoding='UTF-8') as f:
         config_str = f.read()
 
-    config = yaml.safe_load(config_str)
+    try:
+        config = yaml.safe_load(config_str)
+    except yaml.YAMLError as exc:
+        raise RuntimeError(f'Configfile {configfile} is not valid YAML: {exc}') from exc
 
-    if config['pvinstallations']:
-        pass
-    else:
+    if not isinstance(config, dict):
+        raise RuntimeError(f'Configfile {configfile} is empty or not a valid YAML mapping')
+
+    # Validate and coerce types via Pydantic before any other checks.
+    # Re-raise ValidationError as RuntimeError to keep callers' expected error type.
+    try:
+        config = validate_config(config)
+    except ValidationError as exc:
+        # Build a sanitized error: include field path and error type but NOT
+        # the raw input values (which can contain secrets like passwords).
+        details = '; '.join(
+            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
+            for e in exc.errors()
+        )
+        raise RuntimeError(f'Config validation failed: {details}') from exc
+
+    if not config.get('pvinstallations'):
         raise RuntimeError('No PV Installation found')
-    
+
     return config

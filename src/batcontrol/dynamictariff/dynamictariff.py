@@ -42,6 +42,8 @@ class DynamicTariff:
         """
         selected_tariff = None
         provider = config.get('type')
+        # Note: required-field checks below are secondary safety guards.
+        # Primary validation happens at config load time via Pydantic (config_model.py).
 
         if provider.lower() == 'awattar_at':
             required_fields = ['vat', 'markup', 'fees']
@@ -50,9 +52,10 @@ class DynamicTariff:
                     raise RuntimeError(
                         f'[DynTariff] Please include {field} in your configuration file'
                     )
-            vat = float(config.get('vat', 0))
-            markup = float(config.get('markup', 0))
-            fees = float(config.get('fees', 0))
+            # Types already coerced to float by Pydantic config validation
+            vat = config.get('vat', 0)
+            markup = config.get('markup', 0)
+            fees = config.get('fees', 0)
             selected_tariff = Awattar(
                 timezone, 'at',
                 min_time_between_api_calls,
@@ -68,9 +71,9 @@ class DynamicTariff:
                     raise RuntimeError(
                         f'[DynTariff] Please include {field} in your configuration file'
                     )
-            vat = float(config.get('vat', 0))
-            markup = float(config.get('markup', 0))
-            fees = float(config.get('fees', 0))
+            vat = config.get('vat', 0)
+            markup = config.get('markup', 0)
+            fees = config.get('fees', 0)
             selected_tariff = Awattar(
                 timezone, 'de',
                 min_time_between_api_calls,
@@ -115,9 +118,9 @@ class DynamicTariff:
                     raise RuntimeError(
                         f'[DynTariff] Please include {field} in your configuration file'
                     )
-            vat = float(config.get('vat', 0))
-            markup = float(config.get('markup', 0))
-            fees = float(config.get('fees', 0))
+            vat = config.get('vat', 0)
+            markup = config.get('markup', 0)
+            fees = config.get('fees', 0)
             token = config.get('apikey')
             selected_tariff = Energyforecast(
                 timezone,
@@ -144,11 +147,11 @@ class DynamicTariff:
                 min_time_between_api_calls,
                 delay_evaluation_by_seconds,
                 target_resolution=target_resolution,
-                tariff_zone_1=float(config['tariff_zone_1']),
+                tariff_zone_1=config['tariff_zone_1'],
                 zone_1_hours=config['zone_1_hours'],
-                tariff_zone_2=float(config['tariff_zone_2']),
+                tariff_zone_2=config['tariff_zone_2'],
                 zone_2_hours=config['zone_2_hours'],
-                tariff_zone_3=float(tariff_zone_3) if tariff_zone_3 is not None else None,
+                tariff_zone_3=tariff_zone_3,
                 zone_3_hours=zone_3_hours,
             )
 

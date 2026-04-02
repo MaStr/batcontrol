@@ -75,20 +75,26 @@ def _create_homeassistant_forecast(
     history_days = ha_config.get('history_days', [-7, -14, -21])
     history_weights = ha_config.get('history_weights', [1, 1, 1])
 
-    # Configure String -1;-2;-3 to a list and remove spaces
+    # Pydantic validates top-level consumption_forecast.history_days (flat HA
+    # addon config), but when nested under homeassistant_api dict the values
+    # may still be semicolon-separated strings. Parse here for that case.
     if isinstance(history_days, str):
-        history_days = [x.strip() for x in history_days.split(';')]
+        history_days = [int(x.strip()) for x in history_days.split(';')]
     if isinstance(history_weights, str):
-        history_weights = [x.strip() for x in history_weights.split(';')]
-
-    # Convert string lists to int/float lists (HomeAssistant config quirk)
+        history_weights = [int(x.strip()) for x in history_weights.split(';')]
+    # Ensure list items are ints (handles list-of-strings edge case)
     if isinstance(history_days, list):
         history_days = [int(x) for x in history_days]
     if isinstance(history_weights, list):
         history_weights = [int(x) for x in history_weights]
 
-    cache_ttl_hours = ha_config.get('cache_ttl_hours', 48.0)
-    multiplier = ha_config.get('multiplier', 1.0)
+    # Coerce numeric fields that may arrive as strings from nested HA config.
+    # Explicit is-None check guards against null/None YAML values (key present, value None)
+    # without treating 0 as falsy.
+    _cache_ttl_hours = ha_config.get('cache_ttl_hours')
+    cache_ttl_hours = float(_cache_ttl_hours if _cache_ttl_hours is not None else 48.0)
+    _multiplier = ha_config.get('multiplier')
+    multiplier = float(_multiplier if _multiplier is not None else 1.0)
     sensor_unit = ha_config.get('sensor_unit', "auto")
 
     logger.info(
@@ -139,7 +145,7 @@ def _create_csv_forecast(
     consumption = ForecastConsumptionCsv(
         'config/' + csv_config['load_profile'],
         tz,
-        csv_config.get('annual_consumption', 0),
+        float(csv_config.get('annual_consumption') or 0),
         target_resolution=target_resolution
     )
     return consumption
