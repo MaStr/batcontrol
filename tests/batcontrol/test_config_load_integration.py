@@ -2,7 +2,6 @@
 import os
 import pytest
 import yaml
-from pydantic import ValidationError
 from batcontrol.setup import load_config
 
 
@@ -13,7 +12,7 @@ class TestLoadConfigIntegration:
         """Write config dict to a YAML file and return the path."""
         path = os.path.join(tmpdir, 'test_config.yaml')
         with open(path, 'w', encoding='UTF-8') as f:
-            yaml.dump(config_dict, f)
+            yaml.safe_dump(config_dict, f)
         return path
 
     def _minimal_config(self):
@@ -68,7 +67,7 @@ class TestLoadConfigIntegration:
             'utility': {'type': 'awattar_de'},
         }
         path = self._write_config(config, str(tmp_path))
-        with pytest.raises(ValidationError, match='pvinstallations'):
+        with pytest.raises(RuntimeError, match='pvinstallations'):
             load_config(path)
 
     def test_load_config_with_dummy_config_file(self):

@@ -4,6 +4,8 @@ import os
 import yaml
 from logging.handlers import RotatingFileHandler
 
+from pydantic import ValidationError
+
 from .config_model import validate_config
 
 
@@ -58,7 +60,7 @@ def load_config(configfile:str) -> dict:
         dict: The loaded configuration
         
     Raises:
-        RuntimeError: If the config file is not found or no PV installations are found
+        RuntimeError: If the config file is not found, config is invalid/malformed, or no PV installations are found
 
     """
     if not os.path.isfile(configfile):
@@ -72,8 +74,12 @@ def load_config(configfile:str) -> dict:
     if not isinstance(config, dict):
         raise RuntimeError(f'Configfile {configfile} is empty or not a valid YAML mapping')
 
-    # Validate and coerce types via Pydantic before any other checks
-    config = validate_config(config)
+    # Validate and coerce types via Pydantic before any other checks.
+    # Re-raise ValidationError as RuntimeError to keep callers' expected error type.
+    try:
+        config = validate_config(config)
+    except ValidationError as exc:
+        raise RuntimeError(f'Config validation failed: {exc}') from exc
 
     if not config.get('pvinstallations'):
         raise RuntimeError('No PV Installation found')
