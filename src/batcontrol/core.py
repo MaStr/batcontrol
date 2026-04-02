@@ -878,9 +878,10 @@ class Batcontrol:
         elif mode == MODE_LIMIT_BATTERY_CHARGE_RATE:
             if self._limit_battery_charge_rate < 0:
                 logger.debug(
-                    'Override: Mode %d (limit battery charge rate) set but no valid '
-                    'limit configured. Falling back to allow-discharging mode.',
-                    mode)
+                    'Override: Mode %d (limit battery charge rate) requested but '
+                    '_limit_battery_charge_rate=%d; limit_battery_charge_rate() '
+                    'will switch to allow-discharging because the limit is negative.',
+                    mode, self._limit_battery_charge_rate)
             self.limit_battery_charge_rate(self._limit_battery_charge_rate)
         elif mode == MODE_ALLOW_DISCHARGING:
             self.allow_discharging()
@@ -908,7 +909,7 @@ class Batcontrol:
         if duration_minutes is None:
             duration_minutes = self._mqtt_override_duration
 
-        if duration_minutes <= 0 or duration_minutes > 1440:
+        if duration_minutes < 1 or duration_minutes > 1440:
             logger.warning(
                 'API: Invalid duration %.1f min for mode override (must be 1-1440)',
                 duration_minutes)
@@ -940,7 +941,7 @@ class Batcontrol:
         if duration_minutes is None:
             duration_minutes = self._mqtt_override_duration
 
-        if duration_minutes <= 0 or duration_minutes > 1440:
+        if duration_minutes < 1 or duration_minutes > 1440:
             logger.warning(
                 'API: Invalid duration %.1f min for charge rate override (must be 1-1440)',
                 duration_minutes)

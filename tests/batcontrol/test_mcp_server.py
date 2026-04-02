@@ -88,6 +88,8 @@ class TestBatcontrolMcpServer:
         bc.api_set_min_price_difference_rel = MagicMock()
         bc.api_set_production_offset = MagicMock()
         bc.api_apply_override = MagicMock()
+        # Wire api_clear_override to the real manager so override state is cleared
+        bc.api_clear_override = MagicMock(side_effect=bc.override_manager.clear_override)
         return bc
 
     @pytest.fixture

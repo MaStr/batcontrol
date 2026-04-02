@@ -94,8 +94,9 @@ def main() -> int:  # pylint: disable=too-many-locals,too-many-statements
 
     # When using stdio transport, prevent core.py from starting an HTTP MCP server.
     # Both would share the same Batcontrol instance and compete for the port.
+    # Copy the mcp section to avoid mutating the dict stored in bc.config later.
     if args.mcp_stdio:
-        config.setdefault('mcp', {})['enabled'] = False
+        config['mcp'] = {**config.get('mcp', {}), 'enabled': False}
 
     bc = Batcontrol(config)
 

@@ -26,10 +26,10 @@ class OverrideState:
     duration_minutes: float
     reason: str
     created_at: float = field(default_factory=time.time)
-    expires_at: float = 0.0
+    expires_at: Optional[float] = field(default=None)
 
     def __post_init__(self):
-        if self.expires_at == 0.0:
+        if self.expires_at is None:
             self.expires_at = self.created_at + self.duration_minutes * 60
 
     @property
@@ -49,6 +49,8 @@ class OverrideState:
 
     def to_dict(self) -> dict:
         """Serialize override state to a dictionary."""
+        now = time.time()
+        remaining_secs = max(0.0, self.expires_at - now)
         return {
             'mode': self.mode,
             'charge_rate': self.charge_rate,
@@ -56,8 +58,8 @@ class OverrideState:
             'reason': self.reason,
             'created_at': self.created_at,
             'expires_at': self.expires_at,
-            'remaining_minutes': round(self.remaining_minutes, 1),
-            'is_active': not self.is_expired,
+            'remaining_minutes': round(remaining_secs / 60.0, 1),
+            'is_active': now < self.expires_at,
         }
 
 

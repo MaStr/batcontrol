@@ -254,7 +254,6 @@ class BatcontrolMcpServer:
                 'max_charging_from_grid_limit': bc.max_charging_from_grid_limit,
                 'min_price_difference': bc.min_price_difference,
                 'min_price_difference_rel': bc.min_price_difference_rel,
-                'production_offset_percent': bc.production_offset_percent,
                 'production_offset': bc.production_offset_percent,
                 'time_resolution_minutes': bc.time_resolution,
                 'limit_battery_charge_rate': bc.api_get_limit_battery_charge_rate(),
@@ -322,7 +321,7 @@ class BatcontrolMcpServer:
             """
             bc = self._bc
             was_active = bc.override_manager.is_active()
-            bc.override_manager.clear_override()
+            bc.api_clear_override()
             return {
                 'success': True,
                 'was_active': was_active,
@@ -355,11 +354,18 @@ class BatcontrolMcpServer:
             )
             bc.api_apply_override(override)
 
-            return {
+            effective = bc.last_charge_rate
+            result = {
                 'success': True,
                 'override': override.to_dict(),
-                'effective_charge_rate_w': bc.last_charge_rate,
+                'effective_charge_rate_w': effective,
             }
+            if effective != charge_rate_w:
+                result['note'] = (
+                    f"Requested {charge_rate_w} W was clamped to "
+                    f"{effective} W by inverter limits."
+                )
+            return result
 
         @self.mcp.tool()
         def set_parameter(parameter: str, value: float) -> dict:
@@ -416,7 +422,7 @@ class BatcontrolMcpServer:
                 'min_price_difference_rel': bc.api_set_min_price_difference_rel,
                 'production_offset': bc.api_set_production_offset,
             }
-            handlers[parameter](value)  # pylint: disable=protected-access
+            handlers[parameter](value)
             return {
                 'success': True,
                 'parameter': parameter,
