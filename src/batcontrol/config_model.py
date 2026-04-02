@@ -269,7 +269,7 @@ class BatcontrolConfig(BaseModel):
     """
     model_config = ConfigDict(extra='allow')
 
-    timezone: str = 'Europe/Berlin'
+    timezone: str
     time_resolution_minutes: int = 60
     loglevel: str = 'info'
     logfile_enabled: bool = True
