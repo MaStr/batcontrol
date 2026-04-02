@@ -87,9 +87,9 @@ BatcontrolConfig (top-level)
   ├── inverter: InverterConfig
   │     ├── type: str = 'dummy'  [fronius_gen24, mqtt, dummy]
   │     ├── address, user, password: Optional[str]
-  │     ├── max_grid_charge_rate: float = 5000  [alias: max_charge_rate]
-  │     ├── max_pv_charge_rate: float = 0
-  │     ├── min_pv_charge_rate: float = 0
+  │     ├── max_grid_charge_rate: int = 5000  [alias: max_charge_rate]
+  │     ├── max_pv_charge_rate: int = 0
+  │     ├── min_pv_charge_rate: int = 0
   │     ├── enable_resilient_wrapper: bool = False
   │     ├── outage_tolerance_minutes: float = 24
   │     ├── retry_backoff_seconds: float = 60
@@ -139,7 +139,7 @@ BatcontrolConfig (top-level)
 | `mqtt.port` | `str` | `int` | `"1883"` -> `1883` |
 | `evcc.port` | `str` | `int` | `"1883"` -> `1883` |
 | `utility.vat` | `str` | `float` | `"0.19"` -> `0.19` |
-| `inverter.max_grid_charge_rate` | `str` | `float` | `"5000"` -> `5000.0` |
+| `inverter.max_grid_charge_rate` | `str` | `int` | `"5000"` -> `5000` |
 | `battery_control.*` | `str` | `float` | `"0.05"` -> `0.05` |
 | `consumption_forecast.history_days` | `str` | `List[int]` | `"-7;-14;-21"` -> `[-7,-14,-21]` |
 
