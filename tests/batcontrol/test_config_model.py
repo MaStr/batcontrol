@@ -135,13 +135,15 @@ class TestInverterConfig:
             max_grid_charge_rate='3000',
             outage_tolerance_minutes='30',
         )
-        assert cfg.max_grid_charge_rate == 3000.0
+        assert cfg.max_grid_charge_rate == 3000
+        assert isinstance(cfg.max_grid_charge_rate, int)
         assert cfg.outage_tolerance_minutes == 30.0
 
     def test_legacy_max_charge_rate_rename(self):
         """Test backward compat: max_charge_rate -> max_grid_charge_rate."""
         cfg = InverterConfig(max_charge_rate=4000)
-        assert cfg.max_grid_charge_rate == 4000.0
+        assert cfg.max_grid_charge_rate == 4000
+        assert isinstance(cfg.max_grid_charge_rate, int)
 
     def test_max_grid_charge_rate_takes_precedence(self):
         """Test that max_grid_charge_rate is used when both are present."""
@@ -149,7 +151,8 @@ class TestInverterConfig:
             max_charge_rate=4000,
             max_grid_charge_rate=3000,
         )
-        assert cfg.max_grid_charge_rate == 3000.0
+        assert cfg.max_grid_charge_rate == 3000
+        assert isinstance(cfg.max_grid_charge_rate, int)
 
     def test_cache_ttl_coercion(self):
         """Test that cache_ttl string is coerced to int (MQTT inverter)."""
