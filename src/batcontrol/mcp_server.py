@@ -135,11 +135,15 @@ class BatcontrolMcpServer:
             Prices are in EUR/kWh.
             """
             bc = self._bc
+            current = bc.last_prices
+            current_price = (
+                round(float(current[0]), 4) if current is not None and len(current) > 0 else None
+            )
             return {
                 'interval_minutes': bc.time_resolution,
                 'prices': _format_forecast_array(
                     bc.last_prices, bc.last_run_time, bc.time_resolution, digits=4),
-                'current_price': round(float(bc.last_prices[0]), 4) if bc.last_prices is not None and len(bc.last_prices) > 0 else None,
+                'current_price': current_price,
             }
 
         @self.mcp.tool()
@@ -219,12 +223,11 @@ class BatcontrolMcpServer:
                 'override_active': override is not None,
             }
             if override:
+                mode_name = MODE_NAMES.get(override.mode, "Unknown")
+                reason = override.reason or "not specified"
                 result['override_info'] = (
-                    "Manual override active: %s for %.1f more minutes. Reason: %s" % (
-                        MODE_NAMES.get(override.mode, "Unknown"),
-                        override.remaining_minutes,
-                        override.reason or "not specified"
-                    )
+                    f"Manual override active: {mode_name} for "
+                    f"{override.remaining_minutes:.1f} more minutes. Reason: {reason}"
                 )
             return result
 
@@ -243,7 +246,7 @@ class BatcontrolMcpServer:
                 'min_price_difference_rel': bc.min_price_difference_rel,
                 'production_offset_percent': bc.production_offset_percent,
                 'time_resolution_minutes': bc.time_resolution,
-                'limit_battery_charge_rate': bc._limit_battery_charge_rate,
+                'limit_battery_charge_rate': bc.api_get_limit_battery_charge_rate(),
             }
 
         @self.mcp.tool()
@@ -282,7 +285,7 @@ class BatcontrolMcpServer:
                 reason: Human-readable reason for the override
             """
             if mode not in VALID_MODES:
-                return {'error': "Invalid mode %s. Valid: %s" % (mode, sorted(VALID_MODES))}
+                return {'error': f"Invalid mode {mode}. Valid: {sorted(VALID_MODES)}"}
             if duration_minutes <= 0 or duration_minutes > 1440:
                 return {'error': "duration_minutes must be between 1 and 1440 (24h)"}
 
@@ -292,7 +295,7 @@ class BatcontrolMcpServer:
                 duration_minutes=duration_minutes,
                 reason=reason or "MCP set_mode_override",
             )
-            bc._apply_override(override)
+            bc.api_apply_override(override)
 
             return {
                 'success': True,
@@ -339,7 +342,7 @@ class BatcontrolMcpServer:
                 duration_minutes=duration_minutes,
                 reason=reason or "MCP set_charge_rate",
             )
-            bc._apply_override(override)
+            bc.api_apply_override(override)
 
             return {
                 'success': True,
@@ -364,7 +367,7 @@ class BatcontrolMcpServer:
                 value: New value for the parameter
             """
             # Validate ranges before calling the API (mirrors core.py validation)
-            PARAM_VALIDATORS = {
+            param_validators = {
                 'always_allow_discharge_limit': (
                     lambda v: 0.0 <= v <= 1.0,
                     "must be between 0.0 and 1.0"),
@@ -382,17 +385,16 @@ class BatcontrolMcpServer:
                     "must be between 0.0 and 2.0"),
             }
 
-            if parameter not in PARAM_VALIDATORS:
+            if parameter not in param_validators:
                 return {
-                    'error': "Unknown parameter '%s'. Valid: %s" % (
-                        parameter, sorted(PARAM_VALIDATORS.keys()))
+                    'error': f"Unknown parameter '{parameter}'. "
+                             f"Valid: {sorted(param_validators.keys())}"
                 }
 
-            validator, constraint = PARAM_VALIDATORS[parameter]
+            validator, constraint = param_validators[parameter]
             if not validator(value):
                 return {
-                    'error': "Invalid value %.4g for '%s': %s" % (
-                        value, parameter, constraint)
+                    'error': f"Invalid value {value:.4g} for '{parameter}': {constraint}"
                 }
 
             bc = self._bc
@@ -403,20 +405,24 @@ class BatcontrolMcpServer:
                 'min_price_difference_rel': bc.api_set_min_price_difference_rel,
                 'production_offset': bc.api_set_production_offset,
             }
-            handlers[parameter](value)
+            handlers[parameter](value)  # pylint: disable=protected-access
             return {
                 'success': True,
                 'parameter': parameter,
                 'new_value': value,
             }
 
-    def start_http(self, host: str = "0.0.0.0", port: int = 8081):
+    def start_http(self, host: str = "127.0.0.1", port: int = 8081):
         """Start the MCP server with Streamable HTTP transport in a background thread."""
+        # FastMCP reads host/port from its settings at run time
+        self.mcp.settings.host = host
+        self.mcp.settings.port = port
+
         def _run():
             logger.info("Starting MCP server on %s:%d", host, port)
             try:
-                self.mcp.run(transport="streamable-http", host=host, port=port)
-            except Exception as e:
+                self.mcp.run(transport="streamable-http")
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 logger.error("MCP server error: %s", e, exc_info=True)
 
         self._thread = threading.Thread(

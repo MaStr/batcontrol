@@ -87,7 +87,7 @@ class TestBatcontrolMcpServer:
         bc.api_set_min_price_difference = MagicMock()
         bc.api_set_min_price_difference_rel = MagicMock()
         bc.api_set_production_offset = MagicMock()
-        bc._apply_override = MagicMock()
+        bc.api_apply_override = MagicMock()
         return bc
 
     @pytest.fixture
@@ -193,7 +193,7 @@ class TestBatcontrolMcpServer:
         assert result['success'] is True
         assert result['mode_name'] == "Avoid Discharge"
         assert mock_bc.override_manager.is_active()
-        mock_bc._apply_override.assert_called_once()
+        mock_bc.api_apply_override.assert_called_once()
 
     def test_set_mode_override_invalid_mode(self, server):
         """Test set_mode_override with invalid mode."""
@@ -225,7 +225,7 @@ class TestBatcontrolMcpServer:
         override = mock_bc.override_manager.get_override()
         assert override.mode == -1
         assert override.charge_rate == 2000
-        mock_bc._apply_override.assert_called_once()
+        mock_bc.api_apply_override.assert_called_once()
 
     def test_set_charge_rate_invalid(self, server):
         """Test set_charge_rate with invalid rate."""

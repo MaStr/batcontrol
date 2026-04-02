@@ -848,6 +848,13 @@ class Batcontrol:
             # Trigger Inverter
             self.inverter.refresh_api_values()
 
+    def api_apply_override(self, override):
+        """Public entry point to apply an override's mode/charge_rate to the inverter.
+
+        Used by the MCP server to avoid accessing the private _apply_override method.
+        """
+        self._apply_override(override)
+
     def _apply_override(self, override):
         """Apply an override's mode/charge_rate to the inverter."""
         mode = override.mode
@@ -893,6 +900,12 @@ class Batcontrol:
         if duration_minutes is None:
             duration_minutes = self._mqtt_override_duration
 
+        if duration_minutes <= 0 or duration_minutes > 1440:
+            logger.warning(
+                'API: Invalid duration %.1f min for mode override (must be 1-1440)',
+                duration_minutes)
+            return
+
         logger.info('API: Setting mode to %s for %.1f min', mode, duration_minutes)
         override = self.override_manager.set_override(
             mode=mode,
@@ -918,6 +931,12 @@ class Batcontrol:
         # Use MQTT-configured duration if no explicit duration given
         if duration_minutes is None:
             duration_minutes = self._mqtt_override_duration
+
+        if duration_minutes <= 0 or duration_minutes > 1440:
+            logger.warning(
+                'API: Invalid duration %.1f min for charge rate override (must be 1-1440)',
+                duration_minutes)
+            return
 
         logger.info('API: Setting charge rate to %d W for %.1f min', charge_rate, duration_minutes)
         override = self.override_manager.set_override(

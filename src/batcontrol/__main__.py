@@ -1,12 +1,14 @@
-from .core import Batcontrol
-from .setup import setup_logging, load_config
-from .inverter import InverterOutageError
-from . import mcp_server as mcp_module
+"""Batcontrol entry point: parses arguments, sets up logging, and runs the main loop."""
 import argparse
 import time
 import datetime
 import sys
 import logging
+
+from .core import Batcontrol
+from .setup import setup_logging, load_config
+from .inverter import InverterOutageError
+from . import mcp_server as mcp_module
 
 
 CONFIGFILE = "config/batcontrol_config.yaml"
@@ -39,7 +41,8 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def main() -> int:
+def main() -> int:  # pylint: disable=too-many-locals,too-many-statements
+    """Run batcontrol: load config, set up logging, and start the main loop."""
     # Parse command line arguments
     args = parse_arguments()
 
@@ -71,7 +74,11 @@ def main() -> int:
     }
 
     # Setup the logger based on the config
-    setup_logging(level=loglevel_mapping.get(loglevel, logging.INFO), logfile=logfile, max_logfile_size_kb=max_logfile_size)
+    setup_logging(
+        level=loglevel_mapping.get(loglevel, logging.INFO),
+        logfile=logfile,
+        max_logfile_size_kb=max_logfile_size,
+    )
     logger = logging.getLogger(__name__)
 
     # Reduce the default loglevel for urllib3.connectionpool
@@ -81,8 +88,9 @@ def main() -> int:
         logging.getLogger("asyncio").setLevel(logging.WARNING)
         logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
         logging.getLogger("batcontrol.inverter.fronius.auth").setLevel(logging.INFO)
-        logging.getLogger("batcontrol.forecastconsumption.forecast_homeassistant.details").setLevel(logging.INFO)
-        logging.getLogger("batcontrol.forecastconsumption.forecast_homeassistant.communication").setLevel(logging.INFO)
+        ha_base = "batcontrol.forecastconsumption.forecast_homeassistant"
+        logging.getLogger(f"{ha_base}.details").setLevel(logging.INFO)
+        logging.getLogger(f"{ha_base}.communication").setLevel(logging.INFO)
 
     # When using stdio transport, prevent core.py from starting an HTTP MCP server.
     # Both would share the same Batcontrol instance and compete for the port.
@@ -131,7 +139,9 @@ def main() -> int:
             # add time increments to trigger next evaluation
             next_eval += datetime.timedelta(minutes=EVALUATIONS_EVERY_MINUTES)
             sleeptime = (next_eval - loop_now).total_seconds()
-            logger.info("Next evaluation at %s. Sleeping for %d seconds", next_eval.strftime('%H:%M:%S'), int(sleeptime))
+            logger.info(
+                "Next evaluation at %s. Sleeping for %d seconds",
+                next_eval.strftime('%H:%M:%S'), int(sleeptime))
             time.sleep(sleeptime)
     except KeyboardInterrupt:
         print("Shutting down")
