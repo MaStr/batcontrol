@@ -479,7 +479,7 @@ class TestValidateConfig:
         assert isinstance(result['max_logfile_size'], int)
         assert isinstance(
             result['battery_control']['min_price_difference'], float)
-        assert isinstance(result['inverter']['max_grid_charge_rate'], float)
+        assert isinstance(result['inverter']['max_grid_charge_rate'], int)
         assert isinstance(result['mqtt']['port'], int)
         assert isinstance(result['mqtt']['retry_attempts'], int)
         assert isinstance(result['evcc']['port'], int)

@@ -89,7 +89,8 @@ def _create_homeassistant_forecast(
         history_weights = [int(x) for x in history_weights]
 
     # Coerce numeric fields that may arrive as strings from nested HA config.
-    # Use 'or default' to guard against null/None values in YAML config.
+    # Explicit is-None check guards against null/None YAML values (key present, value None)
+    # without treating 0 as falsy.
     _cache_ttl_hours = ha_config.get('cache_ttl_hours')
     cache_ttl_hours = float(_cache_ttl_hours if _cache_ttl_hours is not None else 48.0)
     _multiplier = ha_config.get('multiplier')

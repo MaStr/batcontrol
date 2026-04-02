@@ -54,9 +54,9 @@ class InverterConfig(BaseModel):
     address: Optional[str] = None
     user: Optional[str] = None
     password: Optional[str] = None
-    max_grid_charge_rate: float = 5000
-    max_pv_charge_rate: float = 0
-    min_pv_charge_rate: float = 0
+    max_grid_charge_rate: int = 5000
+    max_pv_charge_rate: int = 0
+    min_pv_charge_rate: int = 0
     fronius_inverter_id: Optional[str] = None
     fronius_controller_id: Optional[str] = None
     enable_resilient_wrapper: bool = False

@@ -82,7 +82,13 @@ def load_config(configfile:str) -> dict:
     try:
         config = validate_config(config)
     except ValidationError as exc:
-        raise RuntimeError(f'Config validation failed: {exc}') from exc
+        # Build a sanitized error: include field path and error type but NOT
+        # the raw input values (which can contain secrets like passwords).
+        details = '; '.join(
+            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
+            for e in exc.errors()
+        )
+        raise RuntimeError(f'Config validation failed: {details}') from exc
 
     if not config.get('pvinstallations'):
         raise RuntimeError('No PV Installation found')
