@@ -168,6 +168,26 @@ class TestInverterConfig:
         InverterConfig(**data)
         assert 'max_charge_rate' in data
 
+    def test_fronius_gen24_requires_address_user_password(self):
+        """Test that fronius_gen24 type requires address, user, password."""
+        with pytest.raises(ValidationError, match='fronius_gen24'):
+            InverterConfig(type='fronius_gen24')
+
+    def test_fronius_gen24_valid_with_required_fields(self):
+        """Test that fronius_gen24 validates OK when required fields are present."""
+        cfg = InverterConfig(type='fronius_gen24', address='192.168.1.1', user='admin', password='secret')
+        assert cfg.address == '192.168.1.1'
+
+    def test_mqtt_requires_capacity(self):
+        """Test that mqtt type requires capacity."""
+        with pytest.raises(ValidationError, match='mqtt inverter requires: capacity'):
+            InverterConfig(type='mqtt')
+
+    def test_mqtt_valid_with_capacity(self):
+        """Test that mqtt validates OK when capacity is present."""
+        cfg = InverterConfig(type='mqtt', capacity=10000)
+        assert cfg.capacity == 10000
+
 
 class TestUtilityConfig:
     """Tests for UtilityConfig."""
@@ -251,6 +271,11 @@ class TestEvccConfig:
 
 class TestPvInstallationConfig:
     """Tests for PvInstallationConfig."""
+
+    def test_name_required(self):
+        """Test that name is required (no default) to avoid empty-string cache key collisions."""
+        with pytest.raises(ValidationError, match='name'):
+            PvInstallationConfig(kWp=10.0)
 
     def test_float_coercion(self):
         """Test that numeric PV fields are coerced from strings."""

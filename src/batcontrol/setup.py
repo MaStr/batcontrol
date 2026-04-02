@@ -69,7 +69,10 @@ def load_config(configfile:str) -> dict:
     with open(configfile, 'r', encoding='UTF-8') as f:
         config_str = f.read()
 
-    config = yaml.safe_load(config_str)
+    try:
+        config = yaml.safe_load(config_str)
+    except yaml.YAMLError as exc:
+        raise RuntimeError(f'Configfile {configfile} is not valid YAML: {exc}') from exc
 
     if not isinstance(config, dict):
         raise RuntimeError(f'Configfile {configfile} is empty or not a valid YAML mapping')

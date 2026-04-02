@@ -79,6 +79,21 @@ class InverterConfig(BaseModel):
                 data['max_grid_charge_rate'] = data.pop('max_charge_rate')
         return data
 
+    @model_validator(mode='after')
+    def validate_type_required_fields(self):
+        """Enforce type-dependent required fields so KeyErrors can't occur at runtime."""
+        inverter_type = (self.type or '').lower()
+        if inverter_type == 'fronius_gen24':
+            missing = [f for f in ('address', 'user', 'password') if getattr(self, f) is None]
+            if missing:
+                raise ValueError(
+                    f"fronius_gen24 inverter requires: {', '.join(missing)}"
+                )
+        elif inverter_type == 'mqtt':
+            if self.capacity is None:
+                raise ValueError("mqtt inverter requires: capacity")
+        return self
+
 
 class UtilityConfig(BaseModel):
     """Dynamic tariff provider configuration."""
@@ -148,7 +163,7 @@ class PvInstallationConfig(BaseModel):
     """Single PV installation configuration."""
     model_config = ConfigDict(extra='allow')
 
-    name: str = ''
+    name: str
     type: Optional[str] = None
     lat: Optional[float] = None
     lon: Optional[float] = None
