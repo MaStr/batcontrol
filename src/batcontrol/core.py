@@ -92,6 +92,10 @@ class Batcontrol:
         # time_resolution_minutes is validated and coerced by Pydantic
         # in config_model.py (must be int, must be 15 or 60)
         self.time_resolution = config.get('time_resolution_minutes', 60)
+        if self.time_resolution not in (15, 60):
+            raise ValueError(
+                f"time_resolution_minutes must be 15 or 60, got {self.time_resolution!r}"
+            )
 
         self.intervals_per_hour = 60 // self.time_resolution
         logger.info(

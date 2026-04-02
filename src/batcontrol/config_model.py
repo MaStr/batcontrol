@@ -5,7 +5,7 @@ eliminating scattered type conversion code throughout the codebase.
 They also fix HA addon issues where numeric values arrive as strings.
 """
 from typing import List, Optional, Union
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def _parse_semicolon_int_list(v):
@@ -219,15 +219,15 @@ class BatcontrolConfig(BaseModel):
     logfile_path: str = 'logs/batcontrol.log'
     solar_forecast_provider: str = 'fcsolarapi'
 
-    battery_control: BatteryControlConfig = BatteryControlConfig()
+    battery_control: BatteryControlConfig = Field(default_factory=BatteryControlConfig)
     battery_control_expert: Optional[BatteryControlExpertConfig] = None
-    inverter: InverterConfig = InverterConfig()
+    inverter: InverterConfig = Field(default_factory=InverterConfig)
     utility: UtilityConfig
     mqtt: Optional[MqttConfig] = None
     evcc: Optional[EvccConfig] = None
     pvinstallations: List[PvInstallationConfig]
-    consumption_forecast: ConsumptionForecastConfig = (
-        ConsumptionForecastConfig()
+    consumption_forecast: ConsumptionForecastConfig = Field(
+        default_factory=ConsumptionForecastConfig
     )
 
     @field_validator('time_resolution_minutes')
