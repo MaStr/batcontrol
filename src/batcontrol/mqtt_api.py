@@ -464,7 +464,7 @@ class MqttApi:
         if self.client.is_connected():
             self.client.publish(
                 self.base_topic + '/override_duration',
-                f'{duration_minutes:.0f}')
+                f'{duration_minutes:.1f}')
 
     def publish_production_offset(self, production_offset: float) -> None:
         """ Publish the production offset percentage to MQTT

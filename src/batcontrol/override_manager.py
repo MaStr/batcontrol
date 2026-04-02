@@ -9,7 +9,7 @@ Used by both MQTT API and MCP server to provide meaningful manual control.
 import time
 import threading
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -117,8 +117,9 @@ class OverrideManager:
             self._override = None
 
     def get_override(self) -> Optional[OverrideState]:
-        """Get the active override, or None if no override is active.
+        """Get a snapshot of the active override, or None if no override is active.
 
+        Returns a defensive copy so callers cannot mutate the internal state.
         Automatically clears expired overrides.
         """
         with self._lock:
@@ -131,7 +132,7 @@ class OverrideManager:
                 )
                 self._override = None
                 return None
-            return self._override
+            return replace(self._override)
 
     def is_active(self) -> bool:
         """Check if an override is currently active (not expired)."""

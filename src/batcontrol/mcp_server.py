@@ -60,12 +60,12 @@ def _format_forecast_array(arr, run_time: float, interval_minutes: int,
     if arr is None:
         return []
     interval_seconds = interval_minutes * 60
-    base_time = run_time - (run_time % interval_seconds)
+    base_time = (int(run_time) // interval_seconds) * interval_seconds
     result = []
     for i, val in enumerate(arr):
         result.append({
             'slot': i,
-            'time_start': base_time + i * interval_seconds,
+            'time_start': int(base_time + i * interval_seconds),
             'value': round(float(val), digits),
         })
     return result
