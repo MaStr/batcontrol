@@ -58,7 +58,7 @@ loop, sharing direct access to the `Batcontrol` instance — same pattern as `Mq
 mcp:
   enabled: false
   transport: http          # 'http' for network, 'stdio' for pipe
-  host: 0.0.0.0            # Bind address
+  host: 127.0.0.1          # Bind address (use 0.0.0.0 only behind a trusted network boundary)
   port: 8081               # HTTP port
 ```
 

@@ -96,7 +96,9 @@ def main() -> int:  # pylint: disable=too-many-locals,too-many-statements
     # Both would share the same Batcontrol instance and compete for the port.
     # Copy the mcp section to avoid mutating the dict stored in bc.config later.
     if args.mcp_stdio:
-        config['mcp'] = {**config.get('mcp', {}), 'enabled': False}
+        existing_mcp = config.get('mcp')
+        config['mcp'] = {**(existing_mcp if isinstance(existing_mcp, dict) else {}),
+                         'enabled': False}
 
     bc = Batcontrol(config)
 
@@ -110,7 +112,9 @@ def main() -> int:  # pylint: disable=too-many-locals,too-many-statements
             del bc
             return 1
         logger.info("Running MCP server in stdio mode")
-        mcp = mcp_module.BatcontrolMcpServer(bc, config.get('mcp', {}))
+        raw_mcp = config.get('mcp')
+        mcp = mcp_module.BatcontrolMcpServer(
+            bc, raw_mcp if isinstance(raw_mcp, dict) else {})
         try:
             mcp.run_stdio()
         except KeyboardInterrupt:

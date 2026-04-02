@@ -85,7 +85,7 @@ if override is not None:
 | Topic | Type | Description |
 |-------|------|-------------|
 | `override_duration/set` | float | Set duration in minutes (1–1440, 0=reset to 30) |
-| `clear_override/set` | int | Any value clears active override |
+| `clear_override/set` | str | Any payload clears active override (e.g. `"1"` or `"clear"`) |
 
 ## HA Auto Discovery
 
@@ -110,7 +110,7 @@ Three entities registered:
 2. Publish -1  to  house/batcontrol/mode/set
    → Creates a 120-minute force-charge override
 3. Override auto-expires after 120 min, OR:
-   Publish 1   to  house/batcontrol/clear_override/set
+   Publish "1" to  house/batcontrol/clear_override/set
    → Clears immediately, autonomous logic resumes next cycle
 ```
 

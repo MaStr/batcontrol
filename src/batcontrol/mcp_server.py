@@ -28,22 +28,15 @@ def is_available() -> bool:
     """Check whether the MCP SDK is installed and importable."""
     return MCP_AVAILABLE
 
+from ._modes import (
+    MODE_ALLOW_DISCHARGING,
+    MODE_LIMIT_BATTERY_CHARGE_RATE,
+    MODE_FORCE_CHARGING,
+    MODE_NAMES,
+    VALID_MODES,
+)
+
 logger = logging.getLogger(__name__)
-
-# Mode constants (duplicated to avoid circular imports)
-MODE_ALLOW_DISCHARGING = 10
-MODE_LIMIT_BATTERY_CHARGE_RATE = 8
-MODE_AVOID_DISCHARGING = 0
-MODE_FORCE_CHARGING = -1
-
-MODE_NAMES = {
-    MODE_FORCE_CHARGING: "Force Charge from Grid",
-    MODE_AVOID_DISCHARGING: "Avoid Discharge",
-    MODE_LIMIT_BATTERY_CHARGE_RATE: "Limit PV Charge Rate",
-    MODE_ALLOW_DISCHARGING: "Allow Discharge",
-}
-
-VALID_MODES = set(MODE_NAMES.keys())
 
 
 def _format_forecast_array(arr, run_time: float, interval_minutes: int,

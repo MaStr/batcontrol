@@ -15,6 +15,7 @@ import time
 import os
 import logging
 import platform
+from typing import Optional
 
 import pytz
 import numpy as np
@@ -33,6 +34,12 @@ from .forecastsolar import ForecastSolar as solar_factory
 
 from .forecastconsumption import Consumption as consumption_factory
 from .override_manager import OverrideManager
+from ._modes import (
+    MODE_ALLOW_DISCHARGING,
+    MODE_LIMIT_BATTERY_CHARGE_RATE,
+    MODE_AVOID_DISCHARGING,
+    MODE_FORCE_CHARGING,
+)
 from . import mcp_server as mcp_module
 
 ERROR_IGNORE_TIME = 600  # 10 Minutes
@@ -43,11 +50,6 @@ TIME_BETWEEN_EVALUATIONS = EVALUATIONS_EVERY_MINUTES * 60
 TIME_BETWEEN_UTILITY_API_CALLS = 900  # 15 Minutes
 MIN_FORECAST_HOURS = 1  # Minimum required forecast hours
 FORECAST_TOLERANCE = 3  # Acceptable tolerance for forecast hours
-
-MODE_ALLOW_DISCHARGING = 10
-MODE_LIMIT_BATTERY_CHARGE_RATE = 8  # Limit PV charge, allow discharge
-MODE_AVOID_DISCHARGING = 0
-MODE_FORCE_CHARGING = -1
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +309,13 @@ class Batcontrol:
 
         # Initialize MCP server (optional, requires Python >=3.10 + mcp package)
         self.mcp_server = None
-        mcp_config = config.get('mcp', {})
+        mcp_config = config.get('mcp')
+        if not isinstance(mcp_config, dict):
+            if mcp_config is not None:
+                logger.warning(
+                    'Invalid "mcp" configuration: expected a mapping, got %s. '
+                    'Ignoring MCP settings.', type(mcp_config).__name__)
+            mcp_config = {}
         if mcp_config.get('enabled', False):
             if not mcp_module.is_available():
                 logger.warning(
@@ -886,7 +894,7 @@ class Batcontrol:
         elif mode == MODE_ALLOW_DISCHARGING:
             self.allow_discharging()
 
-    def api_set_mode(self, mode: int, duration_minutes: float = None):
+    def api_set_mode(self, mode: int, duration_minutes: Optional[float] = None):
         """ Log and change config run mode of inverter(s) from external call.
 
         Uses the OverrideManager for time-bounded overrides.
@@ -923,7 +931,7 @@ class Batcontrol:
         )
         self._apply_override(override)
 
-    def api_set_charge_rate(self, charge_rate: int, duration_minutes: float = None):
+    def api_set_charge_rate(self, charge_rate: int, duration_minutes: Optional[float] = None):
         """ Log and change config charge_rate and activate charging.
 
         Uses the OverrideManager for time-bounded overrides.
