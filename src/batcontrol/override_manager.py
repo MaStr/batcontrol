@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 # Default duration for MQTT overrides (backward compatible)
 DEFAULT_OVERRIDE_DURATION_MINUTES = 30
 
+# Valid inverter modes accepted by the override system
+VALID_OVERRIDE_MODES = {-1, 0, 8, 10}
+
 
 @dataclass
 class OverrideState:
@@ -89,6 +92,10 @@ class OverrideManager:
         Returns:
             The created OverrideState
         """
+        if mode not in VALID_OVERRIDE_MODES:
+            raise ValueError(
+                f"Invalid mode {mode}. Valid modes: {sorted(VALID_OVERRIDE_MODES)}")
+
         if duration_minutes is None:
             duration_minutes = self.default_duration_minutes
 

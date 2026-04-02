@@ -281,7 +281,7 @@ class Batcontrol:
                 self.mqtt_api.register_set_callback(
                     'clear_override',
                     self.api_clear_override,
-                    int
+                    str  # any payload (numeric, "true", empty) triggers the clear
                 )
                 # Inverter Callbacks
                 self.inverter.activate_mqtt(self.mqtt_api)
@@ -982,7 +982,7 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_override_duration(duration_minutes)
 
-    def api_clear_override(self, _value: int = 0):
+    def api_clear_override(self, _value: str = ""):
         """ Clear any active override and resume autonomous control.
 
         The value parameter is ignored (any value triggers the clear).

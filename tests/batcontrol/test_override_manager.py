@@ -120,6 +120,14 @@ class TestOverrideManager:
         with pytest.raises(ValueError):
             mgr.set_override(mode=0, duration_minutes=-5)
 
+    def test_invalid_mode_raises(self):
+        """Unknown mode should raise ValueError"""
+        mgr = OverrideManager()
+        with pytest.raises(ValueError):
+            mgr.set_override(mode=99, duration_minutes=30)
+        with pytest.raises(ValueError):
+            mgr.set_override(mode=5, duration_minutes=30)
+
     def test_override_without_charge_rate(self):
         """Test override for non-charging modes"""
         mgr = OverrideManager()
