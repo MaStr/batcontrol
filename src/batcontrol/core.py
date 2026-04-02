@@ -323,7 +323,15 @@ class Batcontrol:
                     host = mcp_config.get('host', '127.0.0.1')
                     port = mcp_config.get('port', 8081)
                     self.mcp_server.start_http(host=host, port=port)
-                # stdio transport is handled in __main__.py
+                else:
+                    # stdio transport is handled in __main__.py via --mcp-stdio.
+                    # Any other transport value is unsupported here.
+                    logger.warning(
+                        'MCP transport "%s" is not started by batcontrol.core. '
+                        'Only "http" is started automatically. '
+                        'For stdio, use the --mcp-stdio command-line option.',
+                        transport,
+                    )
 
         # Initialize scheduler thread
         self.scheduler = SchedulerThread()

@@ -15,7 +15,7 @@ if not mcp_is_available():
         allow_module_level=True
     )
 
-from batcontrol.mcp_server import BatcontrolMcpServer, _format_forecast_array, MODE_NAMES
+from batcontrol.mcp_server import BatcontrolMcpServer, _format_forecast_array
 from batcontrol.override_manager import OverrideManager
 
 

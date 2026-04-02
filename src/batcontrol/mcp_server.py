@@ -13,6 +13,7 @@ Use `is_available()` to check at runtime before instantiation.
 """
 import logging
 import threading
+import time
 from typing import Optional
 
 try:
@@ -97,6 +98,15 @@ class BatcontrolMcpServer:
         )
         self._register_tools()
 
+    @staticmethod
+    def _base_time(last_run_time: float) -> float:
+        """Return a valid epoch base time for forecast formatting.
+
+        Falls back to the current time when last_run_time has not been set yet
+        (it is initialised to 0 and only updated after the first evaluation cycle).
+        """
+        return last_run_time if last_run_time > 0 else time.time()
+
     def _register_tools(self):
         """Register all MCP tools."""
 
@@ -142,7 +152,7 @@ class BatcontrolMcpServer:
             return {
                 'interval_minutes': bc.time_resolution,
                 'prices': _format_forecast_array(
-                    bc.last_prices, bc.last_run_time, bc.time_resolution, digits=4),
+                    bc.last_prices, self._base_time(bc.last_run_time), bc.time_resolution, digits=4),
                 'current_price': current_price,
             }
 
@@ -156,7 +166,7 @@ class BatcontrolMcpServer:
             return {
                 'interval_minutes': bc.time_resolution,
                 'production_w': _format_forecast_array(
-                    bc.last_production, bc.last_run_time, bc.time_resolution),
+                    bc.last_production, self._base_time(bc.last_run_time), bc.time_resolution),
                 'production_offset_percent': bc.production_offset_percent,
             }
 
@@ -170,7 +180,7 @@ class BatcontrolMcpServer:
             return {
                 'interval_minutes': bc.time_resolution,
                 'consumption_w': _format_forecast_array(
-                    bc.last_consumption, bc.last_run_time, bc.time_resolution),
+                    bc.last_consumption, self._base_time(bc.last_run_time), bc.time_resolution),
             }
 
         @self.mcp.tool()
@@ -183,7 +193,7 @@ class BatcontrolMcpServer:
             return {
                 'interval_minutes': bc.time_resolution,
                 'net_consumption_w': _format_forecast_array(
-                    bc.last_net_consumption, bc.last_run_time, bc.time_resolution),
+                    bc.last_net_consumption, self._base_time(bc.last_run_time), bc.time_resolution),
             }
 
         @self.mcp.tool()
@@ -245,6 +255,7 @@ class BatcontrolMcpServer:
                 'min_price_difference': bc.min_price_difference,
                 'min_price_difference_rel': bc.min_price_difference_rel,
                 'production_offset_percent': bc.production_offset_percent,
+                'production_offset': bc.production_offset_percent,
                 'time_resolution_minutes': bc.time_resolution,
                 'limit_battery_charge_rate': bc.api_get_limit_battery_charge_rate(),
             }
