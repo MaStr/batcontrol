@@ -15,6 +15,7 @@ import time
 import os
 import logging
 import platform
+from typing import Optional
 
 import pytz
 import numpy as np
@@ -32,6 +33,14 @@ from .inverter import Inverter as inverter_factory
 from .forecastsolar import ForecastSolar as solar_factory
 
 from .forecastconsumption import Consumption as consumption_factory
+from .override_manager import OverrideManager
+from ._modes import (
+    MODE_ALLOW_DISCHARGING,
+    MODE_LIMIT_BATTERY_CHARGE_RATE,
+    MODE_AVOID_DISCHARGING,
+    MODE_FORCE_CHARGING,
+)
+from . import mcp_server as mcp_module
 
 ERROR_IGNORE_TIME = 600  # 10 Minutes
 EVALUATIONS_EVERY_MINUTES = 3  # Every x minutes on the clock
@@ -42,11 +51,6 @@ TIME_BETWEEN_UTILITY_API_CALLS = 900  # 15 Minutes
 MIN_FORECAST_HOURS = 1  # Minimum required forecast hours
 FORECAST_TOLERANCE = 3  # Acceptable tolerance for forecast hours
 
-MODE_ALLOW_DISCHARGING = 10
-MODE_LIMIT_BATTERY_CHARGE_RATE = 8  # Limit PV charge, allow discharge
-MODE_AVOID_DISCHARGING = 0
-MODE_FORCE_CHARGING = -1
-
 logger = logging.getLogger(__name__)
 
 
@@ -56,7 +60,8 @@ class Batcontrol:
 
     def __init__(self, configdict: dict):
         # For API
-        self.api_overwrite = False
+        self.override_manager = OverrideManager()
+        self._mqtt_override_duration = self.override_manager.default_duration_minutes
         # -1 = charge from grid , 0 = avoid discharge , 8 = limit battery charge, 10 = discharge allowed
         self.last_mode = None
         self.last_charge_rate = 0
@@ -270,6 +275,16 @@ class Batcontrol:
                     self.api_set_production_offset,
                     float
                 )
+                self.mqtt_api.register_set_callback(
+                    'override_duration',
+                    self.api_set_override_duration,
+                    float
+                )
+                self.mqtt_api.register_set_callback(
+                    'clear_override',
+                    self.api_clear_override,
+                    str  # any payload (numeric, "true", empty) triggers the clear
+                )
                 # Inverter Callbacks
                 self.inverter.activate_mqtt(self.mqtt_api)
 
@@ -291,6 +306,40 @@ class Batcontrol:
                 self.evcc_api.start()
                 self.evcc_api.wait_ready()
                 logger.info('evcc Connection ready')
+
+        # Initialize MCP server (optional, requires Python >=3.10 + mcp package)
+        self.mcp_server = None
+        mcp_config = config.get('mcp')
+        if not isinstance(mcp_config, dict):
+            if mcp_config is not None:
+                logger.warning(
+                    'Invalid "mcp" configuration: expected a mapping, got %s. '
+                    'Ignoring MCP settings.', type(mcp_config).__name__)
+            mcp_config = {}
+        if mcp_config.get('enabled', False):
+            if not mcp_module.is_available():
+                logger.warning(
+                    'MCP server is enabled in config but the "mcp" package '
+                    'is not installed (requires Python >=3.10). '
+                    'Install with: pip install batcontrol[mcp]')
+            else:
+                logger.info('MCP Server enabled')
+                self.mcp_server = mcp_module.BatcontrolMcpServer(
+                    self, mcp_config)
+                transport = mcp_config.get('transport', 'http')
+                if transport == 'http':
+                    host = mcp_config.get('host', '127.0.0.1')
+                    port = mcp_config.get('port', 8081)
+                    self.mcp_server.start_http(host=host, port=port)
+                else:
+                    # stdio transport is handled in __main__.py via --mcp-stdio.
+                    # Any other transport value is unsupported here.
+                    logger.warning(
+                        'MCP transport "%s" is not started by batcontrol.core. '
+                        'Only "http" is started automatically. '
+                        'For stdio, use the --mcp-stdio command-line option.',
+                        transport,
+                    )
 
         # Initialize scheduler thread
         self.scheduler = SchedulerThread()
@@ -325,6 +374,10 @@ class Batcontrol:
             if hasattr(self, 'scheduler') and self.scheduler is not None:
                 self.scheduler.stop()
                 del self.scheduler
+
+            # Stop MCP server
+            if hasattr(self, 'mcp_server') and self.mcp_server is not None:
+                self.mcp_server.shutdown()
 
             self.inverter.shutdown()
             del self.inverter
@@ -457,14 +510,16 @@ class Batcontrol:
         # Store data for API
         self.__save_run_data(production, consumption, net_consumption, prices)
 
-        # stop here if api_overwrite is set and reset it
-        if self.api_overwrite:
+        # Check if a time-bounded override is active
+        override = self.override_manager.get_override()
+        if override is not None:
             logger.info(
-                'API Overwrite active. Skipping control logic. '
-                'Next evaluation in %.0f seconds',
-                TIME_BETWEEN_EVALUATIONS
+                'Override active: mode=%s, %.1f min remaining, reason="%s". '
+                'Skipping control logic.',
+                override.mode, override.remaining_minutes, override.reason
             )
-            self.api_overwrite = False
+            # Re-apply the override mode to ensure inverter stays in sync
+            self._apply_override(override)
             return
 
         # Correction for time that has already passed in the current interval
@@ -797,13 +852,58 @@ class Batcontrol:
             self.mqtt_api.publish_evaluation_intervall(
                 TIME_BETWEEN_EVALUATIONS)
             self.mqtt_api.publish_last_evaluation_time(self.last_run_time)
+            # Publish override status
+            override = self.override_manager.get_override()
+            self.mqtt_api.publish_override_active(override is not None)
+            self.mqtt_api.publish_override_remaining(
+                override.remaining_minutes if override else 0.0)
+            self.mqtt_api.publish_override_duration(
+                self._mqtt_override_duration)
             #
             self.mqtt_api.publish_discharge_blocked(self.discharge_blocked)
             # Trigger Inverter
             self.inverter.refresh_api_values()
 
-    def api_set_mode(self, mode: int):
-        """ Log and change config run mode of inverter(s) from external call """
+    def api_apply_override(self, override):
+        """Public entry point to apply an override's mode/charge_rate to the inverter.
+
+        Used by the MCP server to avoid accessing the private _apply_override method.
+        """
+        self._apply_override(override)
+
+    def _apply_override(self, override):
+        """Apply an override's mode/charge_rate to the inverter."""
+        mode = override.mode
+        charge_rate = override.charge_rate
+
+        if mode == MODE_FORCE_CHARGING:
+            if charge_rate is not None and charge_rate > 0:
+                self.force_charge(charge_rate)
+            else:
+                self.force_charge()
+        elif mode == MODE_AVOID_DISCHARGING:
+            self.avoid_discharging()
+        elif mode == MODE_LIMIT_BATTERY_CHARGE_RATE:
+            if self._limit_battery_charge_rate < 0:
+                logger.debug(
+                    'Override: Mode %d (limit battery charge rate) requested but '
+                    '_limit_battery_charge_rate=%d; limit_battery_charge_rate() '
+                    'will switch to allow-discharging because the limit is negative.',
+                    mode, self._limit_battery_charge_rate)
+            self.limit_battery_charge_rate(self._limit_battery_charge_rate)
+        elif mode == MODE_ALLOW_DISCHARGING:
+            self.allow_discharging()
+
+    def api_set_mode(self, mode: int, duration_minutes: Optional[float] = None):
+        """ Log and change config run mode of inverter(s) from external call.
+
+        Uses the OverrideManager for time-bounded overrides.
+        Args:
+            mode: Inverter mode (-1, 0, 8, 10)
+            duration_minutes: Override duration. None uses the MQTT-configured
+                override_duration (set via override_duration/set), which defaults
+                to the OverrideManager default (30 min).
+        """
         # Check if mode is valid
         if mode not in [
                 MODE_FORCE_CHARGING,
@@ -813,35 +913,94 @@ class Batcontrol:
             logger.warning('API: Invalid mode %s', mode)
             return
 
-        logger.info('API: Setting mode to %s', mode)
-        self.api_overwrite = True
+        # Use MQTT-configured duration if no explicit duration given
+        if duration_minutes is None:
+            duration_minutes = self._mqtt_override_duration
 
-        if mode != self.last_mode:
-            if mode == MODE_FORCE_CHARGING:
-                self.force_charge()
-            elif mode == MODE_AVOID_DISCHARGING:
-                self.avoid_discharging()
-            elif mode == MODE_LIMIT_BATTERY_CHARGE_RATE:
-                if self._limit_battery_charge_rate < 0:
-                    logger.warning(
-                        'API: Mode %d (limit battery charge rate) set but no valid '
-                        'limit configured. Set a limit via api_set_limit_battery_charge_rate '
-                        'first. Falling back to allow-discharging mode.',
-                        mode)
-                self.limit_battery_charge_rate(self._limit_battery_charge_rate)
-            elif mode == MODE_ALLOW_DISCHARGING:
-                self.allow_discharging()
-
-    def api_set_charge_rate(self, charge_rate: int):
-        """ Log and change config charge_rate and activate charging."""
-        if charge_rate < 0:
+        if duration_minutes < 1 or duration_minutes > 1440:
             logger.warning(
-                'API: Invalid charge rate %d W', charge_rate)
+                'API: Invalid duration %.1f min for mode override (must be 1-1440)',
+                duration_minutes)
             return
-        logger.info('API: Setting charge rate to %d W', charge_rate)
-        self.api_overwrite = True
-        if charge_rate != self.last_charge_rate:
-            self.force_charge(charge_rate)
+
+        logger.info('API: Setting mode to %s for %.1f min', mode, duration_minutes)
+        override = self.override_manager.set_override(
+            mode=mode,
+            duration_minutes=duration_minutes,
+            reason="MQTT API mode/set"
+        )
+        self._apply_override(override)
+
+    def api_set_charge_rate(self, charge_rate: int, duration_minutes: Optional[float] = None):
+        """ Log and change config charge_rate and activate charging.
+
+        Uses the OverrideManager for time-bounded overrides.
+        Args:
+            charge_rate: Charge rate in W
+            duration_minutes: Override duration. None uses the MQTT-configured
+                override_duration.
+        """
+        if charge_rate <= 0:
+            logger.warning(
+                'API: Invalid charge rate %d W (must be > 0)', charge_rate)
+            return
+
+        # Use MQTT-configured duration if no explicit duration given
+        if duration_minutes is None:
+            duration_minutes = self._mqtt_override_duration
+
+        if duration_minutes < 1 or duration_minutes > 1440:
+            logger.warning(
+                'API: Invalid duration %.1f min for charge rate override (must be 1-1440)',
+                duration_minutes)
+            return
+
+        logger.info('API: Setting charge rate to %d W for %.1f min', charge_rate, duration_minutes)
+        override = self.override_manager.set_override(
+            mode=MODE_FORCE_CHARGING,
+            charge_rate=charge_rate,
+            duration_minutes=duration_minutes,
+            reason="MQTT API charge_rate/set"
+        )
+        self._apply_override(override)
+
+    def api_set_override_duration(self, duration_minutes: float):
+        """ Set the duration (in minutes) for subsequent mode/charge_rate overrides via MQTT.
+
+        This acts like a "pre-set" — the next mode/set or charge_rate/set will use
+        this duration. Analogous to how limit_battery_charge_rate/set works for mode 8.
+
+        Args:
+            duration_minutes: Duration in minutes (1-1440). 0 resets to default.
+        """
+        if duration_minutes == 0:
+            duration_minutes = self.override_manager.default_duration_minutes
+            logger.info('API: Reset override duration to default (%.1f min)',
+                        duration_minutes)
+        elif duration_minutes < 1 or duration_minutes > 1440:
+            logger.warning(
+                'API: Invalid override duration %.1f min (must be 1-1440, or 0 to reset)',
+                duration_minutes)
+            return
+        else:
+            logger.info('API: Setting override duration to %.1f min',
+                        duration_minutes)
+
+        self._mqtt_override_duration = duration_minutes
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_override_duration(duration_minutes)
+
+    def api_clear_override(self, _value: str = ""):
+        """ Clear any active override and resume autonomous control.
+
+        The value parameter is ignored (any value triggers the clear).
+        This follows the MQTT /set pattern where a message triggers the action.
+        """
+        logger.info('API: Clearing override')
+        self.override_manager.clear_override()
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_override_active(False)
+            self.mqtt_api.publish_override_remaining(0.0)
 
     def api_set_limit_battery_charge_rate(self, limit: int):
         """ Set dynamic battery charge rate limit from external call
@@ -899,6 +1058,20 @@ class Batcontrol:
         logger.info(
             'API: Setting min price difference to %.3f', min_price_difference)
         self.min_price_difference = min_price_difference
+
+    def api_get_decision_explanation(self) -> list:
+        """Get the explanation steps from the last logic calculation.
+
+        Returns:
+            List of human-readable explanation strings, or empty list if no
+            calculation has been run yet.
+        """
+        if self.last_logic_instance is None:
+            return []
+        calc_output = self.last_logic_instance.get_calculation_output()
+        if calc_output is None:
+            return []
+        return list(calc_output.explanation)
 
     def api_set_min_price_difference_rel(
             self, min_price_difference_rel: float):

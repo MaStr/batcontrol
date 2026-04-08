@@ -1,11 +1,14 @@
-from .core import Batcontrol
-from .setup import setup_logging, load_config
-from .inverter import InverterOutageError
+"""Batcontrol entry point: parses arguments, sets up logging, and runs the main loop."""
 import argparse
 import time
 import datetime
 import sys
 import logging
+
+from .core import Batcontrol
+from .setup import setup_logging, load_config
+from .inverter import InverterOutageError
+from . import mcp_server as mcp_module
 
 
 CONFIGFILE = "config/batcontrol_config.yaml"
@@ -30,10 +33,16 @@ def parse_arguments():
         default=CONFIGFILE,
         help=f'Path to configuration file (default: {CONFIGFILE})'
     )
+    parser.add_argument(
+        '--mcp-stdio',
+        action='store_true',
+        help='Run MCP server with stdio transport (for direct integration with AI tools)'
+    )
     return parser.parse_args()
 
 
-def main() -> int:
+def main() -> int:  # pylint: disable=too-many-locals,too-many-statements
+    """Run batcontrol: load config, set up logging, and start the main loop."""
     # Parse command line arguments
     args = parse_arguments()
 
@@ -65,7 +74,11 @@ def main() -> int:
     }
 
     # Setup the logger based on the config
-    setup_logging(level=loglevel_mapping.get(loglevel, logging.INFO), logfile=logfile, max_logfile_size_kb=max_logfile_size)
+    setup_logging(
+        level=loglevel_mapping.get(loglevel, logging.INFO),
+        logfile=logfile,
+        max_logfile_size_kb=max_logfile_size,
+    )
     logger = logging.getLogger(__name__)
 
     # Reduce the default loglevel for urllib3.connectionpool
@@ -75,10 +88,41 @@ def main() -> int:
         logging.getLogger("asyncio").setLevel(logging.WARNING)
         logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
         logging.getLogger("batcontrol.inverter.fronius.auth").setLevel(logging.INFO)
-        logging.getLogger("batcontrol.forecastconsumption.forecast_homeassistant.details").setLevel(logging.INFO)
-        logging.getLogger("batcontrol.forecastconsumption.forecast_homeassistant.communication").setLevel(logging.INFO)
+        ha_base = "batcontrol.forecastconsumption.forecast_homeassistant"
+        logging.getLogger(f"{ha_base}.details").setLevel(logging.INFO)
+        logging.getLogger(f"{ha_base}.communication").setLevel(logging.INFO)
+
+    # When using stdio transport, prevent core.py from starting an HTTP MCP server.
+    # Both would share the same Batcontrol instance and compete for the port.
+    # Copy the mcp section to avoid mutating the dict stored in bc.config later.
+    if args.mcp_stdio:
+        existing_mcp = config.get('mcp')
+        config['mcp'] = {**(existing_mcp if isinstance(existing_mcp, dict) else {}),
+                         'enabled': False}
 
     bc = Batcontrol(config)
+
+    # Handle --mcp-stdio: run MCP server in stdio mode (blocking)
+    if args.mcp_stdio:
+        if not mcp_module.is_available():
+            logger.error(
+                'MCP server requires the "mcp" package (Python >=3.10). '
+                'Install with: pip install batcontrol[mcp]')
+            bc.shutdown()
+            del bc
+            return 1
+        logger.info("Running MCP server in stdio mode")
+        raw_mcp = config.get('mcp')
+        mcp = mcp_module.BatcontrolMcpServer(
+            bc, raw_mcp if isinstance(raw_mcp, dict) else {})
+        try:
+            mcp.run_stdio()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            bc.shutdown()
+            del bc
+        return 0
 
     try:
         while True:
@@ -100,7 +144,9 @@ def main() -> int:
             # add time increments to trigger next evaluation
             next_eval += datetime.timedelta(minutes=EVALUATIONS_EVERY_MINUTES)
             sleeptime = (next_eval - loop_now).total_seconds()
-            logger.info("Next evaluation at %s. Sleeping for %d seconds", next_eval.strftime('%H:%M:%S'), int(sleeptime))
+            logger.info(
+                "Next evaluation at %s. Sleeping for %d seconds",
+                next_eval.strftime('%H:%M:%S'), int(sleeptime))
             time.sleep(sleeptime)
     except KeyboardInterrupt:
         print("Shutting down")

@@ -79,6 +79,11 @@ class DefaultLogic(LogicInterface):
         """ Get the inverter control settings from the last calculation """
         return self.inverter_control_settings
 
+    def _explain(self, message: str):
+        """Add an explanation step to the calculation output."""
+        if self.calculation_output is not None:
+            self.calculation_output.explanation.append(message)
+
     def calculate_inverter_mode(self, calc_input: CalculationInput,
                                 calc_timestamp: Optional[datetime.datetime] = None) -> InverterControlSettings:
         """ Main control logic for battery control """
@@ -100,16 +105,22 @@ class DefaultLogic(LogicInterface):
         if calc_timestamp is None:
             calc_timestamp = datetime.datetime.now().astimezone(self.timezone)
 
+        self._explain(
+            "Current price: %.4f, Battery: %.0f Wh stored, %.0f Wh usable, %.0f Wh free capacity" % (
+                prices[0], calc_input.stored_energy,
+                calc_input.stored_usable_energy, calc_input.free_capacity))
+
         # ensure availability of data
         max_slot = min(len(net_consumption), len(prices))
 
         if self.__is_discharge_allowed(calc_input, net_consumption, prices, calc_timestamp):
             inverter_control_settings.allow_discharge = True
             inverter_control_settings.limit_battery_charge_rate = -1 # no limit
-
+            self._explain("Decision: Allow discharge")
             return inverter_control_settings
         else:  # discharge not allowed
             logger.debug('Discharging is NOT allowed')
+            self._explain("Discharge not allowed — reserving energy for future high-price slots")
             inverter_control_settings.allow_discharge = False
             charging_limit_percent = self.calculation_parameters.max_charging_from_grid_limit * 100
             charge_limit_capacity = self.common.max_capacity * \
@@ -124,6 +135,7 @@ class DefaultLogic(LogicInterface):
                 logger.debug('Charging is allowed, because SOC is below %.0f%%',
                              charging_limit_percent
                              )
+                self._explain("Grid charging possible (SOC below %.0f%% limit)" % charging_limit_percent)
                 required_recharge_energy = self.__get_required_recharge_energy(
                     calc_input,
                     net_consumption[:max_slot],
@@ -133,6 +145,7 @@ class DefaultLogic(LogicInterface):
                 logger.debug('Charging is NOT allowed, because SOC is above %.0f%%',
                              charging_limit_percent
                              )
+                self._explain("Grid charging blocked (SOC above %.0f%% limit)" % charging_limit_percent)
 
             if required_recharge_energy > 0:
                 allowed_charging_energy = charge_limit_capacity - calc_input.stored_energy
@@ -146,6 +159,7 @@ class DefaultLogic(LogicInterface):
                     'Get additional energy via grid: %0.1f Wh',
                     required_recharge_energy
                 )
+                self._explain("Need %.0f Wh from grid for upcoming high-price periods" % required_recharge_energy)
             elif required_recharge_energy == 0 and is_charging_possible:
                 logger.debug(
                     'No additional energy required or possible price found.')
@@ -184,12 +198,13 @@ class DefaultLogic(LogicInterface):
 
                 charge_rate = self.common.calculate_charge_rate(charge_rate)
 
-                #self.force_charge(charge_rate)
                 inverter_control_settings.charge_from_grid = True
                 inverter_control_settings.charge_rate = charge_rate
+                self._explain("Decision: Force charge from grid at %d W" % charge_rate)
             else:
                 # keep current charge level. recharge if solar surplus available
                 inverter_control_settings.allow_discharge = False
+                self._explain("Decision: Avoid discharge (hold current charge level)")
         #
         return inverter_control_settings
 
@@ -211,6 +226,8 @@ class DefaultLogic(LogicInterface):
         if self.common.is_discharge_always_allowed_capacity(calc_input.stored_energy):
             logger.info(
                 "[Rule] Discharge allowed due to always_allow_discharge_limit")
+            self._explain("Battery above always-allow-discharge limit (%.0f%%) — discharge permitted regardless" % (
+                self.common.always_allow_discharge_limit * 100))
             return True
 
         current_price = prices[0]
@@ -315,6 +332,9 @@ class DefaultLogic(LogicInterface):
                 calc_input.stored_usable_energy,
                 reserved_storage
             )
+            self._explain(
+                "Usable energy (%.0f Wh) > reserved energy (%.0f Wh) — surplus available for discharge" % (
+                    calc_input.stored_usable_energy, reserved_storage))
             return True
 
         # forbid discharging
@@ -323,6 +343,9 @@ class DefaultLogic(LogicInterface):
             calc_input.stored_usable_energy,
             reserved_storage
         )
+        self._explain(
+            "Usable energy (%.0f Wh) <= reserved energy (%.0f Wh) — holding for %d upcoming higher-price slot(s)" % (
+                calc_input.stored_usable_energy, reserved_storage, len(higher_price_slots)))
 
         return False
 
