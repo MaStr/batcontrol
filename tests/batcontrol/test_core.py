@@ -27,7 +27,7 @@ class TestModeLimitBatteryChargeRate:
             },
             'utility': {
                 'type': 'tibber',
-                'token': 'test_token'
+                'apikey': 'test_token'
             },
             'pvinstallations': [],
             'consumption_forecast': {
@@ -305,7 +305,7 @@ class TestTimeResolutionString:
             },
             'utility': {
                 'type': 'tibber',
-                'token': 'test_token'
+                'apikey': 'test_token'
             },
             'pvinstallations': [],
             'consumption_forecast': {
@@ -354,6 +354,166 @@ class TestTimeResolutionString:
         )
         assert logic is not None
         assert logic.interval_minutes == int(resolution_str)
+
+
+class TestCoreRunDispatch:
+    """Characterize Batcontrol.run() dispatch to inverter methods"""
+
+    @pytest.fixture
+    def mock_config(self):
+        return {
+            'timezone': 'Europe/Berlin',
+            'time_resolution_minutes': 60,
+            'inverter': {
+                'type': 'dummy',
+                'max_grid_charge_rate': 5000,
+                'max_pv_charge_rate': 3000,
+                'min_pv_charge_rate': 0,
+            },
+            'utility': {
+                'type': 'tibber',
+                'apikey': 'test_token'
+            },
+            'pvinstallations': [],
+            'consumption_forecast': {
+                'type': 'simple',
+                'value': 500
+            },
+            'battery_control': {
+                'max_charging_from_grid_limit': 0.8,
+                'min_price_difference': 0.05
+            },
+            'mqtt': {'enabled': False}
+        }
+
+    @pytest.fixture
+    def run_dispatch_setup(self, mock_config, mocker):
+        core_module = "batcontrol.core"
+
+        mock_inverter = mocker.MagicMock()
+        mock_inverter.max_pv_charge_rate = 3000
+        mock_inverter.max_grid_charge_rate = 5000
+        mock_inverter.get_max_capacity.return_value = 10000
+        mock_inverter.get_SOC.return_value = 50
+        mock_inverter.get_stored_energy.return_value = 5000
+        mock_inverter.get_stored_usable_energy.return_value = 4500
+        mock_inverter.get_free_capacity.return_value = 5000
+
+        mock_tariff_provider = mocker.MagicMock()
+        mock_tariff_provider.get_prices.return_value = {0: 0.20, 1: 0.30, 2: 0.25}
+        mock_tariff_provider.refresh_data = mocker.MagicMock()
+
+        mock_solar_provider = mocker.MagicMock()
+        mock_solar_provider.get_forecast.return_value = {0: 0, 1: 0, 2: 0}
+        mock_solar_provider.refresh_data = mocker.MagicMock()
+
+        mock_consumption_provider = mocker.MagicMock()
+        mock_consumption_provider.get_forecast.return_value = {0: 500, 1: 500, 2: 500}
+        mock_consumption_provider.refresh_data = mocker.MagicMock()
+
+        fake_logic = mocker.MagicMock()
+        fake_logic.calculate.return_value = True
+        fake_logic.get_calculation_output.return_value = mocker.MagicMock(
+            reserved_energy=0,
+            required_recharge_energy=0,
+            min_dynamic_price_difference=0.05,
+        )
+
+        mocker.patch(
+            f"{core_module}.tariff_factory.create_tarif_provider",
+            autospec=True,
+            return_value=mock_tariff_provider,
+        )
+        mocker.patch(
+            f"{core_module}.inverter_factory.create_inverter",
+            autospec=True,
+            return_value=mock_inverter,
+        )
+        mocker.patch(
+            f"{core_module}.solar_factory.create_solar_provider",
+            autospec=True,
+            return_value=mock_solar_provider,
+        )
+        mocker.patch(
+            f"{core_module}.consumption_factory.create_consumption",
+            autospec=True,
+            return_value=mock_consumption_provider,
+        )
+        mocker.patch(
+            f"{core_module}.LogicFactory.create_logic",
+            autospec=True,
+            return_value=fake_logic,
+        )
+
+        bc = Batcontrol(mock_config)
+
+        yield bc, mock_inverter, fake_logic
+
+        bc.shutdown()
+
+    def test_run_dispatches_allow_discharge(self, run_dispatch_setup):
+        bc, mock_inverter, fake_logic = run_dispatch_setup
+        fake_logic.get_inverter_control_settings.return_value = MagicMock(
+            allow_discharge=True,
+            charge_from_grid=False,
+            charge_rate=0,
+            limit_battery_charge_rate=-1,
+        )
+
+        bc.run()
+
+        mock_inverter.set_mode_allow_discharge.assert_called_once_with()
+        mock_inverter.set_mode_force_charge.assert_not_called()
+        mock_inverter.set_mode_avoid_discharge.assert_not_called()
+        mock_inverter.set_mode_limit_battery_charge.assert_not_called()
+
+    def test_run_dispatches_force_charge(self, run_dispatch_setup):
+        bc, mock_inverter, fake_logic = run_dispatch_setup
+        fake_logic.get_inverter_control_settings.return_value = MagicMock(
+            allow_discharge=False,
+            charge_from_grid=True,
+            charge_rate=2345,
+            limit_battery_charge_rate=-1,
+        )
+
+        bc.run()
+
+        mock_inverter.set_mode_force_charge.assert_called_once_with(2345)
+        mock_inverter.set_mode_allow_discharge.assert_not_called()
+        mock_inverter.set_mode_avoid_discharge.assert_not_called()
+        mock_inverter.set_mode_limit_battery_charge.assert_not_called()
+
+    def test_run_dispatches_avoid_discharge(self, run_dispatch_setup):
+        bc, mock_inverter, fake_logic = run_dispatch_setup
+        fake_logic.get_inverter_control_settings.return_value = MagicMock(
+            allow_discharge=False,
+            charge_from_grid=False,
+            charge_rate=0,
+            limit_battery_charge_rate=-1,
+        )
+
+        bc.run()
+
+        mock_inverter.set_mode_avoid_discharge.assert_called_once_with()
+        mock_inverter.set_mode_allow_discharge.assert_not_called()
+        mock_inverter.set_mode_force_charge.assert_not_called()
+        mock_inverter.set_mode_limit_battery_charge.assert_not_called()
+
+    def test_run_dispatches_limit_battery_charge_rate(self, run_dispatch_setup):
+        bc, mock_inverter, fake_logic = run_dispatch_setup
+        fake_logic.get_inverter_control_settings.return_value = MagicMock(
+            allow_discharge=True,
+            charge_from_grid=False,
+            charge_rate=0,
+            limit_battery_charge_rate=1800,
+        )
+
+        bc.run()
+
+        mock_inverter.set_mode_limit_battery_charge.assert_called_once_with(1800)
+        mock_inverter.set_mode_allow_discharge.assert_not_called()
+        mock_inverter.set_mode_force_charge.assert_not_called()
+        mock_inverter.set_mode_avoid_discharge.assert_not_called()
 
 
 if __name__ == '__main__':
