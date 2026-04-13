@@ -36,12 +36,14 @@ version = {attr = "batcontrol.__pkginfo__.__version__"}
 required-version = "~=0.7.0" # Pin uv to major version for stability
 
 # Testing configuration
-[tool.pytest]
+[tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = "test_*.py"
-python_classes = "Test*"
-python_functions = "test_*"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 pythonpath = ["src"]
+addopts = "--strict-markers -v"
+asyncio_mode = "auto"
 
 # For testing
 [project.optional-dependencies]
