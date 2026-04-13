@@ -24,8 +24,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install pytest pytest-cov pytest-asyncio
-        if [ -f pyproject.toml ]; then pip install -e .; fi
+        if [ -f pyproject.toml ]; then pip install -e '.[test]'; fi
     - name: Test with pytest
       run: |
         python -m pytest tests/ --cov=src/batcontrol --cov-report=xml
