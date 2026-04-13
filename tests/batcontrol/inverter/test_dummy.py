@@ -1,9 +1,4 @@
 import pytest
-import sys
-import os
-
-# Add the src directory to Python path for testing
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'src'))
 
 from batcontrol.inverter.dummy import Dummy
 from batcontrol.inverter.inverter import Inverter

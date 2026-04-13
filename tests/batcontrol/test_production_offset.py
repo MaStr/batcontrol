@@ -66,172 +66,146 @@ class TestProductionOffset:
             },
         }
 
-    def test_production_offset_initialization_default(self, mock_config):
+    @pytest.fixture
+    def batcontrol_with_patched_factories(self, mock_config, mocker):
+        core_module = 'batcontrol.core'
+
+        mocker.patch(f'{core_module}.tariff_factory')
+        mocker.patch(f'{core_module}.inverter_factory')
+        mocker.patch(f'{core_module}.solar_factory')
+        mocker.patch(f'{core_module}.consumption_factory')
+
+        bc = Batcontrol(mock_config)
+
+        yield bc
+
+        bc.shutdown()
+
+    def test_production_offset_initialization_default(
+        self, mock_config, batcontrol_with_patched_factories
+    ):
         """Test that production offset initializes with default value when not configured"""
-        # Remove production_offset_percent from config
         del mock_config['battery_control_expert']['production_offset_percent']
 
-        with patch('batcontrol.core.tariff_factory'), \
-             patch('batcontrol.core.inverter_factory'), \
-             patch('batcontrol.core.solar_factory'), \
-             patch('batcontrol.core.consumption_factory'):
+        batcontrol = Batcontrol(mock_config)
 
-            batcontrol = Batcontrol(mock_config)
+        assert batcontrol.production_offset_percent == 1.0
+        batcontrol.shutdown()
 
-            # Should default to 1.0 (100%, no offset)
-            assert batcontrol.production_offset_percent == 1.0
-
-    def test_production_offset_initialization_from_config(self, mock_config):
+    def test_production_offset_initialization_from_config(
+        self, batcontrol_with_patched_factories
+    ):
         """Test that production offset is initialized from config"""
-        with patch('batcontrol.core.tariff_factory'), \
-             patch('batcontrol.core.inverter_factory'), \
-             patch('batcontrol.core.solar_factory'), \
-             patch('batcontrol.core.consumption_factory'):
+        batcontrol = batcontrol_with_patched_factories
 
-            batcontrol = Batcontrol(mock_config)
+        assert batcontrol.production_offset_percent == 0.8
 
-            # Should load value from config
-            assert batcontrol.production_offset_percent == 0.8
-
-    def test_production_offset_applied_to_forecast(self, mock_config):
+    def test_production_offset_applied_to_forecast(
+        self, batcontrol_with_patched_factories, mocker
+    ):
         """Test that production offset is applied to production forecast"""
-        with patch('batcontrol.core.tariff_factory'), \
-             patch('batcontrol.core.inverter_factory'), \
-             patch('batcontrol.core.solar_factory'), \
-             patch('batcontrol.core.consumption_factory'):
+        batcontrol = batcontrol_with_patched_factories
+        batcontrol.production_offset_percent = 0.5  # 50% reduction
 
-            batcontrol = Batcontrol(mock_config)
-            batcontrol.production_offset_percent = 0.5  # 50% reduction
+        production_forecast = {0: 1000, 1: 2000, 2: 3000}  # W
+        consumption_forecast = {0: 500, 1: 500, 2: 500}
+        price_dict = {0: 0.20, 1: 0.25, 2: 0.30}
 
-            # Create mock forecasts
-            production_forecast = {0: 1000, 1: 2000, 2: 3000}  # W
-            consumption_forecast = {0: 500, 1: 500, 2: 500}
-            price_dict = {0: 0.20, 1: 0.25, 2: 0.30}
+        batcontrol.dynamic_tariff = mocker.Mock()
+        batcontrol.dynamic_tariff.get_prices = mocker.Mock(return_value=price_dict)
 
-            # Mock the forecast methods
-            batcontrol.dynamic_tariff = Mock()
-            batcontrol.dynamic_tariff.get_prices = Mock(return_value=price_dict)
+        batcontrol.fc_solar = mocker.Mock()
+        batcontrol.fc_solar.get_forecast = mocker.Mock(return_value=production_forecast)
 
-            batcontrol.fc_solar = Mock()
-            batcontrol.fc_solar.get_forecast = Mock(return_value=production_forecast)
+        batcontrol.fc_consumption = mocker.Mock()
+        batcontrol.fc_consumption.get_forecast = mocker.Mock(return_value=consumption_forecast)
 
-            batcontrol.fc_consumption = Mock()
-            batcontrol.fc_consumption.get_forecast = Mock(return_value=consumption_forecast)
+        batcontrol.inverter = mocker.Mock()
+        batcontrol.inverter.get_SOC = mocker.Mock(return_value=50.0)
+        batcontrol.inverter.get_stored_energy = mocker.Mock(return_value=5000)
+        batcontrol.inverter.get_stored_usable_energy = mocker.Mock(return_value=4000)
+        batcontrol.inverter.get_free_capacity = mocker.Mock(return_value=5000)
+        batcontrol.inverter.get_max_capacity = mocker.Mock(return_value=10000)
+        batcontrol.inverter.get_reserved_energy = mocker.Mock(return_value=1000)
 
-            batcontrol.inverter = Mock()
-            batcontrol.inverter.get_SOC = Mock(return_value=50.0)
-            batcontrol.inverter.get_stored_energy = Mock(return_value=5000)
-            batcontrol.inverter.get_stored_usable_energy = Mock(return_value=4000)
-            batcontrol.inverter.get_free_capacity = Mock(return_value=5000)
-            batcontrol.inverter.get_max_capacity = Mock(return_value=10000)
-            batcontrol.inverter.get_reserved_energy = Mock(return_value=1000)
+        batcontrol.mqtt_api = None
+        batcontrol.evcc_api = None
 
-            batcontrol.mqtt_api = None
-            batcontrol.evcc_api = None
+        mock_logic_factory = mocker.patch('batcontrol.core.LogicFactory')
+        mock_logic = mocker.Mock()
+        mock_logic.mode = 10
+        mock_logic.charge_rate = 0
 
-            # Mock LogicFactory to avoid complex logic
-            with patch('batcontrol.core.LogicFactory') as mock_logic_factory:
-                mock_logic = Mock()
-                mock_logic.mode = 10
-                mock_logic.charge_rate = 0
+        inverter_settings = InverterControlSettings(
+            allow_discharge=True,
+            charge_from_grid=False,
+            charge_rate=0,
+            limit_battery_charge_rate=-1,
+        )
+        mock_logic.get_inverter_control_settings = mocker.Mock(
+            return_value=inverter_settings
+        )
 
-                # Create proper InverterControlSettings object
-                inverter_settings = InverterControlSettings(
-                    allow_discharge=True,
-                    charge_from_grid=False,
-                    charge_rate=0,
-                    limit_battery_charge_rate=-1  # No limit
-                )
-                mock_logic.get_inverter_control_settings = Mock(return_value=inverter_settings)
+        calc_output = CalculationOutput(
+            reserved_energy=1000,
+            required_recharge_energy=0,
+            min_dynamic_price_difference=0.05,
+        )
+        mock_logic.get_calculation_output = mocker.Mock(return_value=calc_output)
+        mock_logic.calculate = mocker.Mock(return_value=True)
+        mock_logic.set_calculation_parameters = mocker.Mock()
 
-                # Create proper CalculationOutput object
-                calc_output = CalculationOutput(
-                    reserved_energy=1000,
-                    required_recharge_energy=0,
-                    min_dynamic_price_difference=0.05
-                )
-                mock_logic.get_calculation_output = Mock(return_value=calc_output)
-                mock_logic.calculate = Mock(return_value=True)
-                mock_logic.set_calculation_parameters = Mock()
+        mock_logic_factory.create_logic = mocker.Mock(return_value=mock_logic)
 
-                mock_logic_factory.create_logic = Mock(return_value=mock_logic)
+        batcontrol.run()
 
-                # Call run to apply the offset
-                batcontrol.run()
+        assert batcontrol.last_production[1] == pytest.approx(1000.0)
+        assert batcontrol.last_production[2] == pytest.approx(1500.0)
 
-                # Check that production was offset correctly
-                # Note: production[0] is adjusted for elapsed time in current interval
-                # so we only check indices [1] and [2] for exact values
-                assert batcontrol.last_production[1] == pytest.approx(1000.0)
-                assert batcontrol.last_production[2] == pytest.approx(1500.0)
-
-    def test_production_offset_api_set_valid(self, mock_config):
+    def test_production_offset_api_set_valid(self, batcontrol_with_patched_factories):
         """Test setting production offset via API with a valid mid-range value"""
-        with patch('batcontrol.core.tariff_factory'), \
-             patch('batcontrol.core.inverter_factory'), \
-             patch('batcontrol.core.solar_factory'), \
-             patch('batcontrol.core.consumption_factory'):
+        batcontrol = batcontrol_with_patched_factories
 
-            batcontrol = Batcontrol(mock_config)
+        batcontrol.api_set_production_offset(0.7)
 
-            # Set a typical valid value (70% of production)
-            batcontrol.api_set_production_offset(0.7)
+        assert batcontrol.production_offset_percent == pytest.approx(0.7)
 
-            # Should be updated
-            assert batcontrol.production_offset_percent == pytest.approx(0.7)
-
-    def test_production_offset_api_set_invalid_negative(self, mock_config):
+    def test_production_offset_api_set_invalid_negative(
+        self, batcontrol_with_patched_factories
+    ):
         """Test setting production offset via API with an invalid negative value"""
-        with patch('batcontrol.core.tariff_factory'), \
-             patch('batcontrol.core.inverter_factory'), \
-             patch('batcontrol.core.solar_factory'), \
-             patch('batcontrol.core.consumption_factory'):
+        batcontrol = batcontrol_with_patched_factories
+        original_value = batcontrol.production_offset_percent
 
-            batcontrol = Batcontrol(mock_config)
-            original_value = batcontrol.production_offset_percent
+        batcontrol.api_set_production_offset(-0.5)
 
-            # Try to set invalid negative value
-            batcontrol.api_set_production_offset(-0.5)
+        assert batcontrol.production_offset_percent == original_value
 
-            # Should not be updated
-            assert batcontrol.production_offset_percent == original_value
-
-    def test_production_offset_api_set_invalid_too_high(self, mock_config):
+    def test_production_offset_api_set_invalid_too_high(
+        self, batcontrol_with_patched_factories
+    ):
         """Test setting production offset via API with invalid high value"""
-        with patch('batcontrol.core.tariff_factory'), \
-             patch('batcontrol.core.inverter_factory'), \
-             patch('batcontrol.core.solar_factory'), \
-             patch('batcontrol.core.consumption_factory'):
+        batcontrol = batcontrol_with_patched_factories
+        original_value = batcontrol.production_offset_percent
 
-            batcontrol = Batcontrol(mock_config)
-            original_value = batcontrol.production_offset_percent
+        batcontrol.api_set_production_offset(2.5)
 
-            # Try to set invalid value (> 2.0)
-            batcontrol.api_set_production_offset(2.5)
+        assert batcontrol.production_offset_percent == original_value
 
-            # Should not be updated
-            assert batcontrol.production_offset_percent == original_value
-
-    def test_production_offset_api_set_boundary_values(self, mock_config):
+    def test_production_offset_api_set_boundary_values(
+        self, batcontrol_with_patched_factories
+    ):
         """Test setting production offset via API with boundary values"""
-        with patch('batcontrol.core.tariff_factory'), \
-             patch('batcontrol.core.inverter_factory'), \
-             patch('batcontrol.core.solar_factory'), \
-             patch('batcontrol.core.consumption_factory'):
+        batcontrol = batcontrol_with_patched_factories
 
-            batcontrol = Batcontrol(mock_config)
+        batcontrol.api_set_production_offset(0.0)
+        assert batcontrol.production_offset_percent == 0.0
 
-            # Test minimum boundary (0.0)
-            batcontrol.api_set_production_offset(0.0)
-            assert batcontrol.production_offset_percent == 0.0
+        batcontrol.api_set_production_offset(2.0)
+        assert batcontrol.production_offset_percent == 2.0
 
-            # Test maximum boundary (2.0)
-            batcontrol.api_set_production_offset(2.0)
-            assert batcontrol.production_offset_percent == 2.0
-
-            # Test normal value (1.0 = 100%)
-            batcontrol.api_set_production_offset(1.0)
-            assert batcontrol.production_offset_percent == 1.0
+        batcontrol.api_set_production_offset(1.0)
+        assert batcontrol.production_offset_percent == 1.0
 
 
 class TestProductionOffsetMqtt:
