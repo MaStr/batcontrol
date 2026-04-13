@@ -43,6 +43,49 @@ def test_factory_uses_max_charge_rate_alias_for_mqtt():
     assert inverter.max_grid_charge_rate == 4200
 
 
+def test_factory_prefers_max_grid_charge_rate_over_alias():
+    """Factory should prefer max_grid_charge_rate when both keys are present."""
+    config = {
+        "type": "mqtt",
+        "capacity": 10000,
+        "max_grid_charge_rate": 5000,
+        "max_charge_rate": 4200,
+    }
+
+    inverter = Inverter.create_inverter(config)
+
+    assert isinstance(inverter, MqttInverter)
+    assert inverter.max_grid_charge_rate == 5000
+
+
+def test_factory_accepts_mqtt_type_case_insensitively():
+    """Factory should resolve MQTT type names case-insensitively."""
+    config = {
+        "type": "MQTT",
+        "capacity": 10000,
+        "max_grid_charge_rate": 5000,
+    }
+
+    inverter = Inverter.create_inverter(config)
+
+    assert isinstance(inverter, MqttInverter)
+
+
+def test_factory_applies_mqtt_defaults():
+    """Factory should apply default MQTT configuration values."""
+    config = {
+        "type": "mqtt",
+        "capacity": 10000,
+        "max_grid_charge_rate": 5000,
+    }
+
+    inverter = Inverter.create_inverter(config)
+
+    assert isinstance(inverter, MqttInverter)
+    assert inverter.min_soc == 5
+    assert inverter.max_soc == 100
+
+
 def test_factory_rejects_unknown_type():
     """Factory should reject unknown inverter types."""
     config = {
