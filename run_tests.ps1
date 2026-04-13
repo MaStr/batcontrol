@@ -1,13 +1,12 @@
 # PowerShell version of run_tests.sh
 
-# Activate virtual environment if it exists (Windows path used by venv)
-if (Test-Path -Path .\.venv\Scripts\Activate.ps1) {
-    . .\.venv\Scripts\Activate.ps1
-}
+uv venv --python 3.13 --allow-existing
 
-# Ensure pytest and helpers are installed
-python -m pip install --upgrade pip
-python -m pip install pytest pytest-cov pytest-asyncio
+# Activate the virtual environment created by uv
+. .\.venv\Scripts\Activate.ps1
+
+# Install the package together with test dependencies from pyproject.toml
+uv pip install -e '.[test]'
 
 # Run pytest with coverage and logging options
 $params = @(
@@ -18,6 +17,6 @@ $params = @(
     '--log-cli-date-format=%Y-%m-%d %H:%M:%S'
 )
 
-python -m pytest @params
+uv run pytest @params
 
 exit $LASTEXITCODE
