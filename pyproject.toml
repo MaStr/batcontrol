@@ -33,7 +33,7 @@ version = {attr = "batcontrol.__pkginfo__.__version__"}
 
 # Configure additional tools
 [tool.uv]
-required-version = "~=0.7.0" # Pin uv to major version for stability
+required-version = ">=0.7.0" # Keep a minimum version while allowing newer uv releases
 
 # Testing configuration
 [tool.pytest.ini_options]

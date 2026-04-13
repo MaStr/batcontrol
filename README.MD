@@ -126,12 +126,9 @@ client.loop_forever()
 ```sh
 git clone https://github.com/MaStr/batcontrol.git
 cd batcontrol
-```
-
-
-virtualenv venv
-source venv/bin/activate
-pip install .
+uv venv --python 3.13 --allow-existing
+source .venv/bin/activate
+uv pip install .
 ```
 
 ## Testing:
@@ -139,8 +136,8 @@ pip install .
 The project uses pytest for running tests. To run the tests:
 
 ```sh
-# Install test dependencies
-pip install pytest pytest-cov
+# Install the package together with test dependencies
+uv pip install -e '.[test]'
 
 # Run tests
 ./run_tests.sh
@@ -275,17 +272,17 @@ To uninstall batcontrol and restore the inverter settings follow these steps:
 
 # Local development
 
-For running batcontrol off the repository for development puroposes, it is required to uses pip with [Developermode](https://setuptools.pypa.io/en/latest/userguide/development_mode.html)
+For running batcontrol off the repository for development purposes, it is recommended to use an editable install.
 
 ```sh
 git clone https://github.com/MaStr/batcontrol.git
 cd batcontrol
-python -m venv .venv
+uv venv --python 3.13 --allow-existing
 # Activate your environment with:
 #      `source .venv/bin/activate` on Unix/macOS
 # or   `.venv\Scripts\activate` on Windows
 
-pip install --editable . 
+uv pip install --editable .
 
 # Now you have access to your package
 # as if it was installed in .venv
