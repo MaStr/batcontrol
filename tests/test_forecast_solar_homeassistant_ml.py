@@ -53,9 +53,12 @@ def ha_entity_state(timezone):
     for offset, wh in enumerate(wh_values):
         start = now + datetime.timedelta(hours=offset)
         end = now + datetime.timedelta(hours=offset + 1)
+        # Use isoformat() so the offset is rendered as '+02:00' (with colon).
+        # Python 3.9/3.10's fromisoformat() rejects the '+0200' form that
+        # strftime('%z') emits.
         forecast.append({
-            "start": start.strftime("%Y-%m-%dT%H:%M:%S%z"),
-            "end": end.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "start": start.isoformat(),
+            "end": end.isoformat(),
             "value": wh,
         })
 
@@ -437,9 +440,10 @@ class TestEdgeCases:
         def _slot(offset, value):
             start = now + datetime.timedelta(hours=offset)
             end = start + datetime.timedelta(hours=1)
+            # isoformat() renders '+02:00' which is required by Python 3.9/3.10
             return {
-                "start": start.strftime("%Y-%m-%dT%H:%M:%S%z"),
-                "end": end.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "start": start.isoformat(),
+                "end": end.isoformat(),
                 "value": value,
             }
 
@@ -468,9 +472,10 @@ class TestEdgeCases:
         def _slot(offset, value):
             start = now + datetime.timedelta(hours=offset)
             end = start + datetime.timedelta(hours=1)
+            # isoformat() renders '+02:00' which is required by Python 3.9/3.10
             return {
-                "start": start.strftime("%Y-%m-%dT%H:%M:%S%z"),
-                "end": end.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "start": start.isoformat(),
+                "end": end.isoformat(),
                 "value": value,
             }
 
