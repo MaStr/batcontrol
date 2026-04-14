@@ -161,8 +161,12 @@ class MqttApi:
                 self.callbacks[message.topic]['function'](
                     self.callbacks[message.topic]['convert'](payload)
                 )
-            except (ValueError, TypeError) as e:
-                logger.error('Error in callback %s : %s', message.topic, e)
+            except (ValueError, TypeError, UnicodeDecodeError) as e:
+                logger.error(
+                    'Error in callback %s for payload type %s: %s',
+                    message.topic,
+                    type(message.payload).__name__,
+                    e)
         else:
             logger.warning('No callback registered for %s', message.topic)
 

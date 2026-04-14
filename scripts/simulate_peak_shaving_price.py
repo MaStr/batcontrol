@@ -200,7 +200,7 @@ wasted_cheap_base  = 0.0   # feed-in during cheap hours (wasted cheap PV)
 wasted_cheap_shav  = 0.0
 
 ROW_FMT = (
-    "{hour:02d}:00  {price:>6.3f}€  "
+    "{hour:02d}:00  {price:>6.3f} EUR  "
     "SOC_base:{soc_base:>6.0f}Wh({soc_base_pct:>3.0f}%)  "
     "SOC_shav:{soc_shav:>6.0f}Wh({soc_shav_pct:>3.0f}%)  "
     "limit:{limit:>6}W  "

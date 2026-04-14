@@ -49,14 +49,14 @@ CONSUMPTION_W  = 400         # W   constant house consumption
 # Adjust this value to explore behaviour with an earlier target (e.g. 14).
 TARGET_HOUR    = 17
 
-PRICE_LIMIT    = 0.05        # EUR/kWh – used only for combined/price modes
-FLAT_PRICE     = 0.30        # EUR/kWh – flat tariff for the whole day
+PRICE_LIMIT    = 0.05        # EUR/kWh - used only for combined/price modes
+FLAT_PRICE     = 0.30        # EUR/kWh - flat tariff for the whole day
 
 # Initial battery state (morning, mostly empty)
 INITIAL_SOC_WH = 1_500       # Wh
 
 # ---------------------------------------------------------------------------
-# 24-hour PV production profile (W) – typical German summer day
+# 24-hour PV production profile (W) - typical German summer day
 # Entries are average W for each hour 0..23.
 # Production ends near 0 at hour 19 (~10 W), full darkness after that.
 # ---------------------------------------------------------------------------
