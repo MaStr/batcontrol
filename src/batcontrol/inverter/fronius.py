@@ -158,7 +158,7 @@ def get_api_config(fw_version: version) -> FroniusApiConfig:
         if config.from_version <= fw_version < config.to_version:
             return config
     raise RuntimeError(
-        f"Keine API Konfiguration für Firmware-Version {fw_version}")
+        f"Keine API Konfiguration fuer Firmware-Version {fw_version}")
 
 
 class FroniusWR(InverterBaseclass):

@@ -60,20 +60,20 @@ def _upsample_linear(hourly_forecast: Dict[int, float]) -> Dict[int, float]:
     - Uses linear power interpolation, then converts to energy
 
     Method:
-    1. Calculate average power per hour (Wh → W)
+    1. Calculate average power per hour (Wh -> W)
     2. Interpolate power linearly between hours
-    3. Convert interpolated power back to energy (W → Wh for 15 min)
+    3. Convert interpolated power back to energy (W -> Wh for 15 min)
 
     Example:
-        Hour 0: 1000 Wh → avg power = 1000 W
-        Hour 1: 2000 Wh → avg power = 2000 W
+        Hour 0: 1000 Wh -> avg power = 1000 W
+        Hour 1: 2000 Wh -> avg power = 2000 W
 
         15-min intervals (linear power ramp):
-        [0]: Power = 1000 W → Energy = 1000 * 0.25 = 250 Wh
-        [1]: Power = 1250 W → Energy = 1250 * 0.25 = 312.5 Wh
-        [2]: Power = 1500 W → Energy = 1500 * 0.25 = 375 Wh
-        [3]: Power = 1750 W → Energy = 1750 * 0.25 = 437.5 Wh
-        [4]: Power = 2000 W → Energy = 2000 * 0.25 = 500 Wh (next hour begins)
+        [0]: Power = 1000 W -> Energy = 1000 * 0.25 = 250 Wh
+        [1]: Power = 1250 W -> Energy = 1250 * 0.25 = 312.5 Wh
+        [2]: Power = 1500 W -> Energy = 1500 * 0.25 = 375 Wh
+        [3]: Power = 1750 W -> Energy = 1750 * 0.25 = 437.5 Wh
+        [4]: Power = 2000 W -> Energy = 2000 * 0.25 = 500 Wh (next hour begins)
     """
     forecast_15min = {}
     max_hour = max(hourly_forecast.keys())
@@ -118,8 +118,8 @@ def _upsample_constant(hourly_forecast: Dict[int, float]) -> Dict[int, float]:
     doesn't make physical sense.
 
     Example:
-        Hour 0: 1000 Wh → 250, 250, 250, 250 Wh per 15 min
-        Hour 1: 2000 Wh → 500, 500, 500, 500 Wh per 15 min
+        Hour 0: 1000 Wh -> 250, 250, 250, 250 Wh per 15 min
+        Hour 1: 2000 Wh -> 500, 500, 500, 500 Wh per 15 min
     """
     forecast_15min = {}
 

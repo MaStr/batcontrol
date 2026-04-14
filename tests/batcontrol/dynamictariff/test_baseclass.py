@@ -255,23 +255,23 @@ class TestTibberProvider:
 
 
 class TestEvccProvider:
-    """Tests for EVCC provider"""
+    """Tests for evcc provider"""
 
     @pytest.fixture
     def timezone(self):
         return pytz.timezone('Europe/Berlin')
 
     def test_evcc_initialization(self, timezone):
-        """Test EVCC provider initialization"""
+        """Test evcc provider initialization"""
         from batcontrol.dynamictariff.evcc import Evcc
 
         provider = Evcc(timezone, 'http://evcc.local/api/tariff/grid', 60,
                         target_resolution=60)
-        assert provider.native_resolution == 15  # EVCC native is 15-min
+        assert provider.native_resolution == 15  # evcc native is 15-min
         assert provider.target_resolution == 60
 
     def test_evcc_15min_target(self, timezone):
-        """Test EVCC with 15-min target (no conversion needed)"""
+        """Test evcc with 15-min target (no conversion needed)"""
         from batcontrol.dynamictariff.evcc import Evcc
 
         provider = Evcc(timezone, 'http://evcc.local/api/tariff/grid', 60,

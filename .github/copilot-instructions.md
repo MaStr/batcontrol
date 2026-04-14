@@ -4,6 +4,7 @@ This is a Python based repository providing an application for controlling batte
 
 ### Required Before Each Commit
 
+- Only use ASCII characters in code, log messages, and documentation. Avoid non-ASCII characters to ensure compatibility and readability across different environments.
 - Remove excessive whitespaces.
 - Follow PEP8 standards. Use autopep8 for that.
 - Check against pylint. Target score is like 9.0-9.5, if you can achieve 10, do it.

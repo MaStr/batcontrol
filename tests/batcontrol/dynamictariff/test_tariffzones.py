@@ -212,7 +212,7 @@ def test_zone3_price_without_hours_raises():
 
 
 # ---------------------------------------------------------------------------
-# _get_prices_native — 2-zone
+# _get_prices_native - 2-zone
 # ---------------------------------------------------------------------------
 
 def test_get_prices_native_returns_48_hours():
