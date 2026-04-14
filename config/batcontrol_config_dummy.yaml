@@ -164,7 +164,7 @@ pvinstallations:
   # - name: HA Solar ML Forecast
   #   base_url: ws://homeassistant.local:8123  # Your HomeAssistant URL
   #   api_token: eyJ...                           # Long-lived access token from HA Profile
-  #   entity_id: sensor.solar_forecast_ml_prognose_nachste_stunde  # Forecast sensor entity
+  #   entity_id: sensor.solar_forecast_ml_evcc_solar_prognose  # Forecast sensor entity
   #   sensor_unit: auto                           # Options: 'auto' (detect), 'Wh', or 'kWh'
   #   cache_ttl_hours: 24.0                       # Cache duration in hours
 
