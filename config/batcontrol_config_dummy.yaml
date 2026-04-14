@@ -74,10 +74,15 @@ utility:
   vat: 0.19 # only required for awattar and energyforecast
   fees: 0.015 # only required for awattar and energyforecast
   markup: 0.03 # only required for awattar and energyforecast
+  # tariff_zones supports 1, 2 or 3 zones and doubles as a static single-price mode.
+  # Single zone (static price): set only tariff_zone_1; zone_1_hours may be omitted
+  # and defaults to all 24 hours. Example:
+  #   type: tariff_zones
+  #   tariff_zone_1: 0.30   # flat price for the whole day, Euro/kWh incl. vat/fees
   # tariff_zone_1: 0.2733 # only required for tariff_zones, Euro/kWh incl. vat/fees (peak hours)
   # zone_1_hours: 7-22 # hours assigned to zone 1; supports ranges (7-22), singles (7), or mixed (0-5,6,7)
-  # tariff_zone_2: 0.1734 # only required for tariff_zones, Euro/kWh incl. vat/fees (off-peak hours)
-  # zone_2_hours: 0-6,23 # hours assigned to zone 2 (must cover remaining hours)
+  # tariff_zone_2: 0.1734 # optional: second zone price, Euro/kWh incl. vat/fees (off-peak hours)
+  # zone_2_hours: 0-6,23 # optional: hours assigned to zone 2 (required if tariff_zone_2 is set)
   # tariff_zone_3: 0.2100 # optional third zone price
   # zone_3_hours: 17-20 # optional hours for zone 3 (must not overlap with zone 1 or 2)
   # apikey: YOUR_API_KEY # MANDATORY for energyforecast and tibber. Uncomment and set if using those providers.
