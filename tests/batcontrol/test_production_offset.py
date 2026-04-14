@@ -67,7 +67,7 @@ class TestProductionOffset:
         }
 
     @pytest.fixture
-    def batcontrol_with_patched_factories(self, mock_config, mocker):
+    def make_batcontrol(self, mocker):
         core_module = 'batcontrol.core'
 
         mocker.patch(f'{core_module}.tariff_factory')
@@ -75,22 +75,29 @@ class TestProductionOffset:
         mocker.patch(f'{core_module}.solar_factory')
         mocker.patch(f'{core_module}.consumption_factory')
 
-        bc = Batcontrol(mock_config)
+        created_instances = []
 
-        yield bc
+        def _make(config):
+            bc = Batcontrol(config)
+            created_instances.append(bc)
+            return bc
 
-        bc.shutdown()
+        yield _make
 
-    def test_production_offset_initialization_default(
-        self, mock_config, batcontrol_with_patched_factories
-    ):
+        for bc in created_instances:
+            bc.shutdown()
+
+    @pytest.fixture
+    def batcontrol_with_patched_factories(self, mock_config, make_batcontrol):
+        yield make_batcontrol(mock_config)
+
+    def test_production_offset_initialization_default(self, mock_config, make_batcontrol):
         """Test that production offset initializes with default value when not configured"""
         del mock_config['battery_control_expert']['production_offset_percent']
 
-        batcontrol = Batcontrol(mock_config)
+        batcontrol = make_batcontrol(mock_config)
 
         assert batcontrol.production_offset_percent == 1.0
-        batcontrol.shutdown()
 
     def test_production_offset_initialization_from_config(
         self, batcontrol_with_patched_factories
