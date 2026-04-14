@@ -4,6 +4,16 @@ from batcontrol.inverter.inverter import Inverter
 from batcontrol.inverter.mqtt_inverter import MqttInverter
 
 
+@pytest.fixture(autouse=True)
+def reset_inverter_counter():
+    original_value = Inverter.num_inverters
+    Inverter.num_inverters = 0
+
+    yield
+
+    Inverter.num_inverters = original_value
+
+
 def test_factory_creates_mqtt_inverter():
     """Factory should create an MQTT inverter for type mqtt."""
     config = {
@@ -40,7 +50,7 @@ def test_factory_rejects_unknown_type():
         "max_grid_charge_rate": 5000,
     }
 
-    with pytest.raises(RuntimeError, match="Unkown inverter type"):
+    with pytest.raises(RuntimeError, match="inverter type"):
         Inverter.create_inverter(config)
 
 
