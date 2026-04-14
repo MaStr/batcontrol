@@ -6,7 +6,11 @@ from batcontrol.inverter.inverter import Inverter
 
 
 class TestMqttInverter:
-    """Test the MQTT inverter implementation"""
+    """Test the MQTT inverter implementation.
+
+    These tests are implementation-specific, but they also make the shared
+    inverter command semantics explicit for MQTT-backed control.
+    """
 
     def test_mqtt_inverter_initialization(self):
         """Test that MQTT inverter initializes with correct configuration"""
@@ -177,8 +181,8 @@ class TestMqttInverter:
         # Verify max_charge_rate was updated
         assert inverter.max_grid_charge_rate == 6000
 
-    def test_set_mode_force_charge_publishes_command(self):
-        """Test that force charge mode publishes correct MQTT commands"""
+    def test_force_charge_matches_inverter_mode_command_contract(self):
+        """Test that MQTT force charge matches the expected inverter command contract."""
         config = {
             'base_topic': 'inverter',
             'capacity': 10000,
@@ -207,8 +211,8 @@ class TestMqttInverter:
         rate_call = call('inverter/command/charge_rate', '3000', qos=1, retain=False)
         assert rate_call in mock_client.publish.call_args_list
 
-    def test_set_mode_allow_discharge_publishes_command(self):
-        """Test that allow discharge mode publishes correct MQTT command"""
+    def test_allow_discharge_matches_inverter_mode_command_contract(self):
+        """Test that MQTT allow discharge matches the expected inverter command contract."""
         config = {
             'base_topic': 'inverter',
             'capacity': 10000,
@@ -234,8 +238,8 @@ class TestMqttInverter:
             retain=False
         )
 
-    def test_set_mode_avoid_discharge_publishes_command(self):
-        """Test that avoid discharge mode publishes correct MQTT command"""
+    def test_avoid_discharge_matches_inverter_mode_command_contract(self):
+        """Test that MQTT avoid discharge matches the expected inverter command contract."""
         config = {
             'base_topic': 'inverter',
             'capacity': 10000,
@@ -261,8 +265,8 @@ class TestMqttInverter:
             retain=False
         )
 
-    def test_set_mode_limit_battery_charge_publishes_commands(self):
-        """Test that limit battery charge mode publishes correct MQTT commands"""
+    def test_limit_battery_charge_matches_inverter_mode_command_contract(self):
+        """Test that MQTT limit battery charge matches the expected inverter command contract."""
         config = {
             'base_topic': 'inverter',
             'capacity': 10000,

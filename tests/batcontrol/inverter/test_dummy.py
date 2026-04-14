@@ -6,7 +6,12 @@ from batcontrol.inverter.resilient_wrapper import ResilientInverterWrapper
 
 
 class TestDummyInverter:
-    """Test the Dummy inverter implementation"""
+    """Test the Dummy inverter implementation.
+
+    These tests are implementation-specific, but they also act as one anchor
+    for the shared inverter mode semantics expected from backend
+    implementations.
+    """
 
     def test_dummy_initialization(self):
         """Test that dummy inverter initializes with correct default values"""
@@ -19,8 +24,8 @@ class TestDummyInverter:
         assert dummy.min_soc == 10
         assert dummy.max_soc == 95
 
-    def test_dummy_mode_changes(self):
-        """Test that mode changes work correctly"""
+    def test_dummy_implements_expected_inverter_mode_semantics(self):
+        """Test that Dummy implements the expected shared inverter mode semantics."""
         config = {'max_grid_charge_rate': 5000}
         dummy = Dummy(config)
 
