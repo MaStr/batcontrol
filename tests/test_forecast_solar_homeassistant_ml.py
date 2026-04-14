@@ -39,20 +39,23 @@ def pv_installations():
 def ha_entity_state(timezone):
     """Provide sample HomeAssistant entity state in evcc Solar-Prognose format.
 
-    Produces a rolling 14-hour forecast starting at the current hour (in the
-    test timezone, Europe/Berlin) so that the baseclass length validation
-    (>= 12 consecutive intervals) is satisfied regardless of when the tests
-    run.
+    The fixture freezes the provider module's ``datetime.datetime.now`` at a
+    fixed reference hour and builds a 14-hour forecast anchored at the same
+    instant. This keeps the fixture and the parser on the exact same "now"
+    and makes the offset mapping deterministic (no flakiness at hour or DST
+    boundaries).
+
+    April 2, 2026 is safely past the DST spring-forward in Europe/Berlin
+    (March 29), matching the reference hour used elsewhere in this file.
     """
-    now = datetime.datetime.now(timezone).replace(
-        minute=0, second=0, microsecond=0)
+    fixed_now = timezone.localize(datetime.datetime(2026, 4, 2, 10, 0, 0))
     forecast = []
     # Values chosen so forecast[0] == 879.0, forecast[1] == 1265.0, ... (in Wh)
     wh_values = [879.0, 1265.0, 1688.0, 1571.0, 1578.0, 990.0, 489.0,
                  268.0, 17.0, 17.0, 17.0, 17.0, 17.0, 17.0]
     for offset, wh in enumerate(wh_values):
-        start = now + datetime.timedelta(hours=offset)
-        end = now + datetime.timedelta(hours=offset + 1)
+        start = fixed_now + datetime.timedelta(hours=offset)
+        end = fixed_now + datetime.timedelta(hours=offset + 1)
         # Use isoformat() so the offset is rendered as '+02:00' (with colon).
         # Python 3.9/3.10's fromisoformat() rejects the '+0200' form that
         # strftime('%z') emits.
@@ -62,7 +65,7 @@ def ha_entity_state(timezone):
             "value": wh,
         })
 
-    return {
+    entity_state = {
         "entity_id": "sensor.solar_forecast_ml_evcc_solar_prognose",
         "state": f"{len(forecast)} slots",
         "attributes": {
@@ -73,6 +76,14 @@ def ha_entity_state(timezone):
         "last_changed": "2026-02-05T08:00:44.824837+00:00",
         "last_updated": "2026-02-05T08:00:44.824837+00:00"
     }
+
+    with patch(
+        'src.batcontrol.forecastsolar.forecast_homeassistant_ml.datetime'
+    ) as mock_dt:
+        mock_dt.datetime.now.return_value = fixed_now
+        # Keep the real fromisoformat so the parser can still decode strings.
+        mock_dt.datetime.fromisoformat = datetime.datetime.fromisoformat
+        yield entity_state
 
 
 @pytest.fixture
@@ -479,7 +490,7 @@ class TestEdgeCases:
                 "value": value,
             }
 
-        # Values interpreted as kWh — conversion factor 1000 applied.
+        # Values interpreted as kWh - conversion factor 1000 applied.
         attributes = {"forecast": [_slot(0, 100.0), _slot(1, 50.5)]}
 
         forecast = provider._parse_forecast_from_attributes(attributes)
@@ -652,11 +663,11 @@ class TestEvccForecastFormat:
                 # Invalid start timestamp
                 {"start": "not-a-date",
                     "end": self._hour_str(timezone, 2), "value": 500.0},
-                # Missing 'end' key → skipped (end is required)
+                # Missing 'end' key -> skipped (end is required)
                 {"start": self._hour_str(timezone, 2), "value": 2000.0},
-                # Missing start → skipped
+                # Missing start -> skipped
                 {"end": self._hour_str(timezone, 3), "value": 300.0},
-                # Missing value → skipped
+                # Missing value -> skipped
                 {"start": self._hour_str(timezone, 4),
                  "end": self._hour_str(timezone, 5)},
                 # Another valid entry
@@ -668,9 +679,9 @@ class TestEvccForecastFormat:
         forecast = provider._parse_forecast_from_attributes(attributes)
 
         assert forecast[0] == 1000.0      # valid entry at offset 0
-        assert 2 not in forecast or forecast[2] == 0.0  # skipped (no end)
+        assert forecast[2] == 0.0         # skipped (no end), zero-filled
         assert forecast[6] == 3000.0      # valid entry at offset 6
-        # Zero-filled gaps between 0 and 6 → consecutive keys 0..6
+        # Zero-filled gaps between 0 and 6 -> consecutive keys 0..6
         assert len(forecast) == 7
         for hour in range(7):
             assert hour in forecast

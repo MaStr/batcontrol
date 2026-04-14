@@ -461,7 +461,7 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
         end_str = entry.get("end")
         value = entry.get("value")
 
-        # evcc entries require start, end and value — entries missing any of
+        # evcc entries require start, end and value - entries missing any of
         # these fields are not valid and must be skipped.
         if start_str is None or end_str is None or value is None:
             return None
@@ -560,7 +560,7 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
         Only the evcc Solar Forecast format is supported: a 'forecast' list
         with {start, end, value} entries (e.g. emitted by
         sensor.solar_forecast_ml_evcc_solar_prognose). Entries must include
-        all three fields — start, end and value — otherwise they are skipped.
+        all three fields - start, end and value - otherwise they are skipped.
         Absolute timestamps are mapped to hour offsets relative to the
         current hour.
 
