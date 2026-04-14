@@ -1,21 +1,29 @@
 """Tariff_zones provider
 
 Simple dynamic tariff provider that assigns a fixed price to each hour of the day
-using up to three configurable zones.
+using one, two, or three configurable zones.
+
+This doubles as a "static price mode": by configuring only zone 1 (without
+zone_1_hours, or with zone_1_hours covering all 24 hours), every hour of the
+day gets the same fixed price.
 
 Config options (in utility config for provider):
 - type: tariff_zones
 - tariff_zone_1: price for zone 1 hours (float, Euro/kWh incl. VAT/fees, required)
-- zone_1_hours: comma-separated list of hours assigned to zone 1, e.g. "7,8,9,10"
-- tariff_zone_2: price for zone 2 hours (float, Euro/kWh incl. VAT/fees, required)
-- zone_2_hours: comma-separated list of hours assigned to zone 2, e.g. "0,1,2,3,4,5,6"
+- zone_1_hours: hours assigned to zone 1 (optional; defaults to all 24 hours
+                when no other zones are configured — enables single-price mode)
+- tariff_zone_2: price for zone 2 hours (float, optional)
+- zone_2_hours: hours assigned to zone 2 (required if tariff_zone_2 is set)
 - tariff_zone_3: price for zone 3 hours (float, optional)
-- zone_3_hours: comma-separated list of hours assigned to zone 3 (optional)
+- zone_3_hours: hours assigned to zone 3 (required if tariff_zone_3 is set)
 
 Rules:
+- tariff_zone_1 is always required.
 - Every hour 0-23 must appear in exactly one zone (ValueError if any hour is missing).
 - No hour may appear more than once across all zones (ValueError on duplicate).
+- zone_2_hours and tariff_zone_2 must both be set or both omitted.
 - zone_3_hours and tariff_zone_3 must both be set or both omitted.
+- In single-zone mode, zone_1_hours defaults to all 24 hours if unset.
 
 The class produces hourly prices (native_resolution=60) for the next 48
 hours aligned to the current hour. The baseclass will handle conversion to
@@ -41,7 +49,12 @@ logger = logging.getLogger(__name__)
 
 
 class TariffZones(DynamicTariffBaseclass):
-    """Multi-zone tariff with up to 3 zones; each zone owns a set of hours."""
+    """Static/zone tariff with 1 to 3 zones; each zone owns a set of hours.
+
+    When only zone 1 is configured, this acts as a flat static price for all 24
+    hours. When zone 2 (and optionally zone 3) is added, the day is split
+    across the zones' hour assignments.
+    """
 
     def __init__(
             self,
@@ -92,12 +105,13 @@ class TariffZones(DynamicTariffBaseclass):
         """Raise RuntimeError/ValueError if the zone configuration is incomplete or invalid."""
         if self._tariff_zone_1 is None:
             raise RuntimeError('[TariffZones] tariff_zone_1 must be set')
-        if self._zone_1_hours is None:
-            raise RuntimeError('[TariffZones] zone_1_hours must be set')
-        if self._tariff_zone_2 is None:
-            raise RuntimeError('[TariffZones] tariff_zone_2 must be set')
-        if self._zone_2_hours is None:
-            raise RuntimeError('[TariffZones] zone_2_hours must be set')
+
+        zone2_hours_set = self._zone_2_hours is not None
+        zone2_price_set = self._tariff_zone_2 is not None
+        if zone2_hours_set != zone2_price_set:
+            raise RuntimeError(
+                '[TariffZones] zone_2_hours and tariff_zone_2 must both be set or both omitted'
+            )
 
         zone3_hours_set = self._zone_3_hours is not None
         zone3_price_set = self._tariff_zone_3 is not None
@@ -105,6 +119,16 @@ class TariffZones(DynamicTariffBaseclass):
             raise RuntimeError(
                 '[TariffZones] zone_3_hours and tariff_zone_3 must both be set or both omitted'
             )
+
+        # Single-zone (static price) mode: if zone 1 is the only configured
+        # zone and no explicit hours are given, default to all 24 hours.
+        if self._zone_1_hours is None:
+            if not zone2_price_set and not zone3_price_set:
+                self._zone_1_hours = list(range(24))
+            else:
+                raise RuntimeError(
+                    '[TariffZones] zone_1_hours must be set when additional zones are configured'
+                )
 
         # Check for duplicate hours across all zones
         seen = {}

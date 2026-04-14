@@ -131,23 +131,36 @@ class DynamicTariff:
                 selected_tariff.upgrade_48h_to_96h()
 
         elif provider.lower() == 'tariff_zones':
-            required_fields = ['tariff_zone_1', 'zone_1_hours', 'tariff_zone_2', 'zone_2_hours']
-            for field in required_fields:
-                if field not in config:
+            # Only tariff_zone_1 is strictly required. A single-zone
+            # configuration acts as a static flat price for all 24 hours.
+            if 'tariff_zone_1' not in config:
+                raise RuntimeError(
+                    '[DynTariff] Please include tariff_zone_1 in your configuration file'
+                )
+            # zone_2 and zone_3 are optional, but price and hours must be
+            # provided together for each additional zone.
+            for zone in (2, 3):
+                price_key = f'tariff_zone_{zone}'
+                hours_key = f'zone_{zone}_hours'
+                if (price_key in config) != (hours_key in config):
                     raise RuntimeError(
-                        f'[DynTariff] Please include {field} in your configuration file'
+                        f'[DynTariff] {price_key} and {hours_key} must both be '
+                        'provided or both omitted'
                     )
-            zone_3_hours = config.get('zone_3_hours')
+            zone_1_hours = config.get('zone_1_hours')
+            tariff_zone_2 = config.get('tariff_zone_2')
+            zone_2_hours = config.get('zone_2_hours')
             tariff_zone_3 = config.get('tariff_zone_3')
+            zone_3_hours = config.get('zone_3_hours')
             selected_tariff = TariffZones(
                 timezone,
                 min_time_between_api_calls,
                 delay_evaluation_by_seconds,
                 target_resolution=target_resolution,
                 tariff_zone_1=float(config['tariff_zone_1']),
-                zone_1_hours=config['zone_1_hours'],
-                tariff_zone_2=float(config['tariff_zone_2']),
-                zone_2_hours=config['zone_2_hours'],
+                zone_1_hours=zone_1_hours,
+                tariff_zone_2=float(tariff_zone_2) if tariff_zone_2 is not None else None,
+                zone_2_hours=zone_2_hours,
                 tariff_zone_3=float(tariff_zone_3) if tariff_zone_3 is not None else None,
                 zone_3_hours=zone_3_hours,
             )

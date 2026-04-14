@@ -140,8 +140,32 @@ def test_missing_prices_raises():
 
 
 def test_missing_hours_raises():
+    """zone_2 has a price but no hours — must fail the paired-option check."""
     t = TariffZones(make_tz(), tariff_zone_1=0.27, tariff_zone_2=0.17)
+    with pytest.raises(RuntimeError, match='zone_2_hours and tariff_zone_2'):
+        t._get_prices_native()
+
+
+def test_zone1_hours_missing_with_additional_zone_raises():
+    """If any extra zone is configured, zone_1_hours must be explicit."""
+    t = TariffZones(
+        make_tz(),
+        tariff_zone_1=0.27,
+        tariff_zone_2=0.17,
+        zone_2_hours=list(range(0, 12)),
+    )
     with pytest.raises(RuntimeError, match='zone_1_hours'):
+        t._get_prices_native()
+
+
+def test_zone2_hours_without_price_raises():
+    t = TariffZones(
+        make_tz(),
+        tariff_zone_1=0.27, zone_1_hours=HOURS_PEAK,
+        zone_2_hours=HOURS_OFFPEAK,
+        # tariff_zone_2 intentionally omitted
+    )
+    with pytest.raises(RuntimeError, match='zone_2_hours and tariff_zone_2'):
         t._get_prices_native()
 
 
@@ -207,6 +231,44 @@ def test_get_prices_native_correct_zone_assignment():
         h = (base + datetime.timedelta(hours=rel_hour)).hour
         expected = t.tariff_zone_1 if h in HOURS_PEAK else t.tariff_zone_2
         assert price == pytest.approx(expected)
+
+
+# ---------------------------------------------------------------------------
+# _get_prices_native — single-zone (static price) mode
+# ---------------------------------------------------------------------------
+
+def test_single_zone_defaults_to_all_hours():
+    """With only tariff_zone_1 set, zone_1_hours defaults to all 24 hours."""
+    t = TariffZones(make_tz(), tariff_zone_1=0.30)
+    prices = t._get_prices_native()
+    assert len(prices) == 48
+    for price in prices.values():
+        assert price == pytest.approx(0.30)
+    assert t.zone_1_hours == list(range(24))
+
+
+def test_single_zone_with_explicit_full_day_hours():
+    """Explicitly configuring zone_1_hours to cover all 24 hours is also valid."""
+    t = TariffZones(
+        make_tz(),
+        tariff_zone_1=0.25,
+        zone_1_hours='0-23',
+    )
+    prices = t._get_prices_native()
+    assert len(prices) == 48
+    for price in prices.values():
+        assert price == pytest.approx(0.25)
+
+
+def test_single_zone_partial_hours_raises():
+    """zone_1 alone with only a subset of hours leaves the rest uncovered."""
+    t = TariffZones(
+        make_tz(),
+        tariff_zone_1=0.25,
+        zone_1_hours='0-11',
+    )
+    with pytest.raises(ValueError, match='not assigned'):
+        t._get_prices_native()
 
 
 # ---------------------------------------------------------------------------
@@ -299,5 +361,31 @@ def test_factory_missing_required_field_raises():
         # zone_2_hours missing
         'tariff_zone_2': 0.17,
     }
-    with pytest.raises(RuntimeError, match='zone_2_hours'):
+    with pytest.raises(RuntimeError, match='tariff_zone_2 and zone_2_hours'):
+        DynamicTariff.create_tarif_provider(config, make_tz(), 0, 0)
+
+
+def test_factory_single_zone_static_price():
+    """tariff_zones with only tariff_zone_1 acts as a static single price."""
+    config = {
+        'type': 'tariff_zones',
+        'tariff_zone_1': 0.30,
+    }
+    provider = DynamicTariff.create_tarif_provider(config, make_tz(), 0, 0)
+    assert isinstance(provider, TariffZones)
+    assert provider.tariff_zone_1 == pytest.approx(0.30)
+    assert provider.tariff_zone_2 is None
+    assert provider.tariff_zone_3 is None
+    prices = provider._get_prices_native()
+    assert len(prices) == 48
+    for price in prices.values():
+        assert price == pytest.approx(0.30)
+
+
+def test_factory_requires_tariff_zone_1():
+    config = {
+        'type': 'tariff_zones',
+        # tariff_zone_1 missing
+    }
+    with pytest.raises(RuntimeError, match='tariff_zone_1'):
         DynamicTariff.create_tarif_provider(config, make_tz(), 0, 0)
