@@ -147,6 +147,18 @@ class DynamicTariff:
                         f'[DynTariff] {hours_key} and {price_key} must both be '
                         'set or both omitted'
                     )
+            # Once any additional zone is configured, zone_1_hours must be
+            # provided explicitly (the all-24-hours default only applies in
+            # single-zone static mode). Fail fast at factory time instead of
+            # deferring to the first price fetch.
+            extra_zone_configured = any(
+                f'tariff_zone_{z}' in config for z in (2, 3)
+            )
+            if extra_zone_configured and 'zone_1_hours' not in config:
+                raise RuntimeError(
+                    '[DynTariff] zone_1_hours must be set when additional '
+                    'zones (tariff_zone_2 or tariff_zone_3) are configured'
+                )
             zone_1_hours = config.get('zone_1_hours')
             tariff_zone_2 = config.get('tariff_zone_2')
             zone_2_hours = config.get('zone_2_hours')

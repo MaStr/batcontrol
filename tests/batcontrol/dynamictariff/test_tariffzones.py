@@ -382,6 +382,19 @@ def test_factory_single_zone_static_price():
         assert price == pytest.approx(0.30)
 
 
+def test_factory_requires_zone_1_hours_when_extra_zones_configured():
+    """With zone 2 configured, zone_1_hours must be provided at factory time."""
+    config = {
+        'type': 'tariff_zones',
+        'tariff_zone_1': 0.27,
+        # zone_1_hours intentionally omitted
+        'tariff_zone_2': 0.17,
+        'zone_2_hours': '0-6,23',
+    }
+    with pytest.raises(RuntimeError, match='zone_1_hours'):
+        DynamicTariff.create_tarif_provider(config, make_tz(), 0, 0)
+
+
 def test_factory_requires_tariff_zone_1():
     config = {
         'type': 'tariff_zones',
