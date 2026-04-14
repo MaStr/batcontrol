@@ -21,7 +21,6 @@ Implementation note:
 """
 
 import threading
-import time
 import logging
 import schedule
 from typing import Callable, Optional
@@ -29,31 +28,33 @@ from typing import Callable, Optional
 logger = logging.getLogger(__name__)
 
 
-# Private module-level scheduler instance.  Using our own instance (instead of
-# ``schedule.default_scheduler``) keeps our scheduled jobs isolated from any
-# other consumer of the ``schedule`` library and makes it possible to fully
-# reset the state between tests.
-_scheduler: schedule.Scheduler = schedule.Scheduler()
+# Private module-level job registry.  Using our own ``schedule.Scheduler``
+# instance (instead of ``schedule.default_scheduler``) keeps our scheduled
+# jobs isolated from any other consumer of the ``schedule`` library and makes
+# it possible to fully reset the state between tests.  The variable is named
+# ``_job_registry`` on purpose so it cannot be confused with either the
+# ``schedule`` library module or the ``SchedulerThread`` class below.
+_job_registry: schedule.Scheduler = schedule.Scheduler()
 
 
-def _get_scheduler() -> schedule.Scheduler:
-    """Return the module-level scheduler instance."""
-    return _scheduler
+def _get_job_registry() -> schedule.Scheduler:
+    """Return the module-level ``schedule.Scheduler`` instance used by batcontrol."""
+    return _job_registry
 
 
 def reset_scheduler() -> schedule.Scheduler:
-    """Replace the internal scheduler with a fresh instance.
+    """Replace the internal job registry with a fresh ``schedule.Scheduler``.
 
     This is mainly useful in tests to guarantee a clean slate between test
     cases, even if a previous test forgot to clear its jobs.
 
     Returns:
-        The new scheduler instance.
+        The new ``schedule.Scheduler`` instance.
     """
-    global _scheduler
-    logger.debug("Resetting scheduler instance")
-    _scheduler = schedule.Scheduler()
-    return _scheduler
+    global _job_registry
+    logger.debug("Resetting batcontrol job registry")
+    _job_registry = schedule.Scheduler()
+    return _job_registry
 
 
 # Global scheduling functions that can be called from any context
@@ -81,7 +82,7 @@ def schedule_every(interval: int, unit: str, job: Callable, job_name: str = ""):
         )
 
     # Create the scheduler based on the unit
-    task = _get_scheduler().every(interval)
+    task = _get_job_registry().every(interval)
     obtained_unit = task.__getattribute__(unit)
 
     # Wrap the job to catch exceptions and add logging
@@ -121,7 +122,7 @@ def schedule_at(time_str: str, job: Callable, job_name: str = ""):
         except Exception as e:
             logger.error("Error in scheduled job '%s': %s", name, e, exc_info=True)
 
-    return _get_scheduler().every().day.at(time_str).do(wrapped_job)
+    return _get_job_registry().every().day.at(time_str).do(wrapped_job)
 
 
 def schedule_once(time: str, job: Callable, job_name: str = ""):
@@ -150,7 +151,7 @@ def schedule_once(time: str, job: Callable, job_name: str = ""):
             logger.error("Error in scheduled one-time job '%s': %s", name, e, exc_info=True)
 
     return (
-        _get_scheduler()
+        _get_job_registry()
         .every()
         .day.at(time)
         .do(wrapped_job)
@@ -161,12 +162,12 @@ def schedule_once(time: str, job: Callable, job_name: str = ""):
 def clear_jobs():
     """Clear all scheduled jobs (globally accessible)"""
     logger.info("Clearing all scheduled jobs")
-    _get_scheduler().clear()
+    _get_job_registry().clear()
 
 
 def get_jobs():
     """Get all currently scheduled jobs (globally accessible)"""
-    return _get_scheduler().get_jobs()
+    return _get_job_registry().get_jobs()
 
 
 class SchedulerThread:
@@ -221,15 +222,18 @@ class SchedulerThread:
         while not self._stop_event.is_set():
             try:
                 logger.debug("Scheduler thread checking for pending jobs")
-                scheduler = _get_scheduler()
-                scheduler.run_pending()
-                # Currently, we do not schedule any jobs dynamically here
-                n = scheduler.idle_seconds
+                job_registry = _get_job_registry()
+                job_registry.run_pending()
+                # Currently, we do not schedule any jobs dynamically here.
+                # ``idle_seconds`` is a property on ``schedule.Scheduler``
+                # (not a method) and returns either ``None`` when no jobs
+                # are scheduled or a ``float`` number of seconds otherwise.
+                n = job_registry.idle_seconds
                 if n is None:
                     n = 10  # Default sleep time if no jobs are scheduled
                 if n > 0:
                     n = min(n, 300)  # Cap sleep time to 300 seconds
-                    logger.debug("Scheduler thread sleeping for %d seconds.", n)
+                    logger.debug("Scheduler thread sleeping for %s seconds.", n)
                     # Use the stop event as an interruptible sleep so that a
                     # call to stop() does not have to wait up to 300 seconds.
                     if self._stop_event.wait(timeout=n):
