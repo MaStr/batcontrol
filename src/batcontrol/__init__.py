@@ -7,6 +7,7 @@ from .scheduler import (
     schedule_once,
     clear_jobs,
     get_jobs,
+    reset_scheduler,
     SchedulerThread
 )
 
@@ -17,5 +18,6 @@ __all__ = [
     'schedule_once',
     'clear_jobs',
     'get_jobs',
+    'reset_scheduler',
     'SchedulerThread',
 ]
