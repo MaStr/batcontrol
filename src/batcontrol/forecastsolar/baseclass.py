@@ -29,7 +29,7 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
 
         Supports Full-Hour Alignment strategy:
         - Providers return hour-aligned data (index 0 = start of current hour)
-        - Baseclass handles resolution conversion (hourly ↔ 15-min)
+        - Baseclass handles resolution conversion (hourly <-> 15-min)
         - Baseclass shifts indices to current-interval alignment
         - Core receives data where [0] = current interval
     """
@@ -177,16 +177,16 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
             return forecast
 
         if self.native_resolution == 60 and self.target_resolution == 15:
-            logger.debug('%s: Upsampling 60min → 15min using linear interpolation',
+            logger.debug('%s: Upsampling 60min -> 15min using linear interpolation',
                          self.__class__.__name__)
             return upsample_forecast(forecast, target_resolution=15, method='linear')
 
         if self.native_resolution == 15 and self.target_resolution == 60:
-            logger.debug('%s: Downsampling 15min → 60min by summing quarters',
+            logger.debug('%s: Downsampling 15min -> 60min by summing quarters',
                          self.__class__.__name__)
             return downsample_to_hourly(forecast)
 
-        logger.error('%s: Cannot convert %d min → %d min',
+        logger.error('%s: Cannot convert %d min -> %d min',
                      self.__class__.__name__,
                      self.native_resolution,
                      self.target_resolution)

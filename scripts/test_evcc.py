@@ -61,7 +61,7 @@ def main():
         print("=" * 50)
         if prices:
             for hour, price in sorted(prices.items()):
-                print(f"Hour +{hour:2d}: {price:.4f} €/kWh")
+                print(f"Hour +{hour:2d}: {price:.4f} EUR/kWh")
         else:
             print("No prices found")
             

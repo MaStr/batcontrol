@@ -10,6 +10,7 @@ log_everything: false # if false debug messages from fronius.auth and urllib3.co
 max_logfile_size: 200 #kB
 logfile_path: logs/batcontrol.log
 battery_control:
+  type: default  # Logic type: 'default' (standard) or 'next' (includes peak shaving)
                                  # min_price_difference is the absolute minimum price difference in Euro to justify charging your battery
                                  # if min_price_difference_rel results in a higher price difference, that will be used
   min_price_difference: 0.05     # minimum price difference in Euro to justify charging your battery
@@ -31,6 +32,29 @@ battery_control_expert:
   round_price_digits: 4 # round price to n digits after the comma
   production_offset_percent: 1.0 # Adjust production forecast by a percentage (1.0 = 100%, 0.8 = 80%, etc.)
                                  # Useful for winter mode when solar panels are covered with snow
+
+#--------------------------
+#  Peak Shaving
+#  Manages PV battery charging rate to limit PV charging before cheap-price
+#  or high-production hours so the battery can absorb as much PV as possible.
+#  Requires logic type 'next' in battery_control section.
+#
+#  mode:
+#    'time'     - limit by target hour only (allow_full_battery_after)
+#    'price'    - reserve capacity for cheap-price slots (price_limit required)
+#    'combined' - both active, stricter limit wins  [default]
+#
+#  price_limit: slots where price (Euro/kWh) is at or below this value are
+#  treated as cheap PV windows. Battery capacity is reserved so the PV
+#  surplus during those cheap slots can be fully absorbed.
+#  Use -1 to disable the price component without changing mode.
+#  Required for mode 'price' and 'combined'; ignored for mode 'time'.
+#--------------------------
+peak_shaving:
+  enabled: false
+  mode: combined               # 'time' | 'price' | 'combined'
+  allow_full_battery_after: 14 # Hour (0-23) - battery should be full by this hour
+  price_limit: 0.05            # Euro/kWh - keep battery empty for slots at or below this price
 
 #--------------------------
 #  Inverter

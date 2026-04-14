@@ -107,7 +107,7 @@ You can create automations to:
     print("=" * 70)
     
     print()
-    print("✓ Production offset feature successfully implemented!")
+    print("[done] Production offset feature successfully implemented!")
     print()
 
 if __name__ == '__main__':

@@ -7,7 +7,7 @@ solar and consumption forecasts.
 Key Design:
 - Providers declare their native_resolution (15 or 60 minutes)
 - Baseclass handles automatic upsampling/downsampling
-- For prices: replication (hourly→15min) or averaging (15min→hourly)
+- For prices: replication (hourly->15min) or averaging (15min->hourly)
 - Baseclass shifts indices to current-interval alignment
 """
 
@@ -31,7 +31,7 @@ class DynamicTariffBaseclass(TariffInterface):
     Provides automatic resolution handling:
     - Providers declare their native_resolution (15 or 60 minutes)
     - Baseclass converts between resolutions automatically
-    - For prices: uses replication (60→15) or averaging (15→60)
+    - For prices: uses replication (60->15) or averaging (15->60)
     - Baseclass shifts indices to current-interval alignment
 
     Subclasses must:
@@ -154,8 +154,8 @@ class DynamicTariffBaseclass(TariffInterface):
         """Convert prices between resolutions if needed.
 
         For prices:
-        - 60→15: Replicate (same price for all 4 quarters of an hour)
-        - 15→60: Average (mean of 4 quarters)
+        - 60->15: Replicate (same price for all 4 quarters of an hour)
+        - 15->60: Average (mean of 4 quarters)
 
         Args:
             prices: Hour-aligned price data at native resolution
@@ -168,16 +168,16 @@ class DynamicTariffBaseclass(TariffInterface):
 
         if self.native_resolution == 60 and self.target_resolution == 15:
             logger.debug(
-                '%s: Replicating hourly prices → 15min (same price per quarter)',
+                '%s: Replicating hourly prices -> 15min (same price per quarter)',
                 self.__class__.__name__)
             return self._replicate_hourly_to_15min(prices)
 
         if self.native_resolution == 15 and self.target_resolution == 60:
-            logger.debug('%s: Averaging 15min prices → hourly',
+            logger.debug('%s: Averaging 15min prices -> hourly',
                          self.__class__.__name__)
             return average_to_hourly(prices)
 
-        logger.error('%s: Cannot convert %d min → %d min',
+        logger.error('%s: Cannot convert %d min -> %d min',
                      self.__class__.__name__,
                      self.native_resolution,
                      self.target_resolution)

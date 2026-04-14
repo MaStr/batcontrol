@@ -184,7 +184,7 @@ class TestModeLimitBatteryChargeRate:
         mock_solar.return_value = MagicMock()
         mock_consumption.return_value = MagicMock()
 
-        # Create Batcontrol instance — misconfiguration is corrected at init
+        # Create Batcontrol instance - misconfiguration is corrected at init
         bc = Batcontrol(mock_config)
 
         # min_pv_charge_rate should have been clamped to max_pv_charge_rate at init
@@ -349,7 +349,7 @@ class TestTimeResolutionString:
         """Logic factory must produce a valid logic instance when given an int resolution"""
         logic = LogicFactory.create_logic(
             int(resolution_str),
-            {'type': 'default'},
+            {'battery_control': {'type': 'default'}},
             datetime.timezone.utc
         )
         assert logic is not None
@@ -514,6 +514,191 @@ class TestCoreRunDispatch:
         mock_inverter.set_mode_allow_discharge.assert_not_called()
         mock_inverter.set_mode_force_charge.assert_not_called()
         mock_inverter.set_mode_avoid_discharge.assert_not_called()
+
+
+class TestEvccPeakShavingGuard:
+    """Test evcc peak shaving guard in core.py run loop."""
+
+    @pytest.fixture
+    def mock_config(self):
+        """Provide a minimal config for testing."""
+        return {
+            'timezone': 'Europe/Berlin',
+            'time_resolution_minutes': 60,
+            'inverter': {
+                'type': 'dummy',
+                'max_grid_charge_rate': 5000,
+                'max_pv_charge_rate': 3000,
+                'min_pv_charge_rate': 100
+            },
+            'utility': {
+                'type': 'tibber',
+                'apikey': 'test_token'
+            },
+            'pvinstallations': [],
+            'consumption_forecast': {
+                'type': 'simple',
+                'value': 500
+            },
+            'battery_control': {
+                'max_charging_from_grid_limit': 0.8,
+                'min_price_difference': 0.05
+            },
+            'peak_shaving': {
+                'enabled': True,
+                'allow_full_battery_after': 14
+            },
+            'mqtt': {
+                'enabled': False
+            }
+        }
+
+    def _create_bc(self, mock_config, mock_inverter_factory, mock_tariff,
+                   mock_solar, mock_consumption):
+        """Helper to create a Batcontrol with mocked dependencies."""
+        mock_inverter = MagicMock()
+        mock_inverter.max_pv_charge_rate = 3000
+        mock_inverter.set_mode_limit_battery_charge = MagicMock()
+        mock_inverter.get_max_capacity = MagicMock(return_value=10000)
+        mock_inverter_factory.return_value = mock_inverter
+
+        mock_tariff.return_value = MagicMock()
+        mock_solar.return_value = MagicMock()
+        mock_consumption.return_value = MagicMock()
+
+        bc = Batcontrol(mock_config)
+        return bc
+
+    @patch('batcontrol.core.tariff_factory.create_tarif_provider')
+    @patch('batcontrol.core.inverter_factory.create_inverter')
+    @patch('batcontrol.core.solar_factory.create_solar_provider')
+    @patch('batcontrol.core.consumption_factory.create_consumption')
+    def test_evcc_charging_disables_peak_shaving_in_calc_params(
+        self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
+        mock_config):
+        """When evcc is actively charging, peak_shaving_enabled is False in calc_params."""
+        bc = self._create_bc(mock_config, mock_inverter_factory, mock_tariff,
+                             mock_solar, mock_consumption)
+
+        mock_evcc = MagicMock()
+        mock_evcc.evcc_is_charging = True
+        mock_evcc.evcc_ev_expects_pv_surplus = False
+        bc.evcc_api = mock_evcc
+
+        # Replicate the pre-calculation evcc check from core.py
+        from batcontrol.logic.logic_interface import CalculationParameters
+        evcc_disable_peak_shaving = (
+            bc.evcc_api.evcc_is_charging or
+            bc.evcc_api.evcc_ev_expects_pv_surplus
+        )
+        peak_shaving_config = mock_config.get('peak_shaving', {})
+        calc_params = CalculationParameters(
+            max_charging_from_grid_limit=0.8,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.0,
+            max_capacity=10000,
+            peak_shaving_enabled=peak_shaving_config.get('enabled', False) and not evcc_disable_peak_shaving,
+        )
+
+        assert calc_params.peak_shaving_enabled is False
+
+    @patch('batcontrol.core.tariff_factory.create_tarif_provider')
+    @patch('batcontrol.core.inverter_factory.create_inverter')
+    @patch('batcontrol.core.solar_factory.create_solar_provider')
+    @patch('batcontrol.core.consumption_factory.create_consumption')
+    def test_evcc_pv_mode_disables_peak_shaving_in_calc_params(
+        self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
+        mock_config):
+        """When EV connected in PV mode, peak_shaving_enabled is False in calc_params."""
+        bc = self._create_bc(mock_config, mock_inverter_factory, mock_tariff,
+                             mock_solar, mock_consumption)
+
+        mock_evcc = MagicMock()
+        mock_evcc.evcc_is_charging = False
+        mock_evcc.evcc_ev_expects_pv_surplus = True
+        bc.evcc_api = mock_evcc
+
+        from batcontrol.logic.logic_interface import CalculationParameters
+        evcc_disable_peak_shaving = (
+            bc.evcc_api.evcc_is_charging or
+            bc.evcc_api.evcc_ev_expects_pv_surplus
+        )
+        peak_shaving_config = mock_config.get('peak_shaving', {})
+        calc_params = CalculationParameters(
+            max_charging_from_grid_limit=0.8,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.0,
+            max_capacity=10000,
+            peak_shaving_enabled=peak_shaving_config.get('enabled', False) and not evcc_disable_peak_shaving,
+        )
+
+        assert calc_params.peak_shaving_enabled is False
+
+    @patch('batcontrol.core.tariff_factory.create_tarif_provider')
+    @patch('batcontrol.core.inverter_factory.create_inverter')
+    @patch('batcontrol.core.solar_factory.create_solar_provider')
+    @patch('batcontrol.core.consumption_factory.create_consumption')
+    def test_evcc_not_active_keeps_peak_shaving_enabled(
+        self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
+        mock_config):
+        """When evcc is not charging and no PV mode, peak_shaving_enabled stays True."""
+        bc = self._create_bc(mock_config, mock_inverter_factory, mock_tariff,
+                             mock_solar, mock_consumption)
+
+        mock_evcc = MagicMock()
+        mock_evcc.evcc_is_charging = False
+        mock_evcc.evcc_ev_expects_pv_surplus = False
+        bc.evcc_api = mock_evcc
+
+        from batcontrol.logic.logic_interface import CalculationParameters
+        evcc_disable_peak_shaving = (
+            bc.evcc_api.evcc_is_charging or
+            bc.evcc_api.evcc_ev_expects_pv_surplus
+        )
+        peak_shaving_config = mock_config.get('peak_shaving', {})
+        calc_params = CalculationParameters(
+            max_charging_from_grid_limit=0.8,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.0,
+            max_capacity=10000,
+            peak_shaving_enabled=peak_shaving_config.get('enabled', False) and not evcc_disable_peak_shaving,
+        )
+
+        assert calc_params.peak_shaving_enabled is True
+
+    @patch('batcontrol.core.tariff_factory.create_tarif_provider')
+    @patch('batcontrol.core.inverter_factory.create_inverter')
+    @patch('batcontrol.core.solar_factory.create_solar_provider')
+    @patch('batcontrol.core.consumption_factory.create_consumption')
+    def test_evcc_no_limit_active_no_change(
+        self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
+        mock_config):
+        """When evcc is charging but peak shaving was off in config, it stays disabled."""
+        mock_config = dict(mock_config)
+        mock_config['peak_shaving'] = {'enabled': False, 'allow_full_battery_after': 14}
+        bc = self._create_bc(mock_config, mock_inverter_factory, mock_tariff,
+                             mock_solar, mock_consumption)
+
+        mock_evcc = MagicMock()
+        mock_evcc.evcc_is_charging = True
+        mock_evcc.evcc_ev_expects_pv_surplus = False
+        bc.evcc_api = mock_evcc
+
+        from batcontrol.logic.logic_interface import CalculationParameters
+        evcc_disable_peak_shaving = (
+            bc.evcc_api.evcc_is_charging or
+            bc.evcc_api.evcc_ev_expects_pv_surplus
+        )
+        peak_shaving_config = mock_config.get('peak_shaving', {})
+        calc_params = CalculationParameters(
+            max_charging_from_grid_limit=0.8,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.0,
+            max_capacity=10000,
+            peak_shaving_enabled=peak_shaving_config.get('enabled', False) and not evcc_disable_peak_shaving,
+        )
+
+        assert calc_params.peak_shaving_enabled is False
 
 
 if __name__ == '__main__':

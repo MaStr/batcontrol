@@ -77,6 +77,10 @@ class EvccApi():
         self.evcc_is_charging = False
 
         self.evcc_loadpoint_status = {}
+        self.evcc_loadpoint_mode = {}       # topic_root -> mode string ("pv", "now", "minpv", "off")
+        self.evcc_loadpoint_connected = {}  # topic_root -> bool
+        self.list_topics_mode = []          # derived mode topics
+        self.list_topics_connected = []     # derived connected topics
 
         self.block_function = None
         self.set_always_allow_discharge_limit_function = None
@@ -133,6 +137,23 @@ class EvccApi():
             self.__store_loadpoint_status(topic, False)
             self.client.message_callback_add(topic, self._handle_message)
 
+        # Derive mode and connected topics from loadpoint charging topics
+        for topic in self.list_topics_loadpoint:
+            if topic.endswith('/charging'):
+                root = topic[:-len('/charging')]
+                mode_topic = root + '/mode'
+                connected_topic = root + '/connected'
+                self.list_topics_mode.append(mode_topic)
+                self.list_topics_connected.append(connected_topic)
+                self.evcc_loadpoint_mode[root] = None
+                self.evcc_loadpoint_connected[root] = False
+                self.client.message_callback_add(mode_topic, self._handle_message)
+                self.client.message_callback_add(connected_topic, self._handle_message)
+            else:
+                logger.warning(
+                    'Loadpoint topic %s does not end in /charging, '
+                    'skipping mode/connected subscription', topic)
+
         self.client.on_connect = self.on_connect
 
     def start(self):
@@ -148,6 +169,10 @@ class EvccApi():
             self.client.unsubscribe(self.topic_battery_halt_soc)
         for topic in self.list_topics_loadpoint:
             self.client.unsubscribe(topic)
+        for topic in self.list_topics_mode:
+            self.client.unsubscribe(topic)
+        for topic in self.list_topics_connected:
+            self.client.unsubscribe(topic)
         self.client.loop_stop()
         self.client.disconnect()
 
@@ -159,6 +184,12 @@ class EvccApi():
         if self.topic_battery_halt_soc is not None:
             self.client.subscribe(self.topic_battery_halt_soc, qos=1)
         for topic in self.list_topics_loadpoint:
+            logger.info('Subscribing to %s', topic)
+            self.client.subscribe(topic)
+        for topic in self.list_topics_mode:
+            logger.info('Subscribing to %s', topic)
+            self.client.subscribe(topic)
+        for topic in self.list_topics_connected:
             logger.info('Subscribing to %s', topic)
             self.client.subscribe(topic)
 
@@ -236,6 +267,10 @@ class EvccApi():
                     self.block_function(False)
                     self.__restore_old_limits()
                     self.__reset_loadpoint_status()
+                # Reset mode/connected state to prevent stale values
+                for root in list(self.evcc_loadpoint_mode.keys()):
+                    self.evcc_loadpoint_mode[root] = None
+                    self.evcc_loadpoint_connected[root] = False
             else:
                 logger.info('evcc is online')
             self.evcc_is_online = online
@@ -326,6 +361,33 @@ class EvccApi():
 
         self.evaluate_charging_status()
 
+    def handle_mode_message(self, message):
+        """Handle incoming loadpoint mode messages."""
+        root = message.topic[:-len('/mode')]
+        mode = message.payload.decode('utf-8').strip().lower()
+        old_mode = self.evcc_loadpoint_mode.get(root)
+        if old_mode != mode:
+            logger.info('Loadpoint %s mode changed: %s -> %s', root, old_mode, mode)
+            self.evcc_loadpoint_mode[root] = mode
+
+    def handle_connected_message(self, message):
+        """Handle incoming loadpoint connected messages."""
+        root = message.topic[:-len('/connected')]
+        connected = re.match(b'true', message.payload, re.IGNORECASE) is not None
+        old_connected = self.evcc_loadpoint_connected.get(root, False)
+        if old_connected != connected:
+            logger.info('Loadpoint %s connected: %s', root, connected)
+            self.evcc_loadpoint_connected[root] = connected
+
+    @property
+    def evcc_ev_expects_pv_surplus(self) -> bool:
+        """True if any loadpoint has an EV connected in PV mode."""
+        for root in self.evcc_loadpoint_connected:
+            if self.evcc_loadpoint_connected.get(root, False) and \
+               self.evcc_loadpoint_mode.get(root) == 'pv':
+                return True
+        return False
+
     def evaluate_charging_status(self):
         """ Go through the loadpoints and check if one is charging """
         for _, is_charging in self.evcc_loadpoint_status.items():
@@ -345,6 +407,10 @@ class EvccApi():
         # Check if message.topic is in self.list_topics_loadpoint
         elif message.topic in self.list_topics_loadpoint:
             self.handle_charging_message(message)
+        elif message.topic in self.list_topics_mode:
+            self.handle_mode_message(message)
+        elif message.topic in self.list_topics_connected:
+            self.handle_connected_message(message)
         else:
             logger.warning(
                 'No callback registered for %s', message.topic)

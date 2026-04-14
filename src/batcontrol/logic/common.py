@@ -131,3 +131,22 @@ class CommonLogic:
         adjusted_charge_rate = int(round(adjusted_charge_rate, 0))
         logger.debug('Adjusted charge rate: %d W', adjusted_charge_rate)
         return adjusted_charge_rate
+
+    def enforce_min_pv_charge_rate(self, limit: int) -> int:
+        """Enforce minimum PV charge rate for peak shaving.
+
+        A positive limit below MIN_CHARGE_RATE is raised to MIN_CHARGE_RATE
+        to avoid inefficient low-power charging scenarios.
+        A limit of 0 (block charging entirely) is never raised.
+
+        Args:
+            limit: Computed PV charge rate limit in W.
+        Returns:
+            int: Adjusted limit in W.
+        """
+        if limit > 0 and limit < MIN_CHARGE_RATE:
+            logger.debug(
+                '[PeakShaving] Raising PV limit from %d W to minimum charge rate %d W',
+                limit, MIN_CHARGE_RATE)
+            return MIN_CHARGE_RATE
+        return limit
