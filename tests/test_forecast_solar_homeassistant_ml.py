@@ -36,45 +36,54 @@ def pv_installations():
 
 
 @pytest.fixture
-def ha_entity_state():
-    """Provide sample HomeAssistant entity state"""
-    return {
-        "entity_id": "sensor.solar_forecast_ml_prognose_nachste_stunde",
-        "state": "0.879",
+def ha_entity_state(timezone):
+    """Provide sample HomeAssistant entity state in evcc Solar-Prognose format.
+
+    The fixture freezes the provider module's ``datetime.datetime.now`` at a
+    fixed reference hour and builds a 14-hour forecast anchored at the same
+    instant. This keeps the fixture and the parser on the exact same "now"
+    and makes the offset mapping deterministic (no flakiness at hour or DST
+    boundaries).
+
+    April 2, 2026 is safely past the DST spring-forward in Europe/Berlin
+    (March 29), matching the reference hour used elsewhere in this file.
+    """
+    fixed_now = timezone.localize(datetime.datetime(2026, 4, 2, 10, 0, 0))
+    forecast = []
+    # Values chosen so forecast[0] == 879.0, forecast[1] == 1265.0, ... (in Wh)
+    wh_values = [879.0, 1265.0, 1688.0, 1571.0, 1578.0, 990.0, 489.0,
+                 268.0, 17.0, 17.0, 17.0, 17.0, 17.0, 17.0]
+    for offset, wh in enumerate(wh_values):
+        start = fixed_now + datetime.timedelta(hours=offset)
+        end = fixed_now + datetime.timedelta(hours=offset + 1)
+        # Use isoformat() so the offset is rendered as '+02:00' (with colon).
+        # Python 3.9/3.10's fromisoformat() rejects the '+0200' form that
+        # strftime('%z') emits.
+        forecast.append({
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "value": wh,
+        })
+
+    entity_state = {
+        "entity_id": "sensor.solar_forecast_ml_evcc_solar_prognose",
+        "state": f"{len(forecast)} slots",
         "attributes": {
-            "state_class": "total",
-            "hour_1": 0.879,
-            "hour_1_time": "10:00",
-            "hour_2": 1.265,
-            "hour_2_time": "11:00",
-            "hour_3": 1.688,
-            "hour_3_time": "12:00",
-            "total_upcoming": 8.83,
-            "hours_count": 14,
-            "hours_list": [
-                {"time": "10:00", "kwh": 0.879},
-                {"time": "11:00", "kwh": 1.265},
-                {"time": "12:00", "kwh": 1.688},
-                {"time": "13:00", "kwh": 1.571},
-                {"time": "14:00", "kwh": 1.578},
-                {"time": "15:00", "kwh": 0.99},
-                {"time": "16:00", "kwh": 0.489},
-                {"time": "17:00", "kwh": 0.268},
-                {"time": "18:00", "kwh": 0.017},
-                {"time": "19:00", "kwh": 0.017},
-                {"time": "20:00", "kwh": 0.017},
-                {"time": "21:00", "kwh": 0.017},
-                {"time": "22:00", "kwh": 0.017},
-                {"time": "23:00", "kwh": 0.017},
-            ],
-            "unit_of_measurement": "kWh",
-            "device_class": "energy",
-            "icon": "mdi:clock-fast",
-            "friendly_name": "Solar Forecast ML"
+            "forecast": forecast,
+            "icon": "mdi:ev-station",
+            "friendly_name": "Solar Forecast ML evcc Solar-Prognose"
         },
         "last_changed": "2026-02-05T08:00:44.824837+00:00",
         "last_updated": "2026-02-05T08:00:44.824837+00:00"
     }
+
+    with patch(
+        'src.batcontrol.forecastsolar.forecast_homeassistant_ml.datetime'
+    ) as mock_dt:
+        mock_dt.datetime.now.return_value = fixed_now
+        # Keep the real fromisoformat so the parser can still decode strings.
+        mock_dt.datetime.fromisoformat = datetime.datetime.fromisoformat
+        yield entity_state
 
 
 @pytest.fixture
@@ -159,142 +168,70 @@ class TestInitialization:
 class TestParsing:
     """Tests for forecast data parsing"""
 
-    def test_parse_hours_list_format(self, pv_installations, timezone, ha_entity_state):
-        """Test parsing primary hours_list format"""
+    def test_parse_evcc_format_from_fixture(
+            self, pv_installations, timezone, ha_entity_state):
+        """Test parsing the evcc forecast list from the shared fixture."""
         provider = ForecastSolarHomeAssistantML(
             pvinstallations=pv_installations,
             timezone=timezone,
             base_url="http://homeassistant.local:8123",
             api_token="test_token",
-            entity_id="sensor.solar_forecast",
-            sensor_unit="kWh"
+            entity_id="sensor.solar_forecast_ml_evcc_solar_prognose",
+            sensor_unit="Wh"
         )
 
         attributes = ha_entity_state["attributes"]
         forecast = provider._parse_forecast_from_attributes(attributes)
 
         assert len(forecast) == 14
-        assert forecast[0] == 879.0  # 0.879 kWh * 1000
-        assert forecast[1] == 1265.0  # 1.265 kWh * 1000
-        assert forecast[2] == 1688.0  # 1.688 kWh * 1000
+        assert forecast[0] == 879.0
+        assert forecast[1] == 1265.0
+        assert forecast[2] == 1688.0
 
-    def test_parse_hours_list_with_wh_unit(self, pv_installations, timezone, ha_entity_state):
-        """Test parsing hours_list with Wh unit (no conversion)"""
+    def test_parse_empty_forecast_list_raises_error(self, pv_installations, timezone):
+        """Test parsing empty forecast list raises error."""
         provider = ForecastSolarHomeAssistantML(
             pvinstallations=pv_installations,
             timezone=timezone,
             base_url="http://homeassistant.local:8123",
             api_token="test_token",
-            entity_id="sensor.solar_forecast",
+            entity_id="sensor.solar_forecast_ml_evcc_solar_prognose",
             sensor_unit="Wh"
         )
 
-        # Modify attributes to have Wh values
-        attributes = ha_entity_state["attributes"]
-        attributes["hours_list"] = [
-            # Already in Wh (renamed to kwh for test)
-            {"time": "10:00", "kwh": 879.0},
-            {"time": "11:00", "kwh": 1265.0},
-        ]
-
-        forecast = provider._parse_forecast_from_attributes(attributes)
-
-        assert forecast[0] == 879.0  # Already Wh
-        assert forecast[1] == 1265.0
-
-    def test_parse_fallback_hour_n_format(self, pv_installations, timezone):
-        """Test fallback hour_N attribute parsing"""
-        provider = ForecastSolarHomeAssistantML(
-            pvinstallations=pv_installations,
-            timezone=timezone,
-            base_url="http://homeassistant.local:8123",
-            api_token="test_token",
-            entity_id="sensor.solar_forecast",
-            sensor_unit="kWh"
-        )
-
-        attributes = {
-            "hour_1": 0.879,
-            "hour_1_time": "10:00",
-            "hour_2": 1.265,
-            "hour_2_time": "11:00",
-            "hour_3": 1.688,
-            "hour_3_time": "12:00",
-        }
-
-        forecast = provider._parse_forecast_from_attributes(attributes)
-
-        assert len(forecast) == 3
-        assert forecast[0] == 879.0  # hour_1 -> index 0
-        assert forecast[1] == 1265.0  # hour_2 -> index 1
-        assert forecast[2] == 1688.0  # hour_3 -> index 2
-
-    def test_parse_empty_hours_list_raises_error(self, pv_installations, timezone):
-        """Test parsing empty hours_list raises error"""
-        provider = ForecastSolarHomeAssistantML(
-            pvinstallations=pv_installations,
-            timezone=timezone,
-            base_url="http://homeassistant.local:8123",
-            api_token="test_token",
-            entity_id="sensor.solar_forecast",
-            sensor_unit="kWh"
-        )
-
-        attributes = {"hours_list": []}
+        attributes = {"forecast": []}
 
         with pytest.raises(ValueError, match="Could not parse any forecast data"):
             provider._parse_forecast_from_attributes(attributes)
 
-    def test_parse_missing_kwh_values_skipped(self, pv_installations, timezone):
-        """Test entries with missing kwh values are skipped"""
+    def test_parse_unsupported_formats_raise_error(self, pv_installations, timezone):
+        """Legacy hours_list / hour_N formats are no longer supported."""
         provider = ForecastSolarHomeAssistantML(
             pvinstallations=pv_installations,
             timezone=timezone,
             base_url="http://homeassistant.local:8123",
             api_token="test_token",
-            entity_id="sensor.solar_forecast",
+            entity_id="sensor.solar_forecast_ml_evcc_solar_prognose",
             sensor_unit="kWh"
         )
 
-        attributes = {
-            "hours_list": [
-                {"time": "10:00", "kwh": 0.879},
-                {"time": "11:00"},  # Missing kwh
-                {"time": "12:00", "kwh": 1.688},
-            ]
-        }
+        # Legacy hours_list is ignored
+        with pytest.raises(ValueError, match="Could not parse any forecast data"):
+            provider._parse_forecast_from_attributes({
+                "hours_list": [
+                    {"time": "10:00", "kwh": 0.879},
+                    {"time": "11:00", "kwh": 1.265},
+                ]
+            })
 
-        forecast = provider._parse_forecast_from_attributes(attributes)
-
-        assert len(forecast) == 2
-        assert forecast[0] == 879.0
-        assert forecast[2] == 1688.0
-        assert 1 not in forecast
-
-    def test_parse_invalid_kwh_values_skipped(self, pv_installations, timezone):
-        """Test entries with invalid kwh values are skipped"""
-        provider = ForecastSolarHomeAssistantML(
-            pvinstallations=pv_installations,
-            timezone=timezone,
-            base_url="http://homeassistant.local:8123",
-            api_token="test_token",
-            entity_id="sensor.solar_forecast",
-            sensor_unit="kWh"
-        )
-
-        attributes = {
-            "hours_list": [
-                {"time": "10:00", "kwh": 0.879},
-                {"time": "11:00", "kwh": "invalid"},  # Invalid kwh
-                {"time": "12:00", "kwh": 1.688},
-            ]
-        }
-
-        forecast = provider._parse_forecast_from_attributes(attributes)
-
-        assert len(forecast) == 2
-        assert forecast[0] == 879.0
-        assert forecast[2] == 1688.0
+        # Legacy hour_N attributes are ignored
+        with pytest.raises(ValueError, match="Could not parse any forecast data"):
+            provider._parse_forecast_from_attributes({
+                "hour_1": 0.879,
+                "hour_1_time": "10:00",
+                "hour_2": 1.265,
+                "hour_2_time": "11:00",
+            })
 
 
 # Tests for caching
@@ -329,8 +266,8 @@ class TestCaching:
             timezone=timezone,
             base_url="http://homeassistant.local:8123",
             api_token="test_token",
-            entity_id="sensor.solar_forecast",
-            sensor_unit="kWh"
+            entity_id="sensor.solar_forecast_ml_evcc_solar_prognose",
+            sensor_unit="Wh"
         )
 
         # Store raw data via baseclass
@@ -498,23 +435,30 @@ class TestEdgeCases:
         assert provider.base_url == "http://homeassistant.local:8123"
 
     def test_zero_forecast_values_accepted(self, pv_installations, timezone):
-        """Test zero forecast values are accepted"""
+        """Test zero forecast values are accepted (evcc format, Wh)."""
         provider = ForecastSolarHomeAssistantML(
             pvinstallations=pv_installations,
             timezone=timezone,
             base_url="http://homeassistant.local:8123",
             api_token="test_token",
-            entity_id="sensor.solar_forecast",
-            sensor_unit="kWh"
+            entity_id="sensor.solar_forecast_ml_evcc_solar_prognose",
+            sensor_unit="Wh"
         )
 
-        attributes = {
-            "hours_list": [
-                {"time": "10:00", "kwh": 0.0},
-                {"time": "11:00", "kwh": 0.0},
-                {"time": "12:00", "kwh": 1.688},
-            ]
-        }
+        now = datetime.datetime.now(timezone).replace(
+            minute=0, second=0, microsecond=0)
+
+        def _slot(offset, value):
+            start = now + datetime.timedelta(hours=offset)
+            end = start + datetime.timedelta(hours=1)
+            # isoformat() renders '+02:00' which is required by Python 3.9/3.10
+            return {
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "value": value,
+            }
+
+        attributes = {"forecast": [_slot(0, 0.0), _slot(1, 0.0), _slot(2, 1688.0)]}
 
         forecast = provider._parse_forecast_from_attributes(attributes)
 
@@ -523,22 +467,31 @@ class TestEdgeCases:
         assert forecast[2] == 1688.0
 
     def test_large_forecast_values(self, pv_installations, timezone):
-        """Test large forecast values are handled"""
+        """Test large forecast values are handled (evcc format, kWh)."""
         provider = ForecastSolarHomeAssistantML(
             pvinstallations=pv_installations,
             timezone=timezone,
             base_url="http://homeassistant.local:8123",
             api_token="test_token",
-            entity_id="sensor.solar_forecast",
+            entity_id="sensor.solar_forecast_ml_evcc_solar_prognose",
             sensor_unit="kWh"
         )
 
-        attributes = {
-            "hours_list": [
-                {"time": "10:00", "kwh": 100.0},  # 100 kWh
-                {"time": "11:00", "kwh": 50.5},
-            ]
-        }
+        now = datetime.datetime.now(timezone).replace(
+            minute=0, second=0, microsecond=0)
+
+        def _slot(offset, value):
+            start = now + datetime.timedelta(hours=offset)
+            end = start + datetime.timedelta(hours=1)
+            # isoformat() renders '+02:00' which is required by Python 3.9/3.10
+            return {
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "value": value,
+            }
+
+        # Values interpreted as kWh - conversion factor 1000 applied.
+        attributes = {"forecast": [_slot(0, 100.0), _slot(1, 50.5)]}
 
         forecast = provider._parse_forecast_from_attributes(attributes)
 
@@ -698,7 +651,8 @@ class TestEvccForecastFormat:
         assert forecast[0] == 7835.0
 
     def test_parse_forecast_list_invalid_entries_skipped(self, pv_installations, timezone):
-        """Test that entries with invalid start timestamps or missing values are skipped"""
+        """Test that entries with invalid start timestamps or missing required
+        fields (start/end/value) are skipped."""
         provider = self._make_provider_wh(pv_installations, timezone)
 
         attributes = {
@@ -709,27 +663,35 @@ class TestEvccForecastFormat:
                 # Invalid start timestamp
                 {"start": "not-a-date",
                     "end": self._hour_str(timezone, 2), "value": 500.0},
-                # Valid (no 'end' key is fine)
+                # Missing 'end' key -> skipped (end is required)
                 {"start": self._hour_str(timezone, 2), "value": 2000.0},
-                # Missing start → skipped
+                # Missing start -> skipped
                 {"end": self._hour_str(timezone, 3), "value": 300.0},
-                # Missing value → skipped
+                # Missing value -> skipped
                 {"start": self._hour_str(timezone, 4),
                  "end": self._hour_str(timezone, 5)},
+                # Another valid entry
+                {"start": self._hour_str(timezone, 6), "end": self._hour_str(timezone, 7),
+                 "value": 3000.0},
             ]
         }
 
         forecast = provider._parse_forecast_from_attributes(attributes)
 
-        assert forecast[0] == 1000.0   # valid entry at offset 0
-        assert forecast[1] == 0.0      # zero-filled gap between 0 and 2
-        assert forecast[2] == 2000.0   # valid entry at offset 2
-        assert 4 not in forecast        # missing value → not in result, beyond max_offset
-        # offsets 0..2 (max valid offset) are present; offset 4 is never added
-        assert len([k for k in forecast if k >= 0]) == 3
+        assert forecast[0] == 1000.0      # valid entry at offset 0
+        assert forecast[2] == 0.0         # skipped (no end), zero-filled
+        assert forecast[6] == 3000.0      # valid entry at offset 6
+        # Zero-filled gaps between 0 and 6 -> consecutive keys 0..6
+        assert len(forecast) == 7
+        for hour in range(7):
+            assert hour in forecast
+        # Offsets with only invalid/skipped entries must be 0.0
+        for hour in (1, 2, 3, 4, 5):
+            assert forecast[hour] == 0.0
 
-    def test_parse_forecast_list_priority_over_hours_list(self, pv_installations, timezone):
-        """Test that 'forecast' list takes priority over 'hours_list' when both are present"""
+    def test_parse_forecast_list_ignores_legacy_formats(self, pv_installations, timezone):
+        """Legacy 'hours_list' / 'hour_N' attributes are ignored; only the
+        evcc 'forecast' list is consulted."""
         provider = self._make_provider_wh(pv_installations, timezone)
 
         attributes = {
@@ -740,12 +702,14 @@ class TestEvccForecastFormat:
             "hours_list": [
                 {"time": "10:00", "kwh": 9.0},
                 {"time": "11:00", "kwh": 9.0},
-            ]
+            ],
+            "hour_1": 9.0,
+            "hour_1_time": "10:00",
         }
 
         forecast = provider._parse_forecast_from_attributes(attributes)
 
-        # forecast list wins
+        # Only the evcc 'forecast' list contributes to the result
         assert forecast[0] == 111.0
         assert len(forecast) == 1
 

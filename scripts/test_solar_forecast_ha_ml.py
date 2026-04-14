@@ -1,7 +1,7 @@
 """Test script to fetch solar forecast data from HomeAssistant via WebSocket
 
 This script demonstrates how to connect to HomeAssistant and fetch solar forecast
-data from the sensor.solar_forecast_ml_prognose_nachste_stunde sensor.
+data from the sensor.solar_forecast_ml_evcc_solar_prognose sensor.
 """
 
 import asyncio
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 BASE_URL = "http://homeassistant.local:8123"
 API_TOKEN = ""
-ENTITY_ID = "sensor.solar_forecast_ml_prognose_nachste_stunde"
+ENTITY_ID = "sensor.solar_forecast_ml_evcc_solar_prognose"
 
 
 async def websocket_connect(base_url: str, api_token: str):

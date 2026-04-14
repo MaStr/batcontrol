@@ -4,9 +4,8 @@ This module provides solar forecasting using ML-based forecast data from
 HomeAssistant Solar Forecast ML integration (HACS).
 
 Based on HACS integration: https://zara-toorox.github.io/
-Supported sensors:
-  - sensor.solar_forecast_ml_prognose_nachste_stunde  (hours_list / hour_N format)
-  - sensor.solar_forecast_ml_evcc_solar_prognose      (forecast list with start/end/value)
+Supported sensor:
+  - sensor.solar_forecast_ml_evcc_solar_prognose  (forecast list with start/end/value)
 
 """
 
@@ -452,16 +451,19 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
         """Parse a single evcc-style forecast entry dict.
 
         Args:
-            entry: Dict with at least 'start' and 'value' keys.
+            entry: Dict with 'start', 'end' and 'value' keys.
             current_hour: Timezone-aware datetime truncated to the current hour.
 
         Returns:
             (hour_offset, wh_value) tuple, or None if the entry should be skipped.
         """
         start_str = entry.get("start")
+        end_str = entry.get("end")
         value = entry.get("value")
 
-        if start_str is None or value is None:
+        # evcc entries require start, end and value - entries missing any of
+        # these fields are not valid and must be skipped.
+        if start_str is None or end_str is None or value is None:
             return None
 
         # Normalize UTC 'Z' suffix for Python 3.9/3.10 fromisoformat compatibility
@@ -485,11 +487,11 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
         wh_value = float(value) * self.unit_conversion_factor
         return hour_offset, wh_value
 
-    def _parse_forecast_format1(
+    def _parse_forecast_evcc(
         self,
         forecast_list: list
     ) -> Dict[int, float]:
-        """Parse Format 1: evcc 'forecast' list with {start, end, value} entries.
+        """Parse evcc 'forecast' list with {start, end, value} entries.
 
         Entries whose 'start' timestamp is before the current hour are skipped.
         Timestamps are converted to hour offsets relative to the current hour.
@@ -549,101 +551,18 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
 
         return forecast_dict
 
-    def _parse_forecast_hours_list(self, hours_list: list) -> Dict[int, float]:
-        """Parse Format 2: hours_list array with {time, kwh} entries.
-
-        Args:
-            hours_list: List of dicts from the 'hours_list' attribute.
-
-        Returns:
-            Dict mapping hour index (0-based) to generation in Wh.
-            Empty dict if no valid entries found.
-        """
-        forecast_dict: Dict[int, float] = {}
-        logger_ha_details.debug(
-            "Parsing forecast from hours_list (%d entries)", len(hours_list))
-
-        for hour_idx, entry in enumerate(hours_list):
-            if not isinstance(entry, dict):
-                logger_ha_details.debug(
-                    "Skipping non-dict entry in hours_list: %s", entry)
-                continue
-
-            kwh_value = entry.get("kwh")
-            if kwh_value is None:
-                logger_ha_details.debug(
-                    "Skipping entry without 'kwh' key: %s", entry)
-                continue
-
-            try:
-                kwh_value = float(kwh_value)
-                wh_value = kwh_value * self.unit_conversion_factor
-                forecast_dict[hour_idx] = wh_value
-                logger_ha_details.debug(
-                    "Hour %d: %.2f kWh -> %.2f Wh", hour_idx, kwh_value, wh_value)
-            except (ValueError, TypeError) as exc:
-                logger_ha_details.debug(
-                    "Skipping invalid kWh value in hours_list: %s (error: %s)",
-                    kwh_value, exc)
-
-        if not forecast_dict:
-            logger_ha_details.warning("hours_list present but no valid entries parsed")
-        return forecast_dict
-
-    def _parse_forecast_hour_n(self, attributes: dict) -> Dict[int, float]:
-        """Parse Format 3 (fallback): hour_1, hour_2, ... attributes.
-
-        Args:
-            attributes: Full sensor attributes dict.
-
-        Returns:
-            Dict mapping hour index (0-based) to generation in Wh.
-        """
-        forecast_dict: Dict[int, float] = {}
-        logger_ha_details.debug("Trying fallback hour_N attribute format")
-        hour_idx = 1
-        while True:
-            hour_key = f"hour_{hour_idx}"
-            if hour_key not in attributes:
-                break
-
-            kwh_value = attributes.get(hour_key)
-            if kwh_value is None:
-                logger_ha_details.debug("Skipping missing %s", hour_key)
-                hour_idx += 1
-                continue
-
-            try:
-                kwh_value = float(kwh_value)
-                wh_value = kwh_value * self.unit_conversion_factor
-                # hour_idx is 1-based in attributes, 0-based in forecast_dict
-                hour_time_key = f"hour_{hour_idx}_time"
-                forecast_dict[hour_idx - 1] = wh_value
-                logger_ha_details.debug(
-                    "Hour %d (%s): %.2f kWh -> %.2f Wh",
-                    hour_idx - 1, attributes.get(hour_time_key, "?"),
-                    kwh_value, wh_value)
-            except (ValueError, TypeError) as exc:
-                logger_ha_details.debug(
-                    "Skipping invalid kWh value for %s: %s (error: %s)",
-                    hour_key, kwh_value, exc)
-
-            hour_idx += 1
-        return forecast_dict
-
     def _parse_forecast_from_attributes(
         self,
         attributes: dict
     ) -> Dict[int, float]:
-        """Parse forecast data from sensor attributes
+        """Parse forecast data from sensor attributes.
 
-        Supports multiple formats:
-        1. Primary: forecast array with {start, end, value} objects (evcc Solar Forecast style)
-           - Uses absolute timestamps; values are mapped to hour offsets from now
-           - Typically used with sensor.solar_forecast_ml_evcc_solar_prognose
-        2. Secondary: hours_list array with {time, kwh} objects
-           - Used with sensor.solar_forecast_ml_prognose_nachste_stunde
-        3. Fallback: hour_1, hour_2, ... attributes
+        Only the evcc Solar Forecast format is supported: a 'forecast' list
+        with {start, end, value} entries (e.g. emitted by
+        sensor.solar_forecast_ml_evcc_solar_prognose). Entries must include
+        all three fields - start, end and value - otherwise they are skipped.
+        Absolute timestamps are mapped to hour offsets relative to the
+        current hour.
 
         Args:
             attributes: Sensor attributes dict from HomeAssistant
@@ -654,38 +573,25 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
         Raises:
             ValueError: If no valid forecast data found
         """
-        # Format 1: forecast list with {start, end, value} - evcc Solar Forecast style
         forecast_list = attributes.get("forecast")
         if forecast_list and isinstance(forecast_list, list):
             has_expected_entry = any(
-                isinstance(entry, dict) and "start" in entry and "value" in entry
+                isinstance(entry, dict)
+                and "start" in entry
+                and "end" in entry
+                and "value" in entry
                 for entry in forecast_list
             )
             if has_expected_entry:
-                result = self._parse_forecast_format1(forecast_list)
+                result = self._parse_forecast_evcc(forecast_list)
                 if result:
                     return result
 
-        # Format 2: hours_list (existing primary format)
-        hours_list = attributes.get("hours_list")
-        if hours_list and isinstance(hours_list, list) and len(hours_list) > 0:
-            result = self._parse_forecast_hours_list(hours_list)
-            if result:
-                return result
-
-        # Format 3 (fallback): hour_1, hour_2, ... attributes
-        forecast_dict = self._parse_forecast_hour_n(attributes)
-
-        if not forecast_dict:
-            raise ValueError(
-                "Could not parse any forecast data from sensor attributes. "
-                "Expected one of: "
-                "(1) 'forecast' list with {start, value} entries "
-                "(evcc Solar-Prognose format, e.g. sensor.solar_forecast_ml_evcc_solar_prognose); "
-                "(2) 'hours_list' array with {kwh} entries; "
-                "(3) 'hour_N' attributes. "
-                "If using the evcc format, check that the 'forecast' list contains "
-                "future entries (past-only entries are skipped)."
-            )
-
-        return forecast_dict
+        raise ValueError(
+            "Could not parse any forecast data from sensor attributes. "
+            "Expected a 'forecast' list with {start, end, value} entries "
+            "(evcc Solar-Prognose format, e.g. "
+            "sensor.solar_forecast_ml_evcc_solar_prognose). "
+            "Check that the 'forecast' list contains future entries "
+            "(past-only entries are skipped)."
+        )
