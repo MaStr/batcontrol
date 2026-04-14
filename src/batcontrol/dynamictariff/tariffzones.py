@@ -23,7 +23,9 @@ Rules:
 - No hour may appear more than once across all zones (ValueError on duplicate).
 - zone_2_hours and tariff_zone_2 must both be set or both omitted.
 - zone_3_hours and tariff_zone_3 must both be set or both omitted.
-- In single-zone mode, zone_1_hours defaults to all 24 hours if unset.
+- In single-zone mode, zone_1_hours defaults to all 24 hours only when it
+  is unset. If zone_1_hours is provided explicitly, it is NOT auto-extended
+  and must cover every hour 0-23 on its own.
 
 The class produces hourly prices (native_resolution=60) for the next 48
 hours aligned to the current hour. The baseclass will handle conversion to

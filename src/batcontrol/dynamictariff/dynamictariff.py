@@ -144,8 +144,8 @@ class DynamicTariff:
                 hours_key = f'zone_{zone}_hours'
                 if (price_key in config) != (hours_key in config):
                     raise RuntimeError(
-                        f'[DynTariff] {price_key} and {hours_key} must both be '
-                        'provided or both omitted'
+                        f'[DynTariff] {hours_key} and {price_key} must both be '
+                        'set or both omitted'
                     )
             zone_1_hours = config.get('zone_1_hours')
             tariff_zone_2 = config.get('tariff_zone_2')

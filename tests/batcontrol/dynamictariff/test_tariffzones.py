@@ -361,7 +361,7 @@ def test_factory_missing_required_field_raises():
         # zone_2_hours missing
         'tariff_zone_2': 0.17,
     }
-    with pytest.raises(RuntimeError, match='tariff_zone_2 and zone_2_hours'):
+    with pytest.raises(RuntimeError, match='zone_2_hours and tariff_zone_2'):
         DynamicTariff.create_tarif_provider(config, make_tz(), 0, 0)
 
 
