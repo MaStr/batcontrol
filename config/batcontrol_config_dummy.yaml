@@ -48,7 +48,13 @@ battery_control_expert:
 #  treated as cheap PV windows. Battery capacity is reserved so the PV
 #  surplus during those cheap slots can be fully absorbed.
 #  Use -1 to disable the price component without changing mode.
-#  Required for mode 'price' and 'combined'; ignored for mode 'time'.
+#  Required for mode 'price'. For mode 'combined' it is optional:
+#  when omitted, combined mode falls back to time-only behaviour and logs
+#  a warning. Ignored for mode 'time'.
+#
+#  Runtime control via MQTT is limited to 'enabled' and
+#  'allow_full_battery_after'. Changes to 'mode' or 'price_limit' require
+#  a restart of batcontrol.
 #--------------------------
 peak_shaving:
   enabled: false

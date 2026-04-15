@@ -56,10 +56,32 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PeakShavingConfig:
     """ Holds peak shaving configuration parameters, initialized from the config dict. """
+    VALID_MODES = ('time', 'price', 'combined')
+
     enabled: bool = False
     mode: str = 'combined'
     allow_full_battery_after: int = 14
     price_limit: Optional[float] = None
+
+    def __post_init__(self):
+        """Validate configuration values and raise ValueError with a clear,
+        config-key-based message on invalid input."""
+        if self.mode not in self.VALID_MODES:
+            raise ValueError(
+                f"peak_shaving.mode must be one of {self.VALID_MODES}, "
+                f"got '{self.mode}'"
+            )
+        if not 0 <= self.allow_full_battery_after <= 23:
+            raise ValueError(
+                f"peak_shaving.allow_full_battery_after must be between "
+                f"0 and 23, got {self.allow_full_battery_after}"
+            )
+        if self.price_limit is not None \
+                and not isinstance(self.price_limit, (int, float)):
+            raise ValueError(
+                f"peak_shaving.price_limit must be numeric or None, "
+                f"got {type(self.price_limit).__name__}"
+            )
 
     @classmethod
     def from_config(cls, config: dict) -> 'PeakShavingConfig':

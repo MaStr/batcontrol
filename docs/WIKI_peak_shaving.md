@@ -148,6 +148,10 @@ The evcc integration derives `mode` and `connected` topics automatically from th
 | `{base}/peak_shaving/enabled/set` | `true`/`false` | Enable/disable peak shaving |
 | `{base}/peak_shaving/allow_full_battery_after/set` | int 0-23 | Set target hour |
 
+Note: `mode` and `price_limit` are **not** settable at runtime via MQTT.
+Changing either requires editing `batcontrol_config.yaml` and restarting
+batcontrol. See "Known Limitations" below.
+
 ### Home Assistant Auto-Discovery
 
 The following HA entities are automatically created:
@@ -161,3 +165,7 @@ The following HA entities are automatically created:
 1. **No intra-day adjustment:** If clouds reduce PV significantly, the limit stays as calculated until the next evaluation cycle (every 3 minutes). The counter-linear ramp self-corrects automatically: high free capacity at the next cycle produces a higher allowed rate.
 
 2. **Code duplication:** `NextLogic` is a copy of `DefaultLogic` with peak shaving added. Once stable, the two could be merged or refactored.
+
+3. **Partial MQTT runtime control:** Only `enabled` and `allow_full_battery_after` can be changed at runtime via MQTT. `mode` and `price_limit` are read from the configuration file once at startup and require a restart to change. If you need to toggle the price component on-the-fly, set `price_limit: -1` in the config so no slots qualify as cheap; the time component continues to work (in `combined` mode) without further changes.
+
+4. **`combined` mode without `price_limit`:** When `mode: combined` is configured but `price_limit` is omitted (or `null`), the price component is skipped and the logic falls back to time-only behaviour. A warning is logged so the fallback is visible. To use the price component, set a numeric `price_limit`; to disable peak shaving entirely, set `enabled: false`.
