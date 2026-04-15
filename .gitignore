@@ -126,6 +126,10 @@ ipython_config.py
 .pdm-python
 .pdm-build/
 
+# uv
+#   uv.lock is generated locally when running run_tests.sh; not tracked.
+uv.lock
+
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
 __pypackages__/
 
