@@ -5,7 +5,7 @@ FROM python:3.13-alpine AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
 
 # Copy only whats needed for dependencies first
-COPY pyproject.toml LICENSE README.MD ./
+COPY pyproject.toml LICENSE README.md ./
 
 # Copy the rest of the source files
 COPY ./src ./src
