@@ -2,7 +2,7 @@
 FROM python:3.13-alpine AS builder
 
 # Install uv for fast, reliable Python packaging
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
 
 # Copy only whats needed for dependencies first
 COPY pyproject.toml LICENSE README.MD ./
@@ -25,14 +25,14 @@ LABEL description="This is a Docker image for the BatControl project."
 LABEL maintainer="matthias.strubel@aod-rpg.de"
 
 # Install uv for fast, reliable Python packaging
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
 
 # Copy the built wheel from the builder stage and install it
 COPY --from=builder /wheels /wheels
 
 # Install runtime dependencies using uv
-# --index-strategy unsafe-best-match: check all indexes for best matching version (like pip)
-RUN uv pip install --system --no-cache --index-strategy unsafe-best-match --extra-index-url https://piwheels.org/simple /wheels/*.whl && \
+# Prefer piwheels for compatible wheels and fall back to PyPI
+RUN uv pip install --system --no-cache --index-url https://piwheels.org/simple --extra-index-url https://pypi.org/simple /wheels/*.whl && \
     rm -rf /wheels /usr/local/bin/uv
 
 ENV BATCONTROL_VERSION=${VERSION}
