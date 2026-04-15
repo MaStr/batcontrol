@@ -219,12 +219,15 @@ class NextLogic(LogicInterface):
           'combined' - both limits active, stricter one wins
 
         Skipped when:
-        - 'price'/'combined' mode and price_limit is not configured
+        - 'price' mode and price_limit is not configured
         - No PV production right now (nighttime)
         - Past allow_full_battery_after hour (all modes)
         - Battery in always_allow_discharge region (high SOC)
         - Force-charge from grid active (MODE -1)
         - Discharge not allowed (battery preserved for high-price hours)
+
+        In 'combined' mode with price_limit=None, falls back to time-only
+        behaviour (the time component does not require price_limit).
 
         Note: evcc checks (charging, connected+pv mode) are handled in
               core.py, not here.
@@ -232,10 +235,20 @@ class NextLogic(LogicInterface):
         mode = self.calculation_parameters.peak_shaving_mode
         price_limit = self.calculation_parameters.peak_shaving_price_limit
 
-        # Price component needs price_limit configured
-        if mode in ('price', 'combined') and price_limit is None:
-            logger.debug('[PeakShaving] Skipped: price_limit not configured for mode %s', mode)
-            return settings
+        # Price component needs price_limit configured.
+        # For 'price' mode: skip entirely (no other component to fall back to).
+        # For 'combined' mode: fall back to time-only behaviour. The user is
+        # informed once at config-load time by PeakShavingConfig, so this
+        # path stays at debug level to avoid per-cycle log spam.
+        if price_limit is None:
+            if mode == 'price':
+                logger.debug('[PeakShaving] Skipped: price_limit not '
+                             'configured for mode price')
+                return settings
+            if mode == 'combined':
+                logger.debug('[PeakShaving] price_limit not configured; '
+                             'combined mode using time-only component')
+                mode = 'time'
 
         # No production right now: skip
         if calc_input.production[0] <= 0:
@@ -290,7 +303,8 @@ class NextLogic(LogicInterface):
                 settings.limit_battery_charge_rate, charge_limit)
 
         # Note: allow_discharge is already True here (checked above).
-        # MODE 8 requires allow_discharge=True to work correctly.
+        # The limit_battery_charge_rate mode in the inverter layer requires
+        # allow_discharge=True to work correctly.
 
         logger.info('[PeakShaving] mode=%s, PV limit: %d W '
                     '(price-based=%s W, time-based=%s W, full by %d:00)',

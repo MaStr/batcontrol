@@ -336,8 +336,15 @@ class TestPeakShavingDecision(unittest.TestCase):
         self.assertEqual(result.limit_battery_charge_rate, -1)
         self.assertFalse(result.allow_discharge)
 
-    def test_price_limit_none_disables_peak_shaving(self):
-        """price_limit=None with mode='combined' -> peak shaving disabled entirely."""
+    def test_price_limit_none_combined_falls_back_to_time_only(self):
+        """price_limit=None with mode='combined' -> falls back to time-only.
+
+        The time component does not need price_limit, so combined mode
+        remains active with only the time-based limiter. At 08:00 with
+        target hour 14 (6 slots remaining) and production 5000 W,
+        consumption 500 W, free_capacity 5000 Wh, the counter-linear ramp
+        yields 2*5000/(6*7) ~= 238 W, raised to the 500 W floor.
+        """
         params = CalculationParameters(
             max_charging_from_grid_limit=0.79,
             min_price_difference=0.05,
@@ -346,6 +353,31 @@ class TestPeakShavingDecision(unittest.TestCase):
             peak_shaving_enabled=True,
             peak_shaving_allow_full_after=14,
             peak_shaving_mode='combined',
+            peak_shaving_price_limit=None,
+        )
+        self.logic.set_calculation_parameters(params)
+        settings = self._make_settings()
+        calc_input = self._make_input([5000] * 8, [500] * 8,
+                                      stored_energy=5000, free_capacity=5000)
+        ts = datetime.datetime(2025, 6, 20, 8, 0, 0,
+                               tzinfo=datetime.timezone.utc)
+        result = self.logic._apply_peak_shaving(settings, calc_input, ts)
+        self.assertEqual(result.limit_battery_charge_rate, 500)
+
+    def test_price_limit_none_price_mode_disables_peak_shaving(self):
+        """price_limit=None with mode='price' -> peak shaving disabled.
+
+        'price' mode has no fallback: without a price_limit, there is no
+        component to apply, so the entire peak shaving is skipped.
+        """
+        params = CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            peak_shaving_enabled=True,
+            peak_shaving_allow_full_after=14,
+            peak_shaving_mode='price',
             peak_shaving_price_limit=None,
         )
         self.logic.set_calculation_parameters(params)
@@ -381,8 +413,10 @@ class TestPeakShavingDecision(unittest.TestCase):
         prices all 0 (cheap), production=3000W, consumption=0, 8 slots.
         Total surplus = 8 * 3000 = 24000 Wh > free=5000 Wh.
         Price-based: spread 5000 / 8 slots = 625 W.
-        Time-based (mode=combined): 6 slots to target, 6*3000=18000>5000 -> 5000/6=833 W.
-        min(625, 833) = 625.
+        Time-based (mode=combined): counter-linear ramp over 6 slots to
+        target hour, current-slot weight 2*5000/(6*7) ~= 238 W, raised to
+        the 500 W min_pv_charge_rate floor.
+        min(625, 500) = 500.
         """
         settings = self._make_settings()
         prices = np.zeros(8)
