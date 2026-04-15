@@ -237,16 +237,17 @@ class NextLogic(LogicInterface):
 
         # Price component needs price_limit configured.
         # For 'price' mode: skip entirely (no other component to fall back to).
-        # For 'combined' mode: fall back to time-only behaviour and warn once.
+        # For 'combined' mode: fall back to time-only behaviour. The user is
+        # informed once at config-load time by PeakShavingConfig, so this
+        # path stays at debug level to avoid per-cycle log spam.
         if price_limit is None:
             if mode == 'price':
                 logger.debug('[PeakShaving] Skipped: price_limit not '
                              'configured for mode price')
                 return settings
             if mode == 'combined':
-                logger.warning('[PeakShaving] price_limit not configured; '
-                               'falling back to time-only behaviour in '
-                               'combined mode')
+                logger.debug('[PeakShaving] price_limit not configured; '
+                             'combined mode using time-only component')
                 mode = 'time'
 
         # No production right now: skip

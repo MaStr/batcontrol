@@ -94,3 +94,38 @@ class TestPeakShavingConfigFromConfig:
             PeakShavingConfig.from_config({
                 'peak_shaving': {'allow_full_battery_after': 99}
             })
+
+
+class TestPeakShavingConfigFallbackWarning:
+    """Test the one-time warning for combined-mode + missing price_limit.
+
+    The warning must fire at config load (not during runtime) and only
+    when the misconfiguration would actually be active (enabled=True and
+    mode='combined' with price_limit=None).
+    """
+
+    def test_combined_without_price_limit_logs_warning(self, caplog):
+        with caplog.at_level('WARNING', logger='batcontrol.core'):
+            PeakShavingConfig(enabled=True, mode='combined', price_limit=None)
+        messages = [r.getMessage() for r in caplog.records
+                    if r.levelname == 'WARNING']
+        assert any("combined" in m and "price_limit" in m for m in messages)
+
+    def test_disabled_combined_without_price_limit_does_not_warn(self, caplog):
+        # When peak shaving is disabled there is no user-visible problem.
+        with caplog.at_level('WARNING', logger='batcontrol.core'):
+            PeakShavingConfig(enabled=False, mode='combined', price_limit=None)
+        warnings = [r for r in caplog.records if r.levelname == 'WARNING']
+        assert warnings == []
+
+    def test_combined_with_price_limit_does_not_warn(self, caplog):
+        with caplog.at_level('WARNING', logger='batcontrol.core'):
+            PeakShavingConfig(enabled=True, mode='combined', price_limit=0.05)
+        warnings = [r for r in caplog.records if r.levelname == 'WARNING']
+        assert warnings == []
+
+    def test_time_mode_without_price_limit_does_not_warn(self, caplog):
+        with caplog.at_level('WARNING', logger='batcontrol.core'):
+            PeakShavingConfig(enabled=True, mode='time', price_limit=None)
+        warnings = [r for r in caplog.records if r.levelname == 'WARNING']
+        assert warnings == []

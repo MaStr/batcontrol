@@ -4,6 +4,11 @@ from typing import Optional
 import datetime
 import numpy as np
 
+# Shared tuple of valid peak-shaving operating modes. Defined here so that
+# both CalculationParameters (this module) and PeakShavingConfig
+# (batcontrol.core) can reference a single source of truth.
+PEAK_SHAVING_VALID_MODES = ('time', 'price', 'combined')
+
 @dataclass
 class CalculationInput:
     """ Input for the calculation """
@@ -40,10 +45,10 @@ class CalculationParameters:
                 f"peak_shaving_allow_full_after must be 0-23, "
                 f"got {self.peak_shaving_allow_full_after}"
             )
-        valid_modes = ('time', 'price', 'combined')
-        if self.peak_shaving_mode not in valid_modes:
+        if self.peak_shaving_mode not in PEAK_SHAVING_VALID_MODES:
             raise ValueError(
-                f"peak_shaving_mode must be one of {valid_modes}, "
+                f"peak_shaving_mode must be one of "
+                f"{PEAK_SHAVING_VALID_MODES}, "
                 f"got '{self.peak_shaving_mode}'"
             )
         if (self.peak_shaving_price_limit is not None

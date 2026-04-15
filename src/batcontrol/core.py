@@ -29,6 +29,7 @@ from .scheduler import SchedulerThread
 from .logic import Logic as LogicFactory
 from .logic import CalculationInput, CalculationParameters
 from .logic import CommonLogic
+from .logic import PEAK_SHAVING_VALID_MODES
 
 from .dynamictariff import DynamicTariff as tariff_factory
 from .inverter import Inverter as inverter_factory
@@ -56,8 +57,6 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PeakShavingConfig:
     """ Holds peak shaving configuration parameters, initialized from the config dict. """
-    VALID_MODES = ('time', 'price', 'combined')
-
     enabled: bool = False
     mode: str = 'combined'
     allow_full_battery_after: int = 14
@@ -65,11 +64,13 @@ class PeakShavingConfig:
 
     def __post_init__(self):
         """Validate configuration values and raise ValueError with a clear,
-        config-key-based message on invalid input."""
-        if self.mode not in self.VALID_MODES:
+        config-key-based message on invalid input. Also emit a one-time
+        warning for the ``combined`` + missing ``price_limit`` fallback,
+        so the log message fires at config load (not every evaluation)."""
+        if self.mode not in PEAK_SHAVING_VALID_MODES:
             raise ValueError(
-                f"peak_shaving.mode must be one of {self.VALID_MODES}, "
-                f"got '{self.mode}'"
+                f"peak_shaving.mode must be one of "
+                f"{PEAK_SHAVING_VALID_MODES}, got '{self.mode}'"
             )
         if not 0 <= self.allow_full_battery_after <= 23:
             raise ValueError(
@@ -81,6 +82,13 @@ class PeakShavingConfig:
             raise ValueError(
                 f"peak_shaving.price_limit must be numeric or None, "
                 f"got {type(self.price_limit).__name__}"
+            )
+        if self.enabled and self.mode == 'combined' and self.price_limit is None:
+            logger.warning(
+                "peak_shaving.mode='combined' but no peak_shaving.price_limit "
+                "configured: the price component is disabled; falling back "
+                "to time-only behaviour. Set a numeric price_limit or change "
+                "mode to 'time' to silence this warning."
             )
 
     @classmethod
