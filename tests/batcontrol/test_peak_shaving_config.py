@@ -57,6 +57,23 @@ class TestPeakShavingConfigValidation:
         with pytest.raises(ValueError, match='peak_shaving.price_limit'):
             PeakShavingConfig(price_limit='cheap')
 
+    def test_price_limit_bool_rejected(self):
+        # bool is a subclass of int but is almost certainly a config typo.
+        with pytest.raises(ValueError, match='peak_shaving.price_limit'):
+            PeakShavingConfig(price_limit=True)
+        with pytest.raises(ValueError, match='peak_shaving.price_limit'):
+            PeakShavingConfig(price_limit=False)
+
+    def test_allow_full_battery_after_bool_rejected(self):
+        with pytest.raises(ValueError,
+                           match='peak_shaving.allow_full_battery_after'):
+            PeakShavingConfig(allow_full_battery_after=True)
+
+    def test_allow_full_battery_after_string_rejected(self):
+        with pytest.raises(ValueError,
+                           match='peak_shaving.allow_full_battery_after'):
+            PeakShavingConfig(allow_full_battery_after='12')
+
 
 class TestPeakShavingConfigFromConfig:
     """Test PeakShavingConfig.from_config factory method."""
@@ -94,6 +111,34 @@ class TestPeakShavingConfigFromConfig:
             PeakShavingConfig.from_config({
                 'peak_shaving': {'allow_full_battery_after': 99}
             })
+
+    def test_unparseable_price_limit_string_raises_keyed_error(self):
+        # Reviewer comment: float() of an unparseable string should be
+        # re-wrapped with a peak_shaving.price_limit-prefixed message.
+        with pytest.raises(ValueError, match='peak_shaving.price_limit'):
+            PeakShavingConfig.from_config({
+                'peak_shaving': {'price_limit': 'cheap'}
+            })
+
+    def test_price_limit_list_raises_keyed_error(self):
+        with pytest.raises(ValueError, match='peak_shaving.price_limit'):
+            PeakShavingConfig.from_config({
+                'peak_shaving': {'price_limit': [0.05]}
+            })
+
+    def test_price_limit_bool_from_config_raises_keyed_error(self):
+        with pytest.raises(ValueError, match='peak_shaving.price_limit'):
+            PeakShavingConfig.from_config({
+                'peak_shaving': {'price_limit': True}
+            })
+
+    def test_price_limit_numeric_string_accepted(self):
+        # A YAML quoted number like "0.05" is a common HA-form-field shape;
+        # float() coerces it cleanly.
+        cfg = PeakShavingConfig.from_config({
+            'peak_shaving': {'price_limit': '0.05'}
+        })
+        assert cfg.price_limit == 0.05
 
 
 class TestPeakShavingConfigFallbackWarning:

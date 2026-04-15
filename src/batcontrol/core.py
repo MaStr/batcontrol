@@ -72,13 +72,20 @@ class PeakShavingConfig:
                 f"peak_shaving.mode must be one of "
                 f"{PEAK_SHAVING_VALID_MODES}, got '{self.mode}'"
             )
+        if not isinstance(self.allow_full_battery_after, int) \
+                or isinstance(self.allow_full_battery_after, bool):
+            raise ValueError(
+                f"peak_shaving.allow_full_battery_after must be an integer, "
+                f"got {type(self.allow_full_battery_after).__name__}"
+            )
         if not 0 <= self.allow_full_battery_after <= 23:
             raise ValueError(
                 f"peak_shaving.allow_full_battery_after must be between "
                 f"0 and 23, got {self.allow_full_battery_after}"
             )
-        if self.price_limit is not None \
-                and not isinstance(self.price_limit, (int, float)):
+        if self.price_limit is not None and (
+                isinstance(self.price_limit, bool)
+                or not isinstance(self.price_limit, (int, float))):
             raise ValueError(
                 f"peak_shaving.price_limit must be numeric or None, "
                 f"got {type(self.price_limit).__name__}"
@@ -96,11 +103,23 @@ class PeakShavingConfig:
         """ Create a PeakShavingConfig instance from a configuration dict. """
         ps = config.get('peak_shaving', {})
         price_limit_raw = ps.get('price_limit', None)
+        if price_limit_raw is None or isinstance(price_limit_raw, bool):
+            # ``None`` stays ``None``; bool is rejected by __post_init__ with a
+            # key-prefixed message. Skip float() so we do not lose the type info.
+            price_limit = price_limit_raw
+        else:
+            try:
+                price_limit = float(price_limit_raw)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"peak_shaving.price_limit must be numeric or None, "
+                    f"got {price_limit_raw!r}"
+                ) from exc
         return cls(
             enabled=ps.get('enabled', False),
             mode=ps.get('mode', 'combined'),
             allow_full_battery_after=ps.get('allow_full_battery_after', 14),
-            price_limit=float(price_limit_raw) if price_limit_raw is not None else None,
+            price_limit=price_limit,
         )
 
 
