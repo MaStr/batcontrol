@@ -1,17 +1,17 @@
 # Stage 1: Build Stage
 FROM python:3.13-alpine AS builder
 
-# Copy only whats needed for dependencies first
-COPY pyproject.toml LICENSE README.MD ./
+# Install uv for fast, reliable Python packaging
+COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
 
-# Install build dependencies
-RUN pip install setuptools>=66.0
+# Copy only whats needed for dependencies first
+COPY pyproject.toml LICENSE README.md ./
 
 # Copy the rest of the source files
 COPY ./src ./src
 
-# Build a wheel from the public Git repo
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir=/wheels .
+# Build a wheel
+RUN uv build --wheel --out-dir /wheels
 
 # Stage 2: Build the final image
 FROM python:3.13-alpine
@@ -24,11 +24,16 @@ LABEL git-sha="${GIT_SHA}"
 LABEL description="This is a Docker image for the BatControl project."
 LABEL maintainer="matthias.strubel@aod-rpg.de"
 
+# Install uv for fast, reliable Python packaging
+COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
+
 # Copy the built wheel from the builder stage and install it
 COPY --from=builder /wheels /wheels
 
-# Update pip and install runtime dependencies
-RUN pip install --no-cache-dir --extra-index-url https://piwheels.org/simple --prefer-binary /wheels/*.whl && rm -rf /wheels
+# Install runtime dependencies using uv
+# Prefer piwheels for compatible wheels and fall back to PyPI
+RUN uv pip install --system --no-cache --index-url https://piwheels.org/simple --extra-index-url https://pypi.org/simple /wheels/*.whl && \
+    rm -rf /wheels /usr/local/bin/uv
 
 ENV BATCONTROL_VERSION=${VERSION}
 ENV BATCONTROL_GIT_SHA=${GIT_SHA}
