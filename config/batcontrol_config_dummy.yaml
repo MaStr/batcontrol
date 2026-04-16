@@ -25,7 +25,7 @@ battery_control:
 #  See more Details in: https://github.com/MaStr/batcontrol/wiki/battery_control_expert
 #--------------------------
 battery_control_expert:
-  charge_rate_multiplier: 1.1 # Increase (>1) calculated charge rate to compensate charge inefficencies.
+  charge_rate_multiplier: 1.1 # Increase (>1) calculated charge rate to compensate charge inefficiencies.
   soften_price_difference_on_charging: False # enable earlier charging based on a more relaxed calculation
                                              # future_price <= current_price-min_price_difference/soften_price_difference_on_charging_factor
   soften_price_difference_on_charging_factor: 5

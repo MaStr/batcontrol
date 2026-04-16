@@ -59,7 +59,7 @@ class Inverter:
             }
             inverter=MqttInverter(iv_config)
         else:
-            raise RuntimeError(f'[Inverter] Unkown inverter type {config["type"]}')
+            raise RuntimeError(f'[Inverter] Unknown inverter type {config["type"]}')
 
         inverter.inverter_num = Inverter.num_inverters
         Inverter.num_inverters += 1
