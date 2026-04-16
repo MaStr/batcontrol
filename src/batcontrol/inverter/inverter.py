@@ -1,6 +1,9 @@
 """ Factory for inverter providers """
 
 import logging
+from .baseclass import DEFAULT_MAX_SOC, DEFAULT_MIN_SOC
+from .fronius_modbus_inverter import FroniusModbusInverter
+from .fronius_modbus_tcp_transport import FroniusModbusTcpTransport
 from .inverter_interface import InverterInterface
 from .resilient_wrapper import (
     ResilientInverterWrapper,
@@ -53,11 +56,25 @@ class Inverter:
             iv_config = {
                 'base_topic': config.get('base_topic', 'default'),
                 'capacity': config['capacity'],
-                'min_soc': config.get('min_soc', 5),
-                'max_soc': config.get('max_soc', 100),
+                'min_soc': config.get('min_soc', DEFAULT_MIN_SOC),
+                'max_soc': config.get('max_soc', DEFAULT_MAX_SOC),
                 'max_grid_charge_rate': config['max_grid_charge_rate']
             }
             inverter=MqttInverter(iv_config)
+        elif config['type'].lower() == 'fronius-modbus':
+            transport = FroniusModbusTcpTransport(
+                config['address'],
+                port=config.get('port', 502),
+                unit_id=config.get('unit_id', 1),
+            )
+            inverter = FroniusModbusInverter(
+                transport,
+                max_charge_rate=config['max_grid_charge_rate'],
+                capacity=config['capacity'],
+                min_soc=config.get('min_soc', DEFAULT_MIN_SOC),
+                max_soc=config.get('max_soc', DEFAULT_MAX_SOC),
+                revert_seconds=config.get('revert_seconds', 0),
+            )
         else:
             raise RuntimeError(f'[Inverter] Unkown inverter type {config["type"]}')
 
