@@ -731,6 +731,7 @@ class MqttApi:
         val_templ = (
             "{% if value == '-1' %}Charge from Grid"
             "{% elif value == '0' %}Avoid Discharge"
+            "{% elif value == '8' %}Limit Battery Charge"
             "{% elif value == '10' %}Discharge Allowed"
             "{% else %}Unknown"
             "{% endif %}"
@@ -738,6 +739,7 @@ class MqttApi:
         cmd_templ = (
             "{% if value == 'Charge from Grid' %}-1"
             "{% elif value == 'Avoid Discharge' %}0"
+            "{% elif value == 'Limit Battery Charge' %}8"
             "{% elif value == 'Discharge Allowed' %}10"
             "{% else %}-1"
             "{% endif %}"
@@ -754,6 +756,7 @@ class MqttApi:
             options=[
                 "Charge from Grid",
                 "Avoid Discharge",
+                "Limit Battery Charge",
                 "Discharge Allowed"],
             value_template=val_templ,
             command_template=cmd_templ)

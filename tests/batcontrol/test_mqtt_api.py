@@ -89,6 +89,33 @@ class TestHandleMessageBytesDecoding:
         assert received == ['true']
 
 
+class TestModeDiscovery:
+    """Mode discovery should expose the full externally supported mode model."""
+
+    def test_mode_discovery_includes_limit_battery_charge_mode(self):
+        api = MagicMock(spec=MqttApi)
+        api.base_topic = 'batcontrol'
+        api.publish_mqtt_discovery_message = MagicMock()
+        api.send_mqtt_discovery_for_mode = (
+            MqttApi.send_mqtt_discovery_for_mode.__get__(api, MqttApi)
+        )
+
+        api.send_mqtt_discovery_for_mode()
+
+        options = api.publish_mqtt_discovery_message.call_args.kwargs['options']
+        value_template = api.publish_mqtt_discovery_message.call_args.kwargs['value_template']
+        command_template = api.publish_mqtt_discovery_message.call_args.kwargs['command_template']
+
+        assert options == [
+            'Charge from Grid',
+            'Avoid Discharge',
+            'Limit Battery Charge',
+            'Discharge Allowed',
+        ]
+        assert "{% elif value == '8' %}Limit Battery Charge" in value_template
+        assert "{% elif value == 'Limit Battery Charge' %}8" in command_template
+
+
 class TestPeakShavingEnabledApi:
     """Regression test: peak_shaving/enabled must correctly parse the bytes payload."""
 
