@@ -1,10 +1,11 @@
 """Tests for core batcontrol functionality including MODE_LIMIT_BATTERY_CHARGE_RATE"""
 import datetime
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from batcontrol.core import (
     Batcontrol,
+    MODE_ALLOW_DISCHARGING,
     MODE_LIMIT_BATTERY_CHARGE_RATE,
 )
 from batcontrol.logic.logic import Logic as LogicFactory
@@ -514,6 +515,134 @@ class TestCoreRunDispatch:
         mock_inverter.set_mode_allow_discharge.assert_not_called()
         mock_inverter.set_mode_force_charge.assert_not_called()
         mock_inverter.set_mode_avoid_discharge.assert_not_called()
+
+
+class TestApiOverrideMqttState:
+    """API override state should be observable via MQTT."""
+
+    @pytest.fixture
+    def mock_config(self):
+        return {
+            'timezone': 'Europe/Berlin',
+            'time_resolution_minutes': 60,
+            'inverter': {
+                'type': 'dummy',
+                'max_grid_charge_rate': 5000,
+                'max_pv_charge_rate': 3000,
+                'min_pv_charge_rate': 0,
+            },
+            'utility': {
+                'type': 'tibber',
+                'apikey': 'test_token'
+            },
+            'pvinstallations': [],
+            'consumption_forecast': {
+                'type': 'simple',
+                'value': 500
+            },
+            'battery_control': {
+                'max_charging_from_grid_limit': 0.8,
+                'min_price_difference': 0.05
+            },
+            'mqtt': {'enabled': False}
+        }
+
+    @pytest.fixture
+    def run_dispatch_setup(self, mock_config, mocker):
+        core_module = "batcontrol.core"
+
+        mock_inverter = mocker.MagicMock()
+        mock_inverter.max_pv_charge_rate = 3000
+        mock_inverter.max_grid_charge_rate = 5000
+        mock_inverter.get_max_capacity.return_value = 10000
+        mock_inverter.get_SOC.return_value = 50
+        mock_inverter.get_stored_energy.return_value = 5000
+        mock_inverter.get_stored_usable_energy.return_value = 4500
+        mock_inverter.get_free_capacity.return_value = 5000
+
+        mock_tariff_provider = mocker.MagicMock()
+        mock_tariff_provider.get_prices.return_value = {0: 0.20, 1: 0.30, 2: 0.25}
+        mock_tariff_provider.refresh_data = mocker.MagicMock()
+
+        mock_solar_provider = mocker.MagicMock()
+        mock_solar_provider.get_forecast.return_value = {0: 0, 1: 0, 2: 0}
+        mock_solar_provider.refresh_data = mocker.MagicMock()
+
+        mock_consumption_provider = mocker.MagicMock()
+        mock_consumption_provider.get_forecast.return_value = {0: 500, 1: 500, 2: 500}
+        mock_consumption_provider.refresh_data = mocker.MagicMock()
+
+        fake_logic = mocker.MagicMock()
+        fake_logic.calculate.return_value = True
+        fake_logic.get_calculation_output.return_value = mocker.MagicMock(
+            reserved_energy=0,
+            required_recharge_energy=0,
+            min_dynamic_price_difference=0.05,
+        )
+        fake_logic.get_inverter_control_settings.return_value = mocker.MagicMock(
+            allow_discharge=True,
+            charge_from_grid=False,
+            charge_rate=0,
+            limit_battery_charge_rate=-1,
+        )
+
+        mocker.patch(
+            f"{core_module}.tariff_factory.create_tarif_provider",
+            autospec=True,
+            return_value=mock_tariff_provider,
+        )
+        mocker.patch(
+            f"{core_module}.inverter_factory.create_inverter",
+            autospec=True,
+            return_value=mock_inverter,
+        )
+        mocker.patch(
+            f"{core_module}.solar_factory.create_solar_provider",
+            autospec=True,
+            return_value=mock_solar_provider,
+        )
+        mocker.patch(
+            f"{core_module}.consumption_factory.create_consumption",
+            autospec=True,
+            return_value=mock_consumption_provider,
+        )
+        mocker.patch(
+            f"{core_module}.LogicFactory.create_logic",
+            autospec=True,
+            return_value=fake_logic,
+        )
+
+        bc = Batcontrol(mock_config)
+
+        yield bc, mock_inverter, fake_logic
+
+        bc.shutdown()
+
+    def test_api_set_mode_publishes_override_active(self, run_dispatch_setup):
+        bc, _mock_inverter, _fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+
+        bc.api_set_mode(MODE_ALLOW_DISCHARGING)
+
+        bc.mqtt_api.publish_api_override_active.assert_called_once_with(True)
+
+    def test_api_set_charge_rate_publishes_override_active(self, run_dispatch_setup):
+        bc, _mock_inverter, _fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+
+        bc.api_set_charge_rate(1200)
+
+        bc.mqtt_api.publish_api_override_active.assert_called_once_with(True)
+
+    def test_run_clears_override_and_publishes_inactive_state(self, run_dispatch_setup):
+        bc, _mock_inverter, _fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+        bc.api_overwrite = True
+
+        bc.run()
+
+        assert bc.api_overwrite is False
+        assert bc.mqtt_api.publish_api_override_active.call_args_list[-1] == call(False)
 
 
 class TestEvccPeakShavingGuard:
