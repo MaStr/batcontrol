@@ -404,7 +404,7 @@ class Batcontrol:
             logger.error("Error during initial data fetch: %s", e)
 
     def shutdown(self):
-        """ Shutdown Batcontrol and dependend modules (inverter..) """
+        """ Shutdown Batcontrol and dependent modules (inverter..) """
         logger.info('Shutting down Batcontrol')
         try:
             # Stop scheduler thread
@@ -437,12 +437,12 @@ class Batcontrol:
 
         if time_passed < ERROR_IGNORE_TIME:
             # keep current mode
-            logger.info("An API Error occured %0.fs ago. "
+            logger.info("An API Error occurred %0.fs ago. "
                         "Keeping inverter mode unchanged.", time_passed)
         else:
             # set default mode
             logger.warning(
-                "An API Error occured %0.fs ago. "
+                "An API Error occurred %0.fs ago. "
                 "Setting inverter to default mode (Allow Discharging)",
                 time_passed)
             self.allow_discharging()
@@ -454,7 +454,7 @@ class Batcontrol:
         # Reset some values
         self.__reset_run_data()
 
-        # Verify some constrains:
+        # Verify some constraints:
         #   always_allow_discharge needs to be above max_charging from grid.
         #   if not, it will oscillate between discharging and charging.
         always_allow_discharge_limit = self.general_logic.get_always_allow_discharge_limit()
