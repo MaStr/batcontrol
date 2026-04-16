@@ -22,6 +22,7 @@ The following topics are published:
 - /min_price_difference : minimum price difference in EUR
 - /discharge_blocked        : bool  # Discharge is blocked by other sources
 - /production_offset: production offset percentage (1.0 = 100%, 0.8 = 80%, etc.)
+- /api_override_active: bool indicating whether a temporary external/API override is active
 
 The following statistical arrays are published as JSON arrays:
 - /FCST/production: forecasted production in W
@@ -451,6 +452,17 @@ class MqttApi:
                 f'{production_offset:.3f}'
             )
 
+    def publish_api_override_active(self, active: bool) -> None:
+        """ Publish whether a temporary API override is currently active.
+            /api_override_active
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/api_override_active',
+                str(active).lower(),
+                retain=True
+            )
+
     def publish_peak_shaving_enabled(self, enabled: bool) -> None:
         """ Publish peak shaving enabled status to MQTT
             /peak_shaving/enabled
@@ -613,6 +625,17 @@ class MqttApi:
             "power",
             "W",
             self.base_topic + "/peak_shaving/charge_limit")
+
+        # sensors
+        self.publish_mqtt_discovery_message(
+            "API Override Active",
+            "batcontrol_api_override_active",
+            "binary_sensor",
+            None,
+            None,
+            self.base_topic + "/api_override_active",
+            entity_category="diagnostic",
+            value_template="{% if value == 'true' %}ON{% else %}OFF{% endif %}")
 
         # sensors
         self.publish_mqtt_discovery_message(

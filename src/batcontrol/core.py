@@ -551,6 +551,8 @@ class Batcontrol:
                 TIME_BETWEEN_EVALUATIONS
             )
             self.api_overwrite = False
+            if self.mqtt_api is not None:
+                self.mqtt_api.publish_api_override_active(False)
             return
 
         # Correction for time that has already passed in the current interval
@@ -914,6 +916,8 @@ class Batcontrol:
                 self.min_price_difference_rel)
             self.mqtt_api.publish_production_offset(
                 self.production_offset_percent)
+            self.mqtt_api.publish_api_override_active(
+                self.api_overwrite)
             #
             self.mqtt_api.publish_evaluation_intervall(
                 TIME_BETWEEN_EVALUATIONS)
@@ -941,6 +945,8 @@ class Batcontrol:
 
         logger.info('API: Setting mode to %s', mode)
         self.api_overwrite = True
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_api_override_active(True)
 
         if mode != self.last_mode:
             if mode == MODE_FORCE_CHARGING:
@@ -966,6 +972,8 @@ class Batcontrol:
             return
         logger.info('API: Setting charge rate to %d W', charge_rate)
         self.api_overwrite = True
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_api_override_active(True)
         if charge_rate != self.last_charge_rate:
             self.force_charge(charge_rate)
 
