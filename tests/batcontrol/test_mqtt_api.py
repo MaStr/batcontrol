@@ -116,6 +116,33 @@ class TestModeDiscovery:
         assert "{% elif value == 'Limit Battery Charge' %}8" in command_template
 
 
+class TestDiscoveryMessages:
+    """Discovery should expose key externally visible runtime state."""
+
+    def test_discovery_includes_api_override_active_binary_sensor(self):
+        api = MagicMock(spec=MqttApi)
+        api.base_topic = 'batcontrol'
+        api.publish_mqtt_discovery_message = MagicMock()
+        api.send_mqtt_discovery_for_mode = MagicMock()
+        api.send_mqtt_discovery_messages = (
+            MqttApi.send_mqtt_discovery_messages.__get__(api, MqttApi)
+        )
+
+        api.send_mqtt_discovery_messages()
+
+        assert any(
+            call.args[:3] == (
+                'API Override Active',
+                'batcontrol_api_override_active',
+                'binary_sensor',
+            )
+            and call.args[5] == 'batcontrol/api_override_active'
+            and call.kwargs['entity_category'] == 'diagnostic'
+            and "value == 'true'" in call.kwargs['value_template']
+            for call in api.publish_mqtt_discovery_message.call_args_list
+        )
+
+
 class TestPeakShavingEnabledApi:
     """Regression test: peak_shaving/enabled must correctly parse the bytes payload."""
 
