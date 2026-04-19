@@ -1,6 +1,10 @@
 """ Parent Class for implementing common functions for all inverters """
 from .inverter_interface import InverterInterface
 
+DEFAULT_MIN_SOC = 5
+DEFAULT_MAX_SOC = 100
+
+
 class InverterBaseclass(InverterInterface):
     def __init__(self, config):
         self.min_soc = -1

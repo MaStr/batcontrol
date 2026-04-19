@@ -26,7 +26,7 @@ from dataclasses import dataclass
 import requests
 from packaging import version
 from cachetools import TTLCache
-from .baseclass import InverterBaseclass
+from .baseclass import DEFAULT_MAX_SOC, DEFAULT_MIN_SOC, InverterBaseclass
 
 logger = logging.getLogger(__name__)
 logger.info('Loading module ')
@@ -201,8 +201,8 @@ class FroniusWR(InverterBaseclass):
         self.previous_battery_config = self.get_battery_config()
         self.previous_backup_power_config = None
         # default values
-        self.max_soc = 100
-        self.min_soc = 5
+        self.max_soc = DEFAULT_MAX_SOC
+        self.min_soc = DEFAULT_MIN_SOC
         # Energy Management (EM)
         #  0 - On  (Automatic , Default)
         #  1 - Off (Adjustable)
