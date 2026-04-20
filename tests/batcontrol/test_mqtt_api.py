@@ -119,6 +119,34 @@ class TestModeDiscovery:
 class TestDiscoveryMessages:
     """Discovery should expose key externally visible runtime state."""
 
+    def test_discovery_includes_limit_battery_charge_rate_number(self):
+        api = MagicMock(spec=MqttApi)
+        api.base_topic = 'batcontrol'
+        api.publish_mqtt_discovery_message = MagicMock()
+        api.send_mqtt_discovery_for_mode = MagicMock()
+        api.send_mqtt_discovery_messages = (
+            MqttApi.send_mqtt_discovery_messages.__get__(api, MqttApi)
+        )
+
+        api.send_mqtt_discovery_messages()
+
+        assert any(
+            call.args[:3] == (
+                'Limit Battery Charge Rate',
+                'batcontrol_limit_battery_charge_rate',
+                'number',
+            )
+            and call.args[3] == 'power'
+            and call.args[4] == 'W'
+            and call.args[5] == 'batcontrol/limit_battery_charge_rate'
+            and call.args[6] == 'batcontrol/limit_battery_charge_rate/set'
+            and call.kwargs['entity_category'] == 'config'
+            and call.kwargs['min_value'] == -1
+            and call.kwargs['max_value'] == 10000
+            and call.kwargs['initial_value'] == -1
+            for call in api.publish_mqtt_discovery_message.call_args_list
+        )
+
     def test_discovery_includes_api_override_active_binary_sensor(self):
         api = MagicMock(spec=MqttApi)
         api.base_topic = 'batcontrol'
