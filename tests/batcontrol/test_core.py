@@ -229,10 +229,10 @@ class TestModeLimitBatteryChargeRate:
         assert bc.last_mode == MODE_LIMIT_BATTERY_CHARGE_RATE
         assert bc.api_overwrite is True
 
-    @patch('batcontrol.core.tariff_factory.create_tarif_provider')
-    @patch('batcontrol.core.inverter_factory.create_inverter')
-    @patch('batcontrol.core.solar_factory.create_solar_provider')
-    @patch('batcontrol.core.consumption_factory.create_consumption')
+    @patch('batcontrol.core.tariff_factory.create_tarif_provider', autospec=True)
+    @patch('batcontrol.core.inverter_factory.create_inverter', autospec=True)
+    @patch('batcontrol.core.solar_factory.create_solar_provider', autospec=True)
+    @patch('batcontrol.core.consumption_factory.create_consumption', autospec=True)
     def test_api_set_limit_battery_charge_rate(
         self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
         mock_config):
@@ -250,17 +250,20 @@ class TestModeLimitBatteryChargeRate:
 
         # Create Batcontrol instance
         bc = Batcontrol(mock_config)
+        bc.mqtt_api = MagicMock()
 
         # Call api_set_limit_battery_charge_rate
         bc.api_set_limit_battery_charge_rate(2500)
 
-        # Verify the value was stored
+        # Verify the value was stored and published without applying mode 8
         assert bc._limit_battery_charge_rate == 2500
+        bc.mqtt_api.publish_limit_battery_charge_rate.assert_called_once_with(2500)
+        mock_inverter.set_mode_limit_battery_charge.assert_not_called()
 
-    @patch('batcontrol.core.tariff_factory.create_tarif_provider')
-    @patch('batcontrol.core.inverter_factory.create_inverter')
-    @patch('batcontrol.core.solar_factory.create_solar_provider')
-    @patch('batcontrol.core.consumption_factory.create_consumption')
+    @patch('batcontrol.core.tariff_factory.create_tarif_provider', autospec=True)
+    @patch('batcontrol.core.inverter_factory.create_inverter', autospec=True)
+    @patch('batcontrol.core.solar_factory.create_solar_provider', autospec=True)
+    @patch('batcontrol.core.consumption_factory.create_consumption', autospec=True)
     def test_api_set_limit_applies_immediately_in_mode_8(
         self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
         mock_config):
@@ -278,16 +281,19 @@ class TestModeLimitBatteryChargeRate:
 
         # Create Batcontrol instance
         bc = Batcontrol(mock_config)
+        bc.mqtt_api = MagicMock()
 
         # Set mode to 8 first
         bc.limit_battery_charge_rate(1000)
         mock_inverter.set_mode_limit_battery_charge.reset_mock()
+        bc.mqtt_api.reset_mock()
 
         # Now change the limit
         bc.api_set_limit_battery_charge_rate(2000)
 
         # Verify the new limit was applied immediately
         mock_inverter.set_mode_limit_battery_charge.assert_called_once_with(2000)
+        bc.mqtt_api.publish_limit_battery_charge_rate.assert_called_once_with(2000)
 
 
 class TestTimeResolutionString:

@@ -995,9 +995,12 @@ class Batcontrol:
         logger.info('API: Setting limit_battery_charge_rate to %d W', limit)
         self._limit_battery_charge_rate = limit
 
-        # If currently in MODE_LIMIT_BATTERY_CHARGE_RATE, apply immediately
+        # If currently in MODE_LIMIT_BATTERY_CHARGE_RATE, apply immediately.
+        # Otherwise, publish the updated requested limit for external clients.
         if self.last_mode == MODE_LIMIT_BATTERY_CHARGE_RATE:
             self.limit_battery_charge_rate(limit)
+        elif self.mqtt_api is not None:
+            self.mqtt_api.publish_limit_battery_charge_rate(limit)
 
     def api_get_limit_battery_charge_rate(self) -> int:
         """ Get current dynamic battery charge rate limit """
