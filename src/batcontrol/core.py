@@ -916,6 +916,11 @@ class Batcontrol:
                 self.min_price_difference_rel)
             self.mqtt_api.publish_production_offset(
                 self.production_offset_percent)
+            if self.last_mode is not None:
+                self.mqtt_api.publish_mode(self.last_mode)
+            self.mqtt_api.publish_charge_rate(self.last_charge_rate)
+            self.mqtt_api.publish_limit_battery_charge_rate(
+                self._limit_battery_charge_rate)
             self.mqtt_api.publish_api_override_active(
                 self.api_overwrite)
             #

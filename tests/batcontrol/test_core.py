@@ -644,6 +644,30 @@ class TestApiOverrideMqttState:
         assert bc.api_overwrite is False
         assert bc.mqtt_api.publish_api_override_active.call_args_list[-1] == call(False)
 
+    def test_refresh_static_values_publishes_current_control_state(self, run_dispatch_setup):
+        bc, _mock_inverter, _fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+        bc.last_mode = MODE_LIMIT_BATTERY_CHARGE_RATE
+        bc.last_charge_rate = 1200
+        bc._limit_battery_charge_rate = 1800
+        bc.api_overwrite = True
+
+        bc.refresh_static_values()
+
+        bc.mqtt_api.publish_mode.assert_called_once_with(MODE_LIMIT_BATTERY_CHARGE_RATE)
+        bc.mqtt_api.publish_charge_rate.assert_called_once_with(1200)
+        bc.mqtt_api.publish_limit_battery_charge_rate.assert_called_once_with(1800)
+        bc.mqtt_api.publish_api_override_active.assert_called_once_with(True)
+
+    def test_refresh_static_values_skips_unknown_mode(self, run_dispatch_setup):
+        bc, _mock_inverter, _fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+        bc.last_mode = None
+
+        bc.refresh_static_values()
+
+        bc.mqtt_api.publish_mode.assert_not_called()
+
 
 class TestEvccPeakShavingGuard:
     """Test evcc peak shaving guard in core.py run loop."""
