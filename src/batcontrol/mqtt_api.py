@@ -528,6 +528,21 @@ class MqttApi:
             initial_value=10000)
 
         self.publish_mqtt_discovery_message(
+            "Limit Battery Charge Rate",
+            "batcontrol_limit_battery_charge_rate",
+            "number",
+            "power",
+            "W",
+            self.base_topic +
+            "/limit_battery_charge_rate",
+            self.base_topic +
+            "/limit_battery_charge_rate/set",
+            entity_category="config",
+            min_value=-1,
+            max_value=10000,
+            initial_value=-1)
+
+        self.publish_mqtt_discovery_message(
             "Always Allow Discharge Limit",
             "batcontrol_always_allow_discharge_limit",
             "number",
