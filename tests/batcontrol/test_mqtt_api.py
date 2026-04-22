@@ -25,6 +25,22 @@ def _make_message(topic: str, payload):
     return msg
 
 
+def _make_discovery_stub():
+    """Return a minimal stub for discovery helper tests."""
+    api = MagicMock(spec=MqttApi)
+    api.base_topic = 'batcontrol'
+    api.publish_mqtt_discovery_message = MagicMock()
+    api._topic = MqttApi._topic.__get__(api, MqttApi)
+    api._set_topic = MqttApi._set_topic.__get__(api, MqttApi)
+    api.send_mqtt_discovery_for_mode = (
+        MqttApi.send_mqtt_discovery_for_mode.__get__(api, MqttApi)
+    )
+    api.send_mqtt_discovery_messages = (
+        MqttApi.send_mqtt_discovery_messages.__get__(api, MqttApi)
+    )
+    return api
+
+
 class TestHandleMessageBytesDecoding:
     """_handle_message must decode bytes payloads before calling convert."""
 
@@ -93,12 +109,7 @@ class TestModeDiscovery:
     """Mode discovery should expose the full externally supported mode model."""
 
     def test_mode_discovery_includes_limit_battery_charge_mode(self):
-        api = MagicMock(spec=MqttApi)
-        api.base_topic = 'batcontrol'
-        api.publish_mqtt_discovery_message = MagicMock()
-        api.send_mqtt_discovery_for_mode = (
-            MqttApi.send_mqtt_discovery_for_mode.__get__(api, MqttApi)
-        )
+        api = _make_discovery_stub()
 
         api.send_mqtt_discovery_for_mode()
 
@@ -120,13 +131,7 @@ class TestDiscoveryMessages:
     """Discovery should expose key externally visible runtime state."""
 
     def test_discovery_includes_limit_battery_charge_rate_number(self):
-        api = MagicMock(spec=MqttApi)
-        api.base_topic = 'batcontrol'
-        api.publish_mqtt_discovery_message = MagicMock()
-        api.send_mqtt_discovery_for_mode = MagicMock()
-        api.send_mqtt_discovery_messages = (
-            MqttApi.send_mqtt_discovery_messages.__get__(api, MqttApi)
-        )
+        api = _make_discovery_stub()
 
         api.send_mqtt_discovery_messages()
 
@@ -148,13 +153,7 @@ class TestDiscoveryMessages:
         )
 
     def test_discovery_includes_api_override_active_binary_sensor(self):
-        api = MagicMock(spec=MqttApi)
-        api.base_topic = 'batcontrol'
-        api.publish_mqtt_discovery_message = MagicMock()
-        api.send_mqtt_discovery_for_mode = MagicMock()
-        api.send_mqtt_discovery_messages = (
-            MqttApi.send_mqtt_discovery_messages.__get__(api, MqttApi)
-        )
+        api = _make_discovery_stub()
 
         api.send_mqtt_discovery_messages()
 

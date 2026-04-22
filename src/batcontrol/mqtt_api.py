@@ -51,10 +51,15 @@ import numpy as np
 logger = logging.getLogger(__name__)
 logger.info('Loading module')
 
+TOPIC_MODE = 'mode'
+TOPIC_CHARGE_RATE = 'charge_rate'
+TOPIC_LIMIT_BATTERY_CHARGE_RATE = 'limit_battery_charge_rate'
+TOPIC_API_OVERRIDE_ACTIVE = 'api_override_active'
+TOPIC_SET_SUFFIX = '/set'
+
 
 class MqttApi:
     """ MQTT API to publish data from batcontrol to MQTT for further processing+visualization"""
-    SET_SUFFIX = '/set'
 
     def __init__(self, config: dict, interval_minutes: int = 60):
         self.config = config
@@ -151,6 +156,14 @@ class MqttApi:
 
         return True
 
+    def _topic(self, topic: str) -> str:
+        """Build a state topic below the configured base topic."""
+        return f"{self.base_topic}/{topic}"
+
+    def _set_topic(self, topic: str) -> str:
+        """Build a command topic below the configured base topic."""
+        return f"{self.base_topic}/{topic}{TOPIC_SET_SUFFIX}"
+
     def _handle_message(self, client, userdata, message):  # pylint: disable=unused-argument
         """ Handle and dispatch incoming messages"""
         logger.debug('Received message on %s', message.topic)
@@ -179,7 +192,7 @@ class MqttApi:
         """ Generic- register a callback for changing values inside batcontrol via
             MQTT set topics
         """
-        topic_string = self.base_topic + "/" + topic + MqttApi.SET_SUFFIX
+        topic_string = self._set_topic(topic)
         logger.debug('Registering callback for %s', topic_string)
         # set api endpoints, generic subscription
         self.callbacks[topic_string] = {
@@ -192,14 +205,14 @@ class MqttApi:
             /mode
         """
         if self.client.is_connected():
-            self.client.publish(self.base_topic + '/mode', mode)
+            self.client.publish(self._topic(TOPIC_MODE), mode)
 
     def publish_charge_rate(self, rate: float) -> None:
         """ Publish the forced charge rate in W to MQTT
             /charge_rate
         """
         if self.client.is_connected():
-            self.client.publish(self.base_topic + '/charge_rate', rate)
+            self.client.publish(self._topic(TOPIC_CHARGE_RATE), rate)
 
     def publish_limit_battery_charge_rate(self, limit: int) -> None:
         """ Publish dynamic battery charge rate limit to MQTT
@@ -207,7 +220,7 @@ class MqttApi:
         """
         if self.client.is_connected():
             self.client.publish(
-                self.base_topic + '/limit_battery_charge_rate',
+                self._topic(TOPIC_LIMIT_BATTERY_CHARGE_RATE),
                 limit
             )
 
@@ -458,7 +471,7 @@ class MqttApi:
         """
         if self.client.is_connected():
             self.client.publish(
-                self.base_topic + '/api_override_active',
+                self._topic(TOPIC_API_OVERRIDE_ACTIVE),
                 str(active).lower(),
                 retain=True
             )
@@ -518,10 +531,8 @@ class MqttApi:
             "number",
             "power",
             "W",
-            self.base_topic +
-            "/charge_rate",
-            self.base_topic +
-            "/charge_rate/set",
+            self._topic(TOPIC_CHARGE_RATE),
+            self._set_topic(TOPIC_CHARGE_RATE),
             entity_category="config",
             min_value=0,
             max_value=10000,
@@ -533,10 +544,8 @@ class MqttApi:
             "number",
             "power",
             "W",
-            self.base_topic +
-            "/limit_battery_charge_rate",
-            self.base_topic +
-            "/limit_battery_charge_rate/set",
+            self._topic(TOPIC_LIMIT_BATTERY_CHARGE_RATE),
+            self._set_topic(TOPIC_LIMIT_BATTERY_CHARGE_RATE),
             entity_category="config",
             min_value=-1,
             max_value=10000,
@@ -648,7 +657,7 @@ class MqttApi:
             "binary_sensor",
             None,
             None,
-            self.base_topic + "/api_override_active",
+            self._topic(TOPIC_API_OVERRIDE_ACTIVE),
             entity_category="diagnostic",
             value_template="{% if value == 'true' %}ON{% else %}OFF{% endif %}")
 
@@ -788,8 +797,8 @@ class MqttApi:
             "select",
             None,
             None,
-            self.base_topic + "/mode",
-            self.base_topic + "/mode/set",
+            self._topic(TOPIC_MODE),
+            self._set_topic(TOPIC_MODE),
             entity_category=None,
             options=[
                 "Charge from Grid",
