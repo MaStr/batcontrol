@@ -650,6 +650,24 @@ class TestApiOverrideMqttState:
         assert bc.api_overwrite is False
         assert bc.mqtt_api.publish_api_override_active.call_args_list[-1] == call(False)
 
+    def test_api_set_min_price_difference_publishes_immediately(self, run_dispatch_setup):
+        bc, _mock_inverter, _fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+
+        bc.api_set_min_price_difference(0.075)
+
+        assert bc.min_price_difference == 0.075
+        bc.mqtt_api.publish_min_price_difference.assert_called_once_with(0.075)
+
+    def test_api_set_min_price_difference_rel_publishes_immediately(self, run_dispatch_setup):
+        bc, _mock_inverter, _fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+
+        bc.api_set_min_price_difference_rel(0.15)
+
+        assert bc.min_price_difference_rel == 0.15
+        bc.mqtt_api.publish_min_price_difference_rel.assert_called_once_with(0.15)
+
     def test_refresh_static_values_publishes_current_control_state(self, run_dispatch_setup):
         bc, _mock_inverter, _fake_logic = run_dispatch_setup
         bc.mqtt_api = MagicMock()
