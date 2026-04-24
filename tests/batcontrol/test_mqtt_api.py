@@ -52,6 +52,9 @@ def _make_publish_stub():
     api.publish_discharge_blocked = (
         MqttApi.publish_discharge_blocked.__get__(api, MqttApi)
     )
+    api.publish_control_source = (
+        MqttApi.publish_control_source.__get__(api, MqttApi)
+    )
     return api
 
 
@@ -240,6 +243,37 @@ class TestDiscoveryMessages:
             and call.args[5] == 'batcontrol/discharge_blocked'
             and "value | lower == 'true'" in call.kwargs['value_template']
             for call in api.publish_mqtt_discovery_message.call_args_list
+        )
+
+    def test_discovery_includes_control_source_diagnostic_sensor(self):
+        api = _make_discovery_stub()
+
+        api.send_mqtt_discovery_messages()
+
+        assert any(
+            call.args[:3] == (
+                'Control Source',
+                'batcontrol_control_source',
+                'sensor',
+            )
+            and call.args[5] == 'batcontrol/control_source'
+            and call.kwargs['entity_category'] == 'diagnostic'
+            for call in api.publish_mqtt_discovery_message.call_args_list
+        )
+
+
+class TestPublishControlSource:
+    """Control source should publish to its dedicated state topic."""
+
+    def test_publish_control_source_uses_control_source_topic(self):
+        api = _make_publish_stub()
+
+        api.publish_control_source('api')
+
+        api.client.publish.assert_called_once_with(
+            'batcontrol/control_source',
+            'api',
+            retain=True,
         )
 
 
