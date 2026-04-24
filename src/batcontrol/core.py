@@ -51,6 +51,9 @@ MODE_LIMIT_BATTERY_CHARGE_RATE = 8  # Limit PV charge, allow discharge
 MODE_AVOID_DISCHARGING = 0
 MODE_FORCE_CHARGING = -1
 
+CONTROL_SOURCE_API = 'api'
+CONTROL_SOURCE_OPTIMIZER = 'optimizer'
+
 logger = logging.getLogger(__name__)
 
 
@@ -132,6 +135,7 @@ class Batcontrol:
         self.api_overwrite = False
         # -1 = charge from grid , 0 = avoid discharge , 8 = limit battery charge, 10 = discharge allowed
         self.last_mode = None
+        self.last_control_source = None
         self.last_charge_rate = 0
         self._limit_battery_charge_rate = -1  # Dynamic battery charge rate limit (-1 = no limit)
         self._evcc_peak_shaving_disabled = False  # Tracks last evcc-disable state for log messages
@@ -681,37 +685,52 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_charge_rate(charge_rate)
 
-    def __set_mode(self, mode):
+    def __set_control_source(self, control_source: str):
+        """Set the source that last selected the current control state."""
+        if self.last_control_source == control_source:
+            return
+        self.last_control_source = control_source
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_control_source(control_source)
+
+    def __set_mode(self, mode, control_source: str = CONTROL_SOURCE_OPTIMIZER):
         """ Set mode and publish to mqtt """
         self.last_mode = mode
         if self.mqtt_api is not None:
             self.mqtt_api.publish_mode(mode)
+        self.__set_control_source(control_source)
         # leaving force charge mode, reset charge rate
         if self.last_charge_rate > 0 and mode != MODE_FORCE_CHARGING:
             self.__set_charge_rate(0)
 
-    def allow_discharging(self):
+    def allow_discharging(self, control_source: str = CONTROL_SOURCE_OPTIMIZER):
         """ Allow unlimited discharging of the battery """
         logger.info('Mode: Allow Discharging')
         self.inverter.set_mode_allow_discharge()
-        self.__set_mode(MODE_ALLOW_DISCHARGING)
+        self.__set_mode(MODE_ALLOW_DISCHARGING, control_source)
 
-    def avoid_discharging(self):
+    def avoid_discharging(self, control_source: str = CONTROL_SOURCE_OPTIMIZER):
         """ Avoid discharging the battery """
         logger.info('Mode: Avoid Discharging')
         self.inverter.set_mode_avoid_discharge()
-        self.__set_mode(MODE_AVOID_DISCHARGING)
+        self.__set_mode(MODE_AVOID_DISCHARGING, control_source)
 
-    def force_charge(self, charge_rate=500):
+    def force_charge(
+            self,
+            charge_rate=500,
+            control_source: str = CONTROL_SOURCE_OPTIMIZER):
         """ Force the battery to charge with a given rate """
         charge_rate = int(min(charge_rate, self.inverter.max_grid_charge_rate))
         logger.info(
             'Mode: grid charging. Charge rate : %d W', charge_rate)
         self.inverter.set_mode_force_charge(charge_rate)
-        self.__set_mode(MODE_FORCE_CHARGING)
+        self.__set_mode(MODE_FORCE_CHARGING, control_source)
         self.__set_charge_rate(charge_rate)
 
-    def limit_battery_charge_rate(self, limit_charge_rate: int = 0):
+    def limit_battery_charge_rate(
+            self,
+            limit_charge_rate: int = 0,
+            control_source: str = CONTROL_SOURCE_OPTIMIZER):
         """ Limit PV charging rate while allowing battery discharge
 
         Args:
@@ -719,7 +738,7 @@ class Batcontrol:
         """
         # If -1, use no limit (don't apply mode 8)
         if limit_charge_rate < 0:
-            self.allow_discharging()
+            self.allow_discharging(control_source)
             return
 
         # Always enforce a non-negative limit
@@ -738,7 +757,7 @@ class Batcontrol:
 
         logger.info('Mode: Limit Battery Charge Rate to %d W, discharge allowed', effective_limit)
         self.inverter.set_mode_limit_battery_charge(effective_limit)
-        self.__set_mode(MODE_LIMIT_BATTERY_CHARGE_RATE)
+        self.__set_mode(MODE_LIMIT_BATTERY_CHARGE_RATE, control_source)
 
         # Publish limit via MQTT
         if self.mqtt_api is not None:
@@ -955,9 +974,9 @@ class Batcontrol:
 
         if mode != self.last_mode:
             if mode == MODE_FORCE_CHARGING:
-                self.force_charge()
+                self.force_charge(control_source=CONTROL_SOURCE_API)
             elif mode == MODE_AVOID_DISCHARGING:
-                self.avoid_discharging()
+                self.avoid_discharging(CONTROL_SOURCE_API)
             elif mode == MODE_LIMIT_BATTERY_CHARGE_RATE:
                 if self._limit_battery_charge_rate < 0:
                     logger.warning(
@@ -965,9 +984,13 @@ class Batcontrol:
                         'limit configured. Set a limit via api_set_limit_battery_charge_rate '
                         'first. Falling back to allow-discharging mode.',
                         mode)
-                self.limit_battery_charge_rate(self._limit_battery_charge_rate)
+                self.limit_battery_charge_rate(
+                    self._limit_battery_charge_rate,
+                    control_source=CONTROL_SOURCE_API)
             elif mode == MODE_ALLOW_DISCHARGING:
-                self.allow_discharging()
+                self.allow_discharging(CONTROL_SOURCE_API)
+        else:
+            self.__set_control_source(CONTROL_SOURCE_API)
 
     def api_set_charge_rate(self, charge_rate: int):
         """ Log and change config charge_rate and activate charging."""
@@ -980,7 +1003,11 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_api_override_active(True)
         if charge_rate != self.last_charge_rate:
-            self.force_charge(charge_rate)
+            self.force_charge(
+                charge_rate,
+                control_source=CONTROL_SOURCE_API)
+        else:
+            self.__set_control_source(CONTROL_SOURCE_API)
 
     def api_set_limit_battery_charge_rate(self, limit: int):
         """ Set dynamic battery charge rate limit from external call
@@ -998,7 +1025,9 @@ class Batcontrol:
         # If currently in MODE_LIMIT_BATTERY_CHARGE_RATE, apply immediately.
         # Otherwise, publish the updated requested limit for external clients.
         if self.last_mode == MODE_LIMIT_BATTERY_CHARGE_RATE:
-            self.limit_battery_charge_rate(limit)
+            self.limit_battery_charge_rate(
+                limit,
+                control_source=CONTROL_SOURCE_API)
         elif self.mqtt_api is not None:
             self.mqtt_api.publish_limit_battery_charge_rate(limit)
 

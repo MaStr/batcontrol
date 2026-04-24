@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, call, patch
 
 from batcontrol.core import (
     Batcontrol,
+    CONTROL_SOURCE_API,
+    CONTROL_SOURCE_OPTIMIZER,
     MODE_ALLOW_DISCHARGING,
     MODE_LIMIT_BATTERY_CHARGE_RATE,
 )
@@ -522,6 +524,21 @@ class TestCoreRunDispatch:
         mock_inverter.set_mode_force_charge.assert_not_called()
         mock_inverter.set_mode_avoid_discharge.assert_not_called()
 
+    def test_run_publishes_optimizer_control_source(self, run_dispatch_setup):
+        bc, _mock_inverter, fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+        fake_logic.get_inverter_control_settings.return_value = MagicMock(
+            allow_discharge=True,
+            charge_from_grid=False,
+            charge_rate=0,
+            limit_battery_charge_rate=-1,
+        )
+
+        bc.run()
+
+        assert bc.last_control_source == CONTROL_SOURCE_OPTIMIZER
+        bc.mqtt_api.publish_control_source.assert_called_with(CONTROL_SOURCE_OPTIMIZER)
+
 
 class TestApiOverrideMqttState:
     """API override state should be observable via MQTT."""
@@ -639,6 +656,44 @@ class TestApiOverrideMqttState:
         bc.api_set_charge_rate(1200)
 
         bc.mqtt_api.publish_api_override_active.assert_called_once_with(True)
+
+    def test_api_set_mode_publishes_api_control_source(self, run_dispatch_setup):
+        bc, _mock_inverter, _fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+
+        bc.api_set_mode(MODE_ALLOW_DISCHARGING)
+
+        assert bc.last_control_source == CONTROL_SOURCE_API
+        bc.mqtt_api.publish_control_source.assert_called_once_with(CONTROL_SOURCE_API)
+
+    def test_api_set_charge_rate_publishes_api_control_source(self, run_dispatch_setup):
+        bc, _mock_inverter, _fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+
+        bc.api_set_charge_rate(1200)
+
+        assert bc.last_control_source == CONTROL_SOURCE_API
+        bc.mqtt_api.publish_control_source.assert_called_once_with(CONTROL_SOURCE_API)
+
+    def test_refresh_static_values_does_not_republish_control_source(self, run_dispatch_setup):
+        bc, _mock_inverter, _fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+        bc.last_control_source = CONTROL_SOURCE_API
+
+        bc.refresh_static_values()
+
+        bc.mqtt_api.publish_control_source.assert_not_called()
+
+    def test_api_set_mode_does_not_republish_unchanged_control_source(
+            self, run_dispatch_setup):
+        bc, _mock_inverter, _fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+        bc.last_mode = MODE_ALLOW_DISCHARGING
+        bc.last_control_source = CONTROL_SOURCE_API
+
+        bc.api_set_mode(MODE_ALLOW_DISCHARGING)
+
+        bc.mqtt_api.publish_control_source.assert_not_called()
 
     def test_run_clears_override_and_publishes_inactive_state(self, run_dispatch_setup):
         bc, _mock_inverter, _fake_logic = run_dispatch_setup

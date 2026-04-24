@@ -23,6 +23,7 @@ The following topics are published:
 - /discharge_blocked        : bool  # Discharge is blocked by other sources
 - /production_offset: production offset percentage (1.0 = 100%, 0.8 = 80%, etc.)
 - /api_override_active: bool indicating whether a temporary external/API override is active
+- /control_source: source that last selected the current control state (api or optimizer)
 
 The following statistical arrays are published as JSON arrays:
 - /FCST/production: forecasted production in W
@@ -55,6 +56,7 @@ TOPIC_MODE = 'mode'
 TOPIC_CHARGE_RATE = 'charge_rate'
 TOPIC_LIMIT_BATTERY_CHARGE_RATE = 'limit_battery_charge_rate'
 TOPIC_API_OVERRIDE_ACTIVE = 'api_override_active'
+TOPIC_CONTROL_SOURCE = 'control_source'
 TOPIC_SET_SUFFIX = '/set'
 
 
@@ -475,6 +477,17 @@ class MqttApi:
                 retain=True
             )
 
+    def publish_control_source(self, source: str) -> None:
+        """ Publish the source that last selected the current control state.
+            /control_source
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self._topic(TOPIC_CONTROL_SOURCE),
+                source,
+                retain=True
+            )
+
     def publish_peak_shaving_enabled(self, enabled: bool) -> None:
         """ Publish peak shaving enabled status to MQTT
             /peak_shaving/enabled
@@ -659,6 +672,15 @@ class MqttApi:
             self._topic(TOPIC_API_OVERRIDE_ACTIVE),
             entity_category="diagnostic",
             value_template="{% if value == 'true' %}ON{% else %}OFF{% endif %}")
+
+        self.publish_mqtt_discovery_message(
+            "Control Source",
+            "batcontrol_control_source",
+            "sensor",
+            None,
+            None,
+            self._topic(TOPIC_CONTROL_SOURCE),
+            entity_category="diagnostic")
 
         # sensors
         self.publish_mqtt_discovery_message(
