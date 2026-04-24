@@ -1041,6 +1041,8 @@ class Batcontrol:
         logger.info(
             'API: Setting min price difference to %.3f', min_price_difference)
         self.min_price_difference = min_price_difference
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_min_price_difference(min_price_difference)
 
     def api_set_min_price_difference_rel(
             self, min_price_difference_rel: float):
@@ -1054,6 +1056,10 @@ class Batcontrol:
             'API: Setting min price rel difference to %.3f',
             min_price_difference_rel)
         self.min_price_difference_rel = min_price_difference_rel
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_min_price_difference_rel(
+                min_price_difference_rel
+            )
 
     def api_set_production_offset(self, production_offset: float):
         """ Set production offset percentage from external API request.
