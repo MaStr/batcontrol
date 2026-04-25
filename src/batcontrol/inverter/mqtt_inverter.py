@@ -169,7 +169,7 @@ TROUBLESHOOTING
 import logging
 import time
 from cachetools import TTLCache
-from .baseclass import InverterBaseclass
+from .baseclass import DEFAULT_MAX_SOC, DEFAULT_MIN_SOC, InverterBaseclass
 from ..mqtt_api import MqttApi
 
 logger = logging.getLogger(__name__)
@@ -207,8 +207,8 @@ class MqttInverter(InverterBaseclass):
         self.cache_ttl = config.get('cache_ttl', 120)
 
         # Battery parameters (from config or defaults)
-        self.min_soc = config.get('min_soc', 5)
-        self.max_soc = config.get('max_soc', 100)
+        self.min_soc = config.get('min_soc', DEFAULT_MIN_SOC)
+        self.max_soc = config.get('max_soc', DEFAULT_MAX_SOC)
 
         # These values should be set in the config, if not throw ValueError
         if 'capacity' not in config:
