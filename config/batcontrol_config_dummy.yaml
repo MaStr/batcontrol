@@ -71,16 +71,24 @@ peak_shaving:
 #
 #  For real operation, you MUST:
 #  1. Comment out the "dummy" type below
-#  2. Uncomment and configure a real inverter type (e.g., fronius_gen24)
-#  3. Update the address, user, and password for your actual inverter
+#  2. Uncomment and configure a real inverter type (e.g., fronius_gen24 or fronius-modbus)
+#  3. Update the address and, if needed, credentials for your actual inverter
 #--------------------------
 inverter:
-  type: dummy # DEMO ONLY - Change to "fronius_gen24" for real operation
-  # For real operation, uncomment and configure the following:
-  # type: fronius_gen24 #currently only fronius_gen24 supported
-  # address: 192.168.0.XX # the local IP of your inverter. needs to be reachable from the machine that runs batcontrol
-  # user: customer #customer or technician lowercase only!!
-  # password: YOUR-PASSWORD #
+  type: dummy # DEMO ONLY - Change to a real inverter type for real operation
+  # For real operation, uncomment and configure one of the following:
+  # type: fronius_gen24
+  # address: 192.0.2.10 # the local IP/host of your inverter. needs to be reachable from the machine that runs batcontrol
+  # user: customer # customer or technician lowercase only!!
+  # password: YOUR-PASSWORD
+  #
+  # Or use Fronius Modbus TCP instead of web-login control:
+  # type: fronius-modbus
+  # address: 192.0.2.10
+  # port: 502 # Optional, default: 502
+  # unit_id: 1 # Optional, default: 1
+  # capacity: 10000 # Battery capacity in Wh
+  # revert_seconds: 0 # Optional, default: 0
   max_grid_charge_rate: 5000 # Watt, Upper limit for Grid to Battery charge rate.
   max_pv_charge_rate: 0 # Watt, STATIC upper limit for PV to Battery charge rate. Set to 0 for unlimited charging.
                         # Applied in MODE_ALLOW_DISCHARGING (10) and as upper bound in MODE_LIMIT_BATTERY_CHARGE_RATE (8).
