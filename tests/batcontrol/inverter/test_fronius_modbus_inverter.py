@@ -394,3 +394,31 @@ def test_shutdown_closes_transport_even_if_reset_to_auto_fails():
 
     assert transport.events == ["write", "close"]
     assert transport.close_count == 1
+
+
+def test_inverter_passes_grid_status_reader_to_control_layer():
+    transport = RecordingModbusTransport()
+    grid_status_reader = object()
+
+    inverter = FroniusModbusInverter(
+        transport,
+        max_charge_rate=5000,
+        grid_status_reader=grid_status_reader,
+    )
+
+    assert inverter.control.grid_status_reader is grid_status_reader
+
+
+def test_shutdown_closes_extra_transports():
+    transport = RecordingModbusTransport()
+    meter_transport = RecordingModbusTransport()
+    inverter = FroniusModbusInverter(
+        transport,
+        max_charge_rate=5000,
+        extra_transports=[meter_transport],
+    )
+
+    inverter.shutdown()
+
+    assert transport.close_count == 1
+    assert meter_transport.close_count == 1

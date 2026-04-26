@@ -1,7 +1,9 @@
 """ Factory for inverter providers """
 
 import logging
+from contextlib import suppress
 from .baseclass import DEFAULT_MAX_SOC, DEFAULT_MIN_SOC
+from .fronius_modbus import FroniusModbusGridStatusReader
 from .fronius_modbus import FroniusModbusInverter
 from .fronius_modbus import FroniusModbusTcpTransport
 from .inverter_interface import InverterInterface
@@ -62,19 +64,43 @@ class Inverter:
             }
             inverter=MqttInverter(iv_config)
         elif config['type'].lower() == 'fronius-modbus':
-            transport = FroniusModbusTcpTransport(
-                config['address'],
-                port=config.get('port', 502),
-                unit_id=config.get('unit_id', 1),
-            )
-            inverter = FroniusModbusInverter(
-                transport,
-                max_charge_rate=config['max_grid_charge_rate'],
-                capacity=config['capacity'],
-                min_soc=config.get('min_soc', DEFAULT_MIN_SOC),
-                max_soc=config.get('max_soc', DEFAULT_MAX_SOC),
-                revert_seconds=config.get('revert_seconds', 0),
-            )
+            transport = None
+            extra_transports = []
+            try:
+                transport = FroniusModbusTcpTransport(
+                    config['address'],
+                    port=config.get('port', 502),
+                    unit_id=config.get('unit_id', 1),
+                )
+                grid_status_reader = None
+                if config.get('backup_mode_safety_enabled', False):
+                    meter_transport = FroniusModbusTcpTransport(
+                        config['address'],
+                        port=config.get('port', 502),
+                        unit_id=config.get('meter_unit_id', 200),
+                    )
+                    extra_transports.append(meter_transport)
+                    grid_status_reader = FroniusModbusGridStatusReader(
+                        transport,
+                        meter_transport,
+                    )
+                inverter = FroniusModbusInverter(
+                    transport,
+                    max_charge_rate=config['max_grid_charge_rate'],
+                    capacity=config['capacity'],
+                    min_soc=config.get('min_soc', DEFAULT_MIN_SOC),
+                    max_soc=config.get('max_soc', DEFAULT_MAX_SOC),
+                    revert_seconds=config.get('revert_seconds', 0),
+                    grid_status_reader=grid_status_reader,
+                    extra_transports=extra_transports,
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                for opened_transport in [transport, *extra_transports]:
+                    close = getattr(opened_transport, 'close', None)
+                    if close is not None:
+                        with suppress(Exception):
+                            close()
+                raise
         else:
             raise RuntimeError(f'[Inverter] Unknown inverter type {config["type"]}')
 

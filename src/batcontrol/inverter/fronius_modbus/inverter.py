@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from ..baseclass import DEFAULT_MAX_SOC, DEFAULT_MIN_SOC, InverterBaseclass
 from .control import FroniusModbusControl
@@ -17,6 +18,8 @@ class FroniusModbusInverter(InverterBaseclass):
         min_soc: float = DEFAULT_MIN_SOC,
         max_soc: float = DEFAULT_MAX_SOC,
         revert_seconds: int = 0,
+        grid_status_reader=None,
+        extra_transports: Optional[list[FroniusModbusTransport]] = None,
     ):
         super().__init__({})
         self.transport = transport
@@ -27,8 +30,10 @@ class FroniusModbusInverter(InverterBaseclass):
             transport,
             max_charge_rate=max_charge_rate,
             revert_seconds=revert_seconds,
+            grid_status_reader=grid_status_reader,
         )
         self.storage_reader = FroniusModbusStorageReader(transport)
+        self.extra_transports = extra_transports or []
 
     def set_mode_force_charge(self, chargerate: float):
         self.control.set_mode_force_charge(chargerate)
@@ -75,6 +80,10 @@ class FroniusModbusInverter(InverterBaseclass):
             close = getattr(self.transport, "close", None)
             if close is not None:
                 close()
+            for transport in self.extra_transports:
+                close = getattr(transport, "close", None)
+                if close is not None:
+                    close()
 
     def activate_mqtt(self, api_mqtt_api: object):
         pass
