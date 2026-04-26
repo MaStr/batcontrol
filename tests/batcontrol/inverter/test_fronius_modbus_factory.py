@@ -133,3 +133,93 @@ def test_factory_accepts_legacy_max_charge_rate_alias_for_fronius_modbus(mocker)
     mock_transport_cls.assert_called_once_with("192.168.1.100", port=502, unit_id=1)
     assert isinstance(inverter, FroniusModbusInverter)
     assert inverter.control.max_charge_rate == 4200
+
+
+def test_factory_wires_optional_fronius_modbus_backup_mode_safety(mocker):
+    inverter_transport = mocker.MagicMock()
+    meter_transport = mocker.MagicMock()
+    mock_transport_cls = mocker.patch(
+        "batcontrol.inverter.inverter.FroniusModbusTcpTransport",
+        autospec=True,
+        side_effect=[inverter_transport, meter_transport],
+    )
+    grid_status_reader = mocker.MagicMock()
+    mock_grid_status_reader_cls = mocker.patch(
+        "batcontrol.inverter.inverter.FroniusModbusGridStatusReader",
+        autospec=True,
+        return_value=grid_status_reader,
+    )
+
+    config = {
+        "type": "fronius-modbus",
+        "address": "192.168.1.100",
+        "port": 1502,
+        "unit_id": 3,
+        "meter_unit_id": 203,
+        "capacity": 10000,
+        "max_grid_charge_rate": 5000,
+        "backup_mode_safety_enabled": True,
+    }
+
+    inverter = Inverter.create_inverter(config)
+
+    assert mock_transport_cls.call_args_list == [
+        mocker.call("192.168.1.100", port=1502, unit_id=3),
+        mocker.call("192.168.1.100", port=1502, unit_id=203),
+    ]
+    mock_grid_status_reader_cls.assert_called_once_with(
+        inverter_transport,
+        meter_transport,
+    )
+    assert inverter.control.grid_status_reader is grid_status_reader
+    assert inverter.extra_transports == [meter_transport]
+
+
+def test_factory_defaults_fronius_modbus_meter_unit_id_for_backup_mode_safety(mocker):
+    mock_transport_cls = mocker.patch(
+        "batcontrol.inverter.inverter.FroniusModbusTcpTransport",
+        autospec=True,
+        side_effect=[mocker.MagicMock(), mocker.MagicMock()],
+    )
+    mocker.patch(
+        "batcontrol.inverter.inverter.FroniusModbusGridStatusReader",
+        autospec=True,
+        return_value=mocker.MagicMock(),
+    )
+
+    config = {
+        "type": "fronius-modbus",
+        "address": "192.168.1.100",
+        "capacity": 10000,
+        "max_grid_charge_rate": 5000,
+        "backup_mode_safety_enabled": True,
+    }
+
+    Inverter.create_inverter(config)
+
+    assert mock_transport_cls.call_args_list == [
+        mocker.call("192.168.1.100", port=502, unit_id=1),
+        mocker.call("192.168.1.100", port=502, unit_id=200),
+    ]
+
+
+def test_factory_closes_primary_transport_when_backup_meter_transport_fails(mocker):
+    inverter_transport = mocker.MagicMock()
+    mocker.patch(
+        "batcontrol.inverter.inverter.FroniusModbusTcpTransport",
+        autospec=True,
+        side_effect=[inverter_transport, RuntimeError("meter unavailable")],
+    )
+
+    config = {
+        "type": "fronius-modbus",
+        "address": "192.168.1.100",
+        "capacity": 10000,
+        "max_grid_charge_rate": 5000,
+        "backup_mode_safety_enabled": True,
+    }
+
+    with pytest.raises(RuntimeError, match="meter unavailable"):
+        Inverter.create_inverter(config)
+
+    inverter_transport.close.assert_called_once_with()
