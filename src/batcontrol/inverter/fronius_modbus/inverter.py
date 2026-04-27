@@ -26,6 +26,7 @@ class FroniusModbusInverter(InverterBaseclass):
         self.capacity = capacity
         self.min_soc = min_soc
         self.max_soc = max_soc
+        self.max_grid_charge_rate = max_charge_rate
         self.control = FroniusModbusControl(
             transport,
             max_charge_rate=max_charge_rate,

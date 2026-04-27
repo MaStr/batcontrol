@@ -112,6 +112,16 @@ def test_inverter_exposes_configured_capacity_limits_for_baseclass_math():
     assert inverter.max_soc == 95
 
 
+def test_inverter_exposes_configured_max_grid_charge_rate():
+    transport = RecordingModbusTransport()
+    inverter = FroniusModbusInverter(
+        transport,
+        max_charge_rate=5000,
+    )
+
+    assert inverter.max_grid_charge_rate == 5000
+
+
 def test_inverter_defaults_to_common_soc_limits():
     transport = RecordingModbusTransport()
     inverter = FroniusModbusInverter(
