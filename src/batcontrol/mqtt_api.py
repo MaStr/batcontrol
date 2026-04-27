@@ -139,8 +139,7 @@ class MqttApi:
         # Handle reconnect case
         for topic in self.callbacks:
             logger.debug('Subscribing topic: %s', topic)
-            for topic in self.callbacks:
-                client.subscribe(topic)
+            client.subscribe(topic)
 
     def wait_ready(self) -> bool:
         """ Wait for MQTT connection to be ready"""
@@ -310,7 +309,7 @@ class MqttApi:
             /SOC
         """
         if self.client.is_connected():
-            self.client.publish(self.base_topic + '/SOC', f'{int(soc):03}')
+            self.client.publish(self._topic('SOC'), f'{soc:.2f}')
 
     def publish_stored_energy_capacity(self, stored_energy: float) -> None:
         """ Publish the stored energy capacity in Wh to MQTT
@@ -453,7 +452,7 @@ class MqttApi:
             self.client.publish(
                 self.base_topic +
                 '/discharge_blocked',
-                str(discharge_blocked))
+                str(discharge_blocked).lower())
 
     def publish_production_offset(self, production_offset: float) -> None:
         """ Publish the production offset percentage to MQTT
@@ -670,7 +669,7 @@ class MqttApi:
             None,
             self.base_topic +
             "/discharge_blocked",
-            value_template="{% if value | lower == 'True' %}blocked{% else %}not blocked{% endif %}")
+            value_template="{% if value | lower == 'true' %}blocked{% else %}not blocked{% endif %}")
 
         self.publish_mqtt_discovery_message(
             "Reserved Energy Capacity",

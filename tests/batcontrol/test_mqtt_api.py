@@ -1,5 +1,5 @@
 """Tests for MqttApi._handle_message, focusing on bytes payload decoding."""
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 from batcontrol.mqtt_api import MqttApi
 
@@ -37,6 +37,20 @@ def _make_discovery_stub():
     )
     api.send_mqtt_discovery_messages = (
         MqttApi.send_mqtt_discovery_messages.__get__(api, MqttApi)
+    )
+    return api
+
+
+def _make_publish_stub():
+    """Return a minimal stub for publish helper tests."""
+    api = MagicMock(spec=MqttApi)
+    api.base_topic = 'batcontrol'
+    api.client = MagicMock()
+    api.client.is_connected.return_value = True
+    api._topic = MqttApi._topic.__get__(api, MqttApi)
+    api.publish_SOC = MqttApi.publish_SOC.__get__(api, MqttApi)
+    api.publish_discharge_blocked = (
+        MqttApi.publish_discharge_blocked.__get__(api, MqttApi)
     )
     return api
 
@@ -105,6 +119,49 @@ class TestHandleMessageBytesDecoding:
         assert received == ['true']
 
 
+class TestReconnectSubscriptions:
+    """Reconnect handling should subscribe to each callback topic once."""
+
+    def test_on_connect_subscribes_each_callback_topic_once(self):
+        api = _make_handler_stub()
+        api.base_topic = 'batcontrol'
+        api.auto_discover_enable = False
+        api.callbacks = {
+            'batcontrol/mode/set': {},
+            'batcontrol/charge_rate/set': {},
+        }
+        api.on_connect = MqttApi.on_connect.__get__(api, MqttApi)
+        client = MagicMock()
+
+        api.on_connect(client, None, None, 0)
+
+        assert client.subscribe.call_args_list == [
+            call('batcontrol/mode/set'),
+            call('batcontrol/charge_rate/set'),
+        ]
+
+
+class TestPublishedState:
+    """Published state payloads should preserve precision and parse cleanly."""
+
+    def test_publish_soc_uses_decimal_precision(self):
+        api = _make_publish_stub()
+
+        api.publish_SOC(87.65)
+
+        api.client.publish.assert_called_once_with('batcontrol/SOC', '87.65')
+
+    def test_publish_discharge_blocked_uses_lowercase_boolean(self):
+        api = _make_publish_stub()
+
+        api.publish_discharge_blocked(True)
+
+        api.client.publish.assert_called_once_with(
+            'batcontrol/discharge_blocked',
+            'true',
+        )
+
+
 class TestModeDiscovery:
     """Mode discovery should expose the full externally supported mode model."""
 
@@ -166,6 +223,22 @@ class TestDiscoveryMessages:
             and call.args[5] == 'batcontrol/api_override_active'
             and call.kwargs['entity_category'] == 'diagnostic'
             and "value == 'true'" in call.kwargs['value_template']
+            for call in api.publish_mqtt_discovery_message.call_args_list
+        )
+
+    def test_discharge_blocked_discovery_accepts_lowercase_true(self):
+        api = _make_discovery_stub()
+
+        api.send_mqtt_discovery_messages()
+
+        assert any(
+            call.args[:3] == (
+                'Discharge Blocked',
+                'batcontrol_discharge_blocked',
+                'sensor',
+            )
+            and call.args[5] == 'batcontrol/discharge_blocked'
+            and "value | lower == 'true'" in call.kwargs['value_template']
             for call in api.publish_mqtt_discovery_message.call_args_list
         )
 
