@@ -7,6 +7,7 @@ from .logic_interface import LogicInterface
 from .logic_interface import CalculationParameters, CalculationInput
 from .logic_interface import CalculationOutput, InverterControlSettings
 from .common import CommonLogic
+from .decision_logging import GridRechargeDecision, log_grid_recharge_decision
 
 # Minimum remaining time in hours to prevent division by very small numbers
 # when calculating charge rates. This constant serves as a safety threshold:
@@ -183,6 +184,19 @@ class DefaultLogic(LogicInterface):
                 charge_rate = required_recharge_energy / remaining_time
 
                 charge_rate = self.common.calculate_charge_rate(charge_rate)
+
+                log_grid_recharge_decision(
+                    logger,
+                    self.calculation_output,
+                    calc_input,
+                    prices,
+                    GridRechargeDecision(
+                        recharge_energy=required_recharge_energy,
+                        allowed_charging_energy=allowed_charging_energy,
+                        remaining_time=remaining_time,
+                        charge_rate=charge_rate
+                    )
+                )
 
                 #self.force_charge(charge_rate)
                 inverter_control_settings.charge_from_grid = True

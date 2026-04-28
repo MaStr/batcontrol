@@ -188,6 +188,37 @@ class TestDefaultLogic(unittest.TestCase):
         self.assertGreater(result.charge_rate, 0, "Charge rate should be greater than 0")
         self.assertGreater(calc_output.required_recharge_energy, 0, "Should calculate required recharge energy")
 
+    def test_grid_recharge_decision_is_logged(self):
+        """Test that grid charging emits a compact decision summary."""
+        stored_energy = 2000
+        stored_usable_energy, free_capacity = self._calculate_battery_values(
+            stored_energy, self.max_capacity
+        )
+
+        calc_input = CalculationInput(
+            consumption=np.array([1000, 2000, 1500]),
+            production=np.array([0, 0, 0]),
+            prices={0: 0.20, 1: 0.35, 2: 0.30},
+            stored_energy=stored_energy,
+            stored_usable_energy=stored_usable_energy,
+            free_capacity=free_capacity,
+        )
+
+        calc_timestamp = datetime.datetime(2025, 6, 20, 12, 30, 0, tzinfo=datetime.timezone.utc)
+        with self.assertLogs('batcontrol.logic.default', level='INFO') as logs:
+            self.assertTrue(self.logic.calculate(calc_input, calc_timestamp))
+
+        result = self.logic.get_inverter_control_settings()
+        self.assertTrue(result.charge_from_grid, "Should charge from grid in this scenario")
+        log_output = '\n'.join(logs.output)
+        expected_stored_usable_energy = (
+            f'stored_usable_energy={stored_usable_energy:.1f} Wh'
+        )
+        self.assertIn('[Rule] Grid recharge decision:', log_output)
+        self.assertIn('current_price=0.200', log_output)
+        self.assertIn(expected_stored_usable_energy, log_output)
+        self.assertIn('charge_rate=', log_output)
+
     def test_charge_calculation_when_charging_not_possible_high_soc(self):
         """Test charge calculation when charging is not possible due to high SOC"""
         # Set SOC above charging limit (79%)

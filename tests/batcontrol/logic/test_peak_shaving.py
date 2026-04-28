@@ -1051,3 +1051,53 @@ class TestPeakShavingMinChargeRate(unittest.TestCase):
 
         self.assertEqual(result.limit_battery_charge_rate, 0)
 
+
+
+class TestNextLogicGridRechargeLogging(unittest.TestCase):
+    """Tests recharge decision logging for NextLogic."""
+
+    def setUp(self):
+        self.max_capacity = 10000
+        self.logic = NextLogic(timezone=datetime.timezone.utc,
+                               interval_minutes=60)
+        CommonLogic.get_instance(
+            charge_rate_multiplier=1.1,
+            always_allow_discharge_limit=0.80,
+            max_capacity=self.max_capacity,
+        )
+        self.logic.set_calculation_parameters(CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            peak_shaving_enabled=False,
+        ))
+
+    def test_grid_recharge_decision_is_logged(self):
+        """NextLogic logs the shared grid recharge decision summary."""
+        stored_energy = 2000
+        stored_usable_energy = stored_energy - self.max_capacity * 0.05
+        calc_input = CalculationInput(
+            consumption=np.array([1000, 2000, 1500]),
+            production=np.array([0, 0, 0]),
+            prices={0: 0.20, 1: 0.35, 2: 0.30},
+            stored_energy=stored_energy,
+            stored_usable_energy=stored_usable_energy,
+            free_capacity=self.max_capacity - stored_energy,
+        )
+
+        calc_timestamp = datetime.datetime(2025, 6, 20, 12, 30, 0,
+                                           tzinfo=datetime.timezone.utc)
+        with self.assertLogs('batcontrol.logic.next', level='INFO') as logs:
+            self.assertTrue(self.logic.calculate(calc_input, calc_timestamp))
+
+        result = self.logic.get_inverter_control_settings()
+        self.assertTrue(result.charge_from_grid)
+        log_output = '\n'.join(logs.output)
+        expected_stored_usable_energy = (
+            f'stored_usable_energy={stored_usable_energy:.1f} Wh'
+        )
+        self.assertIn('[Rule] Grid recharge decision:', log_output)
+        self.assertIn('current_price=0.200', log_output)
+        self.assertIn(expected_stored_usable_energy, log_output)
+        self.assertIn('charge_rate=', log_output)
