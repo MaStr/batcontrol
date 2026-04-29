@@ -594,6 +594,25 @@ class NextLogic(LogicInterface):
             # add_remaining required_energy to reserved_storage
             reserved_storage += required_energy
 
+        min_grid_charge_soc_active = (
+            self.calculation_parameters.preserve_min_grid_charge_soc
+            and reserved_storage > 0
+            and self._has_grid_charge_soc_price_signal(
+                consumption,
+                prices,
+                max_slots,
+                current_price,
+                min_dynamic_price_difference
+            )
+        )
+        reserved_storage = self.common.apply_min_grid_charge_soc_reserve(
+            reserved_storage,
+            calc_input.stored_energy,
+            calc_input.stored_usable_energy,
+            self.calculation_parameters.min_grid_charge_soc,
+            min_grid_charge_soc_active
+        )
+
         self.calculation_output.reserved_energy = reserved_storage
 
         if len(higher_price_slots) > 0:
@@ -623,6 +642,19 @@ class NextLogic(LogicInterface):
             reserved_storage
         )
 
+        return False
+
+    def _has_grid_charge_soc_price_signal(self, consumption: np.ndarray,
+                                          prices: dict,
+                                          max_slots: int,
+                                          current_price: float,
+                                          min_dynamic_price_difference: float) -> bool:
+        """Return True when a future price justifies preserving a grid-charge SoC target."""
+        for slot in range(max_slots):
+            future_price = prices[slot]
+            if (consumption[slot] > 0
+                    and future_price > current_price + min_dynamic_price_difference):
+                return True
         return False
 
     # ------------------------------------------------------------------ #
@@ -713,6 +745,12 @@ class NextLogic(LogicInterface):
             recharge_energy = 0.0
             self.calculation_output.required_recharge_energy = recharge_energy
             return recharge_energy
+
+        recharge_energy = self.common.apply_min_grid_charge_soc_target(
+            recharge_energy,
+            calc_input.stored_energy,
+            self.calculation_parameters.min_grid_charge_soc
+        )
 
         free_capacity = calc_input.free_capacity
 

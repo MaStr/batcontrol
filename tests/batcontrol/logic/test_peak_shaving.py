@@ -1073,11 +1073,11 @@ class TestNextLogicGridRechargeLogging(unittest.TestCase):
             peak_shaving_enabled=False,
         ))
 
-    def test_grid_recharge_decision_is_logged(self):
-        """NextLogic logs the shared grid recharge decision summary."""
+    def _make_grid_charge_input(self):
+        """Build an input that triggers grid charging."""
         stored_energy = 2000
         stored_usable_energy = stored_energy - self.max_capacity * 0.05
-        calc_input = CalculationInput(
+        return CalculationInput(
             consumption=np.array([1000, 2000, 1500]),
             production=np.array([0, 0, 0]),
             prices={0: 0.20, 1: 0.35, 2: 0.30},
@@ -1085,6 +1085,10 @@ class TestNextLogicGridRechargeLogging(unittest.TestCase):
             stored_usable_energy=stored_usable_energy,
             free_capacity=self.max_capacity - stored_energy,
         )
+
+    def test_grid_recharge_decision_is_logged(self):
+        """NextLogic logs the shared grid recharge decision summary."""
+        calc_input = self._make_grid_charge_input()
 
         calc_timestamp = datetime.datetime(2025, 6, 20, 12, 30, 0,
                                            tzinfo=datetime.timezone.utc)
@@ -1095,9 +1099,91 @@ class TestNextLogicGridRechargeLogging(unittest.TestCase):
         self.assertTrue(result.charge_from_grid)
         log_output = '\n'.join(logs.output)
         expected_stored_usable_energy = (
-            f'stored_usable_energy={stored_usable_energy:.1f} Wh'
+            f'stored_usable_energy={calc_input.stored_usable_energy:.1f} Wh'
         )
         self.assertIn('[Rule] Grid recharge decision:', log_output)
         self.assertIn('current_price=0.200', log_output)
         self.assertIn(expected_stored_usable_energy, log_output)
         self.assertIn('charge_rate=', log_output)
+
+    def test_min_grid_charge_soc_increases_recharge_energy(self):
+        """NextLogic applies the optional minimum grid-charge SoC target."""
+        self.logic.set_calculation_parameters(CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            min_grid_charge_soc=0.55,
+            peak_shaving_enabled=False,
+        ))
+        calc_input = self._make_grid_charge_input()
+        calc_timestamp = datetime.datetime(2025, 6, 20, 12, 0, 0,
+                                           tzinfo=datetime.timezone.utc)
+
+        self.assertTrue(self.logic.calculate(calc_input, calc_timestamp))
+        calc_output = self.logic.get_calculation_output()
+
+        self.assertAlmostEqual(calc_output.required_recharge_energy, 3600.0)
+
+    def test_min_grid_charge_soc_blocks_discharge_during_cheap_window(self):
+        """NextLogic expert option preserves battery before expensive demand."""
+        self.logic.set_calculation_parameters(CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            min_grid_charge_soc=0.55,
+            preserve_min_grid_charge_soc=True,
+            peak_shaving_enabled=False,
+        ))
+        stored_energy = 5000
+        stored_usable_energy = stored_energy - self.max_capacity * 0.05
+        calc_input = CalculationInput(
+            consumption=np.array([1000, 1000, 2000]),
+            production=np.array([0, 0, 0]),
+            prices={0: 0.10, 1: 0.11, 2: 0.30},
+            stored_energy=stored_energy,
+            stored_usable_energy=stored_usable_energy,
+            free_capacity=self.max_capacity - stored_energy,
+        )
+        calc_timestamp = datetime.datetime(2025, 6, 20, 22, 0, 0,
+                                           tzinfo=datetime.timezone.utc)
+
+        self.assertTrue(self.logic.calculate(calc_input, calc_timestamp))
+        result = self.logic.get_inverter_control_settings()
+        calc_output = self.logic.get_calculation_output()
+
+        self.assertFalse(result.allow_discharge)
+        self.assertTrue(result.charge_from_grid)
+        self.assertGreater(calc_output.required_recharge_energy, 0)
+        self.assertGreater(calc_output.reserved_energy, 2000)
+
+    def test_min_grid_charge_soc_does_not_block_discharge_at_high_price(self):
+        """NextLogic does not preserve battery when current price is high."""
+        self.logic.set_calculation_parameters(CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            min_grid_charge_soc=0.55,
+            preserve_min_grid_charge_soc=True,
+            peak_shaving_enabled=False,
+        ))
+        stored_energy = 5000
+        stored_usable_energy = stored_energy - self.max_capacity * 0.05
+        calc_input = CalculationInput(
+            consumption=np.array([1000, 1000, 2000]),
+            production=np.array([0, 0, 0]),
+            prices={0: 0.30, 1: 0.10, 2: 0.10},
+            stored_energy=stored_energy,
+            stored_usable_energy=stored_usable_energy,
+            free_capacity=self.max_capacity - stored_energy,
+        )
+        calc_timestamp = datetime.datetime(2025, 6, 20, 6, 0, 0,
+                                           tzinfo=datetime.timezone.utc)
+
+        self.assertTrue(self.logic.calculate(calc_input, calc_timestamp))
+        result = self.logic.get_inverter_control_settings()
+
+        self.assertTrue(result.allow_discharge)
+        self.assertFalse(result.charge_from_grid)

@@ -55,6 +55,9 @@ def _make_publish_stub():
     api.publish_control_source = (
         MqttApi.publish_control_source.__get__(api, MqttApi)
     )
+    api.publish_min_grid_charge_soc = (
+        MqttApi.publish_min_grid_charge_soc.__get__(api, MqttApi)
+    )
     return api
 
 
@@ -164,6 +167,16 @@ class TestPublishedState:
             'true',
         )
 
+    def test_publish_min_grid_charge_soc_publishes_ratio_and_percent(self):
+        api = _make_publish_stub()
+
+        api.publish_min_grid_charge_soc(0.55)
+
+        assert api.client.publish.call_args_list == [
+            call('batcontrol/min_grid_charge_soc_percent', '55'),
+            call('batcontrol/min_grid_charge_soc', '0.55'),
+        ]
+
 
 class TestModeDiscovery:
     """Mode discovery should expose the full externally supported mode model."""
@@ -257,6 +270,24 @@ class TestDiscoveryMessages:
                 'sensor',
             )
             and call.args[5] == 'batcontrol/control_source'
+            and call.kwargs['entity_category'] == 'diagnostic'
+            for call in api.publish_mqtt_discovery_message.call_args_list
+        )
+
+    def test_discovery_includes_min_grid_charge_soc_sensor(self):
+        api = _make_discovery_stub()
+
+        api.send_mqtt_discovery_messages()
+
+        assert any(
+            call.args[:3] == (
+                'Minimum Grid Charge SOC',
+                'batcontrol_min_grid_charge_soc',
+                'sensor',
+            )
+            and call.args[3] == 'battery'
+            and call.args[4] == '%'
+            and call.args[5] == 'batcontrol/min_grid_charge_soc_percent'
             and call.kwargs['entity_category'] == 'diagnostic'
             for call in api.publish_mqtt_discovery_message.call_args_list
         )

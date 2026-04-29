@@ -26,6 +26,12 @@ class CalculationParameters:
     min_price_difference: float
     min_price_difference_rel: float
     max_capacity: float # Maximum capacity of the battery in Wh (excludes MAX_SOC)
+    # Optional minimum SoC target used when grid charging is already economical.
+    # None disables the target. Values are ratios from 0.0 to 1.0.
+    min_grid_charge_soc: Optional[float] = None
+    # Expert option: also preserve the target as reserved energy during
+    # cheap/pre-expensive windows.
+    preserve_min_grid_charge_soc: bool = False
     # Peak shaving parameters
     peak_shaving_enabled: bool = False
     peak_shaving_allow_full_after: int = 14  # Hour (0-23)
@@ -40,6 +46,18 @@ class CalculationParameters:
     peak_shaving_price_limit: Optional[float] = None
 
     def __post_init__(self):
+        if self.min_grid_charge_soc is not None:
+            if (isinstance(self.min_grid_charge_soc, bool)
+                    or not isinstance(self.min_grid_charge_soc, (int, float))):
+                raise ValueError(
+                    f"min_grid_charge_soc must be numeric between 0 and 1 or None, "
+                    f"got {type(self.min_grid_charge_soc).__name__}"
+                )
+            if not 0 <= self.min_grid_charge_soc <= 1:
+                raise ValueError(
+                    f"min_grid_charge_soc must be between 0 and 1 or None, "
+                    f"got {self.min_grid_charge_soc}"
+                )
         if not 0 <= self.peak_shaving_allow_full_after <= 23:
             raise ValueError(
                 f"peak_shaving_allow_full_after must be 0-23, "
