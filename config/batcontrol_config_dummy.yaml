@@ -18,6 +18,7 @@ battery_control:
                                  #    _rel helps to avoid charging at high prices with less efficiency
   always_allow_discharge_limit: 0.90 # 0.00 to 1.00 above this SOC limit using energy from the battery is always allowed
   max_charging_from_grid_limit: 0.89 # 0.00 to 1.00 charging from the grid is only allowed until this SOC limit
+  # min_grid_charge_soc: 0.55        # optional 0.00 to 1.00 target to preserve/charge before expensive slots
   min_recharge_amount: 100           # in Wh, start & minimum amount of energy to recharge the battery
 
 #--------------------------
@@ -32,6 +33,7 @@ battery_control_expert:
   round_price_digits: 4 # round price to n digits after the comma
   production_offset_percent: 1.0 # Adjust production forecast by a percentage (1.0 = 100%, 0.8 = 80%, etc.)
                                  # Useful for winter mode when solar panels are covered with snow
+  preserve_min_grid_charge_soc: false # If true, also preserve min_grid_charge_soc as reserved energy during cheap/pre-expensive slots
 
 #--------------------------
 #  Peak Shaving

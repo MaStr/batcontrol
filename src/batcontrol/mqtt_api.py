@@ -9,6 +9,8 @@ The following topics are published:
 - /mode: operational mode (-1 = charge from grid, 0 = avoid discharge, 8 = limit battery charge, 10 = discharge allowed)
 - /max_charging_from_grid_limit: charge limit in 0.1-1
 - /max_charging_from_grid_limit_percent: charge limit in %
+- /min_grid_charge_soc: optional minimum grid-charge target in 0.0-1.0
+- /min_grid_charge_soc_percent: optional minimum grid-charge target in %
 - /always_allow_discharge_limit: always discharge limit in 0.1-1
 - /always_allow_discharge_limit_percent: always discharge limit in %
 - /always_allow_discharge_limit_capacity: always discharge limit in Wh
@@ -386,6 +388,21 @@ class MqttApi:
                 f'{charge_limit:.2f}'
             )
 
+    def publish_min_grid_charge_soc(self, min_grid_charge_soc: float) -> None:
+        """ Publish the optional minimum grid-charge SoC target to MQTT
+            /min_grid_charge_soc_percent
+            /min_grid_charge_soc as digit.
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/min_grid_charge_soc_percent',
+                f'{min_grid_charge_soc * 100:.0f}'
+            )
+            self.client.publish(
+                self.base_topic + '/min_grid_charge_soc',
+                f'{min_grid_charge_soc:.2f}'
+            )
+
     def publish_min_price_difference(
             self, min_price_difference: float) -> None:
         """ Publish the minimum price difference to MQTT found in config
@@ -594,6 +611,16 @@ class MqttApi:
             max_value=1.0,
             step_value=0.1,
             initial_value=0.9)
+
+        self.publish_mqtt_discovery_message(
+            "Minimum Grid Charge SOC",
+            "batcontrol_min_grid_charge_soc",
+            "sensor",
+            "battery",
+            "%",
+            self.base_topic +
+            "/min_grid_charge_soc_percent",
+            entity_category="diagnostic")
 
         self.publish_mqtt_discovery_message(
             "Min Price Difference",

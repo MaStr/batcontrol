@@ -1,5 +1,6 @@
 """Tests for core batcontrol functionality including MODE_LIMIT_BATTERY_CHARGE_RATE"""
 import datetime
+import logging
 import pytest
 from unittest.mock import MagicMock, call, patch
 
@@ -460,6 +461,103 @@ class TestCoreRunDispatch:
 
         bc.shutdown()
 
+    def _patch_core_dependencies(self, mocker):
+        core_module = "batcontrol.core"
+        mock_inverter = mocker.MagicMock()
+        mock_inverter.max_pv_charge_rate = 3000
+        mock_inverter.get_max_capacity.return_value = 10000
+        mocker.patch(
+            f"{core_module}.tariff_factory.create_tarif_provider",
+            autospec=True,
+            return_value=mocker.MagicMock(),
+        )
+        mocker.patch(
+            f"{core_module}.inverter_factory.create_inverter",
+            autospec=True,
+            return_value=mock_inverter,
+        )
+        mocker.patch(
+            f"{core_module}.solar_factory.create_solar_provider",
+            autospec=True,
+            return_value=mocker.MagicMock(),
+        )
+        mocker.patch(
+            f"{core_module}.consumption_factory.create_consumption",
+            autospec=True,
+            return_value=mocker.MagicMock(),
+        )
+        mocker.patch(
+            f"{core_module}.LogicFactory.create_logic",
+            autospec=True,
+            return_value=mocker.MagicMock(),
+        )
+
+    def test_accepts_min_grid_charge_soc_numeric_string_config(
+            self, mock_config, mocker):
+        mock_config['battery_control']['min_grid_charge_soc'] = '0.55'
+        self._patch_core_dependencies(mocker)
+
+        bc = Batcontrol(mock_config)
+
+        assert bc.min_grid_charge_soc == 0.55
+        bc.shutdown()
+
+    def test_rejects_invalid_min_grid_charge_soc_config(
+            self, mock_config, mocker):
+        mock_config['battery_control']['min_grid_charge_soc'] = 'fifty-five'
+        self._patch_core_dependencies(mocker)
+
+        with pytest.raises(
+                ValueError,
+                match='battery_control.min_grid_charge_soc must be numeric'):
+            Batcontrol(mock_config)
+
+    def test_warns_when_min_grid_charge_soc_exceeds_grid_charge_limit(
+            self, mock_config, mocker, caplog):
+        core_module = "batcontrol.core"
+        mock_config['battery_control']['min_grid_charge_soc'] = 0.85
+        caplog.set_level(logging.WARNING, logger=core_module)
+
+        mock_inverter = mocker.MagicMock()
+        mock_inverter.max_pv_charge_rate = 3000
+        mock_inverter.get_max_capacity.return_value = 10000
+        mocker.patch(
+            f"{core_module}.tariff_factory.create_tarif_provider",
+            autospec=True,
+            return_value=mocker.MagicMock(),
+        )
+        mocker.patch(
+            f"{core_module}.inverter_factory.create_inverter",
+            autospec=True,
+            return_value=mock_inverter,
+        )
+        mocker.patch(
+            f"{core_module}.solar_factory.create_solar_provider",
+            autospec=True,
+            return_value=mocker.MagicMock(),
+        )
+        mocker.patch(
+            f"{core_module}.consumption_factory.create_consumption",
+            autospec=True,
+            return_value=mocker.MagicMock(),
+        )
+        mocker.patch(
+            f"{core_module}.LogicFactory.create_logic",
+            autospec=True,
+            return_value=mocker.MagicMock(),
+        )
+
+        bc = Batcontrol(mock_config)
+
+        assert bc.min_grid_charge_soc == 0.85
+        assert any(
+            'min_grid_charge_soc' in record.message
+            and 'max_charging_from_grid_limit' in record.message
+            and 'grid charging cannot reach' in record.message
+            for record in caplog.records
+        )
+        bc.shutdown()
+
     def test_run_dispatches_allow_discharge(self, run_dispatch_setup):
         bc, mock_inverter, fake_logic = run_dispatch_setup
         fake_logic.get_inverter_control_settings.return_value = MagicMock(
@@ -475,6 +573,22 @@ class TestCoreRunDispatch:
         mock_inverter.set_mode_force_charge.assert_not_called()
         mock_inverter.set_mode_avoid_discharge.assert_not_called()
         mock_inverter.set_mode_limit_battery_charge.assert_not_called()
+
+    def test_run_passes_preserve_min_grid_charge_soc_to_logic(
+            self, run_dispatch_setup):
+        bc, _mock_inverter, fake_logic = run_dispatch_setup
+        bc.preserve_min_grid_charge_soc = True
+        fake_logic.get_inverter_control_settings.return_value = MagicMock(
+            allow_discharge=True,
+            charge_from_grid=False,
+            charge_rate=0,
+            limit_battery_charge_rate=-1,
+        )
+
+        bc.run()
+
+        calc_params = fake_logic.set_calculation_parameters.call_args.args[0]
+        assert calc_params.preserve_min_grid_charge_soc is True
 
     def test_run_dispatches_force_charge(self, run_dispatch_setup):
         bc, mock_inverter, fake_logic = run_dispatch_setup
@@ -737,6 +851,26 @@ class TestApiOverrideMqttState:
         bc.mqtt_api.publish_charge_rate.assert_called_once_with(1200)
         bc.mqtt_api.publish_limit_battery_charge_rate.assert_called_once_with(1800)
         bc.mqtt_api.publish_api_override_active.assert_called_once_with(True)
+
+    def test_refresh_static_values_publishes_min_grid_charge_soc_when_set(
+            self, run_dispatch_setup):
+        bc, _mock_inverter, _fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+        bc.min_grid_charge_soc = 0.55
+
+        bc.refresh_static_values()
+
+        bc.mqtt_api.publish_min_grid_charge_soc.assert_called_once_with(0.55)
+
+    def test_refresh_static_values_skips_min_grid_charge_soc_when_unset(
+            self, run_dispatch_setup):
+        bc, _mock_inverter, _fake_logic = run_dispatch_setup
+        bc.mqtt_api = MagicMock()
+        bc.min_grid_charge_soc = None
+
+        bc.refresh_static_values()
+
+        bc.mqtt_api.publish_min_grid_charge_soc.assert_not_called()
 
     def test_refresh_static_values_skips_unknown_mode(self, run_dispatch_setup):
         bc, _mock_inverter, _fake_logic = run_dispatch_setup

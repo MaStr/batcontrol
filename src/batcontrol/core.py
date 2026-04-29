@@ -57,6 +57,29 @@ CONTROL_SOURCE_OPTIMIZER = 'optimizer'
 logger = logging.getLogger(__name__)
 
 
+def _parse_optional_ratio(value, config_key: str) -> Optional[float]:
+    """Parse an optional 0..1 ratio config value."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError(
+            f"{config_key} must be numeric between 0 and 1 or None, "
+            f"got {type(value).__name__}"
+        )
+    try:
+        ratio = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{config_key} must be numeric between 0 and 1 or None, "
+            f"got {value!r}"
+        ) from exc
+    if not 0 <= ratio <= 1:
+        raise ValueError(
+            f"{config_key} must be between 0 and 1 or None, got {value!r}"
+        )
+    return ratio
+
+
 @dataclass
 class PeakShavingConfig:
     """ Holds peak shaving configuration parameters, initialized from the config dict. """
@@ -277,6 +300,21 @@ class Batcontrol:
             'min_price_difference', 0.05)
         self.min_price_difference_rel = self.batconfig.get(
             'min_price_difference_rel', 0)
+        self.min_grid_charge_soc = _parse_optional_ratio(
+            self.batconfig.get('min_grid_charge_soc', None),
+            'battery_control.min_grid_charge_soc'
+        )
+        self.preserve_min_grid_charge_soc = False
+        if (self.min_grid_charge_soc is not None
+                and self.min_grid_charge_soc > self.max_charging_from_grid_limit):
+            logger.warning(
+                'min_grid_charge_soc (%.2f) is above '
+                'max_charging_from_grid_limit (%.2f); grid charging cannot '
+                'reach the minimum SoC target. Increase '
+                'max_charging_from_grid_limit or lower min_grid_charge_soc.',
+                self.min_grid_charge_soc,
+                self.max_charging_from_grid_limit
+            )
 
         self.round_price_digits = 4
         self.production_offset_percent = 1.0  # Default: no offset
@@ -290,6 +328,9 @@ class Batcontrol:
             self.production_offset_percent = battery_control_expert.get(
                 'production_offset_percent',
                 self.production_offset_percent)
+            self.preserve_min_grid_charge_soc = battery_control_expert.get(
+                'preserve_min_grid_charge_soc',
+                self.preserve_min_grid_charge_soc)
 
         self.general_logic = CommonLogic.get_instance(
             charge_rate_multiplier=self.batconfig.get(
@@ -633,6 +674,8 @@ class Batcontrol:
             self.min_price_difference,
             self.min_price_difference_rel,
             self.get_max_capacity(),
+            min_grid_charge_soc=self.min_grid_charge_soc,
+            preserve_min_grid_charge_soc=self.preserve_min_grid_charge_soc,
             peak_shaving_enabled=peak_shaving_config_enabled and not evcc_disable_peak_shaving,
             peak_shaving_allow_full_after=self.peak_shaving_config.allow_full_battery_after,
             peak_shaving_mode=self.peak_shaving_config.mode,
@@ -928,6 +971,9 @@ class Batcontrol:
                 self.get_always_allow_discharge_limit())
             self.mqtt_api.publish_max_charging_from_grid_limit(
                 self.max_charging_from_grid_limit)
+            if self.min_grid_charge_soc is not None:
+                self.mqtt_api.publish_min_grid_charge_soc(
+                    self.min_grid_charge_soc)
             #
             self.mqtt_api.publish_min_price_difference(
                 self.min_price_difference)

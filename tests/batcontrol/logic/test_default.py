@@ -219,6 +219,208 @@ class TestDefaultLogic(unittest.TestCase):
         self.assertIn(expected_stored_usable_energy, log_output)
         self.assertIn('charge_rate=', log_output)
 
+    def test_min_grid_charge_soc_increases_recharge_energy(self):
+        """Minimum grid-charge SoC raises recharge need when battery is below target."""
+        self.logic.set_calculation_parameters(CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            min_grid_charge_soc=0.55,
+        ))
+        stored_energy = 2000
+        stored_usable_energy, free_capacity = self._calculate_battery_values(
+            stored_energy, self.max_capacity
+        )
+        calc_input = CalculationInput(
+            consumption=np.array([1000, 2000, 1500]),
+            production=np.array([0, 0, 0]),
+            prices={0: 0.20, 1: 0.35, 2: 0.30},
+            stored_energy=stored_energy,
+            stored_usable_energy=stored_usable_energy,
+            free_capacity=free_capacity,
+        )
+
+        calc_timestamp = datetime.datetime(2025, 6, 20, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        self.assertTrue(self.logic.calculate(calc_input, calc_timestamp))
+        calc_output = self.logic.get_calculation_output()
+
+        # Targeting 55% on a 10 kWh battery from 2 kWh stored requires 3.5 kWh,
+        # plus the existing minimum recharge buffer.
+        self.assertAlmostEqual(calc_output.required_recharge_energy, 3600.0)
+
+    def test_min_grid_charge_soc_below_current_soc_does_not_increase_recharge(self):
+        """Minimum grid-charge SoC below current SoC keeps existing behavior."""
+        self.logic.set_calculation_parameters(CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            min_grid_charge_soc=0.10,
+        ))
+        stored_energy = 2000
+        stored_usable_energy, free_capacity = self._calculate_battery_values(
+            stored_energy, self.max_capacity
+        )
+        calc_input = CalculationInput(
+            consumption=np.array([1000, 2000, 1500]),
+            production=np.array([0, 0, 0]),
+            prices={0: 0.20, 1: 0.35, 2: 0.30},
+            stored_energy=stored_energy,
+            stored_usable_energy=stored_usable_energy,
+            free_capacity=free_capacity,
+        )
+
+        calc_timestamp = datetime.datetime(2025, 6, 20, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        self.assertTrue(self.logic.calculate(calc_input, calc_timestamp))
+        calc_output = self.logic.get_calculation_output()
+
+        self.assertAlmostEqual(calc_output.required_recharge_energy, 2100.0)
+
+    def test_min_grid_charge_soc_blocks_discharge_during_cheap_window(self):
+        """Expert option preserves battery before future expensive demand."""
+        self.logic.set_calculation_parameters(CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            min_grid_charge_soc=0.55,
+            preserve_min_grid_charge_soc=True,
+        ))
+        stored_energy = 5000
+        stored_usable_energy, free_capacity = self._calculate_battery_values(
+            stored_energy, self.max_capacity
+        )
+        calc_input = CalculationInput(
+            consumption=np.array([1000, 1000, 2000]),
+            production=np.array([0, 0, 0]),
+            prices={0: 0.10, 1: 0.11, 2: 0.30},
+            stored_energy=stored_energy,
+            stored_usable_energy=stored_usable_energy,
+            free_capacity=free_capacity,
+        )
+
+        calc_timestamp = datetime.datetime(2025, 6, 20, 22, 0, 0, tzinfo=datetime.timezone.utc)
+        self.assertTrue(self.logic.calculate(calc_input, calc_timestamp))
+        result = self.logic.get_inverter_control_settings()
+        calc_output = self.logic.get_calculation_output()
+
+        self.assertFalse(result.allow_discharge)
+        self.assertTrue(result.charge_from_grid)
+        self.assertGreater(calc_output.required_recharge_energy, 0)
+        self.assertGreater(calc_output.reserved_energy, 2000)
+
+    def test_min_grid_charge_soc_does_not_block_discharge_by_default(self):
+        """Minimum grid-charge SoC reserve preservation is opt-in."""
+        self.logic.set_calculation_parameters(CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            min_grid_charge_soc=0.55,
+        ))
+        stored_energy = 5000
+        stored_usable_energy, free_capacity = self._calculate_battery_values(
+            stored_energy, self.max_capacity
+        )
+        calc_input = CalculationInput(
+            consumption=np.array([1000, 1000, 2000]),
+            production=np.array([0, 0, 0]),
+            prices={0: 0.10, 1: 0.11, 2: 0.30},
+            stored_energy=stored_energy,
+            stored_usable_energy=stored_usable_energy,
+            free_capacity=free_capacity,
+        )
+
+        calc_timestamp = datetime.datetime(2025, 6, 20, 22, 0, 0, tzinfo=datetime.timezone.utc)
+        self.assertTrue(self.logic.calculate(calc_input, calc_timestamp))
+        result = self.logic.get_inverter_control_settings()
+
+        self.assertTrue(result.allow_discharge)
+        self.assertFalse(result.charge_from_grid)
+
+    def test_min_grid_charge_soc_allows_discharge_above_target(self):
+        """Minimum grid-charge SoC allows discharging energy above the target."""
+        self.logic.set_calculation_parameters(CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            min_grid_charge_soc=0.55,
+            preserve_min_grid_charge_soc=True,
+        ))
+        stored_energy = 6000
+        stored_usable_energy, free_capacity = self._calculate_battery_values(
+            stored_energy, self.max_capacity
+        )
+        calc_input = CalculationInput(
+            consumption=np.array([1000, 1000, 2000]),
+            production=np.array([0, 0, 0]),
+            prices={0: 0.10, 1: 0.11, 2: 0.30},
+            stored_energy=stored_energy,
+            stored_usable_energy=stored_usable_energy,
+            free_capacity=free_capacity,
+        )
+
+        calc_timestamp = datetime.datetime(2025, 6, 20, 22, 0, 0, tzinfo=datetime.timezone.utc)
+        self.assertTrue(self.logic.calculate(calc_input, calc_timestamp))
+        result = self.logic.get_inverter_control_settings()
+
+        self.assertTrue(result.allow_discharge)
+        self.assertFalse(result.charge_from_grid)
+
+    def test_min_grid_charge_soc_does_not_block_discharge_at_high_price(self):
+        """Minimum grid-charge SoC does not preserve battery when current price is high."""
+        self.logic.set_calculation_parameters(CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            min_grid_charge_soc=0.55,
+            preserve_min_grid_charge_soc=True,
+        ))
+        stored_energy = 5000
+        stored_usable_energy, free_capacity = self._calculate_battery_values(
+            stored_energy, self.max_capacity
+        )
+        calc_input = CalculationInput(
+            consumption=np.array([1000, 1000, 2000]),
+            production=np.array([0, 0, 0]),
+            prices={0: 0.30, 1: 0.10, 2: 0.10},
+            stored_energy=stored_energy,
+            stored_usable_energy=stored_usable_energy,
+            free_capacity=free_capacity,
+        )
+
+        calc_timestamp = datetime.datetime(2025, 6, 20, 6, 0, 0, tzinfo=datetime.timezone.utc)
+        self.assertTrue(self.logic.calculate(calc_input, calc_timestamp))
+        result = self.logic.get_inverter_control_settings()
+
+        self.assertTrue(result.allow_discharge)
+        self.assertFalse(result.charge_from_grid)
+
+    def test_min_grid_charge_soc_must_be_ratio(self):
+        """Minimum grid-charge SoC accepts only ratio values."""
+        with self.assertRaises(ValueError):
+            CalculationParameters(
+                max_charging_from_grid_limit=0.79,
+                min_price_difference=0.05,
+                min_price_difference_rel=0.2,
+                max_capacity=self.max_capacity,
+                min_grid_charge_soc=55,
+            )
+
+    def test_min_grid_charge_soc_must_be_numeric(self):
+        """Minimum grid-charge SoC rejects non-numeric values clearly."""
+        with self.assertRaisesRegex(ValueError, "must be numeric"):
+            CalculationParameters(
+                max_charging_from_grid_limit=0.79,
+                min_price_difference=0.05,
+                min_price_difference_rel=0.2,
+                max_capacity=self.max_capacity,
+                min_grid_charge_soc="0.55",
+            )
+
     def test_charge_calculation_when_charging_not_possible_high_soc(self):
         """Test charge calculation when charging is not possible due to high SOC"""
         # Set SOC above charging limit (79%)

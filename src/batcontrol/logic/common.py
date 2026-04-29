@@ -5,6 +5,7 @@ It includes the handling of:
   - charge_rate multiplier
   """
 import logging
+from typing import Optional
 
 
 # Minimum charge rate to controlling loops between charging and
@@ -113,6 +114,43 @@ class CommonLogic:
             round(self.min_charge_energy, 0),
             round(needed_energy, 0))
         return False
+
+    def apply_min_grid_charge_soc_target(self, recharge_energy: float,
+                                         stored_energy: float,
+                                         min_grid_charge_soc: Optional[float]) -> float:
+        """Apply an optional minimum SoC target to grid recharge energy."""
+        if min_grid_charge_soc is None:
+            return recharge_energy
+
+        target_energy = self.max_capacity * min_grid_charge_soc
+        soc_recharge_energy = max(0.0, target_energy - stored_energy)
+        if soc_recharge_energy > recharge_energy:
+            logger.debug(
+                'Recharge increased to meet min_grid_charge_soc %.1f%%: %.1f Wh',
+                min_grid_charge_soc * 100,
+                soc_recharge_energy
+            )
+        return max(recharge_energy, soc_recharge_energy)
+
+    def apply_min_grid_charge_soc_reserve(self, reserved_energy: float,
+                                          stored_energy: float,
+                                          stored_usable_energy: float,
+                                          min_grid_charge_soc: Optional[float],
+                                          active: bool) -> float:
+        """Apply an optional minimum SoC target to protected reserve energy."""
+        if min_grid_charge_soc is None or not active:
+            return reserved_energy
+
+        min_soc_energy = max(0.0, stored_energy - stored_usable_energy)
+        target_energy = self.max_capacity * min_grid_charge_soc
+        target_usable_energy = max(0.0, target_energy - min_soc_energy)
+        if target_usable_energy > reserved_energy:
+            logger.debug(
+                'Reserve increased to meet min_grid_charge_soc %.1f%%: %.1f Wh',
+                min_grid_charge_soc * 100,
+                target_usable_energy
+            )
+        return max(reserved_energy, target_usable_energy)
 
     def calculate_charge_rate(self, charge_rate: float) -> int:
         """ Calculate the charge rate based on the charge rate multiplier.
