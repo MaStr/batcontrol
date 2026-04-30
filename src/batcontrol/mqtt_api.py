@@ -537,6 +537,34 @@ class MqttApi:
                 str(charge_limit)
             )
 
+    def publish_peak_shaving_price_limit(self, price_limit) -> None:
+        """ Publish peak shaving price limit to MQTT
+            /peak_shaving/price_limit
+
+            Maps an unset (``None``) limit to ``-1`` so the value remains
+            roundtrip-safe with the Home Assistant ``number`` entity, which
+            cannot represent ``None``. Any slot price <= -1 is impossible,
+            so -1 is a natural off-value.
+        """
+        if self.client.is_connected():
+            value = -1.0 if price_limit is None else float(price_limit)
+            self.client.publish(
+                self.base_topic + '/peak_shaving/price_limit',
+                str(value),
+                retain=True
+            )
+
+    def publish_peak_shaving_mode(self, mode: str) -> None:
+        """ Publish peak shaving mode to MQTT
+            /peak_shaving/mode
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/peak_shaving/mode',
+                str(mode),
+                retain=True
+            )
+
     # For depended APIs like the Fronius Inverter classes, which is not
     # directly batcontrol.
     def generic_publish(self, topic: str, value: str) -> None:
@@ -688,6 +716,30 @@ class MqttApi:
             "power",
             "W",
             self.base_topic + "/peak_shaving/charge_limit")
+
+        self.publish_mqtt_discovery_message(
+            "Peak Shaving Price Limit",
+            "batcontrol_peak_shaving_price_limit",
+            "number",
+            "monetary",
+            None,
+            self.base_topic + "/peak_shaving/price_limit",
+            self.base_topic + "/peak_shaving/price_limit/set",
+            entity_category="config",
+            min_value=-1.0,
+            max_value=1.0,
+            step_value=0.01)
+
+        self.publish_mqtt_discovery_message(
+            "Peak Shaving Mode",
+            "batcontrol_peak_shaving_mode",
+            "select",
+            None,
+            None,
+            self.base_topic + "/peak_shaving/mode",
+            self.base_topic + "/peak_shaving/mode/set",
+            entity_category="config",
+            options=["time", "price", "combined"])
 
         # sensors
         self.publish_mqtt_discovery_message(
