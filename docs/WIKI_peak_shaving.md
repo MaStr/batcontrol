@@ -160,7 +160,7 @@ The following HA entities are automatically created:
 
 - **Peak Shaving Enabled** - switch entity
 - **Peak Shaving Allow Full After** - number entity (0-23, step 1)
-- **Peak Shaving Price Limit** - number entity (-1.0..1.0, step 0.01)
+- **Peak Shaving Price Limit** - number entity (-1.0..1.0, step 0.01); this is the HA auto-discovery slider range, not a hard application limit. `peak_shaving.price_limit` itself accepts any numeric EUR/kWh value via the YAML config or the MQTT setter topic.
 - **Peak Shaving Mode** - select entity (`time` / `price` / `combined`)
 - **Peak Shaving Charge Limit** - sensor entity (unit: W)
 
