@@ -1129,8 +1129,11 @@ class Batcontrol:
         """ Set peak shaving price limit via external API request.
             The change is temporary and will not be written to the config file.
 
-            Negative values are accepted and effectively disable the
-            price-based component (no slot price <= -1 ever exists).
+            Any numeric value is accepted. To disable the price-based
+            component, pass -1 (or any value <= -1): no slot price <= -1
+            ever exists, so the price filter never matches. Values above -1
+            (including small negatives like -0.1) may still match negative
+            tariff slots and are NOT a disable-switch.
         """
         if isinstance(price_limit, bool):
             # bool would silently coerce to 1.0/0.0 via float(); reject it

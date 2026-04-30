@@ -48,6 +48,7 @@ import time
 import json
 import logging
 import importlib.metadata
+from typing import Optional
 import paho.mqtt.client as mqtt
 import numpy as np
 
@@ -537,7 +538,8 @@ class MqttApi:
                 str(charge_limit)
             )
 
-    def publish_peak_shaving_price_limit(self, price_limit) -> None:
+    def publish_peak_shaving_price_limit(
+            self, price_limit: Optional[float]) -> None:
         """ Publish peak shaving price limit to MQTT
             /peak_shaving/price_limit
 
