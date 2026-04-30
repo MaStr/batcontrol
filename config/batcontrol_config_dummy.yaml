@@ -63,6 +63,25 @@ peak_shaving:
   price_limit: 0.05            # Euro/kWh - keep battery empty for slots at or below this price
 
 #--------------------------
+#  Low-Price Charging Lock
+#  (NextLogic / 'next' battery_control type only)
+#
+#  When the current grid price is at or below 'threshold' the battery is
+#  locked from discharging - this overrides 'always_allow_discharge_limit'.
+#  Grid charging is suppressed until the absolute minimum-price slot in the
+#  forecast horizon is reached. At that minimum slot the battery is
+#  force-charged from grid at the inverter's max_grid_charge_rate (when
+#  force_charge_at_min is true).
+#
+#  PV charging into the battery stays enabled at all times so that PV is
+#  not exported at negative prices.
+#--------------------------
+low_price_charging:
+  enabled: false               # disabled by default
+  threshold: -0.10             # Euro/kWh - lock kicks in at or below this price
+  force_charge_at_min: true    # force grid charging at the minimum-price slot
+
+#--------------------------
 #  Inverter
 #  See more Details in: https://github.com/MaStr/batcontrol/wiki/Inverter-Configuration
 #

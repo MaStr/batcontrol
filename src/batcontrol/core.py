@@ -126,6 +126,63 @@ class PeakShavingConfig:
         )
 
 
+@dataclass
+class LowPriceChargingConfig:
+    """Holds low-price charging lock configuration parameters.
+
+    When the current grid price drops at or below ``threshold``, the battery
+    is locked from discharging (overriding ``always_allow_discharge_limit``)
+    and grid charging is suppressed until the absolute minimum-price slot
+    in the forecast horizon is reached. At that minimum slot the battery is
+    force-charged from the grid at the inverter's maximum grid charge rate
+    (when ``force_charge_at_min`` is True).
+
+    Only applies to logic type ``next``.
+    """
+    enabled: bool = False
+    threshold: float = 0.0
+    force_charge_at_min: bool = True
+
+    def __post_init__(self):
+        if (isinstance(self.threshold, bool)
+                or not isinstance(self.threshold, (int, float))):
+            raise ValueError(
+                f"low_price_charging.threshold must be numeric, "
+                f"got {type(self.threshold).__name__}"
+            )
+        if not isinstance(self.enabled, bool):
+            raise ValueError(
+                f"low_price_charging.enabled must be a bool, "
+                f"got {type(self.enabled).__name__}"
+            )
+        if not isinstance(self.force_charge_at_min, bool):
+            raise ValueError(
+                f"low_price_charging.force_charge_at_min must be a bool, "
+                f"got {type(self.force_charge_at_min).__name__}"
+            )
+
+    @classmethod
+    def from_config(cls, config: dict) -> 'LowPriceChargingConfig':
+        """Create a LowPriceChargingConfig instance from a config dict."""
+        lpc = config.get('low_price_charging', {}) or {}
+        threshold_raw = lpc.get('threshold', 0.0)
+        if isinstance(threshold_raw, bool):
+            threshold = threshold_raw  # rejected by __post_init__
+        else:
+            try:
+                threshold = float(threshold_raw)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"low_price_charging.threshold must be numeric, "
+                    f"got {threshold_raw!r}"
+                ) from exc
+        return cls(
+            enabled=lpc.get('enabled', False),
+            threshold=threshold,
+            force_charge_at_min=lpc.get('force_charge_at_min', True),
+        )
+
+
 class Batcontrol:
     """ Main class for Batcontrol, handles the logic and control of the battery system """
     general_logic = None  # type: CommonLogic
@@ -270,6 +327,7 @@ class Batcontrol:
         self.time_at_forecast_error = -1
 
         self.peak_shaving_config = PeakShavingConfig.from_config(config)
+        self.low_price_charging_config = LowPriceChargingConfig.from_config(config)
 
         self.max_charging_from_grid_limit = self.batconfig.get(
             'max_charging_from_grid_limit', 0.8)
@@ -406,6 +464,14 @@ class Batcontrol:
             self.fc_consumption.refresh_data()
         except Exception as e:
             logger.error("Error during initial data fetch: %s", e)
+
+    def _get_inverter_max_grid_charge_rate(self) -> int:
+        """Read inverter.max_grid_charge_rate as an int, fall back to 0."""
+        raw = getattr(self.inverter, 'max_grid_charge_rate', 0)
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return 0
 
     def shutdown(self):
         """ Shutdown Batcontrol and dependent modules (inverter..) """
@@ -637,6 +703,10 @@ class Batcontrol:
             peak_shaving_allow_full_after=self.peak_shaving_config.allow_full_battery_after,
             peak_shaving_mode=self.peak_shaving_config.mode,
             peak_shaving_price_limit=self.peak_shaving_config.price_limit,
+            low_price_charging_enabled=self.low_price_charging_config.enabled,
+            low_price_charging_threshold=self.low_price_charging_config.threshold,
+            low_price_charging_force_charge=self.low_price_charging_config.force_charge_at_min,
+            max_grid_charge_rate=self._get_inverter_max_grid_charge_rate(),
         )
 
         self.last_logic_instance = this_logic_run

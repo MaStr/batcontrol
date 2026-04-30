@@ -38,6 +38,18 @@ class CalculationParameters:
     # cheap PV windows.  -1 or any numeric value accepted; None disables
     # price-based component.
     peak_shaving_price_limit: Optional[float] = None
+    # Low-price charging lock parameters (NextLogic only)
+    # When current price <= threshold the battery is locked from discharging
+    # (overrides always_allow_discharge_limit) and grid charging is suppressed
+    # until the absolute minimum-price slot in the forecast is reached.
+    # At that min slot, the battery is force-charged from grid at
+    # max_grid_charge_rate (if force_charge_at_min is True).
+    low_price_charging_enabled: bool = False
+    low_price_charging_threshold: float = 0.0
+    low_price_charging_force_charge: bool = True
+    # Maximum grid charge rate in W; used for force-charge at the min-price
+    # slot. Capped again by the inverter in core.force_charge.
+    max_grid_charge_rate: int = 0
 
     def __post_init__(self):
         if not 0 <= self.peak_shaving_allow_full_after <= 23:
@@ -56,6 +68,12 @@ class CalculationParameters:
             raise ValueError(
                 f"peak_shaving_price_limit must be numeric or None, "
                 f"got {type(self.peak_shaving_price_limit).__name__}"
+            )
+        if (isinstance(self.low_price_charging_threshold, bool)
+                or not isinstance(self.low_price_charging_threshold, (int, float))):
+            raise ValueError(
+                f"low_price_charging_threshold must be numeric, "
+                f"got {type(self.low_price_charging_threshold).__name__}"
             )
 
 @dataclass

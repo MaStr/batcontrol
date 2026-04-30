@@ -214,6 +214,13 @@ class NextLogic(LogicInterface):
             inverter_control_settings = self._apply_peak_shaving(
                 inverter_control_settings, calc_input, calc_timestamp)
 
+        # ----- Low-Price Charging Lock Post-Processing ----- #
+        # Runs last so it overrides peak shaving and the
+        # always_allow_discharge_limit branch in _is_discharge_allowed.
+        if self.calculation_parameters.low_price_charging_enabled:
+            inverter_control_settings = self._apply_low_price_charging_lock(
+                inverter_control_settings, calc_input)
+
         return inverter_control_settings
 
     # ------------------------------------------------------------------ #
@@ -327,6 +334,93 @@ class NextLogic(LogicInterface):
                     time_limit_w if time_limit_w >= 0 else 'off',
                     self.calculation_parameters.peak_shaving_allow_full_after)
 
+        return settings
+
+    # ------------------------------------------------------------------ #
+    #  Low-Price Charging Lock                                            #
+    # ------------------------------------------------------------------ #
+
+    def _apply_low_price_charging_lock(
+            self,
+            settings: InverterControlSettings,
+            calc_input: CalculationInput,
+    ) -> InverterControlSettings:
+        """Override settings during very-low / negative price episodes.
+
+        Active when the current grid price is at or below the configured
+        ``low_price_charging_threshold``. The override:
+
+        - Locks discharge unconditionally (overrides
+          ``always_allow_discharge_limit``).
+        - Suppresses grid charging while waiting for the absolute minimum
+          price slot in the forecast horizon.
+        - At the minimum slot (slot 0 == cheapest), force-charges from grid
+          at ``max_grid_charge_rate`` (capped again in ``core.force_charge``)
+          when ``low_price_charging_force_charge`` is True.
+
+        PV charging is left untouched (``limit_battery_charge_rate = -1``):
+        at negative prices, charging from PV avoids paying feed-in fees.
+        """
+        prices = calc_input.prices
+        if prices is None or len(prices) == 0:
+            return settings
+
+        threshold = self.calculation_parameters.low_price_charging_threshold
+        current_price = prices[0]
+
+        if current_price > threshold:
+            return settings
+
+        min_slot = int(np.argmin(prices))
+        min_price = float(prices[min_slot])
+
+        # Common defaults for the lock: no discharge, no PV charge limit
+        settings.allow_discharge = False
+        settings.limit_battery_charge_rate = -1
+
+        if min_slot == 0:
+            # Current slot is the absolute minimum.
+            force_charge = self.calculation_parameters.low_price_charging_force_charge
+            free_capacity = calc_input.free_capacity
+
+            if not force_charge:
+                logger.info(
+                    '[LowPriceLock] Min-price slot %.4f Eur/kWh '
+                    '(<= threshold %.4f); force_charge_at_min disabled, '
+                    'blocking discharge only',
+                    current_price, threshold)
+                settings.charge_from_grid = False
+                settings.charge_rate = 0
+                return settings
+
+            if free_capacity <= 0:
+                logger.info(
+                    '[LowPriceLock] Min-price slot %.4f Eur/kWh but battery '
+                    'full (free_capacity=%.0f Wh); blocking discharge only',
+                    current_price, free_capacity)
+                settings.charge_from_grid = False
+                settings.charge_rate = 0
+                return settings
+
+            charge_rate = self.calculation_parameters.max_grid_charge_rate
+            if charge_rate <= 0:
+                # Fallback: very large value, capped by inverter in core.py
+                charge_rate = 999999
+            logger.info(
+                '[LowPriceLock] Force charge at min-price slot '
+                '%.4f Eur/kWh (<= threshold %.4f) at %d W',
+                current_price, threshold, charge_rate)
+            settings.charge_from_grid = True
+            settings.charge_rate = int(charge_rate)
+            return settings
+
+        # In low-price window but cheaper slot is still ahead -> wait.
+        logger.info(
+            '[LowPriceLock] Locked at %.4f Eur/kWh (<= threshold %.4f); '
+            'waiting for min-price slot %d at %.4f Eur/kWh',
+            current_price, threshold, min_slot, min_price)
+        settings.charge_from_grid = False
+        settings.charge_rate = 0
         return settings
 
     def _calculate_peak_shaving_charge_limit_price_based(
