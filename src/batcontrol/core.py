@@ -1132,6 +1132,13 @@ class Batcontrol:
             Negative values are accepted and effectively disable the
             price-based component (no slot price <= -1 ever exists).
         """
+        if isinstance(price_limit, bool):
+            # bool would silently coerce to 1.0/0.0 via float(); reject it
+            # so PeakShavingConfig's bool rejection still applies on this path.
+            logger.warning(
+                'API: Invalid peak_shaving price_limit %r: must be numeric, '
+                'not bool', price_limit)
+            return
         try:
             new_config = dataclasses.replace(
                 self.peak_shaving_config, price_limit=float(price_limit))

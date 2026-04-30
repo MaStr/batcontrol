@@ -393,6 +393,16 @@ class TestPeakShavingPriceLimitApi:
         assert bc.peak_shaving_config is original
         bc.mqtt_api.publish_peak_shaving_price_limit.assert_not_called()
 
+    def test_bool_inputs_are_rejected(self):
+        # float(True)=1.0 / float(False)=0.0 would silently bypass the
+        # explicit bool rejection in PeakShavingConfig.__post_init__.
+        original = PeakShavingConfig(price_limit=0.10)
+        for value in (True, False):
+            bc = _make_bc_stub(original)
+            Batcontrol.api_set_peak_shaving_price_limit(bc, value)
+            assert bc.peak_shaving_config is original
+            bc.mqtt_api.publish_peak_shaving_price_limit.assert_not_called()
+
 
 class TestPeakShavingModeApi:
     """Batcontrol.api_set_peak_shaving_mode must validate and round-trip."""
