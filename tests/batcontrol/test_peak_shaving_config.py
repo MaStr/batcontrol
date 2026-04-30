@@ -6,7 +6,7 @@ failing later in ``CalculationParameters.__post_init__``.
 """
 import pytest
 
-from batcontrol.core import PeakShavingConfig
+from batcontrol.logic import PeakShavingConfig
 
 
 class TestPeakShavingConfigValidation:
@@ -144,33 +144,56 @@ class TestPeakShavingConfigFromConfig:
 class TestPeakShavingConfigFallbackWarning:
     """Test the one-time warning for combined-mode + missing price_limit.
 
-    The warning must fire at config load (not during runtime) and only
-    when the misconfiguration would actually be active (enabled=True and
-    mode='combined' with price_limit=None).
+    The warning fires at config load (``from_config``) only -- not in
+    ``__post_init__`` -- so that ``dataclasses.replace`` in the per-cycle
+    build path does not re-emit it on every evaluation.
     """
 
+    LOGGER = 'batcontrol.logic.logic_interface'
+
     def test_combined_without_price_limit_logs_warning(self, caplog):
-        with caplog.at_level('WARNING', logger='batcontrol.core'):
-            PeakShavingConfig(enabled=True, mode='combined', price_limit=None)
+        with caplog.at_level('WARNING', logger=self.LOGGER):
+            PeakShavingConfig.from_config({
+                'peak_shaving': {'enabled': True, 'mode': 'combined'},
+            })
         messages = [r.getMessage() for r in caplog.records
                     if r.levelname == 'WARNING']
         assert any("combined" in m and "price_limit" in m for m in messages)
 
     def test_disabled_combined_without_price_limit_does_not_warn(self, caplog):
         # When peak shaving is disabled there is no user-visible problem.
-        with caplog.at_level('WARNING', logger='batcontrol.core'):
-            PeakShavingConfig(enabled=False, mode='combined', price_limit=None)
+        with caplog.at_level('WARNING', logger=self.LOGGER):
+            PeakShavingConfig.from_config({
+                'peak_shaving': {'enabled': False, 'mode': 'combined'},
+            })
         warnings = [r for r in caplog.records if r.levelname == 'WARNING']
         assert warnings == []
 
     def test_combined_with_price_limit_does_not_warn(self, caplog):
-        with caplog.at_level('WARNING', logger='batcontrol.core'):
-            PeakShavingConfig(enabled=True, mode='combined', price_limit=0.05)
+        with caplog.at_level('WARNING', logger=self.LOGGER):
+            PeakShavingConfig.from_config({
+                'peak_shaving': {
+                    'enabled': True, 'mode': 'combined', 'price_limit': 0.05},
+            })
         warnings = [r for r in caplog.records if r.levelname == 'WARNING']
         assert warnings == []
 
     def test_time_mode_without_price_limit_does_not_warn(self, caplog):
-        with caplog.at_level('WARNING', logger='batcontrol.core'):
-            PeakShavingConfig(enabled=True, mode='time', price_limit=None)
+        with caplog.at_level('WARNING', logger=self.LOGGER):
+            PeakShavingConfig.from_config({
+                'peak_shaving': {'enabled': True, 'mode': 'time'},
+            })
+        warnings = [r for r in caplog.records if r.levelname == 'WARNING']
+        assert warnings == []
+
+    def test_replace_does_not_re_emit_warning(self, caplog):
+        # dataclasses.replace re-runs __post_init__ but must not trigger
+        # the fallback warning on every per-cycle rebuild.
+        import dataclasses
+        cfg = PeakShavingConfig(
+            enabled=True, mode='combined', price_limit=None)
+        with caplog.at_level('WARNING', logger=self.LOGGER):
+            dataclasses.replace(cfg, enabled=False)
+            dataclasses.replace(cfg, enabled=True)
         warnings = [r for r in caplog.records if r.levelname == 'WARNING']
         assert warnings == []

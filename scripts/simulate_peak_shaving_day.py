@@ -30,6 +30,7 @@ from batcontrol.logic.logic_interface import (
     CalculationInput,
     CalculationParameters,
     InverterControlSettings,
+    PeakShavingConfig,
 )
 from batcontrol.logic.common import CommonLogic
 
@@ -179,9 +180,11 @@ params_shaving = CalculationParameters(
     min_price_difference=0.05,
     min_price_difference_rel=0.2,
     max_capacity=MAX_CAPACITY,
-    peak_shaving_enabled=True,
-    peak_shaving_allow_full_after=TARGET_HOUR,
-    peak_shaving_mode='time',   # pure time-based ramp
+    peak_shaving=PeakShavingConfig(
+        enabled=True,
+        allow_full_battery_after=TARGET_HOUR,
+        mode='time',  # pure time-based ramp
+    ),
 )
 
 # ---------------------------------------------------------------------------
@@ -336,9 +339,11 @@ def run_scenario(target_hour: int, initial_soc_wh: float) -> dict:
         min_price_difference=0.05,
         min_price_difference_rel=0.2,
         max_capacity=MAX_CAPACITY,
-        peak_shaving_enabled=True,
-        peak_shaving_allow_full_after=target_hour,
-        peak_shaving_mode='time',
+        peak_shaving=PeakShavingConfig(
+            enabled=True,
+            allow_full_battery_after=target_hour,
+            mode='time',
+        ),
     )
     logic = NextLogic(timezone=TZ, interval_minutes=INTERVAL_MIN)
     logic.set_calculation_parameters(params)
