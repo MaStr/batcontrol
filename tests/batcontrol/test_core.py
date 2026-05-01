@@ -952,7 +952,8 @@ class TestEvccPeakShavingGuard:
         bc.evcc_api = mock_evcc
 
         # Replicate the pre-calculation evcc check from core.py
-        from batcontrol.logic.logic_interface import CalculationParameters
+        from batcontrol.logic.logic_interface import (
+            CalculationParameters, PeakShavingConfig)
         evcc_disable_peak_shaving = (
             bc.evcc_api.evcc_is_charging or
             bc.evcc_api.evcc_ev_expects_pv_surplus
@@ -963,10 +964,12 @@ class TestEvccPeakShavingGuard:
             min_price_difference=0.05,
             min_price_difference_rel=0.0,
             max_capacity=10000,
-            peak_shaving_enabled=peak_shaving_config.get('enabled', False) and not evcc_disable_peak_shaving,
+            peak_shaving=PeakShavingConfig(
+                enabled=peak_shaving_config.get('enabled', False)
+                and not evcc_disable_peak_shaving),
         )
 
-        assert calc_params.peak_shaving_enabled is False
+        assert calc_params.peak_shaving.enabled is False
 
     @patch('batcontrol.core.tariff_factory.create_tarif_provider')
     @patch('batcontrol.core.inverter_factory.create_inverter')
@@ -984,7 +987,8 @@ class TestEvccPeakShavingGuard:
         mock_evcc.evcc_ev_expects_pv_surplus = True
         bc.evcc_api = mock_evcc
 
-        from batcontrol.logic.logic_interface import CalculationParameters
+        from batcontrol.logic.logic_interface import (
+            CalculationParameters, PeakShavingConfig)
         evcc_disable_peak_shaving = (
             bc.evcc_api.evcc_is_charging or
             bc.evcc_api.evcc_ev_expects_pv_surplus
@@ -995,10 +999,12 @@ class TestEvccPeakShavingGuard:
             min_price_difference=0.05,
             min_price_difference_rel=0.0,
             max_capacity=10000,
-            peak_shaving_enabled=peak_shaving_config.get('enabled', False) and not evcc_disable_peak_shaving,
+            peak_shaving=PeakShavingConfig(
+                enabled=peak_shaving_config.get('enabled', False)
+                and not evcc_disable_peak_shaving),
         )
 
-        assert calc_params.peak_shaving_enabled is False
+        assert calc_params.peak_shaving.enabled is False
 
     @patch('batcontrol.core.tariff_factory.create_tarif_provider')
     @patch('batcontrol.core.inverter_factory.create_inverter')
@@ -1016,7 +1022,8 @@ class TestEvccPeakShavingGuard:
         mock_evcc.evcc_ev_expects_pv_surplus = False
         bc.evcc_api = mock_evcc
 
-        from batcontrol.logic.logic_interface import CalculationParameters
+        from batcontrol.logic.logic_interface import (
+            CalculationParameters, PeakShavingConfig)
         evcc_disable_peak_shaving = (
             bc.evcc_api.evcc_is_charging or
             bc.evcc_api.evcc_ev_expects_pv_surplus
@@ -1027,10 +1034,12 @@ class TestEvccPeakShavingGuard:
             min_price_difference=0.05,
             min_price_difference_rel=0.0,
             max_capacity=10000,
-            peak_shaving_enabled=peak_shaving_config.get('enabled', False) and not evcc_disable_peak_shaving,
+            peak_shaving=PeakShavingConfig(
+                enabled=peak_shaving_config.get('enabled', False)
+                and not evcc_disable_peak_shaving),
         )
 
-        assert calc_params.peak_shaving_enabled is True
+        assert calc_params.peak_shaving.enabled is True
 
     @patch('batcontrol.core.tariff_factory.create_tarif_provider')
     @patch('batcontrol.core.inverter_factory.create_inverter')
@@ -1050,7 +1059,8 @@ class TestEvccPeakShavingGuard:
         mock_evcc.evcc_ev_expects_pv_surplus = False
         bc.evcc_api = mock_evcc
 
-        from batcontrol.logic.logic_interface import CalculationParameters
+        from batcontrol.logic.logic_interface import (
+            CalculationParameters, PeakShavingConfig)
         evcc_disable_peak_shaving = (
             bc.evcc_api.evcc_is_charging or
             bc.evcc_api.evcc_ev_expects_pv_surplus
@@ -1061,10 +1071,12 @@ class TestEvccPeakShavingGuard:
             min_price_difference=0.05,
             min_price_difference_rel=0.0,
             max_capacity=10000,
-            peak_shaving_enabled=peak_shaving_config.get('enabled', False) and not evcc_disable_peak_shaving,
+            peak_shaving=PeakShavingConfig(
+                enabled=peak_shaving_config.get('enabled', False)
+                and not evcc_disable_peak_shaving),
         )
 
-        assert calc_params.peak_shaving_enabled is False
+        assert calc_params.peak_shaving.enabled is False
 
 
 if __name__ == '__main__':

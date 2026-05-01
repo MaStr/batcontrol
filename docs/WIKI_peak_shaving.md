@@ -139,6 +139,8 @@ The evcc integration derives `mode` and `connected` topics automatically from th
 |-------|------|----------|-------------|
 | `{base}/peak_shaving/enabled` | bool | Yes | Peak shaving enabled status |
 | `{base}/peak_shaving/allow_full_battery_after` | int | Yes | Target hour (0-23) |
+| `{base}/peak_shaving/price_limit` | float | Yes | Cheap-slot price limit in EUR/kWh; `-1` published when unset |
+| `{base}/peak_shaving/mode` | string | Yes | Active operating mode (`time` / `price` / `combined`) |
 | `{base}/peak_shaving/charge_limit` | int | No | Current charge limit in W (-1 if inactive) |
 
 ### Settable Topics
@@ -147,10 +149,10 @@ The evcc integration derives `mode` and `connected` topics automatically from th
 |-------|---------|-------------|
 | `{base}/peak_shaving/enabled/set` | `true`/`false` | Enable/disable peak shaving |
 | `{base}/peak_shaving/allow_full_battery_after/set` | int 0-23 | Set target hour |
+| `{base}/peak_shaving/price_limit/set` | float | Cheap-slot price limit in EUR/kWh; send `-1` to disable the price component (no slot price <= -1 ever exists) |
+| `{base}/peak_shaving/mode/set` | `time` / `price` / `combined` | Switch operating mode at runtime |
 
-Note: `mode` and `price_limit` are **not** settable at runtime via MQTT.
-Changing either requires editing `batcontrol_config.yaml` and restarting
-batcontrol. See "Known Limitations" below.
+Runtime changes are temporary and not persisted to `batcontrol_config.yaml`.
 
 ### Home Assistant Auto-Discovery
 
@@ -158,6 +160,8 @@ The following HA entities are automatically created:
 
 - **Peak Shaving Enabled** - switch entity
 - **Peak Shaving Allow Full After** - number entity (0-23, step 1)
+- **Peak Shaving Price Limit** - number entity (-1.0..1.0 EUR/kWh, step 0.01); this is the HA auto-discovery slider range, not a hard application limit. `peak_shaving.price_limit` itself accepts any numeric EUR/kWh value via the YAML config or the MQTT setter topic. The slider range is intentionally tight: the field is a *cheap-slot* threshold, so values approaching 1 EUR/kWh are already an unusually high cutoff in practice — values above that are accepted, but rarely meaningful for peak shaving.
+- **Peak Shaving Mode** - select entity (`time` / `price` / `combined`)
 - **Peak Shaving Charge Limit** - sensor entity (unit: W)
 
 ## Known Limitations
@@ -166,6 +170,6 @@ The following HA entities are automatically created:
 
 2. **Code duplication:** `NextLogic` is a copy of `DefaultLogic` with peak shaving added. Once stable, the two could be merged or refactored.
 
-3. **Partial MQTT runtime control:** Only `enabled` and `allow_full_battery_after` can be changed at runtime via MQTT. `mode` and `price_limit` are read from the configuration file once at startup and require a restart to change. If you need to toggle the price component on-the-fly, set `price_limit: -1` in the config so no slots qualify as cheap; the time component continues to work (in `combined` mode) without further changes.
+3. **Persistence:** Runtime changes via MQTT (`enabled`, `allow_full_battery_after`, `price_limit`, `mode`) are not written back to `batcontrol_config.yaml`. After a restart the values from the configuration file take effect again.
 
 4. **`combined` mode without `price_limit`:** When `mode: combined` is configured but `price_limit` is omitted (or `null`), the price component is skipped and the logic falls back to time-only behaviour. A warning is logged so the fallback is visible. To use the price component, set a numeric `price_limit`; to disable peak shaving entirely, set `enabled: false`.

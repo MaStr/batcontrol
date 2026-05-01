@@ -31,6 +31,7 @@ from batcontrol.logic.next import NextLogic
 from batcontrol.logic.logic_interface import (
     CalculationInput,
     CalculationParameters,
+    PeakShavingConfig,
 )
 from batcontrol.logic.common import CommonLogic
 
@@ -153,10 +154,12 @@ params_price = CalculationParameters(
     min_price_difference=0.05,
     min_price_difference_rel=0.2,
     max_capacity=MAX_CAPACITY,
-    peak_shaving_enabled=True,
-    peak_shaving_allow_full_after=ALLOW_FULL_AFTER,
-    peak_shaving_mode='price',
-    peak_shaving_price_limit=PRICE_LIMIT,
+    peak_shaving=PeakShavingConfig(
+        enabled=True,
+        allow_full_battery_after=ALLOW_FULL_AFTER,
+        mode='price',
+        price_limit=PRICE_LIMIT,
+    ),
 )
 
 # ---------------------------------------------------------------------------

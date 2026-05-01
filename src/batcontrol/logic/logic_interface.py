@@ -1,13 +1,95 @@
+import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 import datetime
 import numpy as np
 
-# Shared tuple of valid peak-shaving operating modes. Defined here so that
-# both CalculationParameters (this module) and PeakShavingConfig
-# (batcontrol.core) can reference a single source of truth.
+logger = logging.getLogger(__name__)
+
+# Shared tuple of valid peak-shaving operating modes.
 PEAK_SHAVING_VALID_MODES = ('time', 'price', 'combined')
+
+
+@dataclass
+class PeakShavingConfig:
+    """ Holds peak shaving configuration parameters, initialized from the config dict.
+
+    Range/type validation runs in ``__post_init__``. The "combined mode without
+    price_limit" fallback warning is emitted in :py:meth:`from_config` only,
+    so it fires once at config load and not on every ``dataclasses.replace``
+    in the per-evaluation build path.
+    """
+    enabled: bool = False
+    mode: str = 'combined'
+    allow_full_battery_after: int = 14
+    price_limit: Optional[float] = None
+
+    def __post_init__(self):
+        """Validate configuration values and raise ValueError with a clear,
+        config-key-based message on invalid input."""
+        if self.mode not in PEAK_SHAVING_VALID_MODES:
+            raise ValueError(
+                f"peak_shaving.mode must be one of "
+                f"{PEAK_SHAVING_VALID_MODES}, got '{self.mode}'"
+            )
+        if not isinstance(self.allow_full_battery_after, int) \
+                or isinstance(self.allow_full_battery_after, bool):
+            raise ValueError(
+                f"peak_shaving.allow_full_battery_after must be an integer, "
+                f"got {type(self.allow_full_battery_after).__name__}"
+            )
+        if not 0 <= self.allow_full_battery_after <= 23:
+            raise ValueError(
+                f"peak_shaving.allow_full_battery_after must be between "
+                f"0 and 23, got {self.allow_full_battery_after}"
+            )
+        if self.price_limit is not None and (
+                isinstance(self.price_limit, bool)
+                or not isinstance(self.price_limit, (int, float))):
+            raise ValueError(
+                f"peak_shaving.price_limit must be numeric or None, "
+                f"got {type(self.price_limit).__name__}"
+            )
+
+    @classmethod
+    def from_config(cls, config: dict) -> 'PeakShavingConfig':
+        """ Create a PeakShavingConfig instance from a configuration dict.
+
+        Emits a one-time warning when peak shaving is enabled in 'combined'
+        mode without a configured ``price_limit``: the price component is
+        disabled in that case and behaviour falls back to time-only.
+        """
+        ps = config.get('peak_shaving', {})
+        price_limit_raw = ps.get('price_limit', None)
+        if price_limit_raw is None or isinstance(price_limit_raw, bool):
+            # ``None`` stays ``None``; bool is rejected by __post_init__ with a
+            # key-prefixed message. Skip float() so we do not lose the type info.
+            price_limit = price_limit_raw
+        else:
+            try:
+                price_limit = float(price_limit_raw)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"peak_shaving.price_limit must be numeric or None, "
+                    f"got {price_limit_raw!r}"
+                ) from exc
+        instance = cls(
+            enabled=ps.get('enabled', False),
+            mode=ps.get('mode', 'combined'),
+            allow_full_battery_after=ps.get('allow_full_battery_after', 14),
+            price_limit=price_limit,
+        )
+        if instance.enabled and instance.mode == 'combined' \
+                and instance.price_limit is None:
+            logger.warning(
+                "peak_shaving.mode='combined' but no peak_shaving.price_limit "
+                "configured: the price component is disabled; falling back "
+                "to time-only behaviour. Set a numeric price_limit or change "
+                "mode to 'time' to silence this warning."
+            )
+        return instance
+
 
 @dataclass
 class CalculationInput:
@@ -32,18 +114,9 @@ class CalculationParameters:
     # Expert option: also preserve the target as reserved energy during
     # cheap/pre-expensive windows.
     preserve_min_grid_charge_soc: bool = False
-    # Peak shaving parameters
-    peak_shaving_enabled: bool = False
-    peak_shaving_allow_full_after: int = 14  # Hour (0-23)
-    # Operating mode:
-    #   'time'     - limit by target hour only (allow_full_battery_after)
-    #   'price'    - limit by cheap-slot reservation only (price_limit required)
-    #   'combined' - both limits active, stricter one wins
-    peak_shaving_mode: str = 'combined'
-    # Slots where price (Euro/kWh) is at or below this value are treated as
-    # cheap PV windows.  -1 or any numeric value accepted; None disables
-    # price-based component.
-    peak_shaving_price_limit: Optional[float] = None
+    # Peak shaving sub-configuration. evcc may set ``enabled=False`` for a
+    # single calculation cycle via ``dataclasses.replace`` in core.py.
+    peak_shaving: PeakShavingConfig = field(default_factory=PeakShavingConfig)
 
     def __post_init__(self):
         if self.min_grid_charge_soc is not None:
@@ -58,23 +131,6 @@ class CalculationParameters:
                     f"min_grid_charge_soc must be between 0 and 1 or None, "
                     f"got {self.min_grid_charge_soc}"
                 )
-        if not 0 <= self.peak_shaving_allow_full_after <= 23:
-            raise ValueError(
-                f"peak_shaving_allow_full_after must be 0-23, "
-                f"got {self.peak_shaving_allow_full_after}"
-            )
-        if self.peak_shaving_mode not in PEAK_SHAVING_VALID_MODES:
-            raise ValueError(
-                f"peak_shaving_mode must be one of "
-                f"{PEAK_SHAVING_VALID_MODES}, "
-                f"got '{self.peak_shaving_mode}'"
-            )
-        if (self.peak_shaving_price_limit is not None
-                and not isinstance(self.peak_shaving_price_limit, (int, float))):
-            raise ValueError(
-                f"peak_shaving_price_limit must be numeric or None, "
-                f"got {type(self.peak_shaving_price_limit).__name__}"
-            )
 
 @dataclass
 class CalculationOutput:

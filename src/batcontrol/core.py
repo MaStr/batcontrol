@@ -16,7 +16,7 @@ import os
 import logging
 import platform
 
-from dataclasses import dataclass
+import dataclasses
 from typing import Optional
 
 import pytz
@@ -29,7 +29,7 @@ from .scheduler import SchedulerThread
 from .logic import Logic as LogicFactory
 from .logic import CalculationInput, CalculationParameters
 from .logic import CommonLogic
-from .logic import PEAK_SHAVING_VALID_MODES
+from .logic import PeakShavingConfig
 
 from .dynamictariff import DynamicTariff as tariff_factory
 from .inverter import Inverter as inverter_factory
@@ -78,75 +78,6 @@ def _parse_optional_ratio(value, config_key: str) -> Optional[float]:
             f"{config_key} must be between 0 and 1 or None, got {value!r}"
         )
     return ratio
-
-
-@dataclass
-class PeakShavingConfig:
-    """ Holds peak shaving configuration parameters, initialized from the config dict. """
-    enabled: bool = False
-    mode: str = 'combined'
-    allow_full_battery_after: int = 14
-    price_limit: Optional[float] = None
-
-    def __post_init__(self):
-        """Validate configuration values and raise ValueError with a clear,
-        config-key-based message on invalid input. Also emit a one-time
-        warning for the ``combined`` + missing ``price_limit`` fallback,
-        so the log message fires at config load (not every evaluation)."""
-        if self.mode not in PEAK_SHAVING_VALID_MODES:
-            raise ValueError(
-                f"peak_shaving.mode must be one of "
-                f"{PEAK_SHAVING_VALID_MODES}, got '{self.mode}'"
-            )
-        if not isinstance(self.allow_full_battery_after, int) \
-                or isinstance(self.allow_full_battery_after, bool):
-            raise ValueError(
-                f"peak_shaving.allow_full_battery_after must be an integer, "
-                f"got {type(self.allow_full_battery_after).__name__}"
-            )
-        if not 0 <= self.allow_full_battery_after <= 23:
-            raise ValueError(
-                f"peak_shaving.allow_full_battery_after must be between "
-                f"0 and 23, got {self.allow_full_battery_after}"
-            )
-        if self.price_limit is not None and (
-                isinstance(self.price_limit, bool)
-                or not isinstance(self.price_limit, (int, float))):
-            raise ValueError(
-                f"peak_shaving.price_limit must be numeric or None, "
-                f"got {type(self.price_limit).__name__}"
-            )
-        if self.enabled and self.mode == 'combined' and self.price_limit is None:
-            logger.warning(
-                "peak_shaving.mode='combined' but no peak_shaving.price_limit "
-                "configured: the price component is disabled; falling back "
-                "to time-only behaviour. Set a numeric price_limit or change "
-                "mode to 'time' to silence this warning."
-            )
-
-    @classmethod
-    def from_config(cls, config: dict) -> 'PeakShavingConfig':
-        """ Create a PeakShavingConfig instance from a configuration dict. """
-        ps = config.get('peak_shaving', {})
-        price_limit_raw = ps.get('price_limit', None)
-        if price_limit_raw is None or isinstance(price_limit_raw, bool):
-            # ``None`` stays ``None``; bool is rejected by __post_init__ with a
-            # key-prefixed message. Skip float() so we do not lose the type info.
-            price_limit = price_limit_raw
-        else:
-            try:
-                price_limit = float(price_limit_raw)
-            except (TypeError, ValueError) as exc:
-                raise ValueError(
-                    f"peak_shaving.price_limit must be numeric or None, "
-                    f"got {price_limit_raw!r}"
-                ) from exc
-        return cls(
-            enabled=ps.get('enabled', False),
-            mode=ps.get('mode', 'combined'),
-            allow_full_battery_after=ps.get('allow_full_battery_after', 14),
-            price_limit=price_limit,
-        )
 
 
 class Batcontrol:
@@ -400,6 +331,16 @@ class Batcontrol:
                     'peak_shaving/allow_full_battery_after',
                     self.api_set_peak_shaving_allow_full_after,
                     int
+                )
+                self.mqtt_api.register_set_callback(
+                    'peak_shaving/price_limit',
+                    self.api_set_peak_shaving_price_limit,
+                    float
+                )
+                self.mqtt_api.register_set_callback(
+                    'peak_shaving/mode',
+                    self.api_set_peak_shaving_mode,
+                    str
                 )
                 # Inverter Callbacks
                 self.inverter.activate_mqtt(self.mqtt_api)
@@ -669,6 +610,12 @@ class Batcontrol:
             # Reset tracking flag when peak shaving is disabled in config.
             self._evcc_peak_shaving_disabled = False
 
+        # evcc may force peak shaving off for a single cycle; the underlying
+        # peak_shaving_config is left untouched.
+        ps_runtime = dataclasses.replace(
+            self.peak_shaving_config,
+            enabled=peak_shaving_config_enabled and not evcc_disable_peak_shaving,
+        )
         calc_parameters = CalculationParameters(
             self.max_charging_from_grid_limit,
             self.min_price_difference,
@@ -676,10 +623,7 @@ class Batcontrol:
             self.get_max_capacity(),
             min_grid_charge_soc=self.min_grid_charge_soc,
             preserve_min_grid_charge_soc=self.preserve_min_grid_charge_soc,
-            peak_shaving_enabled=peak_shaving_config_enabled and not evcc_disable_peak_shaving,
-            peak_shaving_allow_full_after=self.peak_shaving_config.allow_full_battery_after,
-            peak_shaving_mode=self.peak_shaving_config.mode,
-            peak_shaving_price_limit=self.peak_shaving_config.price_limit,
+            peak_shaving=ps_runtime,
         )
 
         self.last_logic_instance = this_logic_run
@@ -999,6 +943,10 @@ class Batcontrol:
                 self.peak_shaving_config.enabled)
             self.mqtt_api.publish_peak_shaving_allow_full_after(
                 self.peak_shaving_config.allow_full_battery_after)
+            self.mqtt_api.publish_peak_shaving_price_limit(
+                self.peak_shaving_config.price_limit)
+            self.mqtt_api.publish_peak_shaving_mode(
+                self.peak_shaving_config.mode)
             # Trigger Inverter
             self.inverter.refresh_api_values()
 
@@ -1176,3 +1124,53 @@ class Batcontrol:
         self.peak_shaving_config.allow_full_battery_after = hour
         if self.mqtt_api is not None:
             self.mqtt_api.publish_peak_shaving_allow_full_after(hour)
+
+    def api_set_peak_shaving_price_limit(self, price_limit: float):
+        """ Set peak shaving price limit via external API request.
+            The change is temporary and will not be written to the config file.
+
+            Any numeric value is accepted. To disable the price-based
+            component, pass -1 (or any value <= -1): no slot price <= -1
+            ever exists, so the price filter never matches. Values above -1
+            (including small negatives like -0.1) may still match negative
+            tariff slots and are NOT a disable-switch.
+        """
+        if isinstance(price_limit, bool):
+            # bool would silently coerce to 1.0/0.0 via float(); reject it
+            # so PeakShavingConfig's bool rejection still applies on this path.
+            logger.warning(
+                'API: Invalid peak_shaving price_limit %r: must be numeric, '
+                'not bool', price_limit)
+            return
+        try:
+            new_config = dataclasses.replace(
+                self.peak_shaving_config, price_limit=float(price_limit))
+        except (TypeError, ValueError) as exc:
+            logger.warning(
+                'API: Invalid peak_shaving price_limit %r: %s',
+                price_limit, exc)
+            return
+        logger.info(
+            'API: Setting peak shaving price_limit to %s',
+            new_config.price_limit)
+        self.peak_shaving_config = new_config
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_peak_shaving_price_limit(
+                new_config.price_limit)
+
+    def api_set_peak_shaving_mode(self, mode: str):
+        """ Set peak shaving operating mode via external API request.
+            The change is temporary and will not be written to the config file.
+        """
+        normalized = (mode or '').strip().lower()
+        try:
+            new_config = dataclasses.replace(
+                self.peak_shaving_config, mode=normalized)
+        except ValueError as exc:
+            logger.warning(
+                'API: Invalid peak_shaving mode %r: %s', mode, exc)
+            return
+        logger.info('API: Setting peak shaving mode to %s', new_config.mode)
+        self.peak_shaving_config = new_config
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_peak_shaving_mode(new_config.mode)

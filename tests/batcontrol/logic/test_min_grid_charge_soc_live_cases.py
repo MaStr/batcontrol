@@ -131,7 +131,6 @@ def _make_logic(logic_cls):
         max_capacity=CAPACITY_WH,
         min_grid_charge_soc=MIN_GRID_CHARGE_SOC,
         preserve_min_grid_charge_soc=True,
-        peak_shaving_enabled=False,
     ))
     return logic
 

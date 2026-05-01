@@ -210,7 +210,7 @@ class NextLogic(LogicInterface):
                 inverter_control_settings.allow_discharge = False
 
         # ----- Peak Shaving Post-Processing ----- #
-        if self.calculation_parameters.peak_shaving_enabled:
+        if self.calculation_parameters.peak_shaving.enabled:
             inverter_control_settings = self._apply_peak_shaving(
                 inverter_control_settings, calc_input, calc_timestamp)
 
@@ -226,7 +226,7 @@ class NextLogic(LogicInterface):
                             ) -> InverterControlSettings:
         """Limit PV charge rate based on the configured peak shaving mode.
 
-        Mode behaviour (peak_shaving_mode):
+        Mode behaviour (peak_shaving.mode):
           'time'     - spread remaining capacity until allow_full_battery_after
           'price'    - reserve capacity for upcoming cheap-price PV slots;
                        inside cheap window, spread if surplus > free capacity
@@ -246,8 +246,8 @@ class NextLogic(LogicInterface):
         Note: evcc checks (charging, connected+pv mode) are handled in
               core.py, not here.
         """
-        mode = self.calculation_parameters.peak_shaving_mode
-        price_limit = self.calculation_parameters.peak_shaving_price_limit
+        mode = self.calculation_parameters.peak_shaving.mode
+        price_limit = self.calculation_parameters.peak_shaving.price_limit
 
         # Price component needs price_limit configured.
         # For 'price' mode: skip entirely (no other component to fall back to).
@@ -269,7 +269,7 @@ class NextLogic(LogicInterface):
             return settings
 
         # Past target hour: skip (applies to all modes)
-        if calc_timestamp.hour >= self.calculation_parameters.peak_shaving_allow_full_after:
+        if calc_timestamp.hour >= self.calculation_parameters.peak_shaving.allow_full_battery_after:
             return settings
 
         # In always_allow_discharge region: skip
@@ -325,7 +325,7 @@ class NextLogic(LogicInterface):
                     mode, settings.limit_battery_charge_rate,
                     price_limit_w if price_limit_w >= 0 else 'off',
                     time_limit_w if time_limit_w >= 0 else 'off',
-                    self.calculation_parameters.peak_shaving_allow_full_after)
+                    self.calculation_parameters.peak_shaving.allow_full_battery_after)
 
         return settings
 
@@ -353,7 +353,7 @@ class NextLogic(LogicInterface):
         Returns:
             int: charge rate limit in W, or -1 if no limit needed.
         """
-        price_limit = self.calculation_parameters.peak_shaving_price_limit
+        price_limit = self.calculation_parameters.peak_shaving.price_limit
         prices = calc_input.prices
         interval_hours = self.interval_minutes / 60.0
 
@@ -453,7 +453,7 @@ class NextLogic(LogicInterface):
             second=0, microsecond=0
         )
         target_time = calc_timestamp.replace(
-            hour=self.calculation_parameters.peak_shaving_allow_full_after,
+            hour=self.calculation_parameters.peak_shaving.allow_full_battery_after,
             minute=0, second=0, microsecond=0
         )
 

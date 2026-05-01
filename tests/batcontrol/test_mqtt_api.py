@@ -1,6 +1,8 @@
 """Tests for MqttApi._handle_message, focusing on bytes payload decoding."""
 from unittest.mock import MagicMock, call
 
+from batcontrol.core import Batcontrol
+from batcontrol.logic import PeakShavingConfig
 from batcontrol.mqtt_api import MqttApi
 
 
@@ -349,3 +351,77 @@ class TestPeakShavingEnabledApi:
         api, topic = self._make_api_with_callback()
         api._handle_message(None, None, _make_message(topic, b'OFF'))
         assert self.enabled_values == [False]
+
+
+def _make_bc_stub(initial_config: PeakShavingConfig = None) -> MagicMock:
+    """Stub good enough to invoke Batcontrol.api_set_peak_shaving_* directly.
+
+    Only carries the attributes the setters actually touch.
+    """
+    bc = MagicMock(spec=Batcontrol)
+    bc.peak_shaving_config = (initial_config if initial_config is not None
+                              else PeakShavingConfig())
+    bc.mqtt_api = MagicMock()
+    return bc
+
+
+class TestPeakShavingPriceLimitApi:
+    """Batcontrol.api_set_peak_shaving_price_limit must validate and round-trip."""
+
+    def test_valid_float_updates_and_publishes(self):
+        bc = _make_bc_stub()
+        Batcontrol.api_set_peak_shaving_price_limit(bc, 0.05)
+        assert bc.peak_shaving_config.price_limit == 0.05
+        bc.mqtt_api.publish_peak_shaving_price_limit.assert_called_once_with(0.05)
+
+    def test_negative_one_disables_price_component(self):
+        # -1 is the documented off-value (no slot price <= -1 ever exists).
+        bc = _make_bc_stub()
+        Batcontrol.api_set_peak_shaving_price_limit(bc, -1)
+        assert bc.peak_shaving_config.price_limit == -1.0
+        bc.mqtt_api.publish_peak_shaving_price_limit.assert_called_once_with(-1.0)
+
+    def test_zero_is_accepted(self):
+        bc = _make_bc_stub()
+        Batcontrol.api_set_peak_shaving_price_limit(bc, 0)
+        assert bc.peak_shaving_config.price_limit == 0.0
+
+    def test_invalid_string_keeps_old_value(self):
+        original = PeakShavingConfig(price_limit=0.10)
+        bc = _make_bc_stub(original)
+        Batcontrol.api_set_peak_shaving_price_limit(bc, 'cheap')
+        assert bc.peak_shaving_config is original
+        bc.mqtt_api.publish_peak_shaving_price_limit.assert_not_called()
+
+    def test_bool_inputs_are_rejected(self):
+        # float(True)=1.0 / float(False)=0.0 would silently bypass the
+        # explicit bool rejection in PeakShavingConfig.__post_init__.
+        original = PeakShavingConfig(price_limit=0.10)
+        for value in (True, False):
+            bc = _make_bc_stub(original)
+            Batcontrol.api_set_peak_shaving_price_limit(bc, value)
+            assert bc.peak_shaving_config is original
+            bc.mqtt_api.publish_peak_shaving_price_limit.assert_not_called()
+
+
+class TestPeakShavingModeApi:
+    """Batcontrol.api_set_peak_shaving_mode must validate and round-trip."""
+
+    def test_each_valid_mode_is_accepted(self):
+        for mode in ('time', 'price', 'combined'):
+            bc = _make_bc_stub()
+            Batcontrol.api_set_peak_shaving_mode(bc, mode)
+            assert bc.peak_shaving_config.mode == mode
+            bc.mqtt_api.publish_peak_shaving_mode.assert_called_once_with(mode)
+
+    def test_uppercase_is_normalised(self):
+        bc = _make_bc_stub()
+        Batcontrol.api_set_peak_shaving_mode(bc, 'TIME')
+        assert bc.peak_shaving_config.mode == 'time'
+
+    def test_invalid_mode_keeps_old_value(self):
+        original = PeakShavingConfig(mode='price')
+        bc = _make_bc_stub(original)
+        Batcontrol.api_set_peak_shaving_mode(bc, 'bogus')
+        assert bc.peak_shaving_config is original
+        bc.mqtt_api.publish_peak_shaving_mode.assert_not_called()

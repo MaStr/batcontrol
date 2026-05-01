@@ -18,6 +18,7 @@ from batcontrol.logic.logic_interface import (
     CalculationInput,
     CalculationParameters,
     InverterControlSettings,
+    PeakShavingConfig,
 )
 from batcontrol.logic.common import CommonLogic
 
@@ -41,8 +42,8 @@ class TestPeakShavingAlgorithm(unittest.TestCase):
             min_price_difference=0.05,
             min_price_difference_rel=0.2,
             max_capacity=self.max_capacity,
-            peak_shaving_enabled=True,
-            peak_shaving_allow_full_after=14,
+            peak_shaving=PeakShavingConfig(
+                enabled=True, allow_full_battery_after=14),
         )
         self.logic.set_calculation_parameters(self.params)
 
@@ -210,10 +211,11 @@ class TestPeakShavingDecision(unittest.TestCase):
             min_price_difference=0.05,
             min_price_difference_rel=0.2,
             max_capacity=self.max_capacity,
-            peak_shaving_enabled=True,
-            peak_shaving_allow_full_after=14,
-            peak_shaving_mode='combined',
-            peak_shaving_price_limit=0.05,  # required; tests use high prices so no cheap slots
+            peak_shaving=PeakShavingConfig(
+                enabled=True, allow_full_battery_after=14,
+                mode='combined',
+                # required; tests use high prices so no cheap slots
+                price_limit=0.05),
         )
         self.logic.set_calculation_parameters(self.params)
 
@@ -350,10 +352,9 @@ class TestPeakShavingDecision(unittest.TestCase):
             min_price_difference=0.05,
             min_price_difference_rel=0.2,
             max_capacity=self.max_capacity,
-            peak_shaving_enabled=True,
-            peak_shaving_allow_full_after=14,
-            peak_shaving_mode='combined',
-            peak_shaving_price_limit=None,
+            peak_shaving=PeakShavingConfig(
+                enabled=True, allow_full_battery_after=14,
+                mode='combined', price_limit=None),
         )
         self.logic.set_calculation_parameters(params)
         settings = self._make_settings()
@@ -375,10 +376,9 @@ class TestPeakShavingDecision(unittest.TestCase):
             min_price_difference=0.05,
             min_price_difference_rel=0.2,
             max_capacity=self.max_capacity,
-            peak_shaving_enabled=True,
-            peak_shaving_allow_full_after=14,
-            peak_shaving_mode='price',
-            peak_shaving_price_limit=None,
+            peak_shaving=PeakShavingConfig(
+                enabled=True, allow_full_battery_after=14,
+                mode='price', price_limit=None),
         )
         self.logic.set_calculation_parameters(params)
         settings = self._make_settings()
@@ -440,10 +440,10 @@ class TestPeakShavingDecision(unittest.TestCase):
             min_price_difference=0.05,
             min_price_difference_rel=0.2,
             max_capacity=self.max_capacity,
-            peak_shaving_enabled=True,
-            peak_shaving_allow_full_after=14,
-            peak_shaving_mode='time',
-            peak_shaving_price_limit=None,  # not needed for 'time' mode
+            peak_shaving=PeakShavingConfig(
+                enabled=True, allow_full_battery_after=14,
+                # price_limit not needed for 'time' mode
+                mode='time', price_limit=None),
         )
         self.logic.set_calculation_parameters(params)
         settings = self._make_settings()
@@ -466,10 +466,9 @@ class TestPeakShavingDecision(unittest.TestCase):
             min_price_difference=0.05,
             min_price_difference_rel=0.2,
             max_capacity=self.max_capacity,
-            peak_shaving_enabled=True,
-            peak_shaving_allow_full_after=14,
-            peak_shaving_mode='price',
-            peak_shaving_price_limit=0.05,
+            peak_shaving=PeakShavingConfig(
+                enabled=True, allow_full_battery_after=14,
+                mode='price', price_limit=0.05),
         )
         self.logic.set_calculation_parameters(params)
         settings = self._make_settings()
@@ -499,8 +498,8 @@ class TestPeakShavingDisabled(unittest.TestCase):
             min_price_difference=0.05,
             min_price_difference_rel=0.2,
             max_capacity=self.max_capacity,
-            peak_shaving_enabled=False,
-            peak_shaving_allow_full_after=14,
+            peak_shaving=PeakShavingConfig(
+                enabled=False, allow_full_battery_after=14),
         )
         self.logic.set_calculation_parameters(self.params)
 
@@ -573,144 +572,6 @@ class TestLogicFactory(unittest.TestCase):
         self.assertEqual(logic.round_price_digits, 2)
 
 
-class TestCalculationParametersPeakShaving(unittest.TestCase):
-    """Test CalculationParameters peak shaving fields."""
-
-    def test_defaults(self):
-        """Without peak shaving args -> defaults."""
-        params = CalculationParameters(
-            max_charging_from_grid_limit=0.8,
-            min_price_difference=0.05,
-            min_price_difference_rel=0.1,
-            max_capacity=10000,
-        )
-        self.assertFalse(params.peak_shaving_enabled)
-        self.assertEqual(params.peak_shaving_allow_full_after, 14)
-        self.assertEqual(params.peak_shaving_mode, 'combined')
-
-    def test_explicit_values(self):
-        """With explicit peak shaving args -> stored."""
-        params = CalculationParameters(
-            max_charging_from_grid_limit=0.8,
-            min_price_difference=0.05,
-            min_price_difference_rel=0.1,
-            max_capacity=10000,
-            peak_shaving_enabled=True,
-            peak_shaving_allow_full_after=16,
-        )
-        self.assertTrue(params.peak_shaving_enabled)
-        self.assertEqual(params.peak_shaving_allow_full_after, 16)
-
-    def test_invalid_allow_full_after_too_high(self):
-        """allow_full_battery_after > 23 raises ValueError."""
-        with self.assertRaises(ValueError):
-            CalculationParameters(
-                max_charging_from_grid_limit=0.8,
-                min_price_difference=0.05,
-                min_price_difference_rel=0.1,
-                max_capacity=10000,
-                peak_shaving_allow_full_after=25,
-            )
-
-    def test_invalid_allow_full_after_negative(self):
-        """allow_full_battery_after < 0 raises ValueError."""
-        with self.assertRaises(ValueError):
-            CalculationParameters(
-                max_charging_from_grid_limit=0.8,
-                min_price_difference=0.05,
-                min_price_difference_rel=0.1,
-                max_capacity=10000,
-                peak_shaving_allow_full_after=-1,
-            )
-
-    def test_price_limit_default_is_none(self):
-        """peak_shaving_price_limit defaults to None."""
-        params = CalculationParameters(
-            max_charging_from_grid_limit=0.8,
-            min_price_difference=0.05,
-            min_price_difference_rel=0.1,
-            max_capacity=10000,
-        )
-        self.assertIsNone(params.peak_shaving_price_limit)
-
-    def test_price_limit_explicit_value(self):
-        """Explicit price_limit is stored."""
-        params = CalculationParameters(
-            max_charging_from_grid_limit=0.8,
-            min_price_difference=0.05,
-            min_price_difference_rel=0.1,
-            max_capacity=10000,
-            peak_shaving_price_limit=0.05,
-        )
-        self.assertEqual(params.peak_shaving_price_limit, 0.05)
-
-    def test_price_limit_zero_allowed(self):
-        """price_limit=0 is valid (only free/negative prices count as cheap)."""
-        params = CalculationParameters(
-            max_charging_from_grid_limit=0.8,
-            min_price_difference=0.05,
-            min_price_difference_rel=0.1,
-            max_capacity=10000,
-            peak_shaving_price_limit=0.0,
-        )
-        self.assertEqual(params.peak_shaving_price_limit, 0.0)
-
-    def test_price_limit_negative_one_allowed(self):
-        """price_limit=-1 is valid (effectively disables cheap-slot detection)."""
-        params = CalculationParameters(
-            max_charging_from_grid_limit=0.8,
-            min_price_difference=0.05,
-            min_price_difference_rel=0.1,
-            max_capacity=10000,
-            peak_shaving_price_limit=-1,
-        )
-        self.assertEqual(params.peak_shaving_price_limit, -1)
-
-    def test_price_limit_arbitrary_negative_allowed(self):
-        """Arbitrary negative price_limit is accepted (only numeric check)."""
-        params = CalculationParameters(
-            max_charging_from_grid_limit=0.8,
-            min_price_difference=0.05,
-            min_price_difference_rel=0.1,
-            max_capacity=10000,
-            peak_shaving_price_limit=-0.5,
-        )
-        self.assertEqual(params.peak_shaving_price_limit, -0.5)
-
-    def test_mode_default_is_combined(self):
-        """peak_shaving_mode defaults to 'combined'."""
-        params = CalculationParameters(
-            max_charging_from_grid_limit=0.8,
-            min_price_difference=0.05,
-            min_price_difference_rel=0.1,
-            max_capacity=10000,
-        )
-        self.assertEqual(params.peak_shaving_mode, 'combined')
-
-    def test_mode_valid_values(self):
-        """'time', 'price', 'combined' are all accepted."""
-        for mode in ('time', 'price', 'combined'):
-            params = CalculationParameters(
-                max_charging_from_grid_limit=0.8,
-                min_price_difference=0.05,
-                min_price_difference_rel=0.1,
-                max_capacity=10000,
-                peak_shaving_mode=mode,
-            )
-            self.assertEqual(params.peak_shaving_mode, mode)
-
-    def test_mode_invalid_raises(self):
-        """Unknown mode string raises ValueError."""
-        with self.assertRaises(ValueError):
-            CalculationParameters(
-                max_charging_from_grid_limit=0.8,
-                min_price_difference=0.05,
-                min_price_difference_rel=0.1,
-                max_capacity=10000,
-                peak_shaving_mode='invalid',
-            )
-
-
 class TestPeakShavingPriceBased(unittest.TestCase):
     """Tests for _calculate_peak_shaving_charge_limit_price_based."""
 
@@ -729,10 +590,9 @@ class TestPeakShavingPriceBased(unittest.TestCase):
             min_price_difference=0.05,
             min_price_difference_rel=0.2,
             max_capacity=self.max_capacity,
-            peak_shaving_enabled=True,
-            peak_shaving_allow_full_after=14,
-            peak_shaving_mode='price',
-            peak_shaving_price_limit=0.05,
+            peak_shaving=PeakShavingConfig(
+                enabled=True, allow_full_battery_after=14,
+                mode='price', price_limit=0.05),
         )
         self.logic.set_calculation_parameters(self.params)
 
@@ -856,10 +716,9 @@ class TestPeakShavingPriceBased(unittest.TestCase):
             min_price_difference=0.05,
             min_price_difference_rel=0.2,
             max_capacity=self.max_capacity,
-            peak_shaving_enabled=True,
-            peak_shaving_allow_full_after=14,
-            peak_shaving_mode='combined',
-            peak_shaving_price_limit=0.05,
+            peak_shaving=PeakShavingConfig(
+                enabled=True, allow_full_battery_after=14,
+                mode='combined', price_limit=0.05),
         )
         logic = NextLogic(timezone=datetime.timezone.utc, interval_minutes=60)
         logic.set_calculation_parameters(params_combined)
@@ -965,9 +824,8 @@ class TestPeakShavingMinChargeRate(unittest.TestCase):
             min_price_difference=0.05,
             min_price_difference_rel=0.2,
             max_capacity=self._MAX_CAPACITY,
-            peak_shaving_enabled=True,
-            peak_shaving_allow_full_after=14,
-            peak_shaving_mode='time',
+            peak_shaving=PeakShavingConfig(
+                enabled=True, allow_full_battery_after=14, mode='time'),
         )
         logic.set_calculation_parameters(params)
         return logic
@@ -1070,7 +928,7 @@ class TestNextLogicGridRechargeLogging(unittest.TestCase):
             min_price_difference=0.05,
             min_price_difference_rel=0.2,
             max_capacity=self.max_capacity,
-            peak_shaving_enabled=False,
+            peak_shaving=PeakShavingConfig(enabled=False),
         ))
 
     def _make_grid_charge_input(self):
@@ -1114,7 +972,7 @@ class TestNextLogicGridRechargeLogging(unittest.TestCase):
             min_price_difference_rel=0.2,
             max_capacity=self.max_capacity,
             min_grid_charge_soc=0.55,
-            peak_shaving_enabled=False,
+            peak_shaving=PeakShavingConfig(enabled=False),
         ))
         calc_input = self._make_grid_charge_input()
         calc_timestamp = datetime.datetime(2025, 6, 20, 12, 0, 0,
@@ -1134,7 +992,7 @@ class TestNextLogicGridRechargeLogging(unittest.TestCase):
             max_capacity=self.max_capacity,
             min_grid_charge_soc=0.55,
             preserve_min_grid_charge_soc=True,
-            peak_shaving_enabled=False,
+            peak_shaving=PeakShavingConfig(enabled=False),
         ))
         stored_energy = 5000
         stored_usable_energy = stored_energy - self.max_capacity * 0.05
@@ -1167,7 +1025,7 @@ class TestNextLogicGridRechargeLogging(unittest.TestCase):
             max_capacity=self.max_capacity,
             min_grid_charge_soc=0.55,
             preserve_min_grid_charge_soc=True,
-            peak_shaving_enabled=False,
+            peak_shaving=PeakShavingConfig(enabled=False),
         ))
         stored_energy = 5000
         stored_usable_energy = stored_energy - self.max_capacity * 0.05
