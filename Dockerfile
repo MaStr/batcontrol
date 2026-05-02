@@ -1,5 +1,5 @@
 # Stage 1: Build Stage
-FROM python:3.13-alpine AS builder
+FROM python:3.14-alpine AS builder
 
 # Install uv for fast, reliable Python packaging
 COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
@@ -14,7 +14,7 @@ COPY ./src ./src
 RUN uv build --wheel --out-dir /wheels
 
 # Stage 2: Build the final image
-FROM python:3.13-alpine
+FROM python:3.14-alpine
 
 ARG VERSION
 ARG GIT_SHA
