@@ -30,6 +30,11 @@ from .logic import Logic as LogicFactory
 from .logic import CalculationInput, CalculationParameters
 from .logic import CommonLogic
 from .logic import PeakShavingConfig
+from .logic.grid_charge_target import (
+    GRID_CHARGE_TARGET_STRATEGIES,
+    GRID_CHARGE_TARGET_STRATEGY_FIXED,
+    calculate_effective_grid_charge_soc,
+)
 
 from .dynamictariff import DynamicTariff as tariff_factory
 from .inverter import Inverter as inverter_factory
@@ -78,6 +83,27 @@ def _parse_optional_ratio(value, config_key: str) -> Optional[float]:
             f"{config_key} must be between 0 and 1 or None, got {value!r}"
         )
     return ratio
+
+
+def _parse_ratio(value, config_key: str) -> float:
+    """Parse a required 0..1 ratio config value."""
+    ratio = _parse_optional_ratio(value, config_key)
+    if ratio is None:
+        raise ValueError(
+            f"{config_key} must be numeric between 0 and 1, got None"
+        )
+    return ratio
+
+
+def _parse_grid_charge_target_strategy(value) -> str:
+    """Parse the grid-charge target strategy config value."""
+    strategy = str(value).strip().lower()
+    if strategy not in GRID_CHARGE_TARGET_STRATEGIES:
+        raise ValueError(
+            f"battery_control.grid_charge_target_strategy must be one of "
+            f"{GRID_CHARGE_TARGET_STRATEGIES}, got {value!r}"
+        )
+    return strategy
 
 
 class Batcontrol:
@@ -234,6 +260,16 @@ class Batcontrol:
         self.min_grid_charge_soc = _parse_optional_ratio(
             self.batconfig.get('min_grid_charge_soc', None),
             'battery_control.min_grid_charge_soc'
+        )
+        self.grid_charge_target_strategy = _parse_grid_charge_target_strategy(
+            self.batconfig.get(
+                'grid_charge_target_strategy',
+                GRID_CHARGE_TARGET_STRATEGY_FIXED,
+            )
+        )
+        self.grid_charge_forecast_pv_factor = _parse_ratio(
+            self.batconfig.get('grid_charge_forecast_pv_factor', 1.0),
+            'battery_control.grid_charge_forecast_pv_factor'
         )
         self.preserve_min_grid_charge_soc = False
         if (self.min_grid_charge_soc is not None
@@ -616,12 +652,19 @@ class Batcontrol:
             self.peak_shaving_config,
             enabled=peak_shaving_config_enabled and not evcc_disable_peak_shaving,
         )
+        effective_min_grid_charge_soc = self.__calculate_effective_min_grid_charge_soc(
+            calc_input,
+            production,
+            consumption,
+            prices,
+        )
+
         calc_parameters = CalculationParameters(
             self.max_charging_from_grid_limit,
             self.min_price_difference,
             self.min_price_difference_rel,
             self.get_max_capacity(),
-            min_grid_charge_soc=self.min_grid_charge_soc,
+            min_grid_charge_soc=effective_min_grid_charge_soc,
             preserve_min_grid_charge_soc=self.preserve_min_grid_charge_soc,
             peak_shaving=ps_runtime,
         )
@@ -665,6 +708,41 @@ class Batcontrol:
             self.force_charge(inverter_settings.charge_rate)
         else:
             self.avoid_discharging()
+
+    def __calculate_effective_min_grid_charge_soc(
+            self,
+            calc_input: CalculationInput,
+            production,
+            consumption,
+            prices) -> Optional[float]:
+        effective_min_grid_charge_soc = calculate_effective_grid_charge_soc(
+            strategy=self.grid_charge_target_strategy,
+            configured_min_grid_charge_soc=self.min_grid_charge_soc,
+            max_charging_from_grid_limit=self.max_charging_from_grid_limit,
+            max_capacity=self.get_max_capacity(),
+            min_soc_energy=max(
+                0.0,
+                calc_input.stored_energy - calc_input.stored_usable_energy,
+            ),
+            production=production,
+            consumption=consumption,
+            prices=prices,
+            min_price_difference=self.min_price_difference,
+            min_price_difference_rel=self.min_price_difference_rel,
+            pv_forecast_factor=self.grid_charge_forecast_pv_factor,
+        )
+        if effective_min_grid_charge_soc != self.min_grid_charge_soc:
+            logger.info(
+                'Forecast grid-charge target raised min_grid_charge_soc '
+                'from %.1f%% to %.1f%%',
+                self.min_grid_charge_soc * 100,
+                effective_min_grid_charge_soc * 100,
+            )
+        if (self.mqtt_api is not None
+                and effective_min_grid_charge_soc is not None):
+            self.mqtt_api.publish_effective_min_grid_charge_soc(
+                effective_min_grid_charge_soc)
+        return effective_min_grid_charge_soc
 
     def __set_charge_rate(self, charge_rate: int):
         """ Set charge rate and publish to mqtt """

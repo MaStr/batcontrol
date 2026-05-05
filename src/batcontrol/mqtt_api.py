@@ -9,8 +9,10 @@ The following topics are published:
 - /mode: operational mode (-1 = charge from grid, 0 = avoid discharge, 8 = limit battery charge, 10 = discharge allowed)
 - /max_charging_from_grid_limit: charge limit in 0.1-1
 - /max_charging_from_grid_limit_percent: charge limit in %
-- /min_grid_charge_soc: optional minimum grid-charge target in 0.0-1.0
-- /min_grid_charge_soc_percent: optional minimum grid-charge target in %
+- /min_grid_charge_soc: configured optional minimum grid-charge target in 0.0-1.0
+- /min_grid_charge_soc_percent: configured optional minimum grid-charge target in %
+- /effective_min_grid_charge_soc: runtime effective minimum grid-charge target in 0.0-1.0
+- /effective_min_grid_charge_soc_percent: runtime effective minimum grid-charge target in %
 - /always_allow_discharge_limit: always discharge limit in 0.1-1
 - /always_allow_discharge_limit_percent: always discharge limit in %
 - /always_allow_discharge_limit_capacity: always discharge limit in Wh
@@ -390,7 +392,7 @@ class MqttApi:
             )
 
     def publish_min_grid_charge_soc(self, min_grid_charge_soc: float) -> None:
-        """ Publish the optional minimum grid-charge SoC target to MQTT
+        """ Publish the configured optional minimum grid-charge SoC target to MQTT
             /min_grid_charge_soc_percent
             /min_grid_charge_soc as digit.
         """
@@ -402,6 +404,22 @@ class MqttApi:
             self.client.publish(
                 self.base_topic + '/min_grid_charge_soc',
                 f'{min_grid_charge_soc:.2f}'
+            )
+
+    def publish_effective_min_grid_charge_soc(
+            self, effective_min_grid_charge_soc: float) -> None:
+        """ Publish the runtime effective minimum grid-charge SoC target to MQTT
+            /effective_min_grid_charge_soc_percent
+            /effective_min_grid_charge_soc as digit.
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/effective_min_grid_charge_soc_percent',
+                f'{effective_min_grid_charge_soc * 100:.0f}'
+            )
+            self.client.publish(
+                self.base_topic + '/effective_min_grid_charge_soc',
+                f'{effective_min_grid_charge_soc:.2f}'
             )
 
     def publish_min_price_difference(
@@ -650,6 +668,16 @@ class MqttApi:
             "%",
             self.base_topic +
             "/min_grid_charge_soc_percent",
+            entity_category="diagnostic")
+
+        self.publish_mqtt_discovery_message(
+            "Effective Minimum Grid Charge SOC",
+            "batcontrol_effective_min_grid_charge_soc",
+            "sensor",
+            "battery",
+            "%",
+            self.base_topic +
+            "/effective_min_grid_charge_soc_percent",
             entity_category="diagnostic")
 
         self.publish_mqtt_discovery_message(

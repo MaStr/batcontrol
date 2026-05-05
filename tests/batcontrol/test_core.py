@@ -390,6 +390,56 @@ class TestCoreRunDispatch:
                 match='battery_control.min_grid_charge_soc must be numeric'):
             Batcontrol(mock_config)
 
+    def test_accepts_grid_charge_target_strategy_case_insensitively(
+            self, mock_config, mocker):
+        mock_config['battery_control']['grid_charge_target_strategy'] = 'Forecast'
+        self._patch_core_dependencies(mocker)
+
+        bc = Batcontrol(mock_config)
+
+        assert bc.grid_charge_target_strategy == 'forecast'
+        bc.shutdown()
+
+    def test_accepts_grid_charge_target_strategy_with_whitespace(
+            self, mock_config, mocker):
+        mock_config['battery_control']['grid_charge_target_strategy'] = ' forecast '
+        self._patch_core_dependencies(mocker)
+
+        bc = Batcontrol(mock_config)
+
+        assert bc.grid_charge_target_strategy == 'forecast'
+        bc.shutdown()
+
+    def test_rejects_unknown_grid_charge_target_strategy_config(
+            self, mock_config, mocker):
+        mock_config['battery_control']['grid_charge_target_strategy'] = 'dynamic'
+        self._patch_core_dependencies(mocker)
+
+        with pytest.raises(
+                ValueError,
+                match='battery_control.grid_charge_target_strategy must be one of'):
+            Batcontrol(mock_config)
+
+    def test_accepts_grid_charge_forecast_pv_factor_numeric_string_config(
+            self, mock_config, mocker):
+        mock_config['battery_control']['grid_charge_forecast_pv_factor'] = '0.75'
+        self._patch_core_dependencies(mocker)
+
+        bc = Batcontrol(mock_config)
+
+        assert bc.grid_charge_forecast_pv_factor == 0.75
+        bc.shutdown()
+
+    def test_rejects_invalid_grid_charge_forecast_pv_factor_config(
+            self, mock_config, mocker):
+        mock_config['battery_control']['grid_charge_forecast_pv_factor'] = 1.5
+        self._patch_core_dependencies(mocker)
+
+        with pytest.raises(
+                ValueError,
+                match='battery_control.grid_charge_forecast_pv_factor'):
+            Batcontrol(mock_config)
+
     def test_warns_when_min_grid_charge_soc_exceeds_grid_charge_limit(
             self, mock_config, mocker, caplog):
         core_module = "batcontrol.core"
@@ -467,6 +517,182 @@ class TestCoreRunDispatch:
 
         calc_params = fake_logic.set_calculation_parameters.call_args.args[0]
         assert calc_params.preserve_min_grid_charge_soc is True
+
+    def _make_batcontrol_for_grid_charge_target(
+            self, mock_config, mocker, prices, production, consumption):
+        core_module = "batcontrol.core"
+        mock_inverter = mocker.MagicMock()
+        mock_inverter.max_pv_charge_rate = 3000
+        mock_inverter.max_grid_charge_rate = 5000
+        mock_inverter.get_max_capacity.return_value = 10240
+        mock_inverter.get_SOC.return_value = 8.5
+        mock_inverter.get_stored_energy.return_value = 870.4
+        mock_inverter.get_stored_usable_energy.return_value = 0.0
+        mock_inverter.get_free_capacity.return_value = 8243.2
+
+        mock_tariff_provider = mocker.MagicMock()
+        mock_tariff_provider.get_prices.return_value = prices
+        mock_tariff_provider.refresh_data = mocker.MagicMock()
+
+        mock_solar_provider = mocker.MagicMock()
+        mock_solar_provider.get_forecast.return_value = production
+        mock_solar_provider.refresh_data = mocker.MagicMock()
+
+        mock_consumption_provider = mocker.MagicMock()
+        mock_consumption_provider.get_forecast.return_value = consumption
+        mock_consumption_provider.refresh_data = mocker.MagicMock()
+
+        fake_logic = mocker.MagicMock()
+        fake_logic.calculate.return_value = True
+        fake_logic.get_calculation_output.return_value = mocker.MagicMock(
+            reserved_energy=0,
+            required_recharge_energy=0,
+            min_dynamic_price_difference=0.05,
+        )
+        fake_logic.get_inverter_control_settings.return_value = MagicMock(
+            allow_discharge=True,
+            charge_from_grid=False,
+            charge_rate=0,
+            limit_battery_charge_rate=-1,
+        )
+
+        mocker.patch(
+            f"{core_module}.tariff_factory.create_tarif_provider",
+            autospec=True,
+            return_value=mock_tariff_provider,
+        )
+        mocker.patch(
+            f"{core_module}.inverter_factory.create_inverter",
+            autospec=True,
+            return_value=mock_inverter,
+        )
+        mocker.patch(
+            f"{core_module}.solar_factory.create_solar_provider",
+            autospec=True,
+            return_value=mock_solar_provider,
+        )
+        mocker.patch(
+            f"{core_module}.consumption_factory.create_consumption",
+            autospec=True,
+            return_value=mock_consumption_provider,
+        )
+        mocker.patch(
+            f"{core_module}.LogicFactory.create_logic",
+            autospec=True,
+            return_value=fake_logic,
+        )
+
+        return Batcontrol(mock_config), fake_logic
+
+    def test_run_passes_fixed_grid_charge_target_by_default(
+            self, mock_config, mocker):
+        mock_config['battery_control']['min_grid_charge_soc'] = 0.55
+        bc, fake_logic = self._make_batcontrol_for_grid_charge_target(
+            mock_config,
+            mocker,
+            prices={0: 0.4635, 1: 0.7018, 2: 0.7018},
+            production={0: 0, 1: 0, 2: 0},
+            consumption={0: 500, 1: 5000, 2: 5000},
+        )
+
+        try:
+            bc.run()
+
+            calc_params = fake_logic.set_calculation_parameters.call_args.args[0]
+            assert calc_params.min_grid_charge_soc == 0.55
+        finally:
+            bc.shutdown()
+
+    def test_run_publishes_fixed_grid_charge_target_as_effective_by_default(
+            self, mock_config, mocker):
+        mock_config['battery_control']['min_grid_charge_soc'] = 0.55
+        bc, _fake_logic = self._make_batcontrol_for_grid_charge_target(
+            mock_config,
+            mocker,
+            prices={0: 0.4635, 1: 0.7018, 2: 0.7018},
+            production={0: 0, 1: 0, 2: 0},
+            consumption={0: 500, 1: 5000, 2: 5000},
+        )
+        bc.mqtt_api = mocker.MagicMock()
+
+        try:
+            bc.run()
+
+            bc.mqtt_api.publish_effective_min_grid_charge_soc.assert_called_once_with(
+                0.55)
+        finally:
+            bc.shutdown()
+
+    def test_run_skips_effective_grid_charge_target_publish_when_unset(
+            self, mock_config, mocker):
+        bc, _fake_logic = self._make_batcontrol_for_grid_charge_target(
+            mock_config,
+            mocker,
+            prices={0: 0.4635, 1: 0.7018, 2: 0.7018},
+            production={0: 0, 1: 0, 2: 0},
+            consumption={0: 500, 1: 5000, 2: 5000},
+        )
+        bc.mqtt_api = mocker.MagicMock()
+
+        try:
+            bc.run()
+
+            bc.mqtt_api.publish_effective_min_grid_charge_soc.assert_not_called()
+        finally:
+            bc.shutdown()
+
+    def test_run_passes_forecast_grid_charge_target_to_logic(
+            self, mock_config, mocker):
+        mock_config['battery_control'].update({
+            'min_grid_charge_soc': 0.55,
+            'max_charging_from_grid_limit': 0.89,
+            'grid_charge_target_strategy': 'forecast',
+            'grid_charge_forecast_pv_factor': 0.5,
+        })
+        bc, fake_logic = self._make_batcontrol_for_grid_charge_target(
+            mock_config,
+            mocker,
+            prices={0: 0.4635, 1: 0.7018, 2: 0.7018, 3: 0.7018,
+                    4: 0.7018, 5: 0.4635},
+            production={0: 149, 1: 569, 2: 1488, 3: 2678, 4: 3500, 5: 4000},
+            consumption={0: 547, 1: 731, 2: 3427, 3: 3497, 4: 3700, 5: 500},
+        )
+
+        try:
+            bc.run()
+
+            calc_params = fake_logic.set_calculation_parameters.call_args.args[0]
+            assert calc_params.min_grid_charge_soc == pytest.approx(0.79, abs=0.01)
+        finally:
+            bc.shutdown()
+
+    def test_run_publishes_effective_grid_charge_target(
+            self, mock_config, mocker):
+        mock_config['battery_control'].update({
+            'min_grid_charge_soc': 0.55,
+            'max_charging_from_grid_limit': 0.89,
+            'grid_charge_target_strategy': 'forecast',
+            'grid_charge_forecast_pv_factor': 0.5,
+        })
+        bc, _fake_logic = self._make_batcontrol_for_grid_charge_target(
+            mock_config,
+            mocker,
+            prices={0: 0.4635, 1: 0.7018, 2: 0.7018, 3: 0.7018,
+                    4: 0.7018, 5: 0.4635},
+            production={0: 149, 1: 569, 2: 1488, 3: 2678, 4: 3500, 5: 4000},
+            consumption={0: 547, 1: 731, 2: 3427, 3: 3497, 4: 3700, 5: 500},
+        )
+        bc.mqtt_api = mocker.MagicMock()
+
+        try:
+            bc.run()
+
+            published_target = (
+                bc.mqtt_api.publish_effective_min_grid_charge_soc.call_args.args[0]
+            )
+            assert published_target == pytest.approx(0.79, abs=0.01)
+        finally:
+            bc.shutdown()
 
     def test_run_dispatches_force_charge(self, run_dispatch_setup):
         bc, mock_inverter, fake_logic = run_dispatch_setup
