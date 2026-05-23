@@ -114,7 +114,9 @@ def schedule_at(time_str: str, job: Callable, job_name: str = "",
         The scheduled job object
     """
     name = job_name or job.__name__
-    tz_label = tz if tz else "local"
+    # Normalize empty/whitespace tz to None so log and schedule behaviour agree.
+    effective_tz = tz if tz and tz.strip() else None
+    tz_label = effective_tz if effective_tz else "local"
     logger.info("Scheduling job '%s' to run daily at %s %s", name, time_str, tz_label)
 
     # Wrap the job to catch exceptions and add logging
@@ -127,8 +129,8 @@ def schedule_at(time_str: str, job: Callable, job_name: str = "",
             logger.error("Error in scheduled job '%s': %s", name, e, exc_info=True)
 
     job_def = _get_job_registry().every().day
-    if tz is not None:
-        return job_def.at(time_str, tz).do(wrapped_job)
+    if effective_tz is not None:
+        return job_def.at(time_str, effective_tz).do(wrapped_job)
     return job_def.at(time_str).do(wrapped_job)
 
 

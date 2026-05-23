@@ -81,3 +81,20 @@ def test_schedule_at_without_tz_uses_local_time():
     scheduler.schedule_at("14:00", _noop, "local-job")
     assert len(scheduler.get_jobs()) == 1
     scheduler.reset_scheduler()
+
+
+def test_schedule_at_empty_tz_treated_as_local():
+    """schedule_at() with tz='' must not forward the empty string to schedule."""
+    scheduler.reset_scheduler()
+    # Would raise if "" were passed through to schedule.Job.at()
+    scheduler.schedule_at("14:00", _noop, "empty-tz-job", tz="")
+    assert len(scheduler.get_jobs()) == 1
+    scheduler.reset_scheduler()
+
+
+def test_schedule_at_whitespace_tz_treated_as_local():
+    """schedule_at() with tz containing only whitespace must be treated as None."""
+    scheduler.reset_scheduler()
+    scheduler.schedule_at("14:00", _noop, "whitespace-tz-job", tz="   ")
+    assert len(scheduler.get_jobs()) == 1
+    scheduler.reset_scheduler()
