@@ -170,6 +170,103 @@ class TestNetworkFeesIntegration(unittest.TestCase):
 
         self.assertAlmostEqual(prices[0], expected, places=6)
 
+    def test_energyforecast_price_includes_network_fee_hourly(self):
+        """Energyforecast (60-min resolution) end_price includes network fee before VAT."""
+        from batcontrol.dynamictariff.energyforecast import Energyforecast
+        ef = Energyforecast(self.tz, token='dummy', target_resolution=60)
+        ef.set_price_parameters(vat=0.19, price_fees=0.005, price_markup=0.0)
+
+        network_fee = 0.0867  # ST rate
+        fixed_ts = self.tz.localize(datetime.datetime(2026, 5, 23, 10, 0))
+        fetcher = self._make_fetcher_with_data([
+            {'start': '2026-05-23T00:00:00+02:00',
+             'end': '2026-05-24T00:00:00+02:00',
+             'value': network_fee}
+        ])
+        with patch.object(fetcher, 'refresh_data'):
+            ef.set_network_fees_fetcher(fetcher)
+
+        raw_data = {'data': [{
+            'start': fixed_ts.isoformat(),
+            'end': (fixed_ts + datetime.timedelta(hours=1)).isoformat(),
+            'price': 0.10
+        }]}
+        ef.store_raw_data(raw_data)
+
+        base = 0.10
+        expected = (base + 0.005 + network_fee) * 1.19
+
+        with patch('batcontrol.dynamictariff.energyforecast.datetime') as mock_dt:
+            mock_dt.datetime.now.return_value = fixed_ts
+            mock_dt.datetime.fromisoformat = datetime.datetime.fromisoformat
+            mock_dt.timedelta = datetime.timedelta
+            prices = ef._get_prices_native()
+
+        self.assertAlmostEqual(prices[0], expected, places=6)
+
+    def test_energyforecast_price_includes_network_fee_15min(self):
+        """Energyforecast in 15-min resolution applies the same hourly fee to all 4 quarters."""
+        from batcontrol.dynamictariff.energyforecast import Energyforecast
+        ef = Energyforecast(self.tz, token='dummy', target_resolution=15)
+        ef.set_price_parameters(vat=0.19, price_fees=0.005, price_markup=0.0)
+
+        network_fee = 0.1234  # HT rate
+        fixed_ts = self.tz.localize(datetime.datetime(2026, 5, 23, 18, 0))
+        # Slot covers all of hour 18:00-19:00 (HT)
+        fetcher = self._make_fetcher_with_data([
+            {'start': '2026-05-23T17:00:00+02:00',
+             'end': '2026-05-23T21:00:00+02:00',
+             'value': network_fee}
+        ])
+        with patch.object(fetcher, 'refresh_data'):
+            ef.set_network_fees_fetcher(fetcher)
+
+        # 4 x 15-min slots for one hour, each with its own base price
+        raw_data = {'data': [
+            {'start': (fixed_ts + datetime.timedelta(minutes=15 * i)).isoformat(),
+             'end': (fixed_ts + datetime.timedelta(minutes=15 * (i + 1))).isoformat(),
+             'price': 0.10 + 0.01 * i}
+            for i in range(4)
+        ]}
+        ef.store_raw_data(raw_data)
+
+        with patch('batcontrol.dynamictariff.energyforecast.datetime') as mock_dt:
+            mock_dt.datetime.now.return_value = fixed_ts
+            mock_dt.datetime.fromisoformat = datetime.datetime.fromisoformat
+            mock_dt.timedelta = datetime.timedelta
+            prices = ef._get_prices_native()
+
+        # All 4 quarters of hour 18 fall in the HT slot, so same fee applies
+        for i in range(4):
+            expected = (0.10 + 0.01 * i + 0.005 + network_fee) * 1.19
+            self.assertAlmostEqual(
+                prices[i], expected, places=6,
+                msg=f'15-min slot {i} should include HT network fee')
+
+    def test_energyforecast_without_fetcher_unchanged(self):
+        """Energyforecast without a fetcher behaves exactly as before."""
+        from batcontrol.dynamictariff.energyforecast import Energyforecast
+        ef = Energyforecast(self.tz, token='dummy', target_resolution=60)
+        ef.set_price_parameters(vat=0.19, price_fees=0.005, price_markup=0.0)
+
+        fixed_ts = self.tz.localize(datetime.datetime(2026, 5, 23, 10, 0))
+        raw_data = {'data': [{
+            'start': fixed_ts.isoformat(),
+            'end': (fixed_ts + datetime.timedelta(hours=1)).isoformat(),
+            'price': 0.10
+        }]}
+        ef.store_raw_data(raw_data)
+
+        expected = (0.10 + 0.005) * 1.19
+
+        with patch('batcontrol.dynamictariff.energyforecast.datetime') as mock_dt:
+            mock_dt.datetime.now.return_value = fixed_ts
+            mock_dt.datetime.fromisoformat = datetime.datetime.fromisoformat
+            mock_dt.timedelta = datetime.timedelta
+            prices = ef._get_prices_native()
+
+        self.assertAlmostEqual(prices[0], expected, places=6)
+
 
 if __name__ == '__main__':
     unittest.main()
