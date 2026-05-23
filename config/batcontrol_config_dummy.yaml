@@ -128,6 +128,22 @@ utility:
   # apikey: YOUR_API_KEY # MANDATORY for energyforecast and tibber. Uncomment and set if using those providers.
 
 #--------------------------
+#  Dynamic Network Fees (para. 14a EnWG)
+#  Adds time-of-use NT/ST/HT network fees to energy prices.
+#  Only applies to providers that calculate fees locally: awattar, energyforecast.
+#  Not needed for all-inclusive providers: tibber, evcc, tariff_zones.
+#  Fee data (NET, excl. VAT) is fetched from dyn-net.batcontrol.software and
+#  added to the price before VAT is applied.
+#  Cache: 12 hours (tariffs change at most quarterly).
+#  Operator IDs: see https://dyn-net.batcontrol.software/
+#--------------------------
+dynamic_network_fees:
+  enabled: false        # Set to true to activate dynamic network fees
+  country: de           # Country code: de, at, ch
+  operator: syna        # Network operator ID (e.g. syna, westnetz, ggv, ewr-netz)
+  # url: https://dyn-net.batcontrol.software/api/  # Optional: override for self-hosted instance
+
+#--------------------------
 #  MQTT API
 #  See more Details in: https://github.com/MaStr/batcontrol/wiki/MQTT-API
 #--------------------------

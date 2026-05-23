@@ -68,6 +68,7 @@ class Energyforecast(DynamicTariffBaseclass):
         self.vat = 0
         self.price_fees = 0
         self.price_markup = 0
+        self.network_fees_fetcher = None
 
         logger.info(
             'Energyforecast: Configured to fetch %s data (resolution=%d min)',
@@ -79,11 +80,16 @@ class Energyforecast(DynamicTariffBaseclass):
         """ During initialization, we can upgrade the forecast if user wants 96h horizon """
         self.url = 'https://www.energyforecast.de/api/v1/predictions/next_96_hours'
 
-    def set_price_parameters(self, vat: float, price_fees: float, price_markup: float):
+    def set_price_parameters(
+            self, vat: float, price_fees: float, price_markup: float):
         """ Set the extra price parameters for the tariff calculation """
         self.vat = vat
         self.price_fees = price_fees
         self.price_markup = price_markup
+
+    def set_network_fees_fetcher(self, fetcher):
+        """Attach a NetworkFeesFetcher to add dynamic para. 14a network fees per interval."""
+        self.network_fees_fetcher = fetcher
 
     def get_raw_data_from_provider(self):
         """ Get raw data from energyforecast.de API and return parsed json """
@@ -103,9 +109,11 @@ class Energyforecast(DynamicTariffBaseclass):
             response = requests.get(self.url, params=params, timeout=30)
             response.raise_for_status()
             if response.status_code != 200:
-                raise ConnectionError(f'[Energyforecast] API returned {response}')
+                raise ConnectionError(
+                    f'[Energyforecast] API returned {response}')
         except requests.exceptions.RequestException as e:
-            raise ConnectionError(f'[Energyforecast] API request failed: {e}') from e
+            raise ConnectionError(
+                f'[Energyforecast] API request failed: {e}') from e
 
         response_json = response.json()
         return {'data': response_json}
@@ -151,11 +159,16 @@ class Energyforecast(DynamicTariffBaseclass):
             rel_interval = int(diff.total_seconds() / interval_seconds)
 
             if rel_interval >= 0:
-                # Apply fees/markup/vat to the base price
-                # The price field should already be in the correct unit (EUR/kWh)
                 base_price = item['price']
-                end_price = ((base_price * (1 + self.price_markup) + self.price_fees)
-                             * (1 + self.vat))
+                network_fee = 0.0
+                if self.network_fees_fetcher is not None:
+                    network_fee = self.network_fees_fetcher.get_fee_at(
+                        timestamp)
+                end_price = (
+                    (base_price * (1 + self.price_markup) +
+                     self.price_fees + network_fee)
+                    * (1 + self.vat)
+                )
                 prices[rel_interval] = end_price
 
         logger.debug(
