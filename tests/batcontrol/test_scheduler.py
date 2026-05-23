@@ -57,3 +57,27 @@ def test_schedule_every_rejects_invalid_unit():
 
     with pytest.raises(ValueError):
         scheduler.schedule_every(1, "fortnights", _noop, "bad-unit")
+
+
+def test_schedule_at_registers_daily_job():
+    """schedule_at() must register exactly one job."""
+    scheduler.reset_scheduler()
+    scheduler.schedule_at("12:30", _noop, "daily-job")
+    assert len(scheduler.get_jobs()) == 1
+    scheduler.reset_scheduler()
+
+
+def test_schedule_at_with_utc_timezone():
+    """schedule_at() with tz='UTC' must register a job without raising."""
+    scheduler.reset_scheduler()
+    scheduler.schedule_at("12:30", _noop, "utc-job", tz="UTC")
+    assert len(scheduler.get_jobs()) == 1
+    scheduler.reset_scheduler()
+
+
+def test_schedule_at_without_tz_uses_local_time():
+    """schedule_at() without tz must register a job (uses server local time)."""
+    scheduler.reset_scheduler()
+    scheduler.schedule_at("14:00", _noop, "local-job")
+    assert len(scheduler.get_jobs()) == 1
+    scheduler.reset_scheduler()

@@ -957,5 +957,72 @@ class TestEvccPeakShavingGuard:
         assert calc_params.peak_shaving.enabled is False
 
 
+class TestMarketPriceRefresh:
+    """Tests for the configurable market price hard refresh (issue #366)."""
+
+    BASE_CONFIG = {
+        'timezone': 'Europe/Berlin',
+        'time_resolution_minutes': 60,
+        'inverter': {
+            'type': 'dummy',
+            'max_grid_charge_rate': 5000,
+            'max_pv_charge_rate': 3000,
+            'min_pv_charge_rate': 0,
+        },
+        'utility': {'type': 'tibber', 'apikey': 'test_token'},
+        'pvinstallations': [],
+        'consumption_forecast': {'type': 'simple', 'value': 500},
+        'battery_control': {
+            'max_charging_from_grid_limit': 0.8,
+            'min_price_difference': 0.05,
+        },
+        'mqtt': {'enabled': False},
+    }
+
+    def _patch_core(self, mocker):
+        mock_inverter = mocker.MagicMock()
+        mock_inverter.max_pv_charge_rate = 3000
+        mock_inverter.get_max_capacity.return_value = 10000
+        mocker.patch('batcontrol.core.tariff_factory.create_tarif_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.inverter_factory.create_inverter',
+                     autospec=True, return_value=mock_inverter)
+        mocker.patch('batcontrol.core.solar_factory.create_solar_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.consumption_factory.create_consumption',
+                     autospec=True, return_value=mocker.MagicMock())
+
+    def test_default_market_price_refresh_time(self, mocker):
+        """Without expert config, market_price_refresh_time defaults to 12:30."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        bc = Batcontrol(config)
+        assert bc.market_price_refresh_time == "12:30"
+        bc.shutdown()
+
+    def test_custom_market_price_refresh_time_from_expert_config(self, mocker):
+        """market_price_refresh_time from battery_control_expert is used."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control_expert'] = {'market_price_refresh_time': '13:00'}
+        bc = Batcontrol(config)
+        assert bc.market_price_refresh_time == "13:00"
+        bc.shutdown()
+
+    def test_hard_refresh_prices_calls_force_refresh(self, mocker):
+        """_hard_refresh_prices() must call dynamic_tariff.refresh_data(force=True)."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        bc = Batcontrol(config)
+
+        mock_refresh = mocker.MagicMock()
+        bc.dynamic_tariff.refresh_data = mock_refresh
+
+        bc._hard_refresh_prices()
+
+        mock_refresh.assert_called_once_with(force=True)
+        bc.shutdown()
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

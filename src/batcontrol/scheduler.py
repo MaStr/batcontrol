@@ -98,7 +98,8 @@ def schedule_every(interval: int, unit: str, job: Callable, job_name: str = ""):
     return obtained_unit.do(wrapped_job)
 
 
-def schedule_at(time_str: str, job: Callable, job_name: str = ""):
+def schedule_at(time_str: str, job: Callable, job_name: str = "",
+               tz: Optional[str] = None):
     """
     Schedule a job to run at a specific time each day (globally accessible)
 
@@ -106,12 +107,15 @@ def schedule_at(time_str: str, job: Callable, job_name: str = ""):
         time_str: Time string in HH:MM format (e.g., "14:30")
         job: The callable function to execute
         job_name: Optional name for the job (for logging purposes)
+        tz: Optional timezone name (e.g., "UTC", "Europe/Berlin").
+            When None, the server's local time is used.
 
     Returns:
         The scheduled job object
     """
     name = job_name or job.__name__
-    logger.info("Scheduling job '%s' to run daily at %s", name, time_str)
+    tz_label = tz if tz else "local"
+    logger.info("Scheduling job '%s' to run daily at %s %s", name, time_str, tz_label)
 
     # Wrap the job to catch exceptions and add logging
     def wrapped_job():
@@ -122,7 +126,10 @@ def schedule_at(time_str: str, job: Callable, job_name: str = ""):
         except Exception as e:
             logger.error("Error in scheduled job '%s': %s", name, e, exc_info=True)
 
-    return _get_job_registry().every().day.at(time_str).do(wrapped_job)
+    job_def = _get_job_registry().every().day
+    if tz is not None:
+        return job_def.at(time_str, tz).do(wrapped_job)
+    return job_def.at(time_str).do(wrapped_job)
 
 
 def schedule_once(time: str, job: Callable, job_name: str = ""):
@@ -268,7 +275,8 @@ class SchedulerThread:
         """
         return schedule_every(interval, unit, job, job_name)
 
-    def schedule_at(self, time_str: str, job: Callable, job_name: str = ""):
+    def schedule_at(self, time_str: str, job: Callable, job_name: str = "",
+                    tz: Optional[str] = None):
         """
         Schedule a job to run at a specific time each day
 
@@ -279,11 +287,12 @@ class SchedulerThread:
             time_str: Time string in HH:MM format (e.g., "14:30")
             job: The callable function to execute
             job_name: Optional name for the job (for logging purposes)
+            tz: Optional timezone name (e.g., "UTC"). None uses server local time.
 
         Returns:
             The scheduled job object
         """
-        return schedule_at(time_str, job, job_name)
+        return schedule_at(time_str, job, job_name, tz)
 
     def schedule_once(self, time: str, job: Callable, job_name: str = ""):
         """

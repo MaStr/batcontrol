@@ -249,6 +249,7 @@ class Batcontrol:
 
         self.round_price_digits = 4
         self.production_offset_percent = 1.0  # Default: no offset
+        self.market_price_refresh_time = "12:30"
 
         if self.config.get('battery_control_expert', None) is not None:
             battery_control_expert = self.config.get(
@@ -262,6 +263,9 @@ class Batcontrol:
             self.preserve_min_grid_charge_soc = battery_control_expert.get(
                 'preserve_min_grid_charge_soc',
                 self.preserve_min_grid_charge_soc)
+            self.market_price_refresh_time = battery_control_expert.get(
+                'market_price_refresh_time',
+                self.market_price_refresh_time)
 
         self.general_logic = CommonLogic.get_instance(
             charge_rate_multiplier=self.batconfig.get(
@@ -381,6 +385,14 @@ class Batcontrol:
             'hours',
             self.fc_consumption.refresh_data,
             'forecast-consumption-every')
+        # Hard refresh at market publish time (default 12:30 UTC) to pick up
+        # newly published next-day prices (e.g. EPEX spot).
+        self.scheduler.schedule_at(
+            self.market_price_refresh_time,
+            self._hard_refresh_prices,
+            'market-price-hard-refresh',
+            tz='UTC'
+        )
         # Run initial data fetch
         try:
             self.fc_solar.refresh_data()
@@ -405,6 +417,18 @@ class Batcontrol:
                 del self.evcc_api
         except Exception as exc:
             logger.exception("Error during Batcontrol shutdown: %s", exc)
+
+    def _hard_refresh_prices(self) -> None:
+        """Force a price refresh regardless of cache state.
+
+        Called at market_price_refresh_time (UTC) to pick up newly published
+        dynamic tariff data (e.g. EPEX next-day prices published ~12:00 UTC).
+        """
+        logger.info(
+            'Hard price refresh at %s UTC - fetching fresh market prices',
+            self.market_price_refresh_time
+        )
+        self.dynamic_tariff.refresh_data(force=True)
 
     def reset_forecast_error(self):
         """ Reset the forecast error timer """

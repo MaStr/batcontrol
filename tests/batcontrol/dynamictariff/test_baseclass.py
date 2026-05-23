@@ -1,10 +1,11 @@
 """
 Test module for DynamicTariffBaseclass and providers
 """
+import time
 import pytest
 import pytz
 from datetime import datetime, timezone as dt_timezone
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from batcontrol.dynamictariff.baseclass import DynamicTariffBaseclass
 
 
@@ -201,6 +202,49 @@ class TestDynamicTariffBaseclass:
             for q in range(4):
                 idx = h * 4 + q
                 assert result[idx] == hourly[h]
+
+    def test_refresh_data_force_bypasses_next_update_ts(self, timezone):
+        """force=True must fetch even when next_update_ts is in the future."""
+        instance = ConcreteTariffProvider(timezone)
+        instance.get_raw_data_from_provider = MagicMock(return_value={})
+        instance.delay_evaluation_by_seconds = 0
+
+        # Simulate data already fresh: next update far in the future
+        instance.next_update_ts = time.time() + 9999
+
+        instance.refresh_data(force=True)
+
+        instance.get_raw_data_from_provider.assert_called_once()
+
+    def test_refresh_data_no_force_respects_next_update_ts(self, timezone):
+        """Without force, refresh_data must skip fetch when cache is still valid."""
+        instance = ConcreteTariffProvider(timezone)
+        instance.get_raw_data_from_provider = MagicMock(return_value={})
+
+        # Simulate data already fresh
+        instance.next_update_ts = time.time() + 9999
+
+        instance.refresh_data(force=False)
+
+        instance.get_raw_data_from_provider.assert_not_called()
+
+    def test_refresh_data_force_updates_next_update_ts(self, timezone):
+        """After a forced refresh, next_update_ts must be pushed forward."""
+        instance = ConcreteTariffProvider(timezone)
+        instance.get_raw_data_from_provider = MagicMock(return_value={})
+        instance.delay_evaluation_by_seconds = 0
+
+        old_ts = time.time() + 9999
+        instance.next_update_ts = old_ts
+
+        before = time.time()
+        instance.refresh_data(force=True)
+        after = time.time()
+
+        # next_update_ts must be reset to now + min_time_between_updates
+        expected_min = before + instance.min_time_between_updates
+        expected_max = after + instance.min_time_between_updates
+        assert expected_min <= instance.next_update_ts <= expected_max
 
 
 class TestAwattarProvider:
