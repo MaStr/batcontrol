@@ -36,9 +36,9 @@ class TestNetworkFeesFetcher(unittest.TestCase):
     def test_no_cache_raises_cache_miss_error(self):
         """Without any cached data, get_fee_at must raise CacheMissError (not return 0.0)."""
         ts = datetime.datetime(2026, 5, 23, 10, 0, tzinfo=self.tz)
-        with self.assertRaises(CacheMissError):
-            # Don't call refresh_data() so cache stays empty
-            self.fetcher.get_raw_data()
+        with patch.object(self.fetcher, 'refresh_data'):  # prevent live API call
+            with self.assertRaises(CacheMissError):
+                self.fetcher.get_fee_at(ts)
 
     def test_get_fee_at_nt_slot(self):
         """Returns correct NET fee for an NT-tariff slot."""
