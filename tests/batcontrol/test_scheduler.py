@@ -98,3 +98,12 @@ def test_schedule_at_whitespace_tz_treated_as_local():
     scheduler.schedule_at("14:00", _noop, "whitespace-tz-job", tz="   ")
     assert len(scheduler.get_jobs()) == 1
     scheduler.reset_scheduler()
+
+
+def test_schedule_at_tz_with_surrounding_whitespace_is_stripped():
+    """schedule_at() with tz=' UTC ' must forward 'UTC', not ' UTC '."""
+    scheduler.reset_scheduler()
+    # Would raise UnknownTimeZoneError if the spaces were not stripped.
+    scheduler.schedule_at("12:30", _noop, "padded-tz-job", tz=" UTC ")
+    assert len(scheduler.get_jobs()) == 1
+    scheduler.reset_scheduler()

@@ -115,7 +115,8 @@ def schedule_at(time_str: str, job: Callable, job_name: str = "",
     """
     name = job_name or job.__name__
     # Normalize empty/whitespace tz to None so log and schedule behaviour agree.
-    effective_tz = tz if tz and tz.strip() else None
+    # Also strip surrounding whitespace so " UTC " is treated the same as "UTC".
+    effective_tz = tz.strip() if tz and tz.strip() else None
     tz_label = effective_tz if effective_tz else "local"
     logger.info("Scheduling job '%s' to run daily at %s %s", name, time_str, tz_label)
 
