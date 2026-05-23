@@ -1023,6 +1023,29 @@ class TestMarketPriceRefresh:
         mock_refresh.assert_called_once_with(force=True)
         bc.shutdown()
 
+    @pytest.mark.parametrize("invalid_value", ["25:99", "noon", "12-30", "", 1230])
+    def test_invalid_market_price_refresh_time_raises(self, mocker, invalid_value):
+        """Invalid market_price_refresh_time must raise ValueError at init."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control_expert'] = {
+            'market_price_refresh_time': invalid_value
+        }
+        with pytest.raises(ValueError, match="market_price_refresh_time"):
+            Batcontrol(config)
+
+    @pytest.mark.parametrize("valid_value", ["12:30", "00:00", "23:59", "13:00"])
+    def test_valid_market_price_refresh_time_accepted(self, mocker, valid_value):
+        """Valid HH:MM values must be accepted without error."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control_expert'] = {
+            'market_price_refresh_time': valid_value
+        }
+        bc = Batcontrol(config)
+        assert bc.market_price_refresh_time == valid_value
+        bc.shutdown()
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

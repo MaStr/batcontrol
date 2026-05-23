@@ -263,9 +263,11 @@ class Batcontrol:
             self.preserve_min_grid_charge_soc = battery_control_expert.get(
                 'preserve_min_grid_charge_soc',
                 self.preserve_min_grid_charge_soc)
-            self.market_price_refresh_time = battery_control_expert.get(
+            raw_refresh_time = battery_control_expert.get(
                 'market_price_refresh_time',
                 self.market_price_refresh_time)
+            self._validate_market_price_refresh_time(raw_refresh_time)
+            self.market_price_refresh_time = raw_refresh_time
 
         self.general_logic = CommonLogic.get_instance(
             charge_rate_multiplier=self.batconfig.get(
@@ -417,6 +419,17 @@ class Batcontrol:
                 del self.evcc_api
         except Exception as exc:
             logger.exception("Error during Batcontrol shutdown: %s", exc)
+
+    @staticmethod
+    def _validate_market_price_refresh_time(value: str) -> None:
+        """Raise ValueError if value is not a valid HH:MM time string."""
+        try:
+            datetime.datetime.strptime(value, "%H:%M")
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                f"battery_control_expert.market_price_refresh_time must be "
+                f"a valid HH:MM time string (e.g. '12:30'), got: {value!r}"
+            ) from exc
 
     def _hard_refresh_prices(self) -> None:
         """Force a price refresh regardless of cache state.
