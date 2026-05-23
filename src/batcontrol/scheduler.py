@@ -129,6 +129,7 @@ def schedule_at(time_str: str, job: Callable, job_name: str = "",
         except Exception as e:
             logger.error("Error in scheduled job '%s': %s", name, e, exc_info=True)
 
+    wrapped_job.__name__ = name
     job_def = _get_job_registry().every().day
     if effective_tz is not None:
         return job_def.at(time_str, effective_tz).do(wrapped_job)
@@ -160,6 +161,7 @@ def schedule_once(time: str, job: Callable, job_name: str = ""):
         except Exception as e:
             logger.error("Error in scheduled one-time job '%s': %s", name, e, exc_info=True)
 
+    wrapped_job.__name__ = name
     return (
         _get_job_registry()
         .every()
