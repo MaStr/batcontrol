@@ -57,7 +57,8 @@ class DynamicTariff:
                 timezone=timezone,
                 country=nf_cfg['country'],
                 operator=nf_cfg['operator'],
-                url=nf_cfg.get('url', 'https://dyn-net.batcontrol.software/api/'),
+                url=nf_cfg.get(
+                    'url', 'https://dyn-net.batcontrol.software/api/'),
                 delay_evaluation_by_seconds=delay_evaluation_by_seconds,
             )
 
@@ -195,9 +196,11 @@ class DynamicTariff:
                 target_resolution=target_resolution,
                 tariff_zone_1=float(config['tariff_zone_1']),
                 zone_1_hours=zone_1_hours,
-                tariff_zone_2=float(tariff_zone_2) if tariff_zone_2 is not None else None,
+                tariff_zone_2=float(
+                    tariff_zone_2) if tariff_zone_2 is not None else None,
                 zone_2_hours=zone_2_hours,
-                tariff_zone_3=float(tariff_zone_3) if tariff_zone_3 is not None else None,
+                tariff_zone_3=float(
+                    tariff_zone_3) if tariff_zone_3 is not None else None,
                 zone_3_hours=zone_3_hours,
             )
 

@@ -24,7 +24,6 @@ Methods:
 """
 import datetime
 import logging
-import math
 import requests
 from .baseclass import DynamicTariffBaseclass
 
@@ -61,14 +60,15 @@ class Awattar(DynamicTariffBaseclass):
         self.price_markup = 0
         self.network_fees_fetcher = None
 
-    def set_price_parameters(self, vat: float, price_fees: float, price_markup: float):
+    def set_price_parameters(
+            self, vat: float, price_fees: float, price_markup: float):
         """ Set the extra price parameters for the tariff calculation """
         self.vat = vat
         self.price_fees = price_fees
         self.price_markup = price_markup
 
     def set_network_fees_fetcher(self, fetcher):
-        """Attach a NetworkFeesFetcher to add dynamic §14a network fees per interval."""
+        """Attach a NetworkFeesFetcher to add dynamic para. 14a network fees per interval."""
         self.network_fees_fetcher = fetcher
 
     def get_raw_data_from_provider(self):
@@ -108,7 +108,8 @@ class Awattar(DynamicTariffBaseclass):
             if rel_hour >= 0:
                 network_fee = 0.0
                 if self.network_fees_fetcher is not None:
-                    network_fee = self.network_fees_fetcher.get_fee_at(timestamp)
+                    network_fee = self.network_fees_fetcher.get_fee_at(
+                        timestamp)
                 end_price = (
                     item['marketprice'] / 1000 * (1 + self.price_markup)
                     + self.price_fees + network_fee

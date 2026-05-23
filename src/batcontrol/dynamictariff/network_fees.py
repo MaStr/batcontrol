@@ -1,9 +1,9 @@
-"""Dynamic network fees fetcher (§14a EnWG).
+"""Dynamic network fees fetcher (para. 14a EnWG).
 
 Fetches pre-calculated NT/ST/HT time series from dyn-net.batcontrol.software
 and provides per-timestamp fee lookup for energy price providers.
 
-The API returns NET prices (excluding VAT) in €/kWh. These are added to raw
+The API returns NET prices (excluding VAT) in EUR/kWh. These are added to raw
 energy prices before applying VAT in providers that calculate fees locally
 (e.g. Awattar, Energyforecast).
 """
@@ -19,14 +19,14 @@ _CACHE_SECONDS = 12 * 3600  # tariffs change at most quarterly
 
 
 class NetworkFeesFetcher(DynamicTariffBaseclass):
-    """Fetches §14a EnWG dynamic network fees as a time series.
+    """Fetches para. 14a EnWG dynamic network fees as a time series.
 
     Data is cached for 12 hours. If no data is available (first start or API
     unreachable), get_fee_at() raises CacheMissError which skips the
-    calculation cycle – the same behaviour as the other price providers.
+    calculation cycle - the same behaviour as the other price providers.
     """
 
-    def __init__(self, timezone, country: str, operator: str,
+    def __init__(self, timezone, country: str, operator: str,  # pylint: disable=too-many-arguments,too-many-positional-arguments
                  url: str = DEFAULT_API_URL,
                  delay_evaluation_by_seconds: int = 0):
         super().__init__(
@@ -45,6 +45,7 @@ class NetworkFeesFetcher(DynamicTariffBaseclass):
         )
 
     def get_raw_data_from_provider(self) -> list:
+        """Fetch raw slot list from the network fees API."""
         endpoint = (
             f'{self.api_url}?country={self.country}'
             f'&operator={self.operator}&next_hours=168'
@@ -54,17 +55,19 @@ class NetworkFeesFetcher(DynamicTariffBaseclass):
             response = requests.get(endpoint, timeout=30)
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            raise ConnectionError(f'[NetworkFees] API request failed: {e}') from e
+            raise ConnectionError(
+                f'[NetworkFees] API request failed: {e}') from e
         data = response.json()
         if not isinstance(data, list):
             raise ConnectionError(
-                f'[NetworkFees] Unexpected response format from API: {type(data).__name__}'
+                '[NetworkFees] Unexpected response format from API: '
+                f'{type(data).__name__}'
             )
         logger.info('NetworkFees: Fetched %d slots from API', len(data))
         return data
 
-    def _get_prices_native(self) -> dict[int, float]:
-        """Return hour-aligned fee dict (NET €/kWh). Index 0 = start of current hour."""
+    def _get_prices_native(self) -> dict:
+        """Return hour-aligned fee dict (NET EUR/kWh). Index 0 = start of current hour."""
         raw_data = self.get_raw_data()  # raises CacheMissError if no data
         now = datetime.datetime.now().astimezone(self.timezone)
         current_hour_start = now.replace(minute=0, second=0, microsecond=0)
@@ -77,7 +80,8 @@ class NetworkFeesFetcher(DynamicTariffBaseclass):
                 slot['end'].replace('Z', '+00:00')
             ).astimezone(self.timezone)
             value = float(slot['value'])
-            # Expand multi-hour slot (e.g. NT 00:00-06:00) into individual hours
+            # Expand multi-hour slot (e.g. NT 00:00-06:00) into individual
+            # hours
             t = slot_start.replace(minute=0, second=0, microsecond=0)
             while t < slot_end:
                 rel_hour = int((t - current_hour_start).total_seconds() / 3600)
@@ -88,7 +92,7 @@ class NetworkFeesFetcher(DynamicTariffBaseclass):
         return prices
 
     def get_fee_at(self, ts: datetime.datetime) -> float:
-        """Return the NET network fee (€/kWh) valid at the given timestamp.
+        """Return the NET network fee (EUR/kWh) valid at the given timestamp.
 
         Triggers a cache refresh if data is stale. Raises CacheMissError if no
         data is available yet (first start with unreachable API). Returns 0.0

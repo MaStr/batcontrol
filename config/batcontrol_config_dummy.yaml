@@ -128,7 +128,7 @@ utility:
   # apikey: YOUR_API_KEY # MANDATORY for energyforecast and tibber. Uncomment and set if using those providers.
 
 #--------------------------
-#  Dynamic Network Fees (§14a EnWG)
+#  Dynamic Network Fees (para. 14a EnWG)
 #  Adds time-of-use NT/ST/HT network fees to energy prices.
 #  Only applies to providers that calculate fees locally: awattar, energyforecast.
 #  Not needed for all-inclusive providers: tibber, evcc, tariff_zones.

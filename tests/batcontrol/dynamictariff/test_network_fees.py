@@ -8,13 +8,21 @@ from batcontrol.fetcher.relaxed_caching import CacheMissError
 
 API_SLOTS = [
     # NT: 00:00-06:00
-    {'start': '2026-05-23T00:00:00+02:00', 'end': '2026-05-23T06:00:00+02:00', 'value': 0.0087},
+    {'start': '2026-05-23T00:00:00+02:00',
+     'end': '2026-05-23T06:00:00+02:00',
+     'value': 0.0087},
     # ST: 06:00-17:00
-    {'start': '2026-05-23T06:00:00+02:00', 'end': '2026-05-23T17:00:00+02:00', 'value': 0.0867},
+    {'start': '2026-05-23T06:00:00+02:00',
+     'end': '2026-05-23T17:00:00+02:00',
+     'value': 0.0867},
     # HT: 17:00-21:00
-    {'start': '2026-05-23T17:00:00+02:00', 'end': '2026-05-23T21:00:00+02:00', 'value': 0.1234},
+    {'start': '2026-05-23T17:00:00+02:00',
+     'end': '2026-05-23T21:00:00+02:00',
+     'value': 0.1234},
     # ST: 21:00-24:00
-    {'start': '2026-05-23T21:00:00+02:00', 'end': '2026-05-24T00:00:00+02:00', 'value': 0.0867},
+    {'start': '2026-05-23T21:00:00+02:00',
+     'end': '2026-05-24T00:00:00+02:00',
+     'value': 0.0867},
 ]
 
 
@@ -22,7 +30,8 @@ class TestNetworkFeesFetcher(unittest.TestCase):
 
     def setUp(self):
         self.tz = pytz.timezone('Europe/Berlin')
-        self.fetcher = NetworkFeesFetcher(self.tz, country='de', operator='syna')
+        self.fetcher = NetworkFeesFetcher(
+            self.tz, country='de', operator='syna')
 
     def test_no_cache_raises_cache_miss_error(self):
         """Without any cached data, get_fee_at must raise CacheMissError (not return 0.0)."""
@@ -66,7 +75,8 @@ class TestNetworkFeesFetcher(unittest.TestCase):
     def test_prices_native_expands_multi_hour_slots(self):
         """_get_prices_native expands a 6-hour NT block to 6 individual hourly entries."""
         # Use get_fee_at to verify slot expansion without fragile datetime mocking.
-        # Each slot covers multiple hours; verify several representative timestamps.
+        # Each slot covers multiple hours; verify several representative
+        # timestamps.
         self.fetcher.store_raw_data(API_SLOTS)
         with patch.object(self.fetcher, 'refresh_data'):
             # NT slot: 00:00-06:00
@@ -106,7 +116,8 @@ class TestNetworkFeesIntegration(unittest.TestCase):
         """Awattar end_price must include network_fee before VAT."""
         from batcontrol.dynamictariff.awattar import Awattar
         awattar = Awattar(self.tz, 'de')
-        awattar.set_price_parameters(vat=0.19, price_fees=0.005, price_markup=0.0)
+        awattar.set_price_parameters(
+            vat=0.19, price_fees=0.005, price_markup=0.0)
 
         network_fee = 0.0867  # ST rate
         fixed_ts = datetime.datetime(2026, 5, 23, 10, 0, tzinfo=self.tz)
@@ -139,7 +150,8 @@ class TestNetworkFeesIntegration(unittest.TestCase):
         """Awattar without a fetcher behaves exactly as before (no regression)."""
         from batcontrol.dynamictariff.awattar import Awattar
         awattar = Awattar(self.tz, 'de')
-        awattar.set_price_parameters(vat=0.19, price_fees=0.005, price_markup=0.0)
+        awattar.set_price_parameters(
+            vat=0.19, price_fees=0.005, price_markup=0.0)
 
         fixed_ts = datetime.datetime(2026, 5, 23, 10, 0, tzinfo=self.tz)
         raw_data = {'data': [{
