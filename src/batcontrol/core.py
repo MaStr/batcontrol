@@ -407,10 +407,11 @@ class Batcontrol:
         """ Shutdown Batcontrol and dependent modules (inverter..) """
         logger.info('Shutting down Batcontrol')
         try:
-            # Stop scheduler thread
+            # Stop scheduler thread first, then clear jobs.
+            # Clearing before stop() would race with run_pending() in the thread.
             if hasattr(self, 'scheduler') and self.scheduler is not None:
-                self.scheduler.clear_jobs()
                 self.scheduler.stop()
+                self.scheduler.clear_jobs()
                 del self.scheduler
 
             self.inverter.shutdown()
