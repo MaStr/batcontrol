@@ -20,6 +20,7 @@ from .tibber import Tibber
 from .evcc import Evcc
 from .energyforecast import Energyforecast
 from .tariffzones import TariffZones
+from .network_fees import NetworkFeesFetcher
 from .dynamictariff_interface import TariffInterface
 
 
@@ -29,7 +30,8 @@ class DynamicTariff:
     def create_tarif_provider(config: dict, timezone,
                               min_time_between_api_calls,
                               delay_evaluation_by_seconds,
-                              target_resolution: int = 60
+                              target_resolution: int = 60,
+                              nf_cfg: dict = None
                               ) -> TariffInterface:
         """ Select and configure a dynamic tariff provider based on the given configuration
 
@@ -42,6 +44,22 @@ class DynamicTariff:
         """
         selected_tariff = None
         provider = config.get('type')
+
+        nf_cfg = nf_cfg or {}
+        network_fees_fetcher = None
+        if nf_cfg.get('enabled', False):
+            for field in ('country', 'operator'):
+                if field not in nf_cfg:
+                    raise RuntimeError(
+                        f'[DynTariff] dynamic_network_fees requires "{field}" in config'
+                    )
+            network_fees_fetcher = NetworkFeesFetcher(
+                timezone=timezone,
+                country=nf_cfg['country'],
+                operator=nf_cfg['operator'],
+                url=nf_cfg.get('url', 'https://dyn-net.batcontrol.software/api/'),
+                delay_evaluation_by_seconds=delay_evaluation_by_seconds,
+            )
 
         if provider.lower() == 'awattar_at':
             required_fields = ['vat', 'markup', 'fees']
@@ -60,6 +78,8 @@ class DynamicTariff:
                 target_resolution=target_resolution
             )
             selected_tariff.set_price_parameters(vat, fees, markup)
+            if network_fees_fetcher is not None:
+                selected_tariff.set_network_fees_fetcher(network_fees_fetcher)
 
         elif provider.lower() == 'awattar_de':
             required_fields = ['vat', 'markup', 'fees']
@@ -78,6 +98,8 @@ class DynamicTariff:
                 target_resolution=target_resolution
             )
             selected_tariff.set_price_parameters(vat, fees, markup)
+            if network_fees_fetcher is not None:
+                selected_tariff.set_network_fees_fetcher(network_fees_fetcher)
 
         elif provider.lower() == 'tibber':
             if 'apikey' not in config.keys():
@@ -127,6 +149,8 @@ class DynamicTariff:
                 target_resolution=target_resolution
             )
             selected_tariff.set_price_parameters(vat, fees, markup)
+            if network_fees_fetcher is not None:
+                selected_tariff.set_network_fees_fetcher(network_fees_fetcher)
             if provider.lower() == 'energyforecast_96':
                 selected_tariff.upgrade_48h_to_96h()
 

@@ -59,12 +59,17 @@ class Awattar(DynamicTariffBaseclass):
         self.vat = 0
         self.price_fees = 0
         self.price_markup = 0
+        self.network_fees_fetcher = None
 
     def set_price_parameters(self, vat: float, price_fees: float, price_markup: float):
         """ Set the extra price parameters for the tariff calculation """
         self.vat = vat
         self.price_fees = price_fees
         self.price_markup = price_markup
+
+    def set_network_fees_fetcher(self, fetcher):
+        """Attach a NetworkFeesFetcher to add dynamic §14a network fees per interval."""
+        self.network_fees_fetcher = fetcher
 
     def get_raw_data_from_provider(self):
         """ Get raw data from Awattar API and return parsed json """
@@ -101,8 +106,12 @@ class Awattar(DynamicTariffBaseclass):
             diff = timestamp - current_hour_start
             rel_hour = int(diff.total_seconds() / 3600)
             if rel_hour >= 0:
+                network_fee = 0.0
+                if self.network_fees_fetcher is not None:
+                    network_fee = self.network_fees_fetcher.get_fee_at(timestamp)
                 end_price = (
-                    item['marketprice'] / 1000 * (1 + self.price_markup) + self.price_fees
+                    item['marketprice'] / 1000 * (1 + self.price_markup)
+                    + self.price_fees + network_fee
                 ) * (1 + self.vat)
                 prices[rel_hour] = end_price
 

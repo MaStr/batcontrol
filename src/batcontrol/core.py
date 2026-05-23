@@ -175,7 +175,8 @@ class Batcontrol:
             self.timezone,
             TIME_BETWEEN_UTILITY_API_CALLS,
             DELAY_EVALUATION_BY_SECONDS,
-            target_resolution=self.time_resolution
+            target_resolution=self.time_resolution,
+            nf_cfg=config.get('dynamic_network_fees', {})
         )
 
         self.inverter = inverter_factory.create_inverter(
