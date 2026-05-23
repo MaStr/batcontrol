@@ -75,8 +75,7 @@ class TestNetworkFeesFetcher(unittest.TestCase):
     def test_prices_native_expands_multi_hour_slots(self):
         """_get_prices_native expands a 6-hour NT block to 6 individual hourly entries."""
         # Use get_fee_at to verify slot expansion without fragile datetime mocking.
-        # Each slot covers multiple hours; verify several representative
-        # timestamps.
+        # Each slot covers multiple hours; verify several representative timestamps.
         self.fetcher.store_raw_data(API_SLOTS)
         with patch.object(self.fetcher, 'refresh_data'):
             # NT slot: 00:00-06:00
@@ -110,6 +109,11 @@ class TestNetworkFeesIntegration(unittest.TestCase):
     def _make_fetcher_with_data(self, slots):
         fetcher = NetworkFeesFetcher(self.tz, country='de', operator='syna')
         fetcher.store_raw_data(slots)
+        # Suppress refresh_data permanently so get_fee_at() never hits the live
+        # API during tests. Without this, next_update_ts=0 causes refresh_data()
+        # to fire on every get_fee_at() call, overwriting the stored test data
+        # with real operator tariffs and making tests operator-dependent.
+        fetcher.refresh_data = lambda: None
         return fetcher
 
     def test_awattar_price_includes_network_fee(self):
@@ -125,8 +129,7 @@ class TestNetworkFeesIntegration(unittest.TestCase):
             {'start': '2026-05-23T00:00:00+02:00', 'end': '2026-05-24T00:00:00+02:00',
              'value': network_fee}
         ])
-        with patch.object(fetcher, 'refresh_data'):
-            awattar.set_network_fees_fetcher(fetcher)
+        awattar.set_network_fees_fetcher(fetcher)
 
         # marketprice 50 EUR/MWh = 0.05 EUR/kWh
         raw_data = {'data': [{
@@ -183,8 +186,7 @@ class TestNetworkFeesIntegration(unittest.TestCase):
              'end': '2026-05-24T00:00:00+02:00',
              'value': network_fee}
         ])
-        with patch.object(fetcher, 'refresh_data'):
-            ef.set_network_fees_fetcher(fetcher)
+        ef.set_network_fees_fetcher(fetcher)
 
         raw_data = {'data': [{
             'start': fixed_ts.isoformat(),
@@ -212,14 +214,12 @@ class TestNetworkFeesIntegration(unittest.TestCase):
 
         network_fee = 0.1234  # HT rate
         fixed_ts = self.tz.localize(datetime.datetime(2026, 5, 23, 18, 0))
-        # Slot covers all of hour 18:00-19:00 (HT)
         fetcher = self._make_fetcher_with_data([
             {'start': '2026-05-23T17:00:00+02:00',
              'end': '2026-05-23T21:00:00+02:00',
              'value': network_fee}
         ])
-        with patch.object(fetcher, 'refresh_data'):
-            ef.set_network_fees_fetcher(fetcher)
+        ef.set_network_fees_fetcher(fetcher)
 
         # 4 x 15-min slots for one hour, each with its own base price
         raw_data = {'data': [
