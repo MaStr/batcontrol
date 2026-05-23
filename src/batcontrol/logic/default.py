@@ -8,6 +8,7 @@ from .logic_interface import CalculationParameters, CalculationInput
 from .logic_interface import CalculationOutput, InverterControlSettings
 from .common import CommonLogic
 from .decision_logging import GridRechargeDecision, log_grid_recharge_decision
+from .grid_charge_target import calculate_effective_min_grid_charge_soc
 
 # Minimum remaining time in hours to prevent division by very small numbers
 # when calculating charge rates. This constant serves as a safety threshold:
@@ -65,6 +66,9 @@ class DefaultLogic(LogicInterface):
             required_recharge_energy=0.0,
             min_dynamic_price_difference=0.0
        )
+        self.calculation_output.effective_min_grid_charge_soc = (
+            self.__calculate_effective_min_grid_charge_soc(input_data)
+        )
 
         self.inverter_control_settings = self.calculate_inverter_mode(
             input_data,
@@ -304,22 +308,26 @@ class DefaultLogic(LogicInterface):
             # add_remaining required_energy to reserved_storage
             reserved_storage += required_energy
 
+        forecast_target_active = self.__is_forecast_target_raised()
         min_grid_charge_soc_active = (
             self.calculation_parameters.preserve_min_grid_charge_soc
-            and reserved_storage > 0
-            and self.__has_grid_charge_soc_price_signal(
-                consumption,
-                prices,
-                max_slots,
-                current_price,
-                min_dynamic_price_difference
+            and (reserved_storage > 0 or forecast_target_active)
+            and (
+                forecast_target_active
+                or self.__has_grid_charge_soc_price_signal(
+                    consumption,
+                    prices,
+                    max_slots,
+                    current_price,
+                    min_dynamic_price_difference
+                )
             )
         )
         reserved_storage = self.common.apply_min_grid_charge_soc_reserve(
             reserved_storage,
             calc_input.stored_energy,
             calc_input.stored_usable_energy,
-            self.calculation_parameters.min_grid_charge_soc,
+            self.calculation_output.effective_min_grid_charge_soc,
             min_grid_charge_soc_active
         )
 
@@ -458,13 +466,16 @@ class DefaultLogic(LogicInterface):
                 "[Rule] No additional energy required, because stored energy is sufficient."
             )
             recharge_energy = 0.0
+
+        target_soc = self.calculation_output.effective_min_grid_charge_soc
+        if required_energy == 0.0 and not self.__is_forecast_target_raised():
             self.calculation_output.required_recharge_energy = recharge_energy
             return recharge_energy
 
         recharge_energy = self.common.apply_min_grid_charge_soc_target(
             recharge_energy,
             calc_input.stored_energy,
-            self.calculation_parameters.min_grid_charge_soc
+            target_soc
         )
 
         free_capacity = calc_input.free_capacity
@@ -483,6 +494,38 @@ class DefaultLogic(LogicInterface):
 
         self.calculation_output.required_recharge_energy = recharge_energy
         return recharge_energy
+
+    def __calculate_effective_min_grid_charge_soc(
+            self, calc_input: CalculationInput) -> Optional[float]:
+        """Calculate the runtime grid-charge target inside the logic layer."""
+        effective_soc = calculate_effective_min_grid_charge_soc(
+            config=self.calculation_parameters.grid_charge_target,
+            calc_input=calc_input,
+            configured_min_grid_charge_soc=(
+                self.calculation_parameters.min_grid_charge_soc),
+            max_charging_from_grid_limit=(
+                self.calculation_parameters.max_charging_from_grid_limit),
+            max_capacity=self.calculation_parameters.max_capacity,
+            min_price_difference=self.calculation_parameters.min_price_difference,
+            min_price_difference_rel=(
+                self.calculation_parameters.min_price_difference_rel),
+        )
+        if effective_soc != self.calculation_parameters.min_grid_charge_soc:
+            logger.info(
+                'Forecast grid-charge target raised min_grid_charge_soc '
+                'from %.1f%% to %.1f%%',
+                self.calculation_parameters.min_grid_charge_soc * 100,
+                effective_soc * 100,
+            )
+        return effective_soc
+
+    def __is_forecast_target_raised(self) -> bool:
+        """Return True when forecast strategy raised the configured floor."""
+        effective_soc = self.calculation_output.effective_min_grid_charge_soc
+        configured_soc = self.calculation_parameters.min_grid_charge_soc
+        return (effective_soc is not None
+                and configured_soc is not None
+                and effective_soc > configured_soc)
 
     def __calculate_min_dynamic_price_difference(self, price: float) -> float:
         """ Calculate the dynamic limit for the current price """

@@ -19,6 +19,8 @@ battery_control:
   always_allow_discharge_limit: 0.90 # 0.00 to 1.00 above this SOC limit using energy from the battery is always allowed
   max_charging_from_grid_limit: 0.89 # 0.00 to 1.00 charging from the grid is only allowed until this SOC limit
   # min_grid_charge_soc: 0.55        # optional 0.00 to 1.00 target to preserve/charge before expensive slots
+  # grid_charge_target_strategy: fixed # fixed = use min_grid_charge_soc unchanged; forecast = raise it from forecasted expensive-slot need
+  # grid_charge_forecast_pv_factor: 1.0 # forecast strategy only: 0.0 to 1.0 multiplier for PV forecast trust
   min_recharge_amount: 100           # in Wh, start & minimum amount of energy to recharge the battery
 
 #--------------------------
