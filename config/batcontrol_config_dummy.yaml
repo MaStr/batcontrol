@@ -34,6 +34,9 @@ battery_control_expert:
   production_offset_percent: 1.0 # Adjust production forecast by a percentage (1.0 = 100%, 0.8 = 80%, etc.)
                                  # Useful for winter mode when solar panels are covered with snow
   preserve_min_grid_charge_soc: false # If true, also preserve min_grid_charge_soc as reserved energy during cheap/pre-expensive slots
+  # market_price_refresh_time: "12:30" # UTC time for a daily hard price refresh.
+  #   Use this to pick up newly published next-day prices (e.g. EPEX Spot ~12:00 UTC).
+  #   Format: "HH:MM". Default: "12:30".
 
 #--------------------------
 #  Peak Shaving

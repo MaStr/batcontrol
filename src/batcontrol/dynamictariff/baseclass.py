@@ -85,11 +85,18 @@ class DynamicTariffBaseclass(TariffInterface):
         """Store raw data in cache."""
         self.cache.store_new_entry(data)
 
-    def refresh_data(self) -> None:
-        """Refresh data from provider if needed."""
+    def refresh_data(self, force: bool = False) -> None:
+        """Refresh data from provider if needed.
+
+        Args:
+            force: When True, bypass next_update_ts and always fetch fresh data.
+                   Use for scheduled market-publish refreshes (e.g. 12:30 UTC).
+        """
         with self._refresh_data_lock:
             now = time.time()
-            if now > self.next_update_ts:
+            if force:
+                logger.info('%s: Forced price refresh triggered', self.__class__.__name__)
+            if force or now > self.next_update_ts:
                 # Not on initial call
                 if self.next_update_ts > 0 and self.delay_evaluation_by_seconds > 0:
                     sleeptime = random.randrange(0, self.delay_evaluation_by_seconds, 1)
@@ -99,7 +106,7 @@ class DynamicTariffBaseclass(TariffInterface):
                     time.sleep(sleeptime)
                 try:
                     self.store_raw_data(self.get_raw_data_from_provider())
-                    self.next_update_ts = now + self.min_time_between_updates
+                    self.next_update_ts = time.time() + self.min_time_between_updates
                     self.schedule_next_refresh()
                 except (ConnectionError, TimeoutError) as e:
                     logger.error('Error getting raw tariff data: %s', e)
