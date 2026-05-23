@@ -409,6 +409,7 @@ class Batcontrol:
         try:
             # Stop scheduler thread
             if hasattr(self, 'scheduler') and self.scheduler is not None:
+                self.scheduler.clear_jobs()
                 self.scheduler.stop()
                 del self.scheduler
 

@@ -1046,6 +1046,20 @@ class TestMarketPriceRefresh:
         assert bc.market_price_refresh_time == valid_value
         bc.shutdown()
 
+    def test_shutdown_clears_scheduled_jobs(self, mocker):
+        """shutdown() must clear the job registry so multiple instantiations do not accumulate jobs."""
+        from batcontrol import scheduler as sched_module
+        self._patch_core(mocker)
+        sched_module.reset_scheduler()
+
+        bc = Batcontrol(dict(self.BASE_CONFIG))
+        jobs_after_init = len(sched_module.get_jobs())
+        assert jobs_after_init > 0
+
+        bc.shutdown()
+
+        assert sched_module.get_jobs() == []
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
