@@ -106,7 +106,7 @@ class DynamicTariffBaseclass(TariffInterface):
                     time.sleep(sleeptime)
                 try:
                     self.store_raw_data(self.get_raw_data_from_provider())
-                    self.next_update_ts = now + self.min_time_between_updates
+                    self.next_update_ts = time.time() + self.min_time_between_updates
                     self.schedule_next_refresh()
                 except (ConnectionError, TimeoutError) as e:
                     logger.error('Error getting raw tariff data: %s', e)
