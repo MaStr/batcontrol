@@ -43,9 +43,6 @@ DELAY_EVALUATION_BY_SECONDS = 15  # Delay evaluation for x seconds at every trig
 # Interval between evaluations in seconds
 TIME_BETWEEN_EVALUATIONS = EVALUATIONS_EVERY_MINUTES * 60
 TIME_BETWEEN_UTILITY_API_CALLS = 900  # 15 Minutes
-# 18 calls/day leaves 2 in reserve (providers allow 20/day).
-# Formula: 24h / 18 calls * 60 min/h * 60 s/min
-TIME_BETWEEN_SOLAR_API_CALLS = int(24 / 18 * 60 * 60)  # ~80 min
 MIN_FORECAST_HOURS = 1  # Minimum required forecast hours
 FORECAST_TOLERANCE = 3  # Acceptable tolerance for forecast hours
 
@@ -211,7 +208,7 @@ class Batcontrol:
         self.fc_solar = solar_factory.create_solar_provider(
             self.pvsettings,
             self.timezone,
-            TIME_BETWEEN_SOLAR_API_CALLS,
+            TIME_BETWEEN_UTILITY_API_CALLS,
             DELAY_EVALUATION_BY_SECONDS,
             requested_provider=config.get(
                 'solar_forecast_provider', 'fcsolarapi'),
