@@ -683,6 +683,11 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_min_dynamic_price_diff(
                 calc_output.min_dynamic_price_difference)
+            phase, surplus_wh = self._compute_solar_surplus_and_phase(
+                production, consumption, calc_output.reserved_energy
+            )
+            self.mqtt_api.publish_production_phase(phase)
+            self.mqtt_api.publish_solar_surplus(surplus_wh)
 
         if self.discharge_blocked and not \
                 self.general_logic.is_discharge_always_allowed_soc(self.get_SOC()):
@@ -865,6 +870,75 @@ class Batcontrol:
     def get_reserved_energy(self) -> float:
         """ Returns the reserved energy in Wh from last calculation """
         return self.last_reserved_energy
+
+    def _compute_solar_surplus_and_phase(
+            self,
+            production: np.ndarray,
+            consumption: np.ndarray,
+            reserved_energy: float) -> tuple:
+        """Compute solar production phase and expected surplus energy.
+
+        Uses corrected arrays (elapsed-time-adjusted for slot [0]).
+
+        Returns:
+            phase (str): 'before', 'during', or 'after'
+            surplus_wh (float): Expected usable surplus in Wh (>0 = WP can run)
+
+        Phase semantics:
+            before: production has not started yet (production[0] == 0, future slots > 0)
+            during: solar production is happening right now (production[0] > 0)
+            after:  no production remaining in forecast window
+        """
+        wh_per_slot = self.time_resolution / 60.0
+        net_consumption = consumption - production
+
+        # Locate production window, tolerating single-slot gaps
+        production_start: Optional[int] = None
+        production_end: Optional[int] = None
+        for i, p in enumerate(production):
+            if p > 0:
+                if production_start is None:
+                    production_start = i
+                production_end = i
+
+        if production_start is None:
+            phase = 'after'
+        elif production_start == 0:
+            phase = 'during'
+        else:
+            phase = 'before'
+
+        free_capacity = self.get_free_capacity()
+
+        if phase in ('during', 'before'):
+            end_idx = (production_end + 1) if production_end is not None else len(net_consumption)
+            net_surplus_wh = sum(
+                (-net_consumption[i]) * wh_per_slot
+                for i in range(0, end_idx)
+                if net_consumption[i] < 0
+            )
+            surplus_wh = max(0.0, net_surplus_wh - free_capacity)
+        else:
+            # Find when next significant solar production starts (net excess > 100 W)
+            next_solar_start = len(net_consumption)
+            for i, nc in enumerate(net_consumption):
+                if nc < -100:
+                    next_solar_start = i
+                    break
+            expected_consumption_wh = sum(
+                nc * wh_per_slot
+                for nc in net_consumption[:next_solar_start]
+                if nc > 0
+            )
+            stored_usable = self.get_stored_usable_energy()
+            unreserved = max(0.0, stored_usable - reserved_energy)
+            surplus_wh = max(0.0, unreserved - expected_consumption_wh)
+
+        logger.debug(
+            'Solar phase: %s, surplus: %.1f Wh (free_cap=%.1f Wh)',
+            phase, surplus_wh, free_capacity
+        )
+        return phase, surplus_wh
 
     def set_stored_energy(self, stored_energy) -> None:
         """ Set the stored energy in Wh """
