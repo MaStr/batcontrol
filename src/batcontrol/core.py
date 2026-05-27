@@ -30,6 +30,7 @@ from .logic import Logic as LogicFactory
 from .logic import CalculationInput, CalculationParameters
 from .logic import CommonLogic
 from .logic import PeakShavingConfig
+from .logic.grid_charge_target import GridChargeTargetConfig
 
 from .dynamictariff import DynamicTariff as tariff_factory
 from .inverter import Inverter as inverter_factory
@@ -235,6 +236,13 @@ class Batcontrol:
         self.min_grid_charge_soc = _parse_optional_ratio(
             self.batconfig.get('min_grid_charge_soc', None),
             'battery_control.min_grid_charge_soc'
+        )
+        self.grid_charge_target_config = (
+            GridChargeTargetConfig.from_battery_control_config(self.batconfig)
+        )
+        self.grid_charge_target_strategy = self.grid_charge_target_config.strategy
+        self.grid_charge_forecast_pv_factor = (
+            self.grid_charge_target_config.pv_forecast_factor
         )
         self.preserve_min_grid_charge_soc = False
         if (self.min_grid_charge_soc is not None
@@ -656,14 +664,16 @@ class Batcontrol:
             self.peak_shaving_config,
             enabled=peak_shaving_config_enabled and not evcc_disable_peak_shaving,
         )
+        max_capacity = self.get_max_capacity()
         calc_parameters = CalculationParameters(
             self.max_charging_from_grid_limit,
             self.min_price_difference,
             self.min_price_difference_rel,
-            self.get_max_capacity(),
+            max_capacity,
             min_grid_charge_soc=self.min_grid_charge_soc,
             preserve_min_grid_charge_soc=self.preserve_min_grid_charge_soc,
             peak_shaving=ps_runtime,
+            grid_charge_target=self.grid_charge_target_config,
         )
 
         self.last_logic_instance = this_logic_run
@@ -683,6 +693,9 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_min_dynamic_price_diff(
                 calc_output.min_dynamic_price_difference)
+            if calc_output.effective_min_grid_charge_soc is not None:
+                self.mqtt_api.publish_effective_min_grid_charge_soc(
+                    calc_output.effective_min_grid_charge_soc)
 
         if self.discharge_blocked and not \
                 self.general_logic.is_discharge_always_allowed_soc(self.get_SOC()):
