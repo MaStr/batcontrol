@@ -62,11 +62,11 @@ class SolarPrognose(ForecastSolarBaseclass):
             delay_evaluation_by_seconds: Delay for API evaluation
             target_resolution: Target resolution in minutes (15 or 60)
         """
-        # 18 calls/day leaves 2 in reserve out of the 20 allowed per day.
-        # Ignore the generic interval from core and enforce the provider limit here.
-        min_refresh = int(24 / 18 * 60 * 60)  # ~80 min
+        # Provider allows 20 calls/day; use 18 to leave 2 in reserve (~80 min).
+        # Integer arithmetic avoids float rounding; max() respects larger caller values.
+        _provider_min = 24 * 60 * 60 // 18  # 4800 s
         super().__init__(pvinstallations, timezone,
-                         min_refresh, delay_evaluation_by_seconds,
+                         max(min_time_between_api_calls, _provider_min), delay_evaluation_by_seconds,
                          target_resolution=target_resolution,
                          native_resolution=60)  # SolarPrognose provides hourly data
 
