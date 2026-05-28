@@ -428,13 +428,13 @@ class TestPeakShavingModeApi:
 
 
 def _make_solar_publish_stub():
-    """Stub for solar surplus / production phase publish tests."""
+    """Stub for solar surplus / solar_active publish tests."""
     api = MagicMock(spec=MqttApi)
     api.base_topic = 'batcontrol'
     api.client = MagicMock()
     api.client.is_connected.return_value = True
     api.publish_solar_surplus = MqttApi.publish_solar_surplus.__get__(api, MqttApi)
-    api.publish_production_phase = MqttApi.publish_production_phase.__get__(api, MqttApi)
+    api.publish_solar_active = MqttApi.publish_solar_active.__get__(api, MqttApi)
     return api
 
 
@@ -465,28 +465,22 @@ class TestPublishSolarSurplus:
         api.client.publish.assert_not_called()
 
 
-class TestPublishProductionPhase:
-    def test_publishes_during_to_correct_topic(self):
+class TestPublishSolarActive:
+    def test_publishes_true_to_correct_topic(self):
         api = _make_solar_publish_stub()
-        api.publish_production_phase('during')
+        api.publish_solar_active(True)
         api.client.publish.assert_called_once_with(
-            'batcontrol/solar_production_phase', 'during'
+            'batcontrol/solar_active', 'true', retain=True
         )
 
-    def test_publishes_before(self):
+    def test_publishes_false(self):
         api = _make_solar_publish_stub()
-        api.publish_production_phase('before')
+        api.publish_solar_active(False)
         _, payload = api.client.publish.call_args[0]
-        assert payload == 'before'
-
-    def test_publishes_after(self):
-        api = _make_solar_publish_stub()
-        api.publish_production_phase('after')
-        _, payload = api.client.publish.call_args[0]
-        assert payload == 'after'
+        assert payload == 'false'
 
     def test_skips_publish_when_disconnected(self):
         api = _make_solar_publish_stub()
         api.client.is_connected.return_value = False
-        api.publish_production_phase('during')
+        api.publish_solar_active(True)
         api.client.publish.assert_not_called()

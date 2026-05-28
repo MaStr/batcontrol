@@ -27,7 +27,7 @@ The following topics are published:
 - /api_override_active: bool indicating whether a temporary external/API override is active
 - /control_source: source that last selected the current control state (api or optimizer)
 - /solar_surplus_wh: expected solar surplus energy in Wh (>0 means usable surplus available)
-- /solar_production_phase: solar production phase ('before', 'during', 'after')
+- /solar_active: bool indicating whether solar is currently producing (slot 0 > 0)
 
 The following statistical arrays are published as JSON arrays:
 - /FCST/production: forecasted production in W
@@ -498,16 +498,15 @@ class MqttApi:
                 f'{surplus_wh:.1f}'
             )
 
-    def publish_production_phase(self, phase: str) -> None:
-        """ Publish the solar production phase to MQTT.
-            /solar_production_phase
-            Values: 'before' (production expected later), 'during' (producing now),
-                    'after' (no more production in forecast).
+    def publish_solar_active(self, active: bool) -> None:
+        """ Publish whether solar is currently producing.
+            /solar_active
         """
         if self.client.is_connected():
             self.client.publish(
-                self.base_topic + '/solar_production_phase',
-                phase
+                self.base_topic + '/solar_active',
+                str(active).lower(),
+                retain=True
             )
 
     def publish_api_override_active(self, active: bool) -> None:
@@ -910,13 +909,14 @@ class MqttApi:
             self.base_topic + "/solar_surplus_wh")
 
         self.publish_mqtt_discovery_message(
-            "Solar Production Phase",
-            "batcontrol_solar_production_phase",
-            "sensor",
+            "Solar Active",
+            "batcontrol_solar_active",
+            "binary_sensor",
             None,
             None,
-            self.base_topic + "/solar_production_phase",
-            entity_category="diagnostic")
+            self.base_topic + "/solar_active",
+            entity_category="diagnostic",
+            value_template="{% if value == 'true' %}ON{% else %}OFF{% endif %}")
 
     def send_mqtt_discovery_for_mode(self) -> None:
         """ Publish Home Assistant MQTT Auto Discovery message for mode"""

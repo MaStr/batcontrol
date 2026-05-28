@@ -1,4 +1,4 @@
-"""Tests for Batcontrol._compute_solar_surplus_and_phase."""
+"""Tests for Batcontrol._compute_solar_active_and_surplus."""
 import numpy as np
 import pytest
 from unittest.mock import MagicMock
@@ -6,87 +6,47 @@ from unittest.mock import MagicMock
 from batcontrol.core import Batcontrol
 
 
-def _make_core(time_resolution=60, before_phase_threshold_h=4.0):
+def _make_core(time_resolution=60):
     """Return a minimal stub with only the attributes used by the method."""
     stub = MagicMock(spec=Batcontrol)
     stub.time_resolution = time_resolution
-    stub.before_phase_threshold_h = before_phase_threshold_h
-    stub._compute_solar_surplus_and_phase = (
-        Batcontrol._compute_solar_surplus_and_phase.__get__(stub, Batcontrol)
+    stub._compute_solar_active_and_surplus = (
+        Batcontrol._compute_solar_active_and_surplus.__get__(stub, Batcontrol)
     )
     return stub
 
 
 def _call(stub, production, consumption, free_cap=0.0):
-    return stub._compute_solar_surplus_and_phase(
+    return stub._compute_solar_active_and_surplus(
         np.array(production, dtype=float),
         np.array(consumption, dtype=float),
         free_cap,
     )
 
 
-class TestPhaseDetection:
-    def test_phase_during_when_production_starts_at_slot0(self):
+class TestSolarActive:
+    def test_active_when_production_starts_at_slot0(self):
         stub = _make_core()
-        phase, _ = _call(stub, [1000, 1500, 500], [400, 400, 400])
-        assert phase == 'during'
+        active, _ = _call(stub, [1000, 1500, 500], [400, 400, 400])
+        assert active is True
 
-    def test_phase_before_when_production_starts_within_threshold(self):
-        # production_start=2, threshold=4 slots (4h at 60-min) -> before
+    def test_inactive_when_production_starts_later(self):
         stub = _make_core()
-        phase, _ = _call(stub, [0, 0, 800, 1200, 0], [300, 300, 300, 300, 300])
-        assert phase == 'before'
+        active, _ = _call(stub, [0, 0, 800, 1200, 0], [300, 300, 300, 300, 300])
+        assert active is False
 
-    def test_phase_after_when_no_production_at_all(self):
+    def test_inactive_when_no_production_at_all(self):
         stub = _make_core()
-        phase, _ = _call(stub, [0, 0, 0, 0], [300, 400, 350, 300])
-        assert phase == 'after'
+        active, _ = _call(stub, [0, 0, 0, 0], [300, 400, 350, 300])
+        assert active is False
 
-    def test_phase_after_when_all_production_is_zero_float(self):
+    def test_active_when_slot0_producing_even_with_gap_after(self):
         stub = _make_core()
-        phase, _ = _call(stub, [0.0, 0.0, 0.0], [200.0, 200.0, 200.0])
-        assert phase == 'after'
-
-    def test_phase_during_tolerates_single_slot_gap(self):
-        # Slot 0 producing, slot 1 gap -> still 'during' because production_start==0
-        stub = _make_core()
-        phase, _ = _call(stub, [800, 0, 600, 0], [300, 300, 300, 300])
-        assert phase == 'during'
-
-    def test_phase_after_when_production_start_beyond_threshold(self):
-        # threshold=4 slots, production_start=5 -> after
-        stub = _make_core()
-        phase, _ = _call(stub, [0, 0, 0, 0, 0, 1000, 1000, 0], [200] * 8)
-        assert phase == 'after'
-
-    def test_phase_before_at_threshold_boundary(self):
-        # production_start == threshold_slots (4) -> before (inclusive)
-        stub = _make_core()
-        phase, _ = _call(stub, [0, 0, 0, 0, 1000, 0], [200] * 6)
-        assert phase == 'before'
-
-    def test_threshold_slots_respect_time_resolution(self):
-        # 4h threshold at 15-min resolution = 16 slots
-        stub = _make_core(time_resolution=15)
-        # production_start=16 -> exactly at threshold -> before
-        prod = [0] * 16 + [500, 800, 600]
-        cons = [200] * 19
-        phase, _ = _call(stub, prod, cons)
-        assert phase == 'before'
-        # production_start=17 -> beyond threshold -> after
-        prod2 = [0] * 17 + [500, 800]
-        cons2 = [200] * 19
-        phase2, _ = _call(stub, prod2, cons2)
-        assert phase2 == 'after'
-
-    def test_phase_before_with_15min_resolution(self):
-        stub = _make_core(time_resolution=15)
-        # 4 empty slots (1h) then solar; threshold=16 slots -> before
-        phase, _ = _call(stub, [0, 0, 0, 0, 500, 800, 600], [200] * 7)
-        assert phase == 'before'
+        active, _ = _call(stub, [800, 0, 600, 0], [300, 300, 300, 300])
+        assert active is True
 
 
-class TestSurplusDuring:
+class TestSurplusActive:
     def test_surplus_zero_when_net_production_fits_in_battery(self):
         # net = 1000+1000 = 2000 Wh, free_cap=3000 -> fits, no surplus
         stub = _make_core()
@@ -110,23 +70,21 @@ class TestSurplusDuring:
         _, surplus = _call(stub, [100, 100, 0], [800, 800, 800], free_cap=10000.0)
         assert surplus == 0.0
 
-    def test_during_uses_only_first_production_window(self):
-        # 48h forecast: today solar slots 0-1, tonight/tomorrow no solar, tomorrow solar again
-        # Must NOT include tomorrow's solar in 'during' surplus
+    def test_active_uses_only_first_production_window(self):
+        # 48h forecast: today's solar then a long break then tomorrow's solar
+        # 'during' must NOT include tomorrow's solar (production_end stops at first zero)
         stub = _make_core()
         today_solar = [1500, 1500]  # 2000 Wh net production
-        night = [0] * 12             # 12h night
+        night = [0] * 12
         tomorrow_solar = [1500, 1500]
         production = today_solar + night + tomorrow_solar
         consumption = [500] * len(production)
-        # production_end_current stops at slot 1 (first zero is slot 2)
-        # solar_net = -sum(nc[:2]) = -(500-1500 + 500-1500) = 2000 Wh
-        # free_cap=1200 -> surplus=800
+        # solar_net = -(500-1500 + 500-1500) = 2000 Wh, free_cap=1200 -> surplus=800
         _, surplus = _call(stub, production, consumption, free_cap=1200.0)
         assert surplus == pytest.approx(800.0)
 
 
-class TestSurplusBeforeAfter:
+class TestSurplusInactive:
     def test_surplus_zero_when_no_solar_in_forecast(self):
         stub = _make_core()
         _, surplus = _call(stub, [0, 0, 0, 0], [500, 500, 500, 500], free_cap=0.0)
@@ -160,26 +118,13 @@ class TestSurplusBeforeAfter:
         _, surplus = _call(stub, production, consumption, free_cap=2000.0)
         assert surplus == pytest.approx(500.0)
 
-    def test_before_and_after_use_same_formula(self):
-        # Same inputs, only threshold changes: one gives 'before', other 'after', surplus same
-        production = [0, 0, 1000, 1000, 0]
-        consumption = [200, 200, 200, 200, 200]
-        stub_before = _make_core(before_phase_threshold_h=4.0)  # start=2 <= 4 -> before
-        stub_after = _make_core(before_phase_threshold_h=1.0)   # start=2 > 1 -> after
-        phase_before, surplus_before = _call(stub_before, production, consumption, free_cap=500.0)
-        phase_after, surplus_after = _call(stub_after, production, consumption, free_cap=500.0)
-        assert phase_before == 'before'
-        assert phase_after == 'after'
-        assert surplus_before == pytest.approx(surplus_after)
-
     def test_surplus_never_negative(self):
         stub = _make_core()
         _, surplus = _call(stub, [0, 0, 100, 0], [500, 500, 500, 500], free_cap=10000.0)
         assert surplus == 0.0
 
-    def test_before_only_uses_first_production_window(self):
-        # 48h: night, tomorrow solar window (slots 2-3), second night, day-after solar (slots 8-9)
-        # Must NOT include day-after solar in 'before' calculation
+    def test_inactive_only_uses_first_production_window(self):
+        # 48h: night, tomorrow solar window (slots 2-3), second night, day-after solar
         stub = _make_core()
         production = [0, 0, 1000, 1000, 0, 0, 0, 0, 1000, 1000]
         consumption = [200] * 10
@@ -187,3 +132,14 @@ class TestSurplusBeforeAfter:
         # surplus = max(0, 1600-500-400) = 700 (day-after ignored)
         _, surplus = _call(stub, production, consumption, free_cap=500.0)
         assert surplus == pytest.approx(700.0)
+
+    def test_works_with_15min_resolution(self):
+        # Arrays are already Wh/slot independent of resolution
+        stub = _make_core(time_resolution=15)
+        # 4 slots night (200 Wh each) = 800 bridge
+        # 4 slots solar 500 Wh prod, 200 Wh cons each = 4 * 300 = 1200 Wh solar_net
+        # free_cap=0 -> surplus = max(0, 1200 - 0 - 800) = 400
+        production = [0, 0, 0, 0, 500, 500, 500, 500, 0]
+        consumption = [200] * 9
+        _, surplus = _call(stub, production, consumption, free_cap=0.0)
+        assert surplus == pytest.approx(400.0)
