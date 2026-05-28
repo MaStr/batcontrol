@@ -684,7 +684,8 @@ class Batcontrol:
             self.mqtt_api.publish_min_dynamic_price_diff(
                 calc_output.min_dynamic_price_difference)
             phase, surplus_wh = self._compute_solar_surplus_and_phase(
-                production, consumption, calc_output.reserved_energy
+                production, consumption, calc_output.reserved_energy,
+                calc_input.free_capacity, calc_input.stored_usable_energy
             )
             self.mqtt_api.publish_production_phase(phase)
             self.mqtt_api.publish_solar_surplus(surplus_wh)
@@ -875,10 +876,15 @@ class Batcontrol:
             self,
             production: np.ndarray,
             consumption: np.ndarray,
-            reserved_energy: float) -> tuple:
+            reserved_energy: float,
+            free_capacity: float,
+            stored_usable_energy: float) -> tuple:
         """Compute solar production phase and expected surplus energy.
 
-        Uses corrected arrays (elapsed-time-adjusted for slot [0]).
+        Uses corrected arrays (elapsed-time-adjusted for slot [0]) and
+        the optimizer's own input values for free_capacity and
+        stored_usable_energy so the published values are consistent with
+        the control decision that was just made.
 
         Returns:
             phase (str): 'before', 'during', or 'after'
@@ -908,16 +914,12 @@ class Batcontrol:
         else:
             phase = 'before'
 
-        free_capacity = self.get_free_capacity()
-
         if phase in ('during', 'before'):
             end_idx = (production_end + 1) if production_end is not None else len(net_consumption)
-            net_surplus_wh = sum(
-                (-net_consumption[i]) * wh_per_slot
-                for i in range(0, end_idx)
-                if net_consumption[i] < 0
-            )
-            surplus_wh = max(0.0, net_surplus_wh - free_capacity)
+            # Net energy balance over the production window: positive = more production
+            # than consumption. Only what exceeds free battery capacity is real surplus.
+            net_window_wh = -np.sum(net_consumption[:end_idx]) * wh_per_slot
+            surplus_wh = max(0.0, net_window_wh - free_capacity)
         else:
             # Find when next significant solar production starts (net excess > 100 W)
             next_solar_start = len(net_consumption)
@@ -930,8 +932,7 @@ class Batcontrol:
                 for nc in net_consumption[:next_solar_start]
                 if nc > 0
             )
-            stored_usable = self.get_stored_usable_energy()
-            unreserved = max(0.0, stored_usable - reserved_energy)
+            unreserved = max(0.0, stored_usable_energy - reserved_energy)
             surplus_wh = max(0.0, unreserved - expected_consumption_wh)
 
         logger.debug(
