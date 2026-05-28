@@ -26,6 +26,8 @@ The following topics are published:
 - /production_offset: production offset percentage (1.0 = 100%, 0.8 = 80%, etc.)
 - /api_override_active: bool indicating whether a temporary external/API override is active
 - /control_source: source that last selected the current control state (api or optimizer)
+- /solar_surplus_wh: expected solar surplus energy in Wh (>0 means usable surplus available)
+- /solar_active: bool indicating whether solar is currently producing (slot 0 > 0)
 
 The following statistical arrays are published as JSON arrays:
 - /FCST/production: forecasted production in W
@@ -484,6 +486,29 @@ class MqttApi:
                 f'{production_offset:.3f}'
             )
 
+    def publish_solar_surplus(self, surplus_wh: float) -> None:
+        """ Publish the expected solar surplus energy to MQTT.
+            /solar_surplus_wh
+            Positive values indicate surplus beyond battery free capacity (during/before)
+            or surplus stored energy above expected consumption until next solar (after).
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/solar_surplus_wh',
+                f'{surplus_wh:.1f}'
+            )
+
+    def publish_solar_active(self, active: bool) -> None:
+        """ Publish whether solar is currently producing.
+            /solar_active
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/solar_active',
+                str(active).lower(),
+                retain=True
+            )
+
     def publish_api_override_active(self, active: bool) -> None:
         """ Publish whether a temporary API override is currently active.
             /api_override_active
@@ -874,6 +899,24 @@ class MqttApi:
             self.base_topic +
             "/stored_energy_capacity",
             entity_category="diagnostic")
+
+        self.publish_mqtt_discovery_message(
+            "Solar Surplus",
+            "batcontrol_solar_surplus_wh",
+            "sensor",
+            "energy",
+            "Wh",
+            self.base_topic + "/solar_surplus_wh")
+
+        self.publish_mqtt_discovery_message(
+            "Solar Active",
+            "batcontrol_solar_active",
+            "binary_sensor",
+            None,
+            None,
+            self.base_topic + "/solar_active",
+            entity_category="diagnostic",
+            value_template="{% if value == 'true' %}ON{% else %}OFF{% endif %}")
 
     def send_mqtt_discovery_for_mode(self) -> None:
         """ Publish Home Assistant MQTT Auto Discovery message for mode"""

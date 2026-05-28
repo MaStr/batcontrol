@@ -425,3 +425,62 @@ class TestPeakShavingModeApi:
         Batcontrol.api_set_peak_shaving_mode(bc, 'bogus')
         assert bc.peak_shaving_config is original
         bc.mqtt_api.publish_peak_shaving_mode.assert_not_called()
+
+
+def _make_solar_publish_stub():
+    """Stub for solar surplus / solar_active publish tests."""
+    api = MagicMock(spec=MqttApi)
+    api.base_topic = 'batcontrol'
+    api.client = MagicMock()
+    api.client.is_connected.return_value = True
+    api.publish_solar_surplus = MqttApi.publish_solar_surplus.__get__(api, MqttApi)
+    api.publish_solar_active = MqttApi.publish_solar_active.__get__(api, MqttApi)
+    return api
+
+
+class TestPublishSolarSurplus:
+    def test_publishes_to_correct_topic(self):
+        api = _make_solar_publish_stub()
+        api.publish_solar_surplus(1234.5)
+        api.client.publish.assert_called_once_with(
+            'batcontrol/solar_surplus_wh', '1234.5'
+        )
+
+    def test_formats_with_one_decimal(self):
+        api = _make_solar_publish_stub()
+        api.publish_solar_surplus(999.987)
+        topic, payload = api.client.publish.call_args[0]
+        assert payload == '1000.0'
+
+    def test_zero_surplus_published(self):
+        api = _make_solar_publish_stub()
+        api.publish_solar_surplus(0.0)
+        _, payload = api.client.publish.call_args[0]
+        assert payload == '0.0'
+
+    def test_skips_publish_when_disconnected(self):
+        api = _make_solar_publish_stub()
+        api.client.is_connected.return_value = False
+        api.publish_solar_surplus(500.0)
+        api.client.publish.assert_not_called()
+
+
+class TestPublishSolarActive:
+    def test_publishes_true_to_correct_topic(self):
+        api = _make_solar_publish_stub()
+        api.publish_solar_active(True)
+        api.client.publish.assert_called_once_with(
+            'batcontrol/solar_active', 'true', retain=True
+        )
+
+    def test_publishes_false(self):
+        api = _make_solar_publish_stub()
+        api.publish_solar_active(False)
+        _, payload = api.client.publish.call_args[0]
+        assert payload == 'false'
+
+    def test_skips_publish_when_disconnected(self):
+        api = _make_solar_publish_stub()
+        api.client.is_connected.return_value = False
+        api.publish_solar_active(True)
+        api.client.publish.assert_not_called()

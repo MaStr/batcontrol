@@ -683,6 +683,11 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_min_dynamic_price_diff(
                 calc_output.min_dynamic_price_difference)
+            solar_active, surplus_wh = self._compute_solar_active_and_surplus(
+                production, consumption, calc_input.free_capacity
+            )
+            self.mqtt_api.publish_solar_active(solar_active)
+            self.mqtt_api.publish_solar_surplus(surplus_wh)
 
         if self.discharge_blocked and not \
                 self.general_logic.is_discharge_always_allowed_soc(self.get_SOC()):
@@ -865,6 +870,52 @@ class Batcontrol:
     def get_reserved_energy(self) -> float:
         """ Returns the reserved energy in Wh from last calculation """
         return self.last_reserved_energy
+
+    def _compute_solar_active_and_surplus(
+            self,
+            production: np.ndarray,
+            consumption: np.ndarray,
+            free_capacity: float) -> tuple:
+        """Compute solar-active flag and expected surplus energy.
+
+        Returns:
+            solar_active (bool): True iff solar is producing in slot 0
+            surplus_wh (float): Expected solar overflow in Wh (>0 = WP can run)
+
+        When solar is active, surplus is the overflow in the current production
+        window. Otherwise, surplus is the expected overflow at the end of the
+        next production window after the battery has bridged consumption until
+        solar restarts.
+        """
+        net_consumption = consumption - production
+
+        # Find start and end of the FIRST production window only
+        production_start: Optional[int] = None
+        production_end_current: Optional[int] = None
+        for i, p in enumerate(production):
+            if p > 0:
+                if production_start is None:
+                    production_start = i
+                production_end_current = i
+            elif production_start is not None:
+                break
+
+        solar_active = production_start == 0
+
+        if production_start is None:
+            surplus_wh = 0.0
+        else:
+            bridge_wh = max(0.0, float(np.sum(net_consumption[:production_start])))
+            end_idx = (production_end_current + 1) if production_end_current is not None \
+                else production_start + 1
+            solar_net_wh = float(-np.sum(net_consumption[production_start:end_idx]))
+            surplus_wh = max(0.0, solar_net_wh - free_capacity - bridge_wh)
+
+        logger.debug(
+            'Solar active: %s, surplus: %.1f Wh (free_cap=%.1f Wh)',
+            solar_active, surplus_wh, free_capacity
+        )
+        return solar_active, surplus_wh
 
     def set_stored_energy(self, stored_energy) -> None:
         """ Set the stored energy in Wh """
