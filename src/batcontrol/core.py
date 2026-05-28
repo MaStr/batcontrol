@@ -250,6 +250,7 @@ class Batcontrol:
 
         self.round_price_digits = 4
         self.production_offset_percent = 1.0  # Default: no offset
+        self.before_phase_threshold_h = 4.0
         self.market_price_refresh_time = "12:30"
 
         if self.config.get('battery_control_expert', None) is not None:
@@ -264,6 +265,9 @@ class Batcontrol:
             self.preserve_min_grid_charge_soc = battery_control_expert.get(
                 'preserve_min_grid_charge_soc',
                 self.preserve_min_grid_charge_soc)
+            self.before_phase_threshold_h = float(battery_control_expert.get(
+                'before_phase_threshold_h',
+                self.before_phase_threshold_h))
             raw_refresh_time = battery_control_expert.get(
                 'market_price_refresh_time',
                 self.market_price_refresh_time)
@@ -684,8 +688,7 @@ class Batcontrol:
             self.mqtt_api.publish_min_dynamic_price_diff(
                 calc_output.min_dynamic_price_difference)
             phase, surplus_wh = self._compute_solar_surplus_and_phase(
-                production, consumption, calc_output.reserved_energy,
-                calc_input.free_capacity, calc_input.stored_usable_energy
+                production, consumption, calc_input.free_capacity
             )
             self.mqtt_api.publish_production_phase(phase)
             self.mqtt_api.publish_solar_surplus(surplus_wh)
@@ -876,64 +879,52 @@ class Batcontrol:
             self,
             production: np.ndarray,
             consumption: np.ndarray,
-            reserved_energy: float,
-            free_capacity: float,
-            stored_usable_energy: float) -> tuple:
+            free_capacity: float) -> tuple:
         """Compute solar production phase and expected surplus energy.
 
-        Uses corrected arrays (elapsed-time-adjusted for slot [0]) and
-        the optimizer's own input values for free_capacity and
-        stored_usable_energy so the published values are consistent with
-        the control decision that was just made.
-
         Returns:
-            phase (str): 'before', 'during', or 'after'
-            surplus_wh (float): Expected usable surplus in Wh (>0 = WP can run)
+            phase (str): 'during', 'before', or 'after'
+            surplus_wh (float): Expected solar overflow in Wh (>0 = WP can run)
 
         Phase semantics:
-            before: production has not started yet (production[0] == 0, future slots > 0)
-            during: solar production is happening right now (production[0] > 0)
-            after:  no production remaining in forecast window
+            during: solar is running now (production[0] > 0)
+            before: solar starts within before_phase_threshold_h hours
+            after:  solar is beyond threshold or not in forecast
         """
-        wh_per_slot = self.time_resolution / 60.0
         net_consumption = consumption - production
+        threshold_slots = round(self.before_phase_threshold_h * 60 / self.time_resolution)
 
-        # Locate production window, tolerating single-slot gaps
+        # Find start and end of the FIRST production window only
         production_start: Optional[int] = None
-        production_end: Optional[int] = None
+        production_end_current: Optional[int] = None
         for i, p in enumerate(production):
             if p > 0:
                 if production_start is None:
                     production_start = i
-                production_end = i
+                production_end_current = i
+            elif production_start is not None:
+                break  # stop at first zero slot after production started
 
-        if production_start is None:
+        if production_start is None or production_start > threshold_slots:
             phase = 'after'
         elif production_start == 0:
             phase = 'during'
         else:
             phase = 'before'
 
-        if phase in ('during', 'before'):
-            end_idx = (production_end + 1) if production_end is not None else len(net_consumption)
-            # Net energy balance over the production window: positive = more production
-            # than consumption. Only what exceeds free battery capacity is real surplus.
-            net_window_wh = -np.sum(net_consumption[:end_idx]) * wh_per_slot
-            surplus_wh = max(0.0, net_window_wh - free_capacity)
+        if phase == 'during':
+            end_idx = (production_end_current + 1) if production_end_current is not None else 1
+            solar_net_wh = float(-np.sum(net_consumption[:end_idx]))
+            surplus_wh = max(0.0, solar_net_wh - free_capacity)
         else:
-            # Find when next significant solar production starts (net excess > 100 W)
-            next_solar_start = len(net_consumption)
-            for i, nc in enumerate(net_consumption):
-                if nc < -100:
-                    next_solar_start = i
-                    break
-            expected_consumption_wh = sum(
-                nc * wh_per_slot
-                for nc in net_consumption[:next_solar_start]
-                if nc > 0
-            )
-            unreserved = max(0.0, stored_usable_energy - reserved_energy)
-            surplus_wh = max(0.0, unreserved - expected_consumption_wh)
+            if production_start is None:
+                surplus_wh = 0.0
+            else:
+                bridge_wh = max(0.0, float(np.sum(net_consumption[:production_start])))
+                end_idx = (production_end_current + 1) if production_end_current is not None \
+                    else production_start + 1
+                solar_net_wh = float(-np.sum(net_consumption[production_start:end_idx]))
+                surplus_wh = max(0.0, solar_net_wh - free_capacity - bridge_wh)
 
         logger.debug(
             'Solar phase: %s, surplus: %.1f Wh (free_cap=%.1f Wh)',
