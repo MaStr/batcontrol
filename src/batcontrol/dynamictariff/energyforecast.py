@@ -1,24 +1,25 @@
 """Energyforecast.de Class
 
-This module implements the energyforecast.de API to retrieve dynamic electricity prices.
+This module implements the energyforecast.de API v2 to retrieve dynamic electricity prices.
 It inherits from the DynamicTariffBaseclass.
 
 Classes:
-    Energyforecast: A class to interact with the energyforecast.de API
+    Energyforecast: A class to interact with the energyforecast.de API v2
                     and process electricity prices.
 
 Methods:
     __init__(self,
                 timezone,
-                price_fees: float,
-                price_markup: float,
-                vat: float,
-                min_time_between_API_calls=0):
+                token,
+                min_time_between_API_calls=0,
+                delay_evaluation_by_seconds=0,
+                target_resolution=60,
+                market_zone='DE'):
 
         Initializes the Energyforecast class with the specified parameters.
 
     get_raw_data_from_provider(self):
-        Fetches raw data from the energyforecast.de API.
+        Fetches raw data from the energyforecast.de API v2.
 
     _get_prices_native(self):
         Processes the raw data to extract and calculate electricity prices.
@@ -30,55 +31,54 @@ from .baseclass import DynamicTariffBaseclass
 
 logger = logging.getLogger(__name__)
 
+# API v2 always returns quarter-hourly data; use 4-hour refresh floor so that
+# 6 daily calls cover the full day with headroom for the forced 12:30 UTC fetch.
+_PROVIDER_MIN_INTERVAL = 4 * 60 * 60  # 14400 s
+
+# Convenience aliases: DE and LU are both served by the DE-LU market zone.
+_MARKET_ZONE_ALIASES = {'DE': 'DE-LU', 'LU': 'DE-LU'}
+
 
 class Energyforecast(DynamicTariffBaseclass):
-    """ Implement energyforecast.de API to get dynamic electricity prices
+    """ Implement energyforecast.de API v2 to get dynamic electricity prices
         Inherits from DynamicTariffBaseclass
 
-        Uses 48-hour forecast window for better day-ahead planning.
+        API v2 delivers complete calendar days (plan-dependent horizon).
+        Data is always quarter-hourly; no resolution parameter is needed.
 
-        Energyforecast API supports both resolutions:
-        - hourly: Hourly prices (60-minute intervals)
-        - quarter_hourly: 15-minute prices
-
-        The native resolution is set based on target_resolution to fetch
-        data at the optimal granularity from the API.
+        Supported market zones: DE (default, normalized to DE-LU), LU (normalized to DE-LU),
+        AT, FR, NL, BE, PL, DK1, DK2
     """
 
     def __init__(self, timezone, token, min_time_between_API_calls=0,
-                 delay_evaluation_by_seconds=0, target_resolution: int = 60):
+                 delay_evaluation_by_seconds=0, target_resolution: int = 60,
+                 market_zone: str = 'DE'):
         """ Initialize Energyforecast class with parameters """
-        # Energyforecast API supports both resolutions
-        if target_resolution == 15:
-            native_resolution = 15
-            self.api_resolution = "quarter_hourly"
-        else:
-            native_resolution = 60
-            self.api_resolution = "hourly"
+        # Enforce provider-specific minimum refresh interval.
+        effective_interval = max(min_time_between_API_calls, _PROVIDER_MIN_INTERVAL)
 
+        # API v2 always delivers quarter-hourly data.
         super().__init__(
             timezone,
-            min_time_between_API_calls,
+            effective_interval,
             delay_evaluation_by_seconds,
             target_resolution=target_resolution,
-            native_resolution=native_resolution
+            native_resolution=15
         )
-        self.url = 'https://www.energyforecast.de/api/v1/predictions/next_48_hours'
+        self.url = 'https://www.energyforecast.de/api/v2/forecast'
         self.token = token
+        normalized = market_zone.strip().upper()
+        self.market_zone = _MARKET_ZONE_ALIASES.get(normalized, normalized)
         self.vat = 0
         self.price_fees = 0
         self.price_markup = 0
         self.network_fees_fetcher = None
 
         logger.info(
-            'Energyforecast: Configured to fetch %s data (resolution=%d min)',
-            self.api_resolution,
-            self.native_resolution
+            'Energyforecast: Configured for market_zone=%s, refresh every %d s',
+            self.market_zone,
+            effective_interval
         )
-
-    def upgrade_48h_to_96h(self):
-        """ During initialization, we can upgrade the forecast if user wants 96h horizon """
-        self.url = 'https://www.energyforecast.de/api/v1/predictions/next_96_hours'
 
     def set_price_parameters(
             self, vat: float, price_fees: float, price_markup: float):
@@ -92,65 +92,63 @@ class Energyforecast(DynamicTariffBaseclass):
         self.network_fees_fetcher = fetcher
 
     def get_raw_data_from_provider(self):
-        """ Get raw data from energyforecast.de API and return parsed json """
-        logger.debug('Requesting price forecast from energyforecast.de API (resolution=%s)',
-                     self.api_resolution)
+        """ Get raw data from energyforecast.de API v2 and return parsed json """
+        logger.debug('Requesting price forecast from energyforecast.de API v2 (zone=%s)',
+                     self.market_zone)
         if not self.token:
             raise RuntimeError('[Energyforecast] API token is required')
         try:
-            # Request base prices without provider-side calculations
-            # We apply vat, fees, and markup locally
+            # Request base prices without provider-side calculations;
+            # we apply vat, fees, and markup locally.
             params = {
-                'resolution': self.api_resolution,
                 'token': self.token,
+                'market_zone': self.market_zone,
                 'vat': 0,
                 'fixed_cost_cent': 0
             }
             response = requests.get(self.url, params=params, timeout=30)
             response.raise_for_status()
-            if response.status_code != 200:
-                raise ConnectionError(
-                    f'[Energyforecast] API returned {response}')
         except requests.exceptions.RequestException as e:
             raise ConnectionError(
                 f'[Energyforecast] API request failed: {e}') from e
 
-        response_json = response.json()
-        return {'data': response_json}
+        return response.json()
 
     def _get_prices_native(self) -> dict[int, float]:
-        """Get hour-aligned prices at native resolution.
+        """Get hour-aligned prices at native (15-min) resolution.
 
-        Expected API response format:
-           data: [
-              {
-                "start": "2025-11-11T06:00:35.531Z",
-                "end": "2025-11-11T06:00:35.531Z",
-                "price": 0,
-                "price_origin": "string"
-              }
-            ]
+        Expected API v2 response format:
+           {
+             "generated_at": "...",
+             "valid_until": "...",
+             "data": [
+               {
+                 "start": "2025-11-11T06:00:00+01:00",
+                 "end": "2025-11-11T06:15:00+01:00",
+                 "price_ct_kwh": 12.3456,
+                 "total_ct_kwh": 27.8901,
+                 "price_origin": "market"
+               }
+             ]
+           }
+
+        Prices from the API are in ct/kWh; we convert to EUR/kWh (/100) to
+        stay consistent with the existing fees/markup/vat config values.
 
         Returns:
-            Dict mapping interval index to price value
+            Dict mapping interval index to price value (EUR/kWh)
             Index 0 = start of current hour
-            For 15-min resolution: indices 0-3 represent the current hour
         """
         raw_data = self.get_raw_data()
         data = raw_data.get('data', [])
         now = datetime.datetime.now(self.timezone)
-        # Align to start of current hour
         current_hour_start = now.replace(minute=0, second=0, microsecond=0)
         prices = {}
 
-        # Determine interval duration in seconds
-        interval_seconds = self.native_resolution * 60
+        interval_seconds = self.native_resolution * 60  # 900 s
 
         for item in data:
-            # Parse ISO format timestamp
-            # Python <3.11 does not support 'Z' (UTC) in fromisoformat(),
-            # so we replace it with '+00:00'.
-            # Remove this workaround if only supporting Python 3.11+.
+            # Python <3.11 does not support 'Z' in fromisoformat().
             timestamp = datetime.datetime.fromisoformat(
                 item['start'].replace('Z', '+00:00')
             ).astimezone(self.timezone)
@@ -159,11 +157,12 @@ class Energyforecast(DynamicTariffBaseclass):
             rel_interval = int(diff.total_seconds() / interval_seconds)
 
             if rel_interval >= 0:
-                base_price = item['price']
+                # price_ct_kwh is in ct/kWh; convert to EUR/kWh for consistency
+                # with fees/markup/vat config values.
+                base_price = item['price_ct_kwh'] / 100
                 network_fee = 0.0
                 if self.network_fees_fetcher is not None:
-                    network_fee = self.network_fees_fetcher.get_fee_at(
-                        timestamp)
+                    network_fee = self.network_fees_fetcher.get_fee_at(timestamp)
                 end_price = (
                     (base_price * (1 + self.price_markup) +
                      self.price_fees + network_fee)

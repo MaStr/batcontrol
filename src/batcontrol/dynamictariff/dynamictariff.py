@@ -15,6 +15,8 @@ Raises:
     RuntimeError: If required fields are missing in the configuration
                      or if the provider type is unknown.
 """
+import logging
+
 from .awattar import Awattar
 from .tibber import Tibber
 from .evcc import Evcc
@@ -22,6 +24,8 @@ from .energyforecast import Energyforecast
 from .tariffzones import TariffZones
 from .network_fees import NetworkFeesFetcher
 from .dynamictariff_interface import TariffInterface
+
+logger = logging.getLogger(__name__)
 
 
 class DynamicTariff:
@@ -138,22 +142,28 @@ class DynamicTariff:
                     raise RuntimeError(
                         f'[DynTariff] Please include {field} in your configuration file'
                     )
+            if provider.lower() == 'energyforecast_96':
+                logger.warning(
+                    '[DynTariff] Provider "energyforecast_96" is deprecated. '
+                    'API v2 delivers plan-based multi-day forecasts automatically. '
+                    'Use "energyforecast" instead.'
+                )
             vat = float(config.get('vat', 0))
             markup = float(config.get('markup', 0))
             fees = float(config.get('fees', 0))
             token = config.get('apikey')
+            market_zone = config.get('market_zone', 'DE')
             selected_tariff = Energyforecast(
                 timezone,
                 token,
                 min_time_between_api_calls,
                 delay_evaluation_by_seconds,
-                target_resolution=target_resolution
+                target_resolution=target_resolution,
+                market_zone=market_zone
             )
             selected_tariff.set_price_parameters(vat, fees, markup)
             if network_fees_fetcher is not None:
                 selected_tariff.set_network_fees_fetcher(network_fees_fetcher)
-            if provider.lower() == 'energyforecast_96':
-                selected_tariff.upgrade_48h_to_96h()
 
         elif provider.lower() == 'tariff_zones':
             # Only tariff_zone_1 is strictly required. A single-zone
