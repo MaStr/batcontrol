@@ -11,8 +11,10 @@ Methods:
     __init__(self,
                 timezone,
                 token,
-                market_zone='DE',
-                min_time_between_API_calls=0):
+                min_time_between_API_calls=0,
+                delay_evaluation_by_seconds=0,
+                target_resolution=60,
+                market_zone='DE'):
 
         Initializes the Energyforecast class with the specified parameters.
 
@@ -65,7 +67,8 @@ class Energyforecast(DynamicTariffBaseclass):
         )
         self.url = 'https://www.energyforecast.de/api/v2/forecast'
         self.token = token
-        self.market_zone = _MARKET_ZONE_ALIASES.get(market_zone, market_zone)
+        normalized = market_zone.strip().upper()
+        self.market_zone = _MARKET_ZONE_ALIASES.get(normalized, normalized)
         self.vat = 0
         self.price_fees = 0
         self.price_markup = 0
@@ -112,7 +115,7 @@ class Energyforecast(DynamicTariffBaseclass):
         return response.json()
 
     def _get_prices_native(self) -> dict[int, float]:
-        """Get 15-min-aligned prices at native resolution.
+        """Get hour-aligned prices at native (15-min) resolution.
 
         Expected API v2 response format:
            {
