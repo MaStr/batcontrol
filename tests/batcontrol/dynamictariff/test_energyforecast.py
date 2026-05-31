@@ -248,9 +248,20 @@ class TestEnergyforecast(unittest.TestCase):
         self.assertIn('token is required', str(context.exception).lower())
 
     def test_market_zone_default(self):
-        """Test that market_zone defaults to DE-LU"""
+        """Test that market_zone default 'DE' is normalized to 'DE-LU'"""
         energyforecast = Energyforecast(self.timezone, self.token)
-        self.assertEqual(energyforecast.market_zone, 'DE')
+        self.assertEqual(energyforecast.market_zone, 'DE-LU')
+
+    def test_market_zone_aliases(self):
+        """Test that DE and LU are both normalized to DE-LU"""
+        ef_de = Energyforecast(self.timezone, self.token, market_zone='DE')
+        self.assertEqual(ef_de.market_zone, 'DE-LU')
+
+        ef_lu = Energyforecast(self.timezone, self.token, market_zone='LU')
+        self.assertEqual(ef_lu.market_zone, 'DE-LU')
+
+        ef_delu = Energyforecast(self.timezone, self.token, market_zone='DE-LU')
+        self.assertEqual(ef_delu.market_zone, 'DE-LU')
 
     def test_market_zone_custom(self):
         """Test that custom market_zone is passed to the API request"""
