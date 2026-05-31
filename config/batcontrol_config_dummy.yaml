@@ -129,6 +129,7 @@ utility:
   # tariff_zone_3: 0.2100 # optional third zone price
   # zone_3_hours: 17-20 # optional hours for zone 3 (must not overlap with zone 1 or 2)
   # apikey: YOUR_API_KEY # MANDATORY for energyforecast and tibber. Uncomment and set if using those providers.
+  # market_zone: DE # optional for energyforecast: DE/LU (both map to DE-LU, default), AT, FR, NL, BE, PL, DK1, DK2
 
 #--------------------------
 #  Dynamic Network Fees (para. 14a EnWG)

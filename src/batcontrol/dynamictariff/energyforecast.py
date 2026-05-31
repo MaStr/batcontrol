@@ -11,7 +11,7 @@ Methods:
     __init__(self,
                 timezone,
                 token,
-                market_zone='DE-LU',
+                market_zone='DE',
                 min_time_between_API_calls=0):
 
         Initializes the Energyforecast class with the specified parameters.
@@ -44,7 +44,8 @@ class Energyforecast(DynamicTariffBaseclass):
         API v2 delivers complete calendar days (plan-dependent horizon).
         Data is always quarter-hourly; no resolution parameter is needed.
 
-        Supported market zones: DE-LU (default), AT, FR, NL, BE, PL, DK1, DK2
+        Supported market zones: DE (default, normalized to DE-LU), LU (normalized to DE-LU),
+        AT, FR, NL, BE, PL, DK1, DK2
     """
 
     def __init__(self, timezone, token, min_time_between_API_calls=0,
