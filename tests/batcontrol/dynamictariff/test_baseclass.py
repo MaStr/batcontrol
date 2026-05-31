@@ -332,24 +332,23 @@ class TestEnergyforecastProvider:
         return pytz.timezone('Europe/Berlin')
 
     def test_energyforecast_initialization_hourly(self, timezone):
-        """Test Energyforecast provider initialization with hourly"""
+        """Test Energyforecast provider initialization with hourly target resolution"""
         from batcontrol.dynamictariff.energyforecast import Energyforecast
 
         provider = Energyforecast(timezone, 'test_token', 900, 0,
                                   target_resolution=60)
-        assert provider.native_resolution == 60
+        # API v2 always delivers quarter-hourly; native_resolution is always 15
+        assert provider.native_resolution == 15
         assert provider.target_resolution == 60
-        assert provider.api_resolution == "hourly"
 
     def test_energyforecast_initialization_15min(self, timezone):
-        """Test Energyforecast provider initialization with 15-min"""
+        """Test Energyforecast provider initialization with 15-min target resolution"""
         from batcontrol.dynamictariff.energyforecast import Energyforecast
 
         provider = Energyforecast(timezone, 'test_token', 900, 0,
                                   target_resolution=15)
         assert provider.native_resolution == 15
         assert provider.target_resolution == 15
-        assert provider.api_resolution == "quarter_hourly"
 
 
 class TestDynamicTariffFactory:
