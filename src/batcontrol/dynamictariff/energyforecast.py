@@ -33,6 +33,9 @@ logger = logging.getLogger(__name__)
 # 6 daily calls cover the full day with headroom for the forced 12:30 UTC fetch.
 _PROVIDER_MIN_INTERVAL = 4 * 60 * 60  # 14400 s
 
+# Convenience aliases: DE and LU are both served by the DE-LU market zone.
+_MARKET_ZONE_ALIASES = {'DE': 'DE-LU', 'LU': 'DE-LU'}
+
 
 class Energyforecast(DynamicTariffBaseclass):
     """ Implement energyforecast.de API v2 to get dynamic electricity prices
@@ -61,7 +64,7 @@ class Energyforecast(DynamicTariffBaseclass):
         )
         self.url = 'https://www.energyforecast.de/api/v2/forecast'
         self.token = token
-        self.market_zone = market_zone
+        self.market_zone = _MARKET_ZONE_ALIASES.get(market_zone, market_zone)
         self.vat = 0
         self.price_fees = 0
         self.price_markup = 0
