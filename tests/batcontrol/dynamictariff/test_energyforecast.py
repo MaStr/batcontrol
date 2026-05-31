@@ -253,12 +253,15 @@ class TestEnergyforecast(unittest.TestCase):
         self.assertEqual(energyforecast.market_zone, 'DE-LU')
 
     def test_market_zone_aliases(self):
-        """Test that DE and LU are both normalized to DE-LU"""
+        """Test that DE and LU (and lowercase variants) are normalized to DE-LU"""
         ef_de = Energyforecast(self.timezone, self.token, market_zone='DE')
         self.assertEqual(ef_de.market_zone, 'DE-LU')
 
         ef_lu = Energyforecast(self.timezone, self.token, market_zone='LU')
         self.assertEqual(ef_lu.market_zone, 'DE-LU')
+
+        ef_lower = Energyforecast(self.timezone, self.token, market_zone='de')
+        self.assertEqual(ef_lower.market_zone, 'DE-LU')
 
         ef_delu = Energyforecast(self.timezone, self.token, market_zone='DE-LU')
         self.assertEqual(ef_delu.market_zone, 'DE-LU')
@@ -276,9 +279,7 @@ class TestEnergyforecast(unittest.TestCase):
 
             energyforecast.get_raw_data_from_provider()
 
-            call_kwargs = mock_get.call_args
-            params = call_kwargs[1]['params'] if 'params' in call_kwargs[1] else call_kwargs[0][1]
-            self.assertEqual(params['market_zone'], 'AT')
+            self.assertEqual(mock_get.call_args.kwargs['params']['market_zone'], 'AT')
 
     def test_refresh_interval_floor(self):
         """Test that refresh interval is at least 4 hours"""
