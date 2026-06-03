@@ -149,6 +149,9 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
         # Shift indices to start from CURRENT interval
         current_aligned_forecast = self._shift_to_current_interval(converted_forecast)
 
+        # Pad with zeros to midnight so the forecast horizon always reaches end-of-day
+        current_aligned_forecast = self._pad_to_midnight(current_aligned_forecast)
+
         # Validate minimum forecast length
         if self.target_resolution == 60:
             min_intervals = 12  # 12 hours
@@ -226,6 +229,61 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
                 shifted_forecast[new_idx] = value
 
         return shifted_forecast
+
+    def _pad_to_midnight(self, forecast: dict[int, float]) -> dict[int, float]:
+        """
+        Ensure the forecast reaches end-of-day by appending zero-valued intervals
+        up to the midnight that follows the last provided entry.
+
+        Providers often stop at sunset (e.g. today 21:00 or tomorrow 21:00).
+        Without padding the forecast horizon is a few hours shorter than the
+        last calendar day covered, which limits how far ahead batcontrol can plan.
+        """
+        if not forecast:
+            return forecast
+
+        now = datetime.datetime.now(datetime.timezone.utc).astimezone(self.timezone)
+        # Snap to the start of the current interval (index 0 in the shifted forecast).
+        interval_start = now.replace(
+            minute=(now.minute // self.target_resolution) * self.target_resolution,
+            second=0,
+            microsecond=0,
+        )
+
+        max_idx = max(forecast.keys())
+
+        # Local datetime of the last forecast interval. normalize() re-resolves the
+        # pytz offset so adding a timedelta across a DST boundary stays correct.
+        last_dt = self.timezone.normalize(
+            interval_start + datetime.timedelta(minutes=max_idx * self.target_resolution)
+        )
+
+        # Midnight following the last interval, built from a naive wall-clock date and
+        # localized so the correct (DST-aware) offset is chosen for that day.
+        naive_next_midnight = last_dt.replace(
+            tzinfo=None, hour=0, minute=0, second=0, microsecond=0
+        ) + datetime.timedelta(days=1)
+        next_midnight = self.timezone.localize(naive_next_midnight)
+
+        # Number of intervals from index 0 (interval_start) to next_midnight.
+        seconds_to_midnight = (next_midnight - interval_start).total_seconds()
+        intervals_to_midnight = int(seconds_to_midnight // (self.target_resolution * 60))
+
+        if max_idx >= intervals_to_midnight - 1:
+            return forecast
+
+        padded = dict(forecast)
+        for idx in range(max_idx + 1, intervals_to_midnight):
+            padded[idx] = 0.0
+
+        logger.debug(
+            '%s: Padded forecast from index %d to %d (%s midnight) with zeros',
+            self.__class__.__name__,
+            max_idx + 1,
+            intervals_to_midnight - 1,
+            next_midnight.strftime('%Y-%m-%d'),
+        )
+        return padded
 
     def get_raw_data_from_provider(self, pvinstallation_name) -> dict:
         """ Prototype for get_raw_data_from_provider and store in cache """
