@@ -149,6 +149,9 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
         # Shift indices to start from CURRENT interval
         current_aligned_forecast = self._shift_to_current_interval(converted_forecast)
 
+        # Pad with zeros to midnight so the forecast horizon always reaches end-of-day
+        current_aligned_forecast = self._pad_to_midnight(current_aligned_forecast)
+
         # Validate minimum forecast length
         if self.target_resolution == 60:
             min_intervals = 12  # 12 hours
@@ -226,6 +229,39 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
                 shifted_forecast[new_idx] = value
 
         return shifted_forecast
+
+    def _pad_to_midnight(self, forecast: dict[int, float]) -> dict[int, float]:
+        """
+        Ensure the forecast reaches the end of the current day by appending zero-valued
+        intervals from the last provided index up to (but not crossing) midnight.
+
+        Providers often stop at sunset, leaving late-evening hours missing. Without this
+        padding the forecast horizon shrinks relative to midnight, which limits how far
+        ahead batcontrol can plan.
+        """
+        if not forecast:
+            return forecast
+
+        now = datetime.datetime.now(datetime.timezone.utc).astimezone(self.timezone)
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
+        seconds_to_midnight = (midnight - now).total_seconds()
+        intervals_to_midnight = int(seconds_to_midnight // (self.target_resolution * 60))
+
+        max_idx = max(forecast.keys())
+        if max_idx >= intervals_to_midnight - 1:
+            return forecast
+
+        padded = dict(forecast)
+        for idx in range(max_idx + 1, intervals_to_midnight):
+            padded[idx] = 0.0
+
+        logger.debug(
+            '%s: Padded forecast from index %d to %d (midnight) with zeros',
+            self.__class__.__name__,
+            max_idx + 1,
+            intervals_to_midnight - 1,
+        )
+        return padded
 
     def get_raw_data_from_provider(self, pvinstallation_name) -> dict:
         """ Prototype for get_raw_data_from_provider and store in cache """

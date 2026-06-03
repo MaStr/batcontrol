@@ -306,15 +306,18 @@ class TestFullGetForecastIntegration:
             target_resolution=60, native_resolution=60
         )
 
-        # Set insufficient data (less than 18 hours)
+        # Set insufficient data (less than 12 hours).
+        # Clock is fixed at 22:00 so midnight is only 2 hours away; padding cannot
+        # extend the 10-interval forecast to the required 12 hours.
         hourly_data = {i: 1000 for i in range(10)}
         provider.set_mock_data(hourly_data)
 
-        mock_time = datetime.datetime(2024, 1, 1, 10, 0, 0, tzinfo=timezone)
+        mock_time = datetime.datetime(2024, 1, 1, 22, 0, 0, tzinfo=timezone)
 
         with patch('datetime.datetime') as mock_datetime:
             mock_datetime.now.return_value = mock_time
             mock_datetime.timezone = datetime.timezone
+            mock_datetime.timedelta = datetime.timedelta
 
             with patch.object(provider, 'refresh_data'):
                 with pytest.raises(RuntimeError, match="Less than 12 hours"):
@@ -327,15 +330,18 @@ class TestFullGetForecastIntegration:
             target_resolution=15, native_resolution=15
         )
 
-        # Set insufficient data (less than 48 intervals = 12 hours)
+        # Set insufficient data (less than 48 intervals = 12 hours).
+        # Clock is fixed at 22:00 so midnight is only 8 intervals (2 h) away;
+        # padding cannot extend the 40-interval forecast to the required 48 intervals.
         data_15min = {i: 250 for i in range(40)}
         provider.set_mock_data(data_15min)
 
-        mock_time = datetime.datetime(2024, 1, 1, 10, 0, 0, tzinfo=timezone)
+        mock_time = datetime.datetime(2024, 1, 1, 22, 0, 0, tzinfo=timezone)
 
         with patch('datetime.datetime') as mock_datetime:
             mock_datetime.now.return_value = mock_time
             mock_datetime.timezone = datetime.timezone
+            mock_datetime.timedelta = datetime.timedelta
 
             with patch.object(provider, 'refresh_data'):
                 with pytest.raises(RuntimeError, match="Less than 12 hours"):

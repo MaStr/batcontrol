@@ -323,7 +323,15 @@ class TestForecastSolarBaseclass:
         assert forecast[18] == 180.0
 
     def test_get_forecast_insufficient_hours(self, single_installation, timezone):
-        """Test get_forecast raises error with insufficient forecast hours"""
+        """Test get_forecast raises error with insufficient forecast hours.
+
+        We fix the clock to 22:00 so that midnight is only 2 hours away.
+        The provider returns 10 hours of data but padding only reaches midnight
+        (2 intervals), leaving the total at 10 intervals which is still below 12.
+        """
+        import datetime as dt
+
+        fixed_now = dt.datetime(2024, 6, 1, 22, 0, 0, tzinfo=timezone)
 
         def mock_provider(name):
             return {'data': 'test'}
@@ -341,8 +349,12 @@ class TestForecastSolarBaseclass:
             mock_forecast_func=mock_forecast
         )
 
-        with pytest.raises(RuntimeError, match="Less than 12 hours"):
-            instance.get_forecast()
+        with patch('batcontrol.forecastsolar.baseclass.datetime') as mock_dt:
+            mock_dt.datetime.now.return_value = fixed_now
+            mock_dt.timedelta = dt.timedelta
+            mock_dt.timezone = dt.timezone
+            with pytest.raises(RuntimeError, match="Less than 12 hours"):
+                instance.get_forecast()
 
     def test_base_class_not_implemented_errors(self, single_installation, timezone):
         """Test that base class methods raise NotImplementedError"""
