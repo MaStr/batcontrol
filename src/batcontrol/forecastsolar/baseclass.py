@@ -252,11 +252,18 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
 
         max_idx = max(forecast.keys())
 
-        # Compute the local datetime of the last forecast interval.
-        last_dt = interval_start + datetime.timedelta(minutes=max_idx * self.target_resolution)
+        # Local datetime of the last forecast interval. normalize() re-resolves the
+        # pytz offset so adding a timedelta across a DST boundary stays correct.
+        last_dt = self.timezone.normalize(
+            interval_start + datetime.timedelta(minutes=max_idx * self.target_resolution)
+        )
 
-        # Find the midnight that immediately follows the last interval.
-        next_midnight = last_dt.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
+        # Midnight following the last interval, built from a naive wall-clock date and
+        # localized so the correct (DST-aware) offset is chosen for that day.
+        naive_next_midnight = last_dt.replace(
+            tzinfo=None, hour=0, minute=0, second=0, microsecond=0
+        ) + datetime.timedelta(days=1)
+        next_midnight = self.timezone.localize(naive_next_midnight)
 
         # Number of intervals from index 0 (interval_start) to next_midnight.
         seconds_to_midnight = (next_midnight - interval_start).total_seconds()

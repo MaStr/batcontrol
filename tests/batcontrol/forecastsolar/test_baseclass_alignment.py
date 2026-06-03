@@ -316,7 +316,7 @@ class TestFullGetForecastIntegration:
         hourly_data = {i: 1000 for i in range(2)}
         provider.set_mock_data(hourly_data)
 
-        mock_time = datetime.datetime(2024, 1, 1, 22, 0, 0, tzinfo=timezone)
+        mock_time = timezone.localize(datetime.datetime(2024, 1, 1, 22, 0, 0))
 
         with patch('datetime.datetime') as mock_datetime:
             mock_datetime.now.return_value = mock_time
@@ -341,7 +341,7 @@ class TestFullGetForecastIntegration:
         data_15min = {i: 250 for i in range(7)}
         provider.set_mock_data(data_15min)
 
-        mock_time = datetime.datetime(2024, 1, 1, 22, 0, 0, tzinfo=timezone)
+        mock_time = timezone.localize(datetime.datetime(2024, 1, 1, 22, 0, 0))
 
         with patch('datetime.datetime') as mock_datetime:
             mock_datetime.now.return_value = mock_time

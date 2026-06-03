@@ -336,13 +336,13 @@ class TestForecastSolarBaseclass:
         """
         import datetime as dt
 
-        fixed_now = dt.datetime(2024, 6, 1, 22, 0, 0, tzinfo=timezone)
+        fixed_now = timezone.localize(dt.datetime(2024, 6, 1, 22, 0, 0))
 
         def mock_provider(name):
             return {'data': 'test'}
 
         def mock_forecast():
-            # Only 2 hours of data — stays below 12 even after padding to midnight
+            # Only 2 hours of data - stays below 12 even after padding to midnight
             return {i: float(i * 10) for i in range(2)}
 
         instance = ConcreteForecastSolar(
@@ -360,6 +360,61 @@ class TestForecastSolarBaseclass:
             mock_dt.timezone = dt.timezone
             with pytest.raises(RuntimeError, match="Less than 12 hours"):
                 instance.get_forecast()
+
+    def test_pad_to_midnight_dst_spring_forward(self, single_installation, timezone):
+        """_pad_to_midnight must count a 23-hour day correctly (spring forward).
+
+        On 2024-03-31 Europe/Berlin loses an hour at 02:00 (CET -> CEST), so the
+        day has only 23 hourly intervals. A naive interval_start + timedelta would
+        keep the CET offset and yield 24; normalize/localize must give 23.
+        """
+        import datetime as dt
+
+        instance = ConcreteForecastSolar(
+            single_installation, timezone,
+            min_time_between_API_calls=900, delay_evaluation_by_seconds=0,
+        )
+
+        # Start of the DST day, before the 02:00 jump.
+        fixed_now = timezone.localize(dt.datetime(2024, 3, 31, 0, 0, 0))
+
+        with patch('batcontrol.forecastsolar.baseclass.datetime') as mock_dt:
+            mock_dt.datetime.now.return_value = fixed_now
+            mock_dt.timedelta = dt.timedelta
+            mock_dt.timezone = dt.timezone
+            result = instance._pad_to_midnight({0: 100.0})
+
+        # 00:00 to next midnight on a 23-hour day = 23 hourly intervals (0..22).
+        assert len(result) == 23
+        assert result[0] == 100.0
+        assert result[22] == 0.0
+
+    def test_pad_to_midnight_dst_fall_back(self, single_installation, timezone):
+        """_pad_to_midnight must count a 25-hour day correctly (fall back).
+
+        On 2024-10-27 Europe/Berlin gains an hour at 03:00 (CEST -> CET), so the
+        day has 25 hourly intervals. Naive arithmetic would yield 24; the
+        normalize/localize path must give 25.
+        """
+        import datetime as dt
+
+        instance = ConcreteForecastSolar(
+            single_installation, timezone,
+            min_time_between_API_calls=900, delay_evaluation_by_seconds=0,
+        )
+
+        fixed_now = timezone.localize(dt.datetime(2024, 10, 27, 0, 0, 0))
+
+        with patch('batcontrol.forecastsolar.baseclass.datetime') as mock_dt:
+            mock_dt.datetime.now.return_value = fixed_now
+            mock_dt.timedelta = dt.timedelta
+            mock_dt.timezone = dt.timezone
+            result = instance._pad_to_midnight({0: 100.0})
+
+        # 00:00 to next midnight on a 25-hour day = 25 hourly intervals (0..24).
+        assert len(result) == 25
+        assert result[0] == 100.0
+        assert result[24] == 0.0
 
     def test_base_class_not_implemented_errors(self, single_installation, timezone):
         """Test that base class methods raise NotImplementedError"""
