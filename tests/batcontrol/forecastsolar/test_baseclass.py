@@ -318,16 +318,21 @@ class TestForecastSolarBaseclass:
         )
 
         forecast = instance.get_forecast()
-        assert len(forecast) == 24
+        # Original 24 entries must be intact; _pad_to_midnight may add trailing zeros
+        # up to the midnight following the last entry, so total length >= 24.
+        assert len(forecast) >= 24
         assert forecast[0] == 0.0
         assert forecast[18] == 180.0
+        # Any padding must be zero
+        for idx in range(24, len(forecast)):
+            assert forecast[idx] == 0.0
 
     def test_get_forecast_insufficient_hours(self, single_installation, timezone):
         """Test get_forecast raises error with insufficient forecast hours.
 
-        We fix the clock to 22:00. The 10-interval hourly forecast already extends
-        past midnight, so _pad_to_midnight() adds nothing. The 10-interval total
-        still falls below the 12-interval minimum and RuntimeError is raised.
+        Clock is fixed at 22:00. The provider returns only 2 intervals (22:00
+        and 23:00). _pad_to_midnight() fills to midnight (2 intervals total),
+        which is still below the 12-interval minimum, so RuntimeError is raised.
         """
         import datetime as dt
 
@@ -337,8 +342,8 @@ class TestForecastSolarBaseclass:
             return {'data': 'test'}
 
         def mock_forecast():
-            # Only 10 hours of data
-            return {i: float(i * 10) for i in range(10)}
+            # Only 2 hours of data — stays below 12 even after padding to midnight
+            return {i: float(i * 10) for i in range(2)}
 
         instance = ConcreteForecastSolar(
             single_installation,

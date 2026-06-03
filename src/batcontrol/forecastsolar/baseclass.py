@@ -232,29 +232,36 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
 
     def _pad_to_midnight(self, forecast: dict[int, float]) -> dict[int, float]:
         """
-        Ensure the forecast reaches the end of the current day by appending zero-valued
-        intervals from the last provided index up to (but not crossing) midnight.
+        Ensure the forecast reaches end-of-day by appending zero-valued intervals
+        up to the midnight that follows the last provided entry.
 
-        Providers often stop at sunset, leaving late-evening hours missing. Without this
-        padding the forecast horizon shrinks relative to midnight, which limits how far
-        ahead batcontrol can plan.
+        Providers often stop at sunset (e.g. today 21:00 or tomorrow 21:00).
+        Without padding the forecast horizon is a few hours shorter than the
+        last calendar day covered, which limits how far ahead batcontrol can plan.
         """
         if not forecast:
             return forecast
 
         now = datetime.datetime.now(datetime.timezone.utc).astimezone(self.timezone)
-        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
-        # Snap back to the start of the current interval so the count matches the
-        # shifted forecast indices (index 0 = current interval start, not "now").
+        # Snap to the start of the current interval (index 0 in the shifted forecast).
         interval_start = now.replace(
             minute=(now.minute // self.target_resolution) * self.target_resolution,
             second=0,
             microsecond=0,
         )
-        seconds_to_midnight = (midnight - interval_start).total_seconds()
-        intervals_to_midnight = int(seconds_to_midnight // (self.target_resolution * 60))
 
         max_idx = max(forecast.keys())
+
+        # Compute the local datetime of the last forecast interval.
+        last_dt = interval_start + datetime.timedelta(minutes=max_idx * self.target_resolution)
+
+        # Find the midnight that immediately follows the last interval.
+        next_midnight = last_dt.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
+
+        # Number of intervals from index 0 (interval_start) to next_midnight.
+        seconds_to_midnight = (next_midnight - interval_start).total_seconds()
+        intervals_to_midnight = int(seconds_to_midnight // (self.target_resolution * 60))
+
         if max_idx >= intervals_to_midnight - 1:
             return forecast
 
@@ -263,10 +270,11 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
             padded[idx] = 0.0
 
         logger.debug(
-            '%s: Padded forecast from index %d to %d (midnight) with zeros',
+            '%s: Padded forecast from index %d to %d (%s midnight) with zeros',
             self.__class__.__name__,
             max_idx + 1,
             intervals_to_midnight - 1,
+            next_midnight.strftime('%Y-%m-%d'),
         )
         return padded
 

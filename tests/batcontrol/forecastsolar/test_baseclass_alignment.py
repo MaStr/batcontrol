@@ -267,9 +267,12 @@ class TestFullGetForecastIntegration:
             with patch.object(provider, 'refresh_data'):
                 result = provider.get_forecast()
 
-        # Should return data without modification (at hour start)
-        assert len(result) == 24
+        # Original 24 entries intact; _pad_to_midnight may append trailing zeros
+        # up to the midnight following the last entry.
+        assert len(result) >= 24
         assert result[0] == 1000
+        for idx in range(24, len(result)):
+            assert result[idx] == 0.0
 
     def test_hourly_provider_15min_target(self, pvinstallations, timezone):
         """Test hourly provider with 15-min target (upsampling)."""
@@ -307,10 +310,10 @@ class TestFullGetForecastIntegration:
         )
 
         # Set insufficient data (less than 12 hours).
-        # Clock is fixed at 22:00. The 10-interval hourly forecast already extends
-        # past midnight, so _pad_to_midnight() adds nothing. The 10-interval total
-        # still falls below the 12-interval minimum and RuntimeError is raised.
-        hourly_data = {i: 1000 for i in range(10)}
+        # Clock is fixed at 22:00. 2 intervals (22:00 and 23:00) end before midnight;
+        # _pad_to_midnight() fills index 2 up to midnight (total 2 intervals). That
+        # is still below the 12-interval minimum, so RuntimeError is raised.
+        hourly_data = {i: 1000 for i in range(2)}
         provider.set_mock_data(hourly_data)
 
         mock_time = datetime.datetime(2024, 1, 1, 22, 0, 0, tzinfo=timezone)
@@ -332,10 +335,10 @@ class TestFullGetForecastIntegration:
         )
 
         # Set insufficient data (less than 48 intervals = 12 hours).
-        # Clock is fixed at 22:00. The 40-interval 15-min forecast already extends
-        # past midnight, so _pad_to_midnight() adds nothing. The 40-interval total
-        # still falls below the 48-interval minimum and RuntimeError is raised.
-        data_15min = {i: 250 for i in range(40)}
+        # Clock is fixed at 22:00. 7 intervals (22:00..23:30) end before midnight;
+        # _pad_to_midnight() fills to midnight (total 8 intervals = 2 h). That is
+        # still below the 48-interval minimum, so RuntimeError is raised.
+        data_15min = {i: 250 for i in range(7)}
         provider.set_mock_data(data_15min)
 
         mock_time = datetime.datetime(2024, 1, 1, 22, 0, 0, tzinfo=timezone)
