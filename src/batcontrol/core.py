@@ -930,12 +930,25 @@ class Batcontrol:
             free_capacity: float) -> float:
         """Compute expected battery surplus at the start of the next production window.
 
-        Returns the energy (Wh) that will remain in the battery (above MIN_SOC) after
-        the overnight discharge period between the end of today's solar production and
-        the start of tomorrow's. A positive value means the battery will not be fully
-        depleted and the surplus could be used for flexible loads before dawn.
+        Answers the question: after tonight's discharge, how much charge will remain
+        in the battery when tomorrow's solar production starts?
 
-        Returns 0.0 if no solar production window exists in the forecast.
+        The calculation intentionally projects through the entire first production
+        window (including any solar charging) to obtain the battery level at production
+        end. From there it subtracts overnight consumption to arrive at the battery
+        level at the next morning's production start:
+
+            battery_at_production_end - night_consumption
+
+        When solar is currently inactive (e.g. early morning), this means net_delta
+        covers the bridge discharge AND the upcoming solar charging. This is deliberate:
+        stopping at production_start would give the battery level at dawn of today, not
+        at dusk — which is the wrong baseline for the overnight calculation.
+
+        If no second production window exists within the forecast horizon,
+        night_consumption covers the remaining forecast slots (best available proxy).
+
+        Returns 0.0 if no solar production window exists in the forecast at all.
         """
         net_consumption = consumption - production
 
