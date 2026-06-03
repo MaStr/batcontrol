@@ -688,6 +688,11 @@ class Batcontrol:
             )
             self.mqtt_api.publish_solar_active(solar_active)
             self.mqtt_api.publish_solar_surplus(surplus_wh)
+            night_surplus_wh = self._compute_night_surplus(
+                production, consumption,
+                calc_input.stored_usable_energy, calc_input.free_capacity
+            )
+            self.mqtt_api.publish_night_surplus(night_surplus_wh)
 
         if self.discharge_blocked and not \
                 self.general_logic.is_discharge_always_allowed_soc(self.get_SOC()):
@@ -916,6 +921,65 @@ class Batcontrol:
             solar_active, surplus_wh, free_capacity
         )
         return solar_active, surplus_wh
+
+    def _compute_night_surplus(
+            self,
+            production: np.ndarray,
+            consumption: np.ndarray,
+            stored_usable_energy: float,
+            free_capacity: float) -> float:
+        """Compute expected battery surplus at the start of the next production window.
+
+        Returns the energy (Wh) that will remain in the battery (above MIN_SOC) after
+        the overnight discharge period between the end of today's solar production and
+        the start of tomorrow's. A positive value means the battery will not be fully
+        depleted and the surplus could be used for flexible loads before dawn.
+
+        Returns 0.0 if no solar production window exists in the forecast.
+        """
+        net_consumption = consumption - production
+
+        # Find start and end of the first production window
+        production_start: Optional[int] = None
+        production_end: Optional[int] = None
+        for i, p in enumerate(production):
+            if p > 0:
+                if production_start is None:
+                    production_start = i
+                production_end = i
+            elif production_start is not None:
+                break
+
+        if production_start is None:
+            return 0.0
+
+        end_idx = production_end + 1  # type: ignore[operator]
+
+        # Project battery level at end of first production window (clamped to [0, max])
+        net_delta = float(-np.sum(net_consumption[0:end_idx]))
+        battery_at_end = stored_usable_energy + min(
+            free_capacity, max(-stored_usable_energy, net_delta)
+        )
+
+        # Find the start of the next (second) production window after the night gap
+        next_production_start: Optional[int] = None
+        for i in range(end_idx, len(production)):
+            if production[i] > 0:
+                next_production_start = i
+                break
+        night_end = next_production_start if next_production_start is not None \
+            else len(production)
+
+        night_consumption_wh = max(0.0, float(np.sum(net_consumption[end_idx:night_end])))
+
+        night_surplus_wh = max(0.0, battery_at_end - night_consumption_wh)
+
+        logger.debug(
+            'Night surplus: %.1f Wh (battery_at_production_end=%.1f Wh,'
+            ' night_consumption=%.1f Wh, night_slots=%d)',
+            night_surplus_wh, battery_at_end, night_consumption_wh, night_end - end_idx
+        )
+        return night_surplus_wh
 
     def set_stored_energy(self, stored_energy) -> None:
         """ Set the stored energy in Wh """

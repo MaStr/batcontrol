@@ -28,6 +28,7 @@ The following topics are published:
 - /control_source: source that last selected the current control state (api or optimizer)
 - /solar_surplus_wh: expected solar surplus energy in Wh (>0 means usable surplus available)
 - /solar_active: bool indicating whether solar is currently producing (slot 0 > 0)
+- /night_surplus_wh: expected battery surplus in Wh at start of next production window (>0 means leftover charge after overnight discharge)
 
 The following statistical arrays are published as JSON arrays:
 - /FCST/production: forecasted production in W
@@ -498,6 +499,18 @@ class MqttApi:
                 f'{surplus_wh:.1f}'
             )
 
+    def publish_night_surplus(self, surplus_wh: float) -> None:
+        """ Publish the expected battery surplus at the start of the next production window.
+            /night_surplus_wh
+            Positive values mean the battery will still hold charge (above MIN_SOC)
+            when solar production resumes the next morning.
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/night_surplus_wh',
+                f'{surplus_wh:.1f}'
+            )
+
     def publish_solar_active(self, active: bool) -> None:
         """ Publish whether solar is currently producing.
             /solar_active
@@ -907,6 +920,14 @@ class MqttApi:
             "energy",
             "Wh",
             self.base_topic + "/solar_surplus_wh")
+
+        self.publish_mqtt_discovery_message(
+            "Night Surplus",
+            "batcontrol_night_surplus_wh",
+            "sensor",
+            "energy",
+            "Wh",
+            self.base_topic + "/night_surplus_wh")
 
         self.publish_mqtt_discovery_message(
             "Solar Active",
