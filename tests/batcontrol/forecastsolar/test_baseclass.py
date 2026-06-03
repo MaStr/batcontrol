@@ -325,9 +325,9 @@ class TestForecastSolarBaseclass:
     def test_get_forecast_insufficient_hours(self, single_installation, timezone):
         """Test get_forecast raises error with insufficient forecast hours.
 
-        We fix the clock to 22:00 so that midnight is only 2 hours away.
-        The provider returns 10 hours of data but padding only reaches midnight
-        (2 intervals), leaving the total at 10 intervals which is still below 12.
+        We fix the clock to 22:00. The 10-interval hourly forecast already extends
+        past midnight, so _pad_to_midnight() adds nothing. The 10-interval total
+        still falls below the 12-interval minimum and RuntimeError is raised.
         """
         import datetime as dt
 

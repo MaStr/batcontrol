@@ -244,7 +244,14 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
 
         now = datetime.datetime.now(datetime.timezone.utc).astimezone(self.timezone)
         midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
-        seconds_to_midnight = (midnight - now).total_seconds()
+        # Snap back to the start of the current interval so the count matches the
+        # shifted forecast indices (index 0 = current interval start, not "now").
+        interval_start = now.replace(
+            minute=(now.minute // self.target_resolution) * self.target_resolution,
+            second=0,
+            microsecond=0,
+        )
+        seconds_to_midnight = (midnight - interval_start).total_seconds()
         intervals_to_midnight = int(seconds_to_midnight // (self.target_resolution * 60))
 
         max_idx = max(forecast.keys())

@@ -307,8 +307,9 @@ class TestFullGetForecastIntegration:
         )
 
         # Set insufficient data (less than 12 hours).
-        # Clock is fixed at 22:00 so midnight is only 2 hours away; padding cannot
-        # extend the 10-interval forecast to the required 12 hours.
+        # Clock is fixed at 22:00. The 10-interval hourly forecast already extends
+        # past midnight, so _pad_to_midnight() adds nothing. The 10-interval total
+        # still falls below the 12-interval minimum and RuntimeError is raised.
         hourly_data = {i: 1000 for i in range(10)}
         provider.set_mock_data(hourly_data)
 
@@ -331,8 +332,9 @@ class TestFullGetForecastIntegration:
         )
 
         # Set insufficient data (less than 48 intervals = 12 hours).
-        # Clock is fixed at 22:00 so midnight is only 8 intervals (2 h) away;
-        # padding cannot extend the 40-interval forecast to the required 48 intervals.
+        # Clock is fixed at 22:00. The 40-interval 15-min forecast already extends
+        # past midnight, so _pad_to_midnight() adds nothing. The 40-interval total
+        # still falls below the 48-interval minimum and RuntimeError is raised.
         data_15min = {i: 250 for i in range(40)}
         provider.set_mock_data(data_15min)
 
