@@ -178,7 +178,7 @@ docker run -d \
   --name batcontrol \
   -v /path/to/config:/app/config \
   -v /path/to/logs:/app/logs \
-  muexx/batcontrol:latest
+  mastr950/batcontrol:latest
 ```
 
 ### Docker-compose example
@@ -190,7 +190,7 @@ version: '3.8'
 
 services:
   batcontrol:
-    image: muexx/batcontrol:latest
+    image: mastr950/batcontrol:latest
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
@@ -211,7 +211,7 @@ docker run -d \
   -v /path/to/config:/app/config \
   -v /path/to/logs:/app/logs \
   -e TZ=Europe/Berlin \
-  muexx/batcontrol:latest
+  mastr950/batcontrol:latest
 ```
 
 #### Docker-compose example
@@ -223,7 +223,7 @@ version: '3.8'
 
 services:
   batcontrol:
-    image: muexx/batcontrol:latest
+    image: mastr950/batcontrol:latest
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
