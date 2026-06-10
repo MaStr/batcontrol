@@ -4,7 +4,7 @@ This is a Python based repository providing an application for controlling batte
 
 ### Required Before Each Commit
 
-- Only use ASCII characters in code, log messages, and documentation. Avoid non-ASCII characters to ensure compatibility and readability across different environments.
+- Only use ASCII characters in source code and log messages. Avoid non-ASCII characters to ensure compatibility and readability across different environments. This rule does not apply to documentation in `docs/`.
 - Remove excessive whitespaces.
 - Follow PEP8 standards. Use autopep8 for that.
 - Check against pylint. Target score is like 9.0-9.5, if you can achieve 10, do it.
@@ -44,5 +44,5 @@ This is a Python based repository providing an application for controlling batte
 4. Document public APIs and complex logic. Suggest changes to the `docs/` folder when appropriate
 5. Lay test scripts for verification and simple testing into the folder `scripts`.
 6. Never commit content of `tmp`.
-7. If you have new documentation for the wiki, add files to the `docs/` folder. Prefix is `WIKI_`.
+7. User documentation lives in the `docs/` folder and is published via MkDocs to https://mastr.github.io/batcontrol/ — add or update pages there and register new pages in `mkdocs.yml`.
 8. Ensure compatibility with supported Python versions (3.9 to 3.13)

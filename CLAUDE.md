@@ -28,7 +28,7 @@ src/batcontrol/
 
 ## Known Pitfalls
 
-- ASCII-only in all files — no umlauts, special chars, emoji, even in log messages.
+- ASCII-only in source code — no umlauts, special chars, emoji, even in log messages. Does not apply to documentation in `docs/`.
 - Peak shaving config is nested inside calculation parameters (not top-level).
 - `§14a EnWG` dynamic network fees live in `dynamictariff/network_fees.py`.
 - `resilient_wrapper.py` wraps inverter calls — test with the wrapper, not the raw backend.
