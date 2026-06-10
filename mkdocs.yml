@@ -62,6 +62,7 @@ nav:
       - Battery Control Expert: features/battery-control-expert.md
       - Peak Shaving: features/peak-shaving.md
       - Price Difference Calculation: features/price-difference-calculation.md
+      - Forecast Metrics: features/forecast-metrics.md
   - Integrations:
       - MQTT API: integrations/mqtt-api.md
       - MQTT Inverter: integrations/mqtt-inverter.md

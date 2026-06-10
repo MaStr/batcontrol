@@ -28,7 +28,8 @@ The following topics are published:
 - /control_source: source that last selected the current control state (api or optimizer)
 - /solar_surplus_wh: expected solar surplus energy in Wh (>0 means usable surplus available)
 - /solar_active: bool indicating whether solar is currently producing (slot 0 > 0)
-- /night_surplus_wh: expected battery surplus in Wh at start of next production window (>0 means leftover charge after overnight discharge)
+- /pv_start_battery_wh: battery level in Wh (above MIN_SOC) at the next net-charging point (when PV first exceeds consumption)
+- /forecast_min_battery_wh: minimum battery level in Wh (above MIN_SOC) over the entire forecast horizon (0 = shortage expected)
 
 The following statistical arrays are published as JSON arrays:
 - /FCST/production: forecasted production in W
@@ -499,16 +500,28 @@ class MqttApi:
                 f'{surplus_wh:.1f}'
             )
 
-    def publish_night_surplus(self, surplus_wh: float) -> None:
-        """ Publish the expected battery surplus at the start of the next production window.
-            /night_surplus_wh
-            Positive values mean the battery will still hold charge (above MIN_SOC)
-            when solar production resumes the next morning.
+    def publish_pv_start_battery(self, battery_wh: float) -> None:
+        """ Publish the battery level at the next net-charging point.
+            /pv_start_battery_wh
+            Energy in Wh above MIN_SOC at the moment PV production first exceeds
+            household consumption. 0 if battery hits MIN_SOC before that point.
         """
         if self.client.is_connected():
             self.client.publish(
-                self.base_topic + '/night_surplus_wh',
-                f'{surplus_wh:.1f}'
+                self.base_topic + '/pv_start_battery_wh',
+                f'{battery_wh:.1f}'
+            )
+
+    def publish_forecast_min_battery(self, battery_wh: float) -> None:
+        """ Publish the minimum battery level over the entire forecast horizon.
+            /forecast_min_battery_wh
+            Energy in Wh above MIN_SOC at the trough of the slot-by-slot simulation.
+            0 means the battery is expected to hit MIN_SOC at some point.
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/forecast_min_battery_wh',
+                f'{battery_wh:.1f}'
             )
 
     def publish_solar_active(self, active: bool) -> None:
@@ -922,12 +935,20 @@ class MqttApi:
             self.base_topic + "/solar_surplus_wh")
 
         self.publish_mqtt_discovery_message(
-            "Night Surplus",
-            "batcontrol_night_surplus_wh",
+            "PV Start Battery",
+            "batcontrol_pv_start_battery_wh",
             "sensor",
             "energy",
             "Wh",
-            self.base_topic + "/night_surplus_wh")
+            self.base_topic + "/pv_start_battery_wh")
+
+        self.publish_mqtt_discovery_message(
+            "Forecast Min Battery",
+            "batcontrol_forecast_min_battery_wh",
+            "sensor",
+            "energy",
+            "Wh",
+            self.base_topic + "/forecast_min_battery_wh")
 
         self.publish_mqtt_discovery_message(
             "Solar Active",
@@ -938,6 +959,16 @@ class MqttApi:
             self.base_topic + "/solar_active",
             entity_category="diagnostic",
             value_template="{% if value == 'true' %}ON{% else %}OFF{% endif %}")
+
+        # TODO(0.9.1): remove this tombstone block once brokers have been cleaned up.
+        # Remove legacy retained discovery config for the renamed metric.
+        # An empty retained payload deletes the HA entity from existing brokers.
+        if self.client.is_connected():
+            self.client.publish(
+                self.auto_discover_topic +
+                '/sensor/batcontrol/batcontrol_night_surplus_wh/config',
+                '',
+                retain=True)
 
     def send_mqtt_discovery_for_mode(self) -> None:
         """ Publish Home Assistant MQTT Auto Discovery message for mode"""

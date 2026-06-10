@@ -94,10 +94,13 @@ Batcontrol publishes data to the following topic structure (assuming base topic 
 - `house/batcontrol/stored_usable_energy_capacity` - Usable energy stored in battery in Wh (considering min SOC)
 - `house/batcontrol/reserved_energy_capacity` - Energy reserved for discharge in Wh
 
-### Solar Surplus Information
+### Forecast Metrics
+See [Forecast Metrics](../features/forecast-metrics.md) for details and use cases:
+
 - `house/batcontrol/solar_surplus_wh` - Expected solar surplus energy in Wh (>0 means usable surplus available)
 - `house/batcontrol/solar_active` - Whether solar is currently producing (`true`/`false`)
-- `house/batcontrol/night_surplus_wh` - Expected battery surplus in Wh at start of next production window
+- `house/batcontrol/pv_start_battery_wh` - Battery level in Wh (above min SOC) at the next net-charging point (when PV first exceeds consumption)
+- `house/batcontrol/forecast_min_battery_wh` - Minimum battery level in Wh (above min SOC) over the entire forecast horizon (`0` = shortage expected)
 
 ### Configuration Limits
 - `house/batcontrol/always_allow_discharge_limit` - Always discharge limit (0.0-1.0)

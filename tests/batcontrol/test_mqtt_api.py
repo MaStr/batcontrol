@@ -40,6 +40,8 @@ def _make_discovery_stub():
     api.send_mqtt_discovery_messages = (
         MqttApi.send_mqtt_discovery_messages.__get__(api, MqttApi)
     )
+    api.client = MagicMock()
+    api.auto_discover_topic = 'homeassistant'
     return api
 
 
