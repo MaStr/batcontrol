@@ -31,7 +31,7 @@ If a solar forecast provider is not available, batcontrol is running on cached v
 ## Forecast.Solar (Default)
 [Forecast Solar](https://forecast.solar/) allows a limited amount of free requests with no subscription or account. 
 
-The minimum configuration block is are:
+The minimum configuration block is:
 
 ```
   - name: Haus #name
@@ -91,7 +91,7 @@ If you run multiple installations with you account or want to split up forecasts
 * item: <location|inverter|module_field>
 * token: <item token>
 
-For further details see: [API description|(https://www.solarprognose.de/web/de/solarprediction/page/api)
+For further details see: [API description](https://www.solarprognose.de/web/de/solarprediction/page/api)
 
 ## Local evcc instance
 evcc is able to collect its own PV forecast, which can be obtained via REST API. batcontrol can make use of that.
@@ -104,7 +104,7 @@ pvinstallations:
     url: http://evcc.local:7070/api/tariff/solar
 
 ```
-If evcc is running under HomeAssistant, you should you either `http://homeassistant:7070/api/tariff/grid` or `http://<homeassistant-ip>:7070/api/tariff/grid`
+If evcc is running under HomeAssistant, you should use either `http://homeassistant:7070/api/tariff/solar` or `http://<homeassistant-ip>:7070/api/tariff/solar`
 
 ## HomeAssistant Solar Forecast ML
 The [HomeAssistant Solar Forecast ML](https://zara-toorox.github.io/) integration (available via HACS) provides machine learning-based solar forecasts directly from your HomeAssistant instance. This provider requires the HACS integration to be installed first.

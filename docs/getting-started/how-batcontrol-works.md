@@ -28,18 +28,18 @@ Batcontrol runs in a continuous loop, evaluating conditions **every 3 minutes**:
 Batcontrol combines three critical forecasts to make intelligent decisions:
 
 ### 1. Electricity Price Forecast
-- **Source**: Dynamic tariff providers (Tibber, aWATTar, evcc)
+- **Source**: Dynamic tariff providers (Tibber, aWATTar, evcc, energyforecast.de, static tariff zones) — see [Dynamic Tariff Provider](../configuration/dynamic-tariff-provider.md)
 - **Data**: Hourly electricity prices for the next 24-48 hours
 - **Purpose**: Identifies when electricity is cheapest for charging
 
 ### 2. Solar Production Forecast
-- **Source**: Solar forecast APIs (Forecast.Solar, Solarprognose, evcc)
+- **Source**: Solar forecast APIs (Forecast.Solar, Solarprognose, evcc, HomeAssistant Solar Forecast ML) — see [Solar Forecast](../configuration/solar-forecast.md)
 - **Data**: Expected PV generation based on weather predictions
 - **Configuration**: Your PV system specifications (kWp, orientation, location)
 - **Purpose**: Predicts available solar energy
 
 ### 3. Consumption Forecast
-- **Source**: Load profile CSV file scaled to your annual consumption
+- **Source**: Load profile CSV file scaled to your annual consumption, or your actual historical data via the HomeAssistant API — see [Consumption Forecast](../configuration/consumption-forecast.md)
 - **Data**: Expected household energy usage patterns
 - **Purpose**: Estimates energy demand throughout the day
 
@@ -114,7 +114,7 @@ Based on the forecasts and current battery state, batcontrol puts your inverter 
 - Above this SOC, battery always discharges freely
 - Prevents over-charging and ensures availability
 
-**`max_charging_from_grid_limit`** (default: 89%)
+**`max_charging_from_grid_limit`** (default: 80%)
 - Maximum SOC for grid charging
 - Must be lower than discharge limit to prevent oscillation
 

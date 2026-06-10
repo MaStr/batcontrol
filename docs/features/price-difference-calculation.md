@@ -10,7 +10,7 @@ This feature is introduced in version 0.4.0, but defaults to `0%` (disabled).
    - Example: `€0.05`  
    - Batcontrol checks if the future price is at least `€0.05` higher than the current price.
 
-2. **Relative threshold** (`min_price_difference_relative`)  
+2. **Relative threshold** (`min_price_difference_rel`)  
    - Example: `0.10` (i.e., 10% of the current price)  
    - Batcontrol multiplies the current price by `0.10`.  
    - If `current_price = €0.50`, the difference is `€0.05`.  

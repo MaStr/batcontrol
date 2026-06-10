@@ -254,7 +254,7 @@ Discovered entities include:
 
 ### Custom Topic Structure
 
-By default, the MQTT inverter uses the topic structure `<mqtt.base_topic>/inverter/<inverter_num>`. You can override this:
+By default, the MQTT inverter uses the topic structure `<mqtt.base_topic>/inverters/<inverter_num>`. You can override this:
 
 ```yaml
 inverter:
