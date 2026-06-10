@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Standalone test script for the EVCC dynamic tariff module.
+Standalone test script for the evcc dynamic tariff module.
 
-This script allows you to test the EVCC API integration by providing a URL
+This script allows you to test the evcc API integration by providing a URL
 and seeing the fetched dynamic pricing data.
 
 Usage:
@@ -28,7 +28,7 @@ from batcontrol.dynamictariff.evcc import Evcc
 
 
 def main():
-    """Test the EVCC dynamic tariff functionality"""
+    """Test the evcc dynamic tariff functionality"""
     if len(sys.argv) != 2:
         print("Usage: python scripts/test_evcc.py <url>")
         print("Example: python scripts/test_evcc.py http://evcc.lan")
@@ -36,12 +36,12 @@ def main():
         sys.exit(1)
 
     url = sys.argv[1]
-    print(f"Testing EVCC API at: {url}")
+    print(f"Testing evcc API at: {url}")
     print("=" * 50)
     
     try:
-        # Initialize EVCC with Europe/Berlin timezone
-        print("Initializing EVCC client...")
+        # Initialize evcc with Europe/Berlin timezone
+        print("Initializing evcc client...")
         evcc = Evcc(pytz.timezone('Europe/Berlin'), url)
         
         # Fetch raw data first

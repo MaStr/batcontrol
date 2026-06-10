@@ -15,7 +15,7 @@ The `scripts` folder is separate from the `tests` folder to avoid interference w
 
 ### test_evcc.py
 
-Standalone test script for the EVCC dynamic tariff module.
+Standalone test script for the evcc dynamic tariff module.
 
 **Usage:**
 ```bash
@@ -27,7 +27,7 @@ python scripts/test_evcc.py http://evcc.local/api/tariff/grid
 ```
 
 **Features:**
-- Tests the EVCC API integration
+- Tests the evcc API integration
 - Shows both raw API data and processed prices
 - Provides detailed error information for debugging
 - Displays hourly prices with proper formatting

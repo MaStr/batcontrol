@@ -42,7 +42,7 @@ Batcontrol is an intelligent battery management system that optimizes your home 
 ### External Systems
 | Integration | Purpose | Documentation |
 |-------------|---------|---------------|
-| **EVCC** | Electric vehicle charging coordination | [EVCC Connection](integrations/evcc-connection.md) |
+| **evcc** | Electric vehicle charging coordination | [evcc Connection](integrations/evcc-connection.md) |
 | **MQTT/Home Assistant** | Home automation integration | [MQTT API](integrations/mqtt-api.md) |
 | **MQTT Inverter** | Integrate any battery system via MQTT | [MQTT Inverter](integrations/mqtt-inverter.md) |
 
@@ -50,8 +50,8 @@ Batcontrol is an intelligent battery management system that optimizes your home 
 
 ### Supported Hardware
 - **Inverters**: Fronius GEN24 series, Fronius Modbus TCP, MQTT inverter bridge
-- **Dynamic Tariff Providers**: aWATTar, Tibber, EVCC integration, 2 Tariff Providers like Octopus
-- **Solar Forecast**: Forecast.Solar, Solar-Prognose.de, EVCC integration
+- **Dynamic Tariff Providers**: aWATTar, Tibber, evcc integration, 2 Tariff Providers like Octopus
+- **Solar Forecast**: Forecast.Solar, Solar-Prognose.de, evcc integration
 - **Consumption Forecast**: CSV-based load profiles
 
 ### File Structure

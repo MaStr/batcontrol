@@ -1,4 +1,4 @@
-# EVCC Integration
+# evcc Integration
 
 Batcontrol can integrate with [evcc (Electric Vehicle Charging Controller)](https://evcc.io/) to intelligently manage battery usage during electric vehicle charging. This integration helps prevent unnecessary battery discharge while your EV is charging, optimizing your overall energy management.
 
@@ -87,7 +87,7 @@ The `battery_halt_topic` enables dynamic battery discharge limit management base
 ### Example Scenario
 
 - Your normal `always_allow_discharge_limit`: `0.20` (20%)
-- EVCC `bufferSoc` setting: `50` (50%)
+- evcc `bufferSoc` setting: `50` (50%)
 - **Result**: While EV charges, battery discharge is blocked above 50% SOC instead of 20%
 
 ## MQTT Topics Monitored
@@ -125,7 +125,7 @@ These are used by [peak shaving](../features/peak-shaving.md): peak shaving is a
 2. **Limit Restoration**: Original discharge limit is restored
 3. **Logging**: Batcontrol logs: `"evcc is not charging, remove block"`
 
-### When EVCC Goes Offline
+### When evcc Goes Offline
 1. **Safety Mechanism**: If evcc goes offline while charging, blocks are automatically removed
 2. **Limit Restoration**: Original settings are restored
 3. **Logging**: Batcontrol logs: `"evcc went offline"` and `"evcc was charging, remove block"`
