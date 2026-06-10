@@ -64,6 +64,7 @@ nav:
       - Price Difference Calculation: features/price-difference-calculation.md
   - Integrations:
       - MQTT API: integrations/mqtt-api.md
+      - Forecast Metrics: integrations/forecast-metrics.md
       - MQTT Inverter: integrations/mqtt-inverter.md
       - EVCC Connection: integrations/evcc-connection.md
   - Development:
