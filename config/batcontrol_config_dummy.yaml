@@ -1,6 +1,6 @@
 #--------------------------
 #  Batcontrol Configuration
-#  See more Details in: https://github.com/MaStr/batcontrol/wiki/Batcontrol-Configuration
+#  See more Details in: https://mastr.github.io/batcontrol/configuration/batcontrol-configuration/
 #--------------------------
 timezone: Europe/Berlin #your time zone. not optional.
 time_resolution_minutes: 60 # Time resolution for forecasts: 15 (quarter-hourly) or 60 (hourly). Default: 60
@@ -23,7 +23,7 @@ battery_control:
 
 #--------------------------
 #  Battery Control Expert Tuning Parameters
-#  See more Details in: https://github.com/MaStr/batcontrol/wiki/battery_control_expert
+#  See more Details in: https://mastr.github.io/batcontrol/features/battery-control-expert/
 #--------------------------
 battery_control_expert:
   charge_rate_multiplier: 1.1 # Increase (>1) calculated charge rate to compensate charge inefficiencies.
@@ -69,7 +69,7 @@ peak_shaving:
 
 #--------------------------
 #  Inverter
-#  See more Details in: https://github.com/MaStr/batcontrol/wiki/Inverter-Configuration
+#  See more Details in: https://mastr.github.io/batcontrol/configuration/inverter-configuration/
 #
 #  IMPORTANT: This configuration uses a "dummy" inverter for demonstration purposes.
 #  The dummy inverter returns static values to make batcontrol work out of the box.
@@ -110,7 +110,7 @@ inverter:
 
 #--------------------------
 #  Dynamic Tariff Provider
-#  See more Details in: https://github.com/MaStr/batcontrol/wiki/Dynamic-tariff-provider
+#  See more Details in: https://mastr.github.io/batcontrol/configuration/dynamic-tariff-provider/
 #--------------------------
 utility:
   type: awattar_de # [tibber, awattar_at, awattar_de, evcc, energyforecast, tariff_zones]
@@ -148,7 +148,7 @@ dynamic_network_fees:
 
 #--------------------------
 #  MQTT API
-#  See more Details in: https://github.com/MaStr/batcontrol/wiki/MQTT-API
+#  See more Details in: https://mastr.github.io/batcontrol/integrations/mqtt-api/
 #--------------------------
 mqtt:
   enabled: false
@@ -170,7 +170,7 @@ mqtt:
 
 #--------------------------
 #  Forecast Solar
-#  See more Details in:  https://github.com/MaStr/batcontrol/wiki/Solar-Forecast
+#  See more Details in:  https://mastr.github.io/batcontrol/configuration/solar-forecast/
 #
 #  Supported providers:
 #  - fcsolarapi: Third-party solar forecast API (configured below, default)
@@ -205,7 +205,7 @@ pvinstallations:
 
 #--------------------------
 #  Forecast Consumption
-#  See more Details in: https://github.com/MaStr/batcontrol/wiki/Consumption-forecast
+#  See more Details in: https://mastr.github.io/batcontrol/configuration/consumption-forecast/
 #
 #  Option 1: CSV-based forecast (default)
 #  Option 2: HomeAssistant API-based forecast
@@ -232,7 +232,7 @@ consumption_forecast:
 #--------------------------
 # evcc connection
 #   listen to evcc mqtt messages to lock the battery if the car is charging
-#   See more Details in: https://github.com/MaStr/batcontrol/wiki/evcc-connection
+#   See more Details in: https://mastr.github.io/batcontrol/integrations/evcc-connection/
 #--------------------------
 evcc:
   enabled: false

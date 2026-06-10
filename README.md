@@ -5,7 +5,7 @@ To integrate batcontrol with Home Assistant, use the following repository: [batc
 [![Docker Image CI](https://github.com/MaStr/batcontrol/actions/workflows/docker-image.yml/badge.svg?branch=main)](https://github.com/MaStr/batcontrol/actions/workflows/docker-image.yml)
 
 
-[Wiki/Documentation](https://github.com/MaStr/batcontrol/wiki)
+[Documentation](https://mastr.github.io/batcontrol/)
 
 ## Prerequisites:
 
