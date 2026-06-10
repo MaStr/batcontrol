@@ -16,11 +16,11 @@ The MQTT inverter driver uses batcontrol's shared MQTT connection (configured in
 All topics follow the pattern: `<batcontrol_base_topic>/inverters/$num/<subtopic>`
 
 Where:
-- `<batcontrol_base_topic>` is the MQTT base topic from your main MQTT configuration
+- `<batcontrol_base_topic>` is the MQTT base topic from your main MQTT configuration (the `topic` key in the `mqtt` section)
 - `$num` is the inverter number (e.g., 0, 1, 2), **not** the literal string "$num"
 - `<subtopic>` is the specific status or command topic
 
-**Example:** If your base_topic is "batcontrol" and inverter number is 0, topics would be:
+**Example:** If your base topic is "batcontrol" and inverter number is 0, topics would be:
 - `batcontrol/inverters/0/status/soc`
 - `batcontrol/inverters/0/command/mode`
 
@@ -68,9 +68,9 @@ Configure the MQTT connection in batcontrol's main MQTT API section (not in the 
 mqtt:
   broker: 192.168.1.100
   port: 1883
-  user: batcontrol
+  username: batcontrol
   password: secret
-  base_topic: batcontrol  # Base topic for all MQTT messages
+  topic: batcontrol  # Base topic for all MQTT messages
 ```
 
 ### Inverter Configuration
@@ -83,7 +83,7 @@ inverter:
   max_soc: 100                 # Maximum SoC % (default: 100)
   max_grid_charge_rate: 5000   # Maximum charge rate in W (required)
   cache_ttl: 120               # Cache TTL for SOC values in seconds (default: 120)
-  base_topic: batcontrol/inverter/0  # Optional: override default topic structure
+  base_topic: batcontrol/inverters/0  # Optional: override default topic structure
 ```
 
 ### Configuration Parameters
@@ -96,7 +96,7 @@ inverter:
 | `min_soc` | No | 5 | Minimum State of Charge in % |
 | `max_soc` | No | 100 | Maximum State of Charge in % |
 | `cache_ttl` | No | 120 | Cache TTL for SOC values in seconds |
-| `base_topic` | No | `<mqtt.base_topic>/inverters/<num>` | Custom base topic for inverter MQTT messages |
+| `base_topic` | No | `<mqtt.topic>/inverters/<num>` | Custom base topic for inverter MQTT messages |
 
 ## External Bridge Requirements
 
@@ -254,7 +254,7 @@ Discovered entities include:
 
 ### Custom Topic Structure
 
-By default, the MQTT inverter uses the topic structure `<mqtt.base_topic>/inverters/<inverter_num>`. You can override this:
+By default, the MQTT inverter uses the topic structure `<mqtt.topic>/inverters/<inverter_num>`, where `<mqtt.topic>` is the base topic from the main MQTT configuration. You can override this:
 
 ```yaml
 inverter:
