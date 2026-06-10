@@ -971,7 +971,7 @@ class Tibber(DynamicTariffBase):
 - Fetches data at target resolution (no conversion needed)
 - **Action Required**: Verify API parameter for 15-min data
 
-**Evcc** (`evcc.py`):
+**evcc** (`evcc.py`):
 ```python
 class EvccTariff(DynamicTariffBase):
     def __init__(self, config: dict):
@@ -2203,7 +2203,7 @@ def test_backward_compatibility_60min():
 - Create data collection guide for users
 
 **4. Price Forecasts** ✅
-- Evcc: Use native 15-min data when available
+- evcc: Use native 15-min data when available
 - Awattar/Tibber: Replicate hourly prices to quarters
 - Future: Monitor for API updates offering 15-min granularity
 

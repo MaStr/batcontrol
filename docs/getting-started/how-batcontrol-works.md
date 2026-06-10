@@ -130,7 +130,7 @@ The system validates configuration to prevent problematic behavior:
 
 ## External Integrations
 
-### EVCC Integration
+### evcc Integration
 - **Purpose**: Coordinate with electric vehicle charging
 - **Function**: Can lock battery discharge when car is charging
 - **Configuration**: Monitors charging status and adjusts battery limits

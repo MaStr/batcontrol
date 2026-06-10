@@ -9,13 +9,13 @@ src/batcontrol/
   core.py                 # Main orchestrator
   logic/                  # Battery control decisions (default, next)
   inverter/               # Backends: Fronius HTTP, Fronius Modbus, MQTT, Dummy
-  dynamictariff/          # Tariff providers: Awattar, Tibber, EVCC, EnergyForecast, NetworkFees
-  forecastsolar/          # Solar forecast: FCSolar, SolarPrognose, EVCC, HA-ML
+  dynamictariff/          # Tariff providers: Awattar, Tibber, evcc, EnergyForecast, NetworkFees
+  forecastsolar/          # Solar forecast: FCSolar, SolarPrognose, evcc, HA-ML
   forecastconsumption/    # Consumption forecast: CSV, HomeAssistant
   fetcher/                # HTTP caching helper
   scheduler.py            # Main loop
   mqtt_api.py             # State publishing + runtime config overrides
-  evcc_api.py             # EVCC integration
+  evcc_api.py             # evcc integration
 ```
 
 ## Architecture

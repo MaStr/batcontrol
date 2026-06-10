@@ -66,7 +66,7 @@ nav:
       - MQTT API: integrations/mqtt-api.md
       - Forecast Metrics: integrations/forecast-metrics.md
       - MQTT Inverter: integrations/mqtt-inverter.md
-      - EVCC Connection: integrations/evcc-connection.md
+      - evcc Connection: integrations/evcc-connection.md
   - Development:
       - 15-Minute Interval Transformation: development/15-min-transform.md
 
