@@ -1,0 +1,75 @@
+site_name: Batcontrol Documentation
+site_description: >-
+  Optimize your electricity costs by re-charging your PV battery when
+  electricity is cheap and there is not enough solar power available.
+site_url: https://mastr.github.io/batcontrol/
+repo_url: https://github.com/MaStr/batcontrol
+repo_name: MaStr/batcontrol
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  icon:
+    logo: material/battery-charging
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      accent: light green
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      accent: light green
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.action.edit
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.details
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - How Batcontrol Works: getting-started/how-batcontrol-works.md
+  - Configuration:
+      - Main Configuration: configuration/batcontrol-configuration.md
+      - Inverter: configuration/inverter-configuration.md
+      - Dynamic Tariff Provider: configuration/dynamic-tariff-provider.md
+      - Solar Forecast: configuration/solar-forecast.md
+      - Consumption Forecast: configuration/consumption-forecast.md
+  - Features:
+      - Battery Control Expert: features/battery-control-expert.md
+      - Peak Shaving: features/peak-shaving.md
+      - Price Difference Calculation: features/price-difference-calculation.md
+  - Integrations:
+      - MQTT API: integrations/mqtt-api.md
+      - MQTT Inverter: integrations/mqtt-inverter.md
+      - EVCC Connection: integrations/evcc-connection.md
+  - Development:
+      - 15-Minute Interval Transformation: development/15-min-transform.md
+
+validation:
+  links:
+    not_found: warn
+    unrecognized_links: warn

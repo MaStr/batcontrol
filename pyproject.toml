@@ -53,6 +53,9 @@ test = [
     "pytest-asyncio>=0.21.0",
     "pytest-mock>=3.0.0",
 ]
+docs = [
+    "mkdocs-material>=9.5,<10",
+]
 
 # Bump Version
 [tool.bumpversion]
