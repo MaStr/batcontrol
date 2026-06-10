@@ -103,7 +103,7 @@ consumption_forecast:
     entity_id: sensor.energy_consumption        # Entity ID with consumption data
     sensor_unit: auto                           # Options: 'auto', 'Wh', or 'kWh' (since 0.5.7)
     history_days: "-7;-14;-21"               # Days to look back (negative values)
-    history_weights: "1,1,1"                 # Weight for each history period (1-10)
+    history_weights: "1;1;1"                 # Weight for each history period (1-10)
     cache_ttl_hours: 48.0                      # Cache duration in hours
     multiplier: 1.0                             # Forecast adjustment multiplier
 ```

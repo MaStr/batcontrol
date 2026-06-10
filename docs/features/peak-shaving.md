@@ -44,14 +44,16 @@ peak_shaving:
 
 ### MQTT Runtime Control
 
-Two parameters can be changed at runtime via MQTT without restarting batcontrol:
+All four parameters can be changed at runtime via MQTT without restarting batcontrol:
 
 | Topic | Accepts | Description |
 |-------|---------|-------------|
 | `{base}/peak_shaving/enabled/set` | `true` / `false` | Enable or disable peak shaving |
 | `{base}/peak_shaving/allow_full_battery_after/set` | int 0-23 | Change the target hour |
+| `{base}/peak_shaving/mode/set` | `time` / `price` / `combined` | Change the algorithm mode |
+| `{base}/peak_shaving/price_limit/set` | float | Change the price threshold in EUR/kWh; send `-1` to disable the price component |
 
-`mode` and `price_limit` are read-only at runtime and require a configuration change with restart.
+Runtime changes are temporary and are not written back to the configuration file.
 
 ## The `allow_full_battery_after` Target Hour
 
@@ -116,7 +118,7 @@ Only slots within the **production window** are considered. The production windo
 
 Both the time-based and price-based components run in parallel. The **stricter (lower non-negative) limit wins**. This is the most conservative and generally recommended mode.
 
-`price_limit` is **required** for this mode. If `price_limit` is not set, peak shaving is silently disabled entirely (both components are skipped). Make sure to always configure `price_limit` when using `combined`.
+`price_limit` is **required** for the price component. If `price_limit` is not set, the price component is disabled and `combined` falls back to **time-only** behaviour — batcontrol logs a warning at startup in this case. Set a numeric `price_limit` or change the mode to `time` to silence the warning.
 
 ## Charge Limit and Minimum Charge Rate
 
@@ -143,7 +145,7 @@ Peak shaving is automatically bypassed in the following situations:
 | Discharge not allowed | Battery is being preserved for expensive hours -- limiting PV would be counterproductive |
 | evcc is actively charging the EV | The EV already consumes excess PV |
 | EV connected in PV mode (evcc) | evcc will absorb surplus PV when its threshold is reached |
-| `price_limit` not configured (modes `price`/`combined`) | Price component cannot operate |
+| `price_limit` not configured | Price component cannot operate; `combined` falls back to time-only, `price` is effectively inactive |
 
 ## evcc Interaction
 

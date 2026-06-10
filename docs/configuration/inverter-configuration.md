@@ -1,7 +1,7 @@
 ## General options
 
 ### max_grid_charge_rate
-This is the uppler limit to charge the battery from grid. Value is WATT. This value should not be above the limit of your inverter.
+This is the upper limit to charge the battery from grid. Value is WATT. This value should not be above the limit of your inverter.
 
 Default:
 ```
@@ -26,7 +26,7 @@ Enable or disable the resilient wrapper for graceful outage handling. When enabl
 
 Default:
 ```
-enable_resilient_wrapper: true
+enable_resilient_wrapper: false
 ```
 
 ### outage_tolerance_minutes

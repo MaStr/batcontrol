@@ -55,16 +55,7 @@ evcc:
 
 ### TLS/SSL Support
 
-> ⚠️ **Note**: TLS/SSL support is currently **untested**. Use with caution in production environments.
-
-```yaml
-evcc:
-  tls: true
-  cafile: /etc/ssl/certs/ca-certificates.crt
-  certfile: /etc/ssl/certs/client.crt
-  keyfile: /etc/ssl/certs/client.key
-  tls_version: tlsv1.2
-```
+> ⚠️ **Note**: TLS/SSL support is currently **untested and known to be non-functional** (same limitation as in the [MQTT API](mqtt-api.md)). Keep MQTT traffic on a trusted local network.
 
 ### Battery Management Options
 
@@ -77,7 +68,7 @@ evcc:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `block_battery_while_charging` | boolean | `true` | If `true`: Block battery discharge while EV is charging. If `false`: Battery discharge follows normal batcontrol algorithm regardless of EV charging status |
-| `battery_halt_topic` | string | `evcc/site/bufferSoc` | Topic for dynamic discharge limit control |
+| `battery_halt_topic` | string | *unset (disabled)* | Topic for dynamic discharge limit control, e.g. `evcc/site/bufferSoc` |
 
 ## Battery Halt Topic (Advanced)
 
@@ -110,6 +101,14 @@ Batcontrol subscribes to the following evcc MQTT topics:
 - `evcc/loadpoints/1/charging` - Loadpoint 1 charging status (`true`/`false`)
 - `evcc/loadpoints/2/charging` - Loadpoint 2 charging status (`true`/`false`)
 - Additional loadpoints as configured
+
+### Loadpoint Mode and Connection State (derived automatically)
+For every configured `.../charging` topic, batcontrol additionally subscribes to the sibling topics:
+
+- `evcc/loadpoints/1/mode` - Loadpoint charging mode (`pv`, `now`, `minpv`, `off`)
+- `evcc/loadpoints/1/connected` - Whether an EV is connected (`true`/`false`)
+
+These are used by [peak shaving](../features/peak-shaving.md): peak shaving is automatically disabled while evcc is actively charging or while an EV is connected in PV mode, and re-enabled when the EV disconnects or the mode changes.
 
 ### Buffer SOC (Optional)
 - `evcc/site/bufferSoc` - Dynamic discharge threshold (integer 0-100)
@@ -238,6 +237,6 @@ When using both batcontrol and evcc with Home Assistant:
 ## Security Considerations
 
 - Use authentication for production MQTT brokers
-- Consider TLS encryption for remote connections (though currently untested)
+- TLS encryption is currently not functional (see above) — keep MQTT traffic on a trusted local network
 - Ensure MQTT user has appropriate topic permissions
 - Keep MQTT credentials secure and unique

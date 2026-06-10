@@ -61,8 +61,8 @@ inverter:
   mqtt_password: secret
   base_topic: inverter
   capacity: 10000              # Battery capacity in Wh (required)
-  min_soc: 10                  # Minimum SoC % (default: 10)
-  max_soc: 95                  # Maximum SoC % (default: 95)
+  min_soc: 5                   # Minimum SoC % (default: 5)
+  max_soc: 100                 # Maximum SoC % (default: 100)
   max_grid_charge_rate: 5000   # Maximum charge rate in W (required)
 ```
 

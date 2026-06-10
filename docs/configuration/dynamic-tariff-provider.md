@@ -19,12 +19,12 @@ utility:
 
 
 ## awattar
-batcontrol provides to different awattar types:
+batcontrol provides two different awattar types:
 
-* `awattar_de`for German aWATTar
+* `awattar_de` for German aWATTar
 * `awattar_at` for Austrian aWATTar
 
-Please chose the corresponding version. For aWATTar you can you this configuration:
+Please choose the corresponding version. For aWATTar you can use this configuration:
 
 ```
 utility:
@@ -157,7 +157,7 @@ utility:
   type: evcc
   url: http://evcc.local:7070/api/tariff/grid
 ```
-You may need to adjust hostname + port for your setup. If evcc is running under HomeAssistant, you should you either `http://homeassistant:7070/api/tariff/grid` or `http://<homeassistant-ip>:7070/api/tariff/grid`
+You may need to adjust hostname + port for your setup. If evcc is running under HomeAssistant, you should use either `http://homeassistant:7070/api/tariff/grid` or `http://<homeassistant-ip>:7070/api/tariff/grid`
 
 ## energyforecast.de (0.5.6)
 [energyforecast.de](https://www.energyforecast.de) provides a calculated forecast for upcoming prices. Dayahead prices are populated at 14:00 GMT+2, which is after the lunch-drop in prices and prevents a good energy calculation. Based on different values, energyforecast.de calculates a price expectation with a median of 3 cent of. 
@@ -174,3 +174,26 @@ utility:
 ```
 
 To enable the paid 96h forecast, use type: energyforecast_96
+
+## Dynamic network fees (§14a EnWG)
+
+Batcontrol can add time-of-use network fees (NT/ST/HT zones according to §14a EnWG) on top of the energy prices. This only applies to providers that calculate fees locally: **awattar** and **energyforecast**. All-inclusive providers (tibber, evcc, tariff_zones) already deliver final prices and do not need this.
+
+The fee data (NET prices, excluding VAT) is fetched from [dyn-net.batcontrol.software](https://dyn-net.batcontrol.software/) and added to the raw energy price before VAT is applied. Data is cached for 12 hours, as tariffs change at most quarterly.
+
+Configure it as a top-level block (next to `utility`):
+
+```yaml
+dynamic_network_fees:
+  enabled: true         # Set to true to activate dynamic network fees
+  country: de           # Country code: de, at, ch
+  operator: syna        # Network operator ID (e.g. syna, westnetz, ggv, ewr-netz)
+  # url: https://dyn-net.batcontrol.software/api/  # Optional: override for self-hosted instance
+```
+
+| Key        | Required | Description                                                        |
+|------------|----------|--------------------------------------------------------------------|
+| `enabled`  | yes      | Master switch, defaults to `false`                                 |
+| `country`  | yes      | Country code (`de`, `at`, `ch`)                                    |
+| `operator` | yes      | Your network operator ID — see [dyn-net.batcontrol.software](https://dyn-net.batcontrol.software/) for available IDs |
+| `url`      | no       | Override the API endpoint, e.g. for a self-hosted instance         |
