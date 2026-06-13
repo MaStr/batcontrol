@@ -1,22 +1,34 @@
 """
-Custom exceptions for inverter module.
+Custom exceptions for the inverter module.
 
-These exceptions provide specific error handling for inverter-related failures,
-particularly for handling temporary outages gracefully.
+These let batcontrol distinguish three situations:
+
+1. Configuration errors         -> fail immediately on the first run.
+2. Transient communication loss -> skip the current control cycle and retry
+   on the next scheduled run (InverterCommunicationError).
+3. Permanent outage             -> terminate after the tolerance window
+   (InverterOutageError).
 """
 
 
-class InverterOutageError(Exception):
+class InverterError(Exception):
+    """Base class for inverter communication problems."""
+
+
+class InverterCommunicationError(InverterError):
     """
-    Exception raised when an inverter has been unreachable for too long.
+    Raised when an inverter call fails after initialization.
 
-    This exception is raised after the configured outage tolerance period
-    (default: 24 minutes) has elapsed without successful communication
-    with the inverter. This allows batcontrol to distinguish between:
+    Signals the caller to abort the current control cycle. batcontrol retries
+    on the next scheduled run, so no decision is ever made on stale data.
+    """
 
-    1. Configuration errors (fail immediately on first run)
-    2. Transient outages (tolerate for up to 24 minutes using cached values)
-    3. Permanent outages (terminate after 24 minutes)
+
+class InverterOutageError(InverterError):
+    """
+    Raised when the inverter stays unreachable beyond the tolerance window.
+
+    Terminates batcontrol - the inverter is considered permanently down.
 
     Attributes:
         message: Explanation of the error
