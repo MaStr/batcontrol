@@ -26,6 +26,8 @@ Enable or disable the resilient wrapper for graceful outage handling. When enabl
 
 Errors before the first successful control command still fail fast, so configuration mistakes are caught at startup.
 
+Why not just let batcontrol crash and rely on the container restart policy? Without the wrapper, every inverter outage terminates the process, and `restart: unless-stopped` brings it straight back up. During a multi-minute outage this turns into a tight restart loop, and **each restart re-fetches the price and solar forecasts from their providers**. Repeated cold starts can therefore run into provider rate limits (e.g. Awattar/Tibber for prices, Forecast.Solar/SolarPrognose for solar), which can leave batcontrol without fresh data even after the inverter recovers. Keeping the process alive and skipping cycles avoids hammering both the inverter and the data providers.
+
 Default:
 ```
 enable_resilient_wrapper: false
