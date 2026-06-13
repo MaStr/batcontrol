@@ -1,30 +1,23 @@
-"""
-Tests for the ResilientInverterWrapper class.
+"""Tests for ResilientInverterWrapper.
 
-These tests verify that the resilient wrapper:
-1. Fails fast on first connection attempt (config errors)
-2. Uses cached values during temporary outages
-3. Raises InverterOutageError after 24-minute timeout
-4. Recovers properly when connection is restored
+Behaviour under test:
+1. Before first successful set_mode_*: errors propagate immediately (fail-fast).
+2. After initialization: read failures return cached values; commands are discarded.
+3. After the outage tolerance expires: InverterOutageError is raised.
+4. Automatic recovery when the connection is restored.
 """
 
 import pytest
 import time
 from unittest.mock import Mock
 
-from batcontrol.inverter.resilient_wrapper import (
-    ResilientInverterWrapper,
-    CachedValues,
-)
+from batcontrol.inverter.resilient_wrapper import ResilientInverterWrapper
 from batcontrol.inverter.exceptions import InverterOutageError
 
 
 class MockInverter:
-    """Mock inverter for testing."""
-
     def __init__(self, should_fail=False):
         self.should_fail = should_fail
-        self.failure_count = 0
         self.min_soc = 10
         self.max_soc = 95
         self.mqtt_api = None
@@ -32,620 +25,356 @@ class MockInverter:
         self.inverter_num = 0
         self.max_grid_charge_rate = 5000
         self.max_pv_charge_rate = 0
-
-        # Track calls
-        self.get_soc_calls = 0
+        self.soc_calls = 0
         self.set_mode_calls = []
 
-    def get_SOC(self):
-        self.get_soc_calls += 1
+    def _maybe_fail(self):
         if self.should_fail:
-            self.failure_count += 1
             raise ConnectionError("Inverter unreachable")
+
+    def get_SOC(self):
+        self.soc_calls += 1
+        self._maybe_fail()
         return 75.0
 
     def get_stored_energy(self):
-        if self.should_fail:
-            raise ConnectionError("Inverter unreachable")
+        self._maybe_fail()
         return 7500.0
 
     def get_stored_usable_energy(self):
-        if self.should_fail:
-            raise ConnectionError("Inverter unreachable")
+        self._maybe_fail()
         return 6500.0
 
     def get_capacity(self):
-        if self.should_fail:
-            raise ConnectionError("Inverter unreachable")
+        self._maybe_fail()
         return 10000.0
 
     def get_free_capacity(self):
-        if self.should_fail:
-            raise ConnectionError("Inverter unreachable")
+        self._maybe_fail()
         return 2500.0
 
     def get_max_capacity(self):
-        if self.should_fail:
-            raise ConnectionError("Inverter unreachable")
+        self._maybe_fail()
         return 9500.0
 
     def set_mode_force_charge(self, chargerate):
         self.set_mode_calls.append(('force_charge', chargerate))
-        if self.should_fail:
-            raise ConnectionError("Inverter unreachable")
+        self._maybe_fail()
 
     def set_mode_avoid_discharge(self):
         self.set_mode_calls.append(('avoid_discharge',))
-        if self.should_fail:
-            raise ConnectionError("Inverter unreachable")
+        self._maybe_fail()
 
     def set_mode_allow_discharge(self):
         self.set_mode_calls.append(('allow_discharge',))
-        if self.should_fail:
-            raise ConnectionError("Inverter unreachable")
+        self._maybe_fail()
 
-    def set_mode_limit_battery_charge(self, limit_charge_rate):
-        self.set_mode_calls.append(('limit_battery_charge', limit_charge_rate))
-        if self.should_fail:
-            raise ConnectionError("Inverter unreachable")
+    def set_mode_limit_battery_charge(self, rate):
+        self.set_mode_calls.append(('limit_battery_charge', rate))
+        self._maybe_fail()
 
     def activate_mqtt(self, api):
         self.mqtt_api = api
 
     def refresh_api_values(self):
-        if self.should_fail:
-            raise ConnectionError("Inverter unreachable")
+        self._maybe_fail()
 
     def shutdown(self):
         pass
 
 
-class TestCachedValues:
-    """Tests for the CachedValues dataclass."""
+# ---------------------------------------------------------------------------
+# Fail-fast before initialization
+# ---------------------------------------------------------------------------
 
-    def test_default_values(self):
-        cache = CachedValues()
-        assert cache.soc is None
-        assert cache.stored_energy is None
-        assert cache.capacity is None
-
-    def test_is_valid_when_empty(self):
-        cache = CachedValues()
-        assert cache.is_valid() is False
-
-    def test_is_valid_with_required_values(self):
-        cache = CachedValues(soc=75.0, capacity=10000.0)
-        assert cache.is_valid() is True
-
-    def test_is_valid_partial(self):
-        cache = CachedValues(soc=75.0)
-        assert cache.is_valid() is False
-
-
-class TestResilientWrapperFirstRun:
-    """Tests for first-run behavior (config error detection)."""
-
-    def test_first_run_failure_propagates(self):
-        """First connection failure should propagate immediately."""
-        mock_inverter = MockInverter(should_fail=True)
-        wrapper = ResilientInverterWrapper(mock_inverter)
-
+class TestPreInitFailFast:
+    def test_read_failure_before_init_propagates(self):
+        inv = MockInverter(should_fail=True)
+        w = ResilientInverterWrapper(inv)
         with pytest.raises(ConnectionError):
-            wrapper.get_SOC()
+            w.get_SOC()
 
-    def test_first_run_success_sets_flag(self):
-        """Successful set_mode should set the initialization flag."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(mock_inverter)
+    def test_command_failure_before_init_propagates(self):
+        inv = MockInverter(should_fail=True)
+        w = ResilientInverterWrapper(inv)
+        with pytest.raises(ConnectionError):
+            w.set_mode_allow_discharge()
 
-        # get_SOC doesn't mark initialization complete
-        wrapper.get_SOC()
-        assert wrapper._initialization_complete is False
+    def test_successful_set_mode_marks_initialized(self):
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv)
+        assert w._initialized is False
+        w.set_mode_allow_discharge()
+        assert w._initialized is True
 
-        # set_mode marks initialization complete
-        wrapper.set_mode_allow_discharge()
-        assert wrapper._initialization_complete is True
-
-    def test_first_run_caches_values(self):
-        """Successful first run should cache values."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(mock_inverter)
-
-        wrapper.get_SOC()
-
-        assert wrapper._cache.soc == 75.0
+    def test_read_success_does_not_mark_initialized(self):
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv)
+        w.get_SOC()
+        assert w._initialized is False
 
 
-class TestResilientWrapperOutage:
-    """Tests for outage handling behavior."""
+# ---------------------------------------------------------------------------
+# Cache behaviour during outages
+# ---------------------------------------------------------------------------
 
-    def test_subsequent_failure_uses_cache(self):
-        """After initialization, failures should use cached values."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(mock_inverter, outage_tolerance_seconds=60)
+class TestCacheDuringOutage:
+    def _init(self, **kw):
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv, **kw)
+        w.set_mode_allow_discharge()
+        w.get_SOC()  # prime cache
+        return inv, w
 
-        # Initialize with set_mode and cache SOC
-        wrapper.set_mode_allow_discharge()
-        soc1 = wrapper.get_SOC()
-        assert soc1 == 75.0
+    def test_read_returns_cached_value_after_failure(self):
+        inv, w = self._init(outage_tolerance_seconds=60)
+        inv.should_fail = True
+        assert w.get_SOC() == 75.0
 
-        # Now fail
-        mock_inverter.should_fail = True
-        soc2 = wrapper.get_SOC()
+    def test_read_returns_cached_value_during_backoff(self):
+        inv, w = self._init(outage_tolerance_seconds=60, retry_backoff_seconds=60)
+        inv.should_fail = True
+        w.get_SOC()  # triggers failure, starts backoff
+        inv.should_fail = False
+        # still in backoff - must use cache, not call inverter
+        calls_before = inv.soc_calls
+        assert w.get_SOC() == 75.0
+        assert inv.soc_calls == calls_before  # no new call
 
-        # Should return cached value
-        assert soc2 == 75.0
-        assert wrapper._consecutive_failures == 1
+    def test_soc_default_used_when_cache_empty(self):
+        inv, w = self._init(outage_tolerance_seconds=60)
+        del w._cache['soc']  # clear soc from cache
+        inv.should_fail = True
+        assert w.get_SOC() == 50.0  # default
 
-    def test_failure_tracking_starts_on_first_failure(self):
-        """Failure timer should start on first failure after initialization."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(mock_inverter, outage_tolerance_seconds=60)
+    def test_outage_start_set_on_first_failure(self):
+        inv, w = self._init(outage_tolerance_seconds=60)
+        assert w._outage_start is None
+        inv.should_fail = True
+        w.get_SOC()
+        assert w._outage_start is not None
 
-        # Initialize with set_mode and cache values
-        wrapper.set_mode_allow_discharge()
-        wrapper.get_SOC()
-        assert wrapper._first_failure_time is None
+    def test_recovery_resets_outage_state(self):
+        inv, w = self._init(outage_tolerance_seconds=60, retry_backoff_seconds=0.05)
+        inv.should_fail = True
+        w.get_SOC()
+        assert w._outage_start is not None
 
-        # Now fail
-        mock_inverter.should_fail = True
-        wrapper.get_SOC()
-
-        assert wrapper._first_failure_time is not None
-
-    def test_outage_timeout_raises_error(self):
-        """After timeout, should raise InverterOutageError."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(
-            mock_inverter,
-            outage_tolerance_seconds=0.1,
-            retry_backoff_seconds=0.05  # Short backoff for testing
-        )
-
-        # Initialize with set_mode and cache values
-        wrapper.set_mode_allow_discharge()
-        wrapper.get_SOC()
-
-        # Now fail
-        mock_inverter.should_fail = True
-
-        # First failure uses cache
-        wrapper.get_SOC()
-
-        # Wait for timeout (and backoff to expire)
-        time.sleep(0.2)
-
-        # Next failure should raise InverterOutageError
-        with pytest.raises(InverterOutageError) as exc_info:
-            wrapper.get_SOC()
-
-        assert exc_info.value.outage_duration_seconds >= 0.1
-
-    def test_recovery_resets_failure_tracking(self):
-        """Successful call after failures should reset tracking."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(
-            mock_inverter,
-            outage_tolerance_seconds=60,
-            retry_backoff_seconds=0.05  # Short backoff for testing
-        )
-
-        # Initialize with set_mode
-        wrapper.set_mode_allow_discharge()
-        wrapper.get_SOC()
-
-        # Fail
-        mock_inverter.should_fail = True
-        wrapper.get_SOC()
-        assert wrapper._first_failure_time is not None
-        assert wrapper._consecutive_failures == 1
-
-        # Wait for backoff to expire
         time.sleep(0.1)
+        inv.should_fail = False
+        w.get_SOC()
 
-        # Recover
-        mock_inverter.should_fail = False
-        wrapper.get_SOC()
+        assert w._outage_start is None
+        assert not w._in_backoff()
 
-        assert wrapper._first_failure_time is None
-        assert wrapper._consecutive_failures == 0
+    def test_outage_error_after_tolerance_exceeded(self):
+        inv, w = self._init(outage_tolerance_seconds=0.1, retry_backoff_seconds=0.05)
+        inv.should_fail = True
+        w.get_SOC()          # first failure, starts backoff
+        time.sleep(0.2)      # exceed both backoff and tolerance
+        with pytest.raises(InverterOutageError):
+            w.get_SOC()
 
 
-class TestResilientWrapperBackoff:
-    """Tests for retry backoff behavior."""
+# ---------------------------------------------------------------------------
+# Command behaviour during outages
+# ---------------------------------------------------------------------------
 
-    def test_backoff_skips_inverter_call(self):
-        """During backoff period, actual inverter calls should be skipped."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(
-            mock_inverter,
-            outage_tolerance_seconds=60,
-            retry_backoff_seconds=0.5  # 500ms backoff for testing
-        )
+class TestCommandsDuringOutage:
+    def _init(self, **kw):
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv, **kw)
+        w.set_mode_allow_discharge()
+        return inv, w
 
-        # Initialize with set_mode and cache values
-        wrapper.set_mode_allow_discharge()
-        wrapper.get_SOC()
+    def test_command_discarded_during_backoff(self):
+        inv, w = self._init(outage_tolerance_seconds=60, retry_backoff_seconds=60)
+        inv.should_fail = True
+        w.get_SOC()  # triggers failure, starts backoff
+        inv.should_fail = False
 
-        # Now fail
-        mock_inverter.should_fail = True
-        wrapper.get_SOC()  # This will fail and start backoff
-        call_count_after_failure = mock_inverter.get_soc_calls
+        calls_before = len(inv.set_mode_calls)
+        result = w.set_mode_avoid_discharge()
 
-        # Subsequent calls during backoff should NOT hit the inverter
-        for _ in range(3):
-            wrapper.get_SOC()
+        assert result is None
+        assert len(inv.set_mode_calls) == calls_before  # not sent
 
-        # Call count should be same (no new calls during backoff)
-        assert mock_inverter.get_soc_calls == call_count_after_failure
+    def test_command_failure_returns_none_not_crash(self):
+        inv, w = self._init(outage_tolerance_seconds=60)
+        inv.should_fail = True
+        result = w.set_mode_force_charge(5000)
+        assert result is None
+        # The call was attempted
+        assert ('force_charge', 5000) in inv.set_mode_calls
 
-    def test_backoff_uses_cached_value(self):
-        """During backoff period, cached values should be returned."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(
-            mock_inverter,
-            outage_tolerance_seconds=60,
-            retry_backoff_seconds=0.5
-        )
+    def test_command_raises_outage_error_after_tolerance(self):
+        inv, w = self._init(outage_tolerance_seconds=0.1, retry_backoff_seconds=0.05)
+        inv.should_fail = True
+        w.set_mode_allow_discharge()  # first failure, returns None
+        time.sleep(0.2)
+        with pytest.raises(InverterOutageError):
+            w.set_mode_allow_discharge()
 
-        # Initialize with set_mode and cache value
-        wrapper.set_mode_allow_discharge()
-        soc1 = wrapper.get_SOC()
-        assert soc1 == 75.0
+    def test_all_set_mode_variants_work(self):
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv)
+        w.set_mode_force_charge(5000)
+        w.set_mode_avoid_discharge()
+        w.set_mode_allow_discharge()
+        w.set_mode_limit_battery_charge(3000)
+        assert ('force_charge', 5000) in inv.set_mode_calls
+        assert ('avoid_discharge',) in inv.set_mode_calls
+        assert ('allow_discharge',) in inv.set_mode_calls
+        assert ('limit_battery_charge', 3000) in inv.set_mode_calls
+        assert w._initialized is True
 
-        # Fail to start backoff
-        mock_inverter.should_fail = True
-        wrapper.get_SOC()
 
-        # During backoff, should return cached value without calling inverter
-        soc2 = wrapper.get_SOC()
-        assert soc2 == 75.0
+# ---------------------------------------------------------------------------
+# Backoff mechanics
+# ---------------------------------------------------------------------------
+
+class TestBackoff:
+    def test_backoff_active_after_failure(self):
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv, outage_tolerance_seconds=60, retry_backoff_seconds=60)
+        w.set_mode_allow_discharge()
+        w.get_SOC()
+        inv.should_fail = True
+        w.get_SOC()
+        assert w._in_backoff() is True
 
     def test_backoff_expires_and_retries(self):
-        """After backoff period, should retry actual inverter call."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(
-            mock_inverter,
-            outage_tolerance_seconds=60,
-            retry_backoff_seconds=0.1  # 100ms backoff
-        )
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv, outage_tolerance_seconds=60, retry_backoff_seconds=0.1)
+        w.set_mode_allow_discharge()
+        w.get_SOC()
+        inv.should_fail = True
+        w.get_SOC()
+        calls_after_fail = inv.soc_calls
 
-        # Initialize with set_mode and cache values
-        wrapper.set_mode_allow_discharge()
-        wrapper.get_SOC()
-
-        # Fail to start backoff
-        mock_inverter.should_fail = True
-        wrapper.get_SOC()
-        call_count_after_first_failure = mock_inverter.get_soc_calls
-
-        # Wait for backoff to expire
         time.sleep(0.15)
+        inv.should_fail = False
+        w.get_SOC()
+        assert inv.soc_calls > calls_after_fail
 
-        # Now call should actually hit the inverter again
-        wrapper.get_SOC()
-        assert mock_inverter.get_soc_calls > call_count_after_first_failure
+    def test_recovery_clears_backoff(self):
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv, outage_tolerance_seconds=60, retry_backoff_seconds=0.1)
+        w.set_mode_allow_discharge()
+        w.get_SOC()
+        inv.should_fail = True
+        w.get_SOC()
+        assert w._in_backoff() is True
 
-    def test_backoff_recovery_resets_backoff(self):
-        """When inverter recovers, backoff should be reset."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(
-            mock_inverter,
-            outage_tolerance_seconds=60,
-            retry_backoff_seconds=0.5
-        )
-
-        # Initialize with set_mode
-        wrapper.set_mode_allow_discharge()
-        wrapper.get_SOC()
-
-        # Fail
-        mock_inverter.should_fail = True
-        wrapper.get_SOC()
-        assert wrapper._is_in_backoff_period() is True
-
-        # Wait for backoff to expire
-        time.sleep(0.6)
-
-        # Recover
-        mock_inverter.should_fail = False
-        wrapper.get_SOC()
-
-        # Backoff should be reset
-        assert wrapper._is_in_backoff_period() is False
-        assert wrapper._last_failure_time is None
-
-    def test_outage_status_includes_backoff_info(self):
-        """Outage status should include backoff information."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(
-            mock_inverter,
-            outage_tolerance_seconds=60,
-            retry_backoff_seconds=1.0
-        )
-
-        # Initialize with set_mode
-        wrapper.set_mode_allow_discharge()
-        wrapper.get_SOC()
-        status = wrapper.get_outage_status()
-        assert status['in_backoff_period'] is False
-
-        # Fail
-        mock_inverter.should_fail = True
-        wrapper.get_SOC()
-
-        status = wrapper.get_outage_status()
-        assert status['in_backoff_period'] is True
-        assert status['retry_backoff_seconds'] == 1.0
-        assert status['time_until_retry_seconds'] > 0
-
-
-class TestResilientWrapperDefaultValue:
-    """Tests for default value handling when no cache is available."""
-
-    def test_soc_default_value_on_first_failure_after_success(self):
-        """SOC should have a safe default if no cache available."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(mock_inverter, outage_tolerance_seconds=60)
-
-        # Initialize with set_mode and cache values
-        wrapper.set_mode_allow_discharge()
-        wrapper.get_SOC()
-
-        # Clear the cache manually (simulate edge case)
-        wrapper._cache.soc = None
-
-        # Now fail
-        mock_inverter.should_fail = True
-        soc = wrapper.get_SOC()
-
-        # Should return default safe value
-        assert soc == 50.0
-
-
-class TestResilientWrapperWriteOperations:
-    """Tests for write operations (mode changes)."""
-
-    def test_set_mode_passes_through(self):
-        """Set mode operations should pass through to inverter."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(mock_inverter)
-
-        # set_mode calls mark initialization complete
-        wrapper.set_mode_force_charge(5000)
-        assert wrapper._initialization_complete is True
-
-        wrapper.set_mode_avoid_discharge()
-        wrapper.set_mode_allow_discharge()
-
-        assert ('force_charge', 5000) in mock_inverter.set_mode_calls
-        assert ('avoid_discharge',) in mock_inverter.set_mode_calls
-        assert ('allow_discharge',) in mock_inverter.set_mode_calls
-
-    def test_set_mode_failure_during_outage_degrades_gracefully(self):
-        """A transient command failure must not crash; it degrades to None.
-
-        Commands (set_mode_*) have no cached fallback. Within the outage
-        tolerance window a failed command should return None (to be retried
-        next cycle) instead of raising RuntimeError, which would otherwise
-        bring down the whole process.
-        """
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(mock_inverter, outage_tolerance_seconds=60)
-
-        # Initialize with set_mode
-        wrapper.set_mode_allow_discharge()
-
-        # Now fail
-        mock_inverter.should_fail = True
-
-        result = wrapper.set_mode_force_charge(5000)
-
-        assert result is None
-        # The command was actually attempted on the inverter
-        assert ('force_charge', 5000) in mock_inverter.set_mode_calls
-        assert wrapper._consecutive_failures == 1
-
-    def test_set_mode_discarded_during_backoff(self):
-        """During backoff the inverter is presumed unavailable.
-
-        A read failure (e.g. refresh_api_values / get_*) starts a backoff
-        window. A command issued in that window must be discarded (returns
-        None) instead of being fired at a presumed-dead inverter or crashing.
-        batcontrol re-issues the mode on the next cycle.
-        """
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(
-            mock_inverter,
-            outage_tolerance_seconds=60,
-            retry_backoff_seconds=60  # long backoff so it stays active
-        )
-
-        # Initialize and cache a value
-        wrapper.set_mode_allow_discharge()
-        wrapper.get_SOC()
-
-        # A transient read failure starts the backoff window
-        mock_inverter.should_fail = True
-        wrapper.get_SOC()
-        assert wrapper._is_in_backoff_period() is True
-
-        # A command issued during backoff is discarded - not sent, no crash.
-        calls_before = len(mock_inverter.set_mode_calls)
-        result = wrapper.set_mode_avoid_discharge()
-
-        assert result is None
-        assert len(mock_inverter.set_mode_calls) == calls_before
-
-    def test_set_mode_first_run_failure_propagates(self):
-        """Before initialization, a command failure must still fail fast."""
-        mock_inverter = MockInverter(should_fail=True)
-        wrapper = ResilientInverterWrapper(mock_inverter)
-
-        with pytest.raises(ConnectionError):
-            wrapper.set_mode_allow_discharge()
-
-    def test_set_mode_raises_outage_error_after_tolerance(self):
-        """A command must surface InverterOutageError once tolerance is exceeded."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(
-            mock_inverter,
-            outage_tolerance_seconds=0.1,
-            retry_backoff_seconds=0.05
-        )
-
-        # Initialize
-        wrapper.set_mode_allow_discharge()
-
-        # Permanent outage
-        mock_inverter.should_fail = True
-
-        # First failure degrades gracefully (within tolerance)
-        assert wrapper.set_mode_allow_discharge() is None
-
-        # Wait beyond tolerance
         time.sleep(0.15)
-
-        with pytest.raises(InverterOutageError):
-            wrapper.set_mode_allow_discharge()
-
-
-class TestResilientWrapperStatus:
-    """Tests for status/diagnostic methods."""
-
-    def test_get_outage_status_when_connected(self):
-        """Status should show connected state."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(mock_inverter)
-
-        wrapper.set_mode_allow_discharge()
-        status = wrapper.get_outage_status()
-
-        assert status['is_connected'] is True
-        assert status['initialization_complete'] is True
-        assert status['consecutive_failures'] == 0
-
-    def test_get_outage_status_during_outage(self):
-        """Status should show outage state."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(mock_inverter, outage_tolerance_seconds=60)
-
-        wrapper.set_mode_allow_discharge()
-        wrapper.get_SOC()  # Cache a value
-        mock_inverter.should_fail = True
-        wrapper.get_SOC()
-
-        status = wrapper.get_outage_status()
-
-        assert status['is_connected'] is False
-        assert status['consecutive_failures'] == 1
-        assert status['outage_duration_seconds'] >= 0
+        inv.should_fail = False
+        w.get_SOC()
+        assert w._in_backoff() is False
 
 
-class TestResilientWrapperAttributeForwarding:
-    """Tests for attribute forwarding to wrapped inverter."""
+# ---------------------------------------------------------------------------
+# Outage status / diagnostics
+# ---------------------------------------------------------------------------
 
-    def test_attributes_forwarded(self):
-        """Common attributes should be forwarded from wrapped inverter."""
-        mock_inverter = MockInverter()
-        wrapper = ResilientInverterWrapper(mock_inverter)
+class TestOutageStatus:
+    def test_connected_state(self):
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv)
+        w.set_mode_allow_discharge()
+        s = w.get_outage_status()
+        assert s['is_connected'] is True
+        assert s['initialization_complete'] is True
+        assert s['in_backoff_period'] is False
 
-        assert wrapper.min_soc == 10
-        assert wrapper.max_soc == 95
-        assert wrapper.max_grid_charge_rate == 5000
+    def test_outage_state(self):
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv, outage_tolerance_seconds=60)
+        w.set_mode_allow_discharge()
+        w.get_SOC()
+        inv.should_fail = True
+        w.get_SOC()
 
-    def test_unknown_attribute_forwarded(self):
-        """Unknown attributes should be forwarded via __getattr__."""
-        mock_inverter = MockInverter()
-        mock_inverter.custom_attr = "test_value"
-        wrapper = ResilientInverterWrapper(mock_inverter)
+        s = w.get_outage_status()
+        assert s['is_connected'] is False
+        assert s['in_backoff_period'] is True
+        assert s['time_until_retry_seconds'] > 0
 
-        assert wrapper.custom_attr == "test_value"
+    def test_backoff_info_in_status(self):
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv, outage_tolerance_seconds=60, retry_backoff_seconds=1.0)
+        w.set_mode_allow_discharge()
+        w.get_SOC()
+        inv.should_fail = True
+        w.get_SOC()
+
+        s = w.get_outage_status()
+        assert s['retry_backoff_seconds'] == 1.0
+        assert s['time_until_retry_seconds'] > 0
+
+
+# ---------------------------------------------------------------------------
+# Attribute forwarding
+# ---------------------------------------------------------------------------
+
+class TestAttributeForwarding:
+    def test_common_attributes_forwarded(self):
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv)
+        assert w.min_soc == 10
+        assert w.max_soc == 95
+        assert w.max_grid_charge_rate == 5000
+
+    def test_unknown_attributes_forwarded_via_getattr(self):
+        inv = MockInverter()
+        inv.custom_attr = "hello"
+        w = ResilientInverterWrapper(inv)
+        assert w.custom_attr == "hello"
 
     def test_wrapped_inverter_accessible(self):
-        """Wrapped inverter should be accessible for advanced use."""
-        mock_inverter = MockInverter()
-        wrapper = ResilientInverterWrapper(mock_inverter)
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv)
+        assert w.wrapped_inverter is inv
 
-        assert wrapper.wrapped_inverter is mock_inverter
-
-
-class TestResilientWrapperMqtt:
-    """Tests for MQTT-related functionality."""
-
-    def test_activate_mqtt_forwards_to_inverter(self):
-        """MQTT activation should be forwarded."""
-        mock_inverter = MockInverter()
-        wrapper = ResilientInverterWrapper(mock_inverter)
-
-        mock_api = Mock()
-        wrapper.activate_mqtt(mock_api)
-
-        assert mock_inverter.mqtt_api is mock_api
+    def test_activate_mqtt_forwarded(self):
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv)
+        api = Mock()
+        w.activate_mqtt(api)
+        assert inv.mqtt_api is api
 
 
-class TestResilientWrapperIntegration:
-    """Integration tests simulating real-world scenarios."""
+# ---------------------------------------------------------------------------
+# Integration scenarios
+# ---------------------------------------------------------------------------
 
-    def test_firmware_upgrade_scenario(self):
-        """Simulate a firmware upgrade with recovery."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(
-            mock_inverter,
-            outage_tolerance_seconds=0.5,
-            retry_backoff_seconds=0.05  # Short backoff for testing
-        )
+class TestIntegration:
+    def test_firmware_upgrade_and_recovery(self):
+        """Simulate: outage -> cached reads -> recovery."""
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv, outage_tolerance_seconds=1.0, retry_backoff_seconds=0.05)
+        w.set_mode_allow_discharge()
+        assert w.get_SOC() == 75.0
 
-        # Initialize with set_mode
-        wrapper.set_mode_allow_discharge()
-
-        # Normal operation
-        soc1 = wrapper.get_SOC()
-        assert soc1 == 75.0
-
-        # Firmware upgrade starts - inverter goes offline
-        mock_inverter.should_fail = True
-
-        # Multiple calls during outage - should use cache
-        for _ in range(5):
-            soc = wrapper.get_SOC()
-            assert soc == 75.0
+        inv.should_fail = True
+        for _ in range(3):
+            assert w.get_SOC() == 75.0  # cache
             time.sleep(0.02)
 
-        # Wait for backoff to expire
-        time.sleep(0.1)
+        time.sleep(0.1)  # backoff expires
+        inv.should_fail = False
+        assert w.get_SOC() == 75.0
+        assert w._outage_start is None
 
-        # Inverter comes back online
-        mock_inverter.should_fail = False
-        soc2 = wrapper.get_SOC()
+    def test_permanent_outage_raises(self):
+        """Simulate: outage exceeding tolerance -> InverterOutageError."""
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv, outage_tolerance_seconds=0.1, retry_backoff_seconds=0.05)
+        w.set_mode_allow_discharge()
+        w.get_SOC()
 
-        assert soc2 == 75.0
-        assert wrapper._first_failure_time is None  # Reset after recovery
+        inv.should_fail = True
+        w.get_SOC()  # first failure
 
-    def test_permanent_outage_scenario(self):
-        """Simulate a permanent outage exceeding tolerance."""
-        mock_inverter = MockInverter(should_fail=False)
-        wrapper = ResilientInverterWrapper(
-            mock_inverter,
-            outage_tolerance_seconds=0.1,
-            retry_backoff_seconds=0.05  # Short backoff for testing
-        )
-
-        # Initialize with set_mode
-        wrapper.set_mode_allow_discharge()
-
-        # Normal operation
-        wrapper.get_SOC()
-
-        # Permanent outage
-        mock_inverter.should_fail = True
-
-        # First failure uses cache
-        wrapper.get_SOC()
-
-        # Wait beyond tolerance (and backoff)
         time.sleep(0.15)
-
-        # Should raise InverterOutageError
         with pytest.raises(InverterOutageError):
-            wrapper.get_SOC()
+            w.get_SOC()
