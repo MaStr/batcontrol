@@ -129,7 +129,5 @@ class Inverter:
             inverter,
             outage_tolerance_seconds=outage_tolerance,
         )
-        # Preserve inverter_num on wrapper
-        resilient_inverter.inverter_num = inverter.inverter_num
 
         return resilient_inverter
