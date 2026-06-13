@@ -221,7 +221,8 @@ class ResilientInverterWrapper(InverterInterface):
         cache_attr: Optional[str] = None,
         default_value: Any = None,
         method_args: tuple = (),
-        mark_initialized: bool = False
+        mark_initialized: bool = False,
+        is_command: bool = False
     ) -> Any:
         """
         Call an inverter method with resilience handling.
@@ -234,13 +235,33 @@ class ResilientInverterWrapper(InverterInterface):
             method_args: Arguments to pass to the method
             mark_initialized: If True, mark initialization complete on success
                               (should only be True for set_mode_* calls)
+            is_command: If True, this is a write/command operation (set_mode_*)
+                        with no cached fallback. During the backoff period the
+                        inverter is presumed unavailable, so the command is
+                        discarded (returns None) rather than attempted - it will
+                        be re-issued on the next cycle. A command that is
+                        attempted outside backoff and fails also degrades to
+                        None instead of raising. Either way the process keeps
+                        running; the outage tolerance window still applies.
 
         Returns:
-            The method result, cached value, or default value
+            The method result, cached value, default value, or None for a
+            command that could not be applied during an outage.
         """
-        # Check if we're in backoff period - skip actual call to avoid
-        # hammering an unavailable inverter
+        # Check if we're in backoff period - skip the actual call to avoid
+        # hammering an unavailable inverter.
         if self._is_in_backoff_period():
+            if is_command:
+                # Commands have no cached fallback. The inverter is presumed
+                # unavailable during backoff, so the command cannot be
+                # delivered - discard it. batcontrol recalculates and re-issues
+                # the mode on the next cycle.
+                logger.debug(
+                    "Skipping inverter command '%s' during backoff "
+                    "(inverter unavailable, retry next cycle)",
+                    operation_name
+                )
+                return None
             return self._get_cached_or_default(
                 operation_name, cache_attr, default_value, is_backoff=True
             )
@@ -261,6 +282,20 @@ class ResilientInverterWrapper(InverterInterface):
 
             if should_reraise:
                 raise
+
+            if is_command:
+                # A command (set_mode_*) has no cached value or default to
+                # fall back on. Within the outage tolerance window we degrade
+                # gracefully: the action could not be applied this cycle, but
+                # batcontrol will recalculate and retry on the next cycle. Once
+                # the tolerance window is exceeded, _handle_failure above raises
+                # InverterOutageError instead of returning.
+                logger.warning(
+                    "Inverter command '%s' could not be applied "
+                    "(communication failure). Will retry next cycle.",
+                    operation_name
+                )
+                return None
 
             return self._get_cached_or_default(
                 operation_name, cache_attr, default_value, is_backoff=False
@@ -381,7 +416,8 @@ class ResilientInverterWrapper(InverterInterface):
             "set_mode_force_charge",
             None, None,
             method_args=(chargerate,),
-            mark_initialized=True
+            mark_initialized=True,
+            is_command=True
         )
 
     def set_mode_avoid_discharge(self):
@@ -389,7 +425,8 @@ class ResilientInverterWrapper(InverterInterface):
         return self._call_with_resilience(
             self._inverter.set_mode_avoid_discharge,
             "set_mode_avoid_discharge",
-            mark_initialized=True
+            mark_initialized=True,
+            is_command=True
         )
 
     def set_mode_allow_discharge(self):
@@ -397,7 +434,8 @@ class ResilientInverterWrapper(InverterInterface):
         return self._call_with_resilience(
             self._inverter.set_mode_allow_discharge,
             "set_mode_allow_discharge",
-            mark_initialized=True
+            mark_initialized=True,
+            is_command=True
         )
 
     def set_mode_limit_battery_charge(self, limit_charge_rate: int):
@@ -407,7 +445,8 @@ class ResilientInverterWrapper(InverterInterface):
             "set_mode_limit_battery_charge",
             None, None,
             method_args=(limit_charge_rate,),
-            mark_initialized=True
+            mark_initialized=True,
+            is_command=True
         )
 
     # =========================================================================

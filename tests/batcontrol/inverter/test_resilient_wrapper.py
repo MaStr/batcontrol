@@ -422,8 +422,14 @@ class TestResilientWrapperWriteOperations:
         assert ('avoid_discharge',) in mock_inverter.set_mode_calls
         assert ('allow_discharge',) in mock_inverter.set_mode_calls
 
-    def test_set_mode_failure_during_outage(self):
-        """Set mode failures during outage should raise RuntimeError (no cache)."""
+    def test_set_mode_failure_during_outage_degrades_gracefully(self):
+        """A transient command failure must not crash; it degrades to None.
+
+        Commands (set_mode_*) have no cached fallback. Within the outage
+        tolerance window a failed command should return None (to be retried
+        next cycle) instead of raising RuntimeError, which would otherwise
+        bring down the whole process.
+        """
         mock_inverter = MockInverter(should_fail=False)
         wrapper = ResilientInverterWrapper(mock_inverter, outage_tolerance_seconds=60)
 
@@ -433,12 +439,75 @@ class TestResilientWrapperWriteOperations:
         # Now fail
         mock_inverter.should_fail = True
 
-        # Write operations don't have cache, should raise RuntimeError
-        # because there's no cached value or default for write operations
-        with pytest.raises(RuntimeError) as exc_info:
-            wrapper.set_mode_force_charge(5000)
+        result = wrapper.set_mode_force_charge(5000)
 
-        assert "No cached value or default available" in str(exc_info.value)
+        assert result is None
+        # The command was actually attempted on the inverter
+        assert ('force_charge', 5000) in mock_inverter.set_mode_calls
+        assert wrapper._consecutive_failures == 1
+
+    def test_set_mode_discarded_during_backoff(self):
+        """During backoff the inverter is presumed unavailable.
+
+        A read failure (e.g. refresh_api_values / get_*) starts a backoff
+        window. A command issued in that window must be discarded (returns
+        None) instead of being fired at a presumed-dead inverter or crashing.
+        batcontrol re-issues the mode on the next cycle.
+        """
+        mock_inverter = MockInverter(should_fail=False)
+        wrapper = ResilientInverterWrapper(
+            mock_inverter,
+            outage_tolerance_seconds=60,
+            retry_backoff_seconds=60  # long backoff so it stays active
+        )
+
+        # Initialize and cache a value
+        wrapper.set_mode_allow_discharge()
+        wrapper.get_SOC()
+
+        # A transient read failure starts the backoff window
+        mock_inverter.should_fail = True
+        wrapper.get_SOC()
+        assert wrapper._is_in_backoff_period() is True
+
+        # A command issued during backoff is discarded - not sent, no crash.
+        calls_before = len(mock_inverter.set_mode_calls)
+        result = wrapper.set_mode_avoid_discharge()
+
+        assert result is None
+        assert len(mock_inverter.set_mode_calls) == calls_before
+
+    def test_set_mode_first_run_failure_propagates(self):
+        """Before initialization, a command failure must still fail fast."""
+        mock_inverter = MockInverter(should_fail=True)
+        wrapper = ResilientInverterWrapper(mock_inverter)
+
+        with pytest.raises(ConnectionError):
+            wrapper.set_mode_allow_discharge()
+
+    def test_set_mode_raises_outage_error_after_tolerance(self):
+        """A command must surface InverterOutageError once tolerance is exceeded."""
+        mock_inverter = MockInverter(should_fail=False)
+        wrapper = ResilientInverterWrapper(
+            mock_inverter,
+            outage_tolerance_seconds=0.1,
+            retry_backoff_seconds=0.05
+        )
+
+        # Initialize
+        wrapper.set_mode_allow_discharge()
+
+        # Permanent outage
+        mock_inverter.should_fail = True
+
+        # First failure degrades gracefully (within tolerance)
+        assert wrapper.set_mode_allow_discharge() is None
+
+        # Wait beyond tolerance
+        time.sleep(0.15)
+
+        with pytest.raises(InverterOutageError):
+            wrapper.set_mode_allow_discharge()
 
 
 class TestResilientWrapperStatus:
