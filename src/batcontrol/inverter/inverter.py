@@ -10,7 +10,6 @@ from .inverter_interface import InverterInterface
 from .resilient_wrapper import (
     ResilientInverterWrapper,
     DEFAULT_OUTAGE_TOLERANCE_SECONDS,
-    DEFAULT_RETRY_BACKOFF_SECONDS
 )
 
 logger = logging.getLogger(__name__)
@@ -121,24 +120,14 @@ class Inverter:
             DEFAULT_OUTAGE_TOLERANCE_SECONDS / 60
         ) * 60  # Convert to seconds
 
-        # Get retry backoff from config (default: 60 seconds)
-        retry_backoff = config.get(
-            'retry_backoff_seconds',
-            DEFAULT_RETRY_BACKOFF_SECONDS
-        )
-
         logger.info(
             'Wrapping inverter with resilient wrapper '
-            '(outage tolerance: %.1f min, retry backoff: %.0fs)',
+            '(outage tolerance: %.1f min)',
             outage_tolerance / 60,
-            retry_backoff
         )
         resilient_inverter = ResilientInverterWrapper(
             inverter,
             outage_tolerance_seconds=outage_tolerance,
-            retry_backoff_seconds=retry_backoff
         )
-        # Preserve inverter_num on wrapper
-        resilient_inverter.inverter_num = inverter.inverter_num
 
         return resilient_inverter

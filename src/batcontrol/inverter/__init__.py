@@ -1,3 +1,7 @@
 from .inverter import Inverter
-from .exceptions import InverterOutageError
+from .exceptions import (
+    InverterError,
+    InverterCommunicationError,
+    InverterOutageError,
+)
 from .resilient_wrapper import ResilientInverterWrapper

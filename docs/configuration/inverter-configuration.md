@@ -22,7 +22,11 @@ Default:
 These options enable graceful handling of temporary inverter outages (e.g., during firmware upgrades or network interruptions).
 
 ### enable_resilient_wrapper
-Enable or disable the resilient wrapper for graceful outage handling. When enabled, temporary inverter failures are handled gracefully by caching values and applying retry backoff. This helps batcontrol survive brief connection losses without terminating.
+Enable or disable the resilient wrapper for graceful outage handling. When enabled, a temporary inverter failure makes batcontrol skip the current control cycle and retry on the next scheduled run, instead of terminating. No decisions are made on stale data - the inverter is simply read again next cycle. This helps batcontrol survive brief connection losses (e.g. firmware upgrades) without exiting.
+
+Errors before the first successful control command still fail fast, so configuration mistakes are caught at startup.
+
+Why not just let batcontrol crash and rely on the container restart policy? Without the wrapper, every inverter outage terminates the process, and `restart: unless-stopped` brings it straight back up. During a multi-minute outage this turns into a tight restart loop, and **each restart re-fetches the price and solar forecasts from their providers**. Repeated cold starts can therefore run into provider rate limits (e.g. Awattar/Tibber for prices, Forecast.Solar/SolarPrognose for solar), which can leave batcontrol without fresh data even after the inverter recovers. Keeping the process alive and skipping cycles avoids hammering both the inverter and the data providers.
 
 Default:
 ```
@@ -30,19 +34,11 @@ enable_resilient_wrapper: false
 ```
 
 ### outage_tolerance_minutes
-The maximum duration (in minutes) to tolerate inverter outages before terminating. This allows batcontrol to survive firmware upgrades or network issues up to the specified time window. After this timeout, batcontrol will give up and exit with an error.
+The maximum duration (in minutes) to tolerate inverter outages before terminating. While the inverter is unreachable, each control cycle is skipped. If communication is not restored within this window, batcontrol gives up and exits with an error.
 
 Default:
 ```
 outage_tolerance_minutes: 24  # 24 minutes
-```
-
-### retry_backoff_seconds
-The time to wait (in seconds) before retrying after an inverter failure. This prevents hammering an unavailable inverter during the outage period and allows time for recovery.
-
-Default:
-```
-retry_backoff_seconds: 60  # 60 seconds
 ```
 
 ## mqtt

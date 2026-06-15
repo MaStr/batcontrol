@@ -15,6 +15,7 @@ import time
 import os
 import logging
 import platform
+import functools
 
 import dataclasses
 from typing import Optional
@@ -33,6 +34,7 @@ from .logic import PeakShavingConfig
 
 from .dynamictariff import DynamicTariff as tariff_factory
 from .inverter import Inverter as inverter_factory
+from .inverter import InverterError, InverterCommunicationError
 from .forecastsolar import ForecastSolar as solar_factory
 
 from .forecastconsumption import Consumption as consumption_factory
@@ -56,6 +58,28 @@ CONTROL_SOURCE_API = 'api'
 CONTROL_SOURCE_OPTIMIZER = 'optimizer'
 
 logger = logging.getLogger(__name__)
+
+
+def _tolerate_inverter_outage(func):
+    """Swallow inverter outages for externally triggered (API/evcc) actions.
+
+    These run on background threads in response to MQTT/evcc events. If the
+    inverter is briefly unavailable the request is dropped and logged; the
+    next scheduled run() reconciles the inverter state. Background calls
+    advance the shared outage clock in the resilient wrapper; termination on
+    a permanent outage is only triggered from the main run() loop.
+    """
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except InverterError as e:
+            logger.warning(
+                "Inverter unavailable during '%s', ignoring external request: %s",
+                func.__name__, e,
+            )
+            return None
+    return wrapper
 
 
 def _parse_optional_ratio(value, config_key: str) -> Optional[float]:
@@ -475,6 +499,22 @@ class Batcontrol:
             self.allow_discharging()
 
     def run(self):
+        """One control cycle. Aborts cleanly on a transient inverter outage.
+
+        Communication failures are turned into InverterCommunicationError by
+        the resilient wrapper. We skip the cycle and let the scheduler retry on
+        the next run - no decision is made on stale data. A permanent outage
+        surfaces as InverterOutageError, which propagates to terminate.
+        """
+        try:
+            self._run_once()
+        except InverterCommunicationError as e:
+            logger.warning(
+                "Inverter unreachable this cycle (%s). "
+                "Skipping control cycle, will retry on next run.", e
+            )
+
+    def _run_once(self):
         """ Main calculation & control loop """
         logger.debug('Timeslots are in %d-minute intervals', self.time_resolution)
 
@@ -940,6 +980,7 @@ class Batcontrol:
         """ Get the max charging from grid limit for battery control """
         return self.max_charging_from_grid_limit
 
+    @_tolerate_inverter_outage
     def set_discharge_blocked(self, discharge_blocked) -> None:
         """ Avoid discharging if an external block is received,
             but take care of the always_allow_discharge_limit.
@@ -1007,6 +1048,7 @@ class Batcontrol:
             # Trigger Inverter
             self.inverter.refresh_api_values()
 
+    @_tolerate_inverter_outage
     def api_set_mode(self, mode: int):
         """ Log and change config run mode of inverter(s) from external call """
         # Check if mode is valid
@@ -1043,6 +1085,7 @@ class Batcontrol:
         else:
             self.__set_control_source(CONTROL_SOURCE_API)
 
+    @_tolerate_inverter_outage
     def api_set_charge_rate(self, charge_rate: int):
         """ Log and change config charge_rate and activate charging."""
         if charge_rate < 0:
@@ -1060,6 +1103,7 @@ class Batcontrol:
         else:
             self.__set_control_source(CONTROL_SOURCE_API)
 
+    @_tolerate_inverter_outage
     def api_set_limit_battery_charge_rate(self, limit: int):
         """ Set dynamic battery charge rate limit from external call
 

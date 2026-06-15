@@ -11,6 +11,10 @@ from batcontrol.core import (
     MODE_ALLOW_DISCHARGING,
     MODE_LIMIT_BATTERY_CHARGE_RATE,
 )
+from batcontrol.inverter import (
+    InverterCommunicationError,
+    InverterOutageError,
+)
 from batcontrol.logic.logic import Logic as LogicFactory
 
 
@@ -451,6 +455,39 @@ class TestCoreRunDispatch:
         mock_inverter.set_mode_force_charge.assert_not_called()
         mock_inverter.set_mode_avoid_discharge.assert_not_called()
         mock_inverter.set_mode_limit_battery_charge.assert_not_called()
+
+    def test_run_skips_cycle_on_communication_error(self, run_dispatch_setup):
+        """A transient inverter outage aborts the cycle without raising."""
+        bc, mock_inverter, _fake_logic = run_dispatch_setup
+        mock_inverter.get_stored_energy.side_effect = \
+            InverterCommunicationError("get_stored_energy")
+
+        # Must not raise - the cycle is skipped and retried on the next run.
+        bc.run()
+
+        # No control action was applied this cycle.
+        mock_inverter.set_mode_allow_discharge.assert_not_called()
+        mock_inverter.set_mode_force_charge.assert_not_called()
+        mock_inverter.set_mode_avoid_discharge.assert_not_called()
+
+    def test_run_propagates_outage_error(self, run_dispatch_setup):
+        """A permanent outage propagates so the main loop can terminate."""
+        bc, mock_inverter, _fake_logic = run_dispatch_setup
+        mock_inverter.get_stored_energy.side_effect = \
+            InverterOutageError("permanent", outage_duration_seconds=9999)
+
+        with pytest.raises(InverterOutageError):
+            bc.run()
+
+    def test_api_set_mode_swallows_communication_error(self, run_dispatch_setup):
+        """Externally triggered control tolerates a transient outage."""
+        bc, mock_inverter, _fake_logic = run_dispatch_setup
+        mock_inverter.set_mode_avoid_discharge.side_effect = \
+            InverterCommunicationError("set_mode_avoid_discharge")
+
+        # api_set_mode runs on a background thread; it must not raise.
+        from batcontrol.core import MODE_AVOID_DISCHARGING
+        bc.api_set_mode(MODE_AVOID_DISCHARGING)
 
     def test_run_passes_preserve_min_grid_charge_soc_to_logic(
             self, run_dispatch_setup):
