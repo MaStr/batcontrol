@@ -65,8 +65,9 @@ def _tolerate_inverter_outage(func):
 
     These run on background threads in response to MQTT/evcc events. If the
     inverter is briefly unavailable the request is dropped and logged; the
-    next scheduled run() reconciles the inverter state. Termination on a
-    permanent outage is driven by the main run() loop, not background threads.
+    next scheduled run() reconciles the inverter state. Background calls
+    advance the shared outage clock in the resilient wrapper; termination on
+    a permanent outage is only triggered from the main run() loop.
     """
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
@@ -498,7 +499,7 @@ class Batcontrol:
             self.allow_discharging()
 
     def run(self):
-        """ One control cycle. Aborts cleanly on a transient inverter outage.
+        """One control cycle. Aborts cleanly on a transient inverter outage.
 
         Communication failures are turned into InverterCommunicationError by
         the resilient wrapper. We skip the cycle and let the scheduler retry on

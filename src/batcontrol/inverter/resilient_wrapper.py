@@ -94,7 +94,7 @@ class ResilientInverterWrapper:
         if not self._initialized:
             logger.error(
                 "Inverter failure before initialization (config error?): %s", error)
-            raise error
+            raise
 
         now = time.time()
         if self._outage_start is None:
@@ -108,7 +108,7 @@ class ResilientInverterWrapper:
             ) from error
 
         logger.warning(
-            "Inverter communication failed for '%s' (outage: %.1f min, "
+            "Inverter communication failed for '%s': %s (outage: %.1f min, "
             "tolerance: %.1f min). Skipping this control cycle.",
-            name, outage / 60, self._outage_tolerance / 60)
+            name, error, outage / 60, self._outage_tolerance / 60)
         raise InverterCommunicationError(name) from error
