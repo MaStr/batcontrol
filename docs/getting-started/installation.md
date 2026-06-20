@@ -29,7 +29,7 @@ Your annual electricity consumption in kWh. The default load profile covers typi
 
 ## Configuration File
 
-All installation methods require a `batcontrol_config.yaml` in the `config/` directory. If none is present when the Docker container starts for the first time, batcontrol copies a sample configuration that uses a dummy inverter. The dummy inverter simulates responses without touching real hardware, so you can explore the setup and logs safely before connecting batcontrol to your actual system.
+Docker (plain or Compose) and local Python installs use a `batcontrol_config.yaml` in the `config/` directory. If none is present when the Docker container starts for the first time, batcontrol copies a sample configuration that uses a dummy inverter. Home Assistant add-on configuration is done via the add-on UI (no local YAML file).
 
 Once you are ready, edit `config/batcontrol_config.yaml` and set your inverter type, credentials, tariff provider, and PV details. See [Main Configuration](../configuration/batcontrol-configuration.md) and the other configuration pages for a full reference.
 
