@@ -47,6 +47,38 @@ markdown_extensions:
 
 plugins:
   - search
+  - llmstxt:
+      markdown_description: |
+        Batcontrol controls a PV battery inverter based on dynamic electricity prices,
+        solar production forecasts, and consumption patterns. It charges from the grid
+        when prices are low and preserves stored energy when prices are high. It supports
+        Fronius Gen24 inverters (HTTP API and Modbus TCP) and any inverter via MQTT bridge.
+        Tariff providers include Tibber, aWATTar, evcc, EnergyForecast.de, and static zone
+        tariffs. Solar forecast sources include Forecast.Solar, Solar-Prognose.de, evcc,
+        and Home Assistant Solar Forecast ML. Peak shaving distributes PV battery charging
+        across the day using forecasts, and works with both dynamic and static tariffs.
+      full_output: llms-full.txt
+      sections:
+        Getting Started:
+          - getting-started/installation.md: Installation guide with pre-flight checklist, Docker setup, and next steps
+          - getting-started/how-batcontrol-works.md: Architecture, control loop, forecasting system, and decision logic
+        Configuration:
+          - configuration/batcontrol-configuration.md: Main configuration file reference
+          - configuration/inverter-configuration.md: Fronius Gen24, Fronius Modbus, and MQTT inverter configuration
+          - configuration/dynamic-tariff-provider.md: Tibber, aWATTar, evcc, EnergyForecast, and static tariff zones
+          - configuration/solar-forecast.md: Forecast.Solar, Solar-Prognose.de, evcc, and Home Assistant ML
+          - configuration/consumption-forecast.md: CSV load profile and Home Assistant API forecast
+        Features:
+          - features/peak-shaving.md: Dynamic PV charge rate limiting to maximize solar absorption
+          - features/battery-control-expert.md: Advanced tuning parameters
+          - features/price-difference-calculation.md: How price thresholds are calculated
+        Integrations:
+          - integrations/mqtt-api.md: MQTT state publishing, runtime overrides, and Home Assistant auto-discovery
+          - integrations/mqtt-inverter.md: Integrating any battery system via MQTT bridge
+          - integrations/evcc-connection.md: Coordinating with EV charging via evcc
+          - integrations/forecast-metrics.md: Forecast data exposed via MQTT
+        Optional:
+          - development/15-min-transform.md: Internal 15-minute interval resolution
 
 nav:
   - Home: index.md

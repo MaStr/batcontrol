@@ -55,6 +55,7 @@ test = [
 ]
 docs = [
     "mkdocs-material>=9.5,<10",
+    "mkdocs-llmstxt>=0.1.0",
 ]
 
 # Bump Version

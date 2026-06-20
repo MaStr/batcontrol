@@ -93,3 +93,8 @@ config/
 📝 **Documentation Status**: This documentation lives in the [`docs/` folder of the batcontrol repository](https://github.com/MaStr/batcontrol/tree/main/docs). If you find outdated information or need additional details, please open an issue or pull request.
 
 🔗 **Project Repository**: [GitHub - Batcontrol](https://github.com/MaStr/batcontrol)
+
+---
+
+**LLM-friendly versions of this documentation:**
+[llms.txt](llms.txt) — [llms-full.txt](llms-full.txt)
