@@ -97,4 +97,4 @@ config/
 ---
 
 **LLM-friendly versions of this documentation:**
-[llms.txt](llms.txt) — [llms-full.txt](llms-full.txt)
+[llms.txt](https://mastr.github.io/batcontrol/llms.txt) — [llms-full.txt](https://mastr.github.io/batcontrol/llms-full.txt)
