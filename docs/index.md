@@ -9,7 +9,7 @@ Batcontrol is an intelligent battery management system that optimizes your home 
 - **[Main Configuration](configuration/batcontrol-configuration.md)** - Basic system settings and logging
 
 ### Installation
-- **Docker / docker-compose**: See the [project README](https://github.com/MaStr/batcontrol#readme) for container setup instructions
+- See the **[Installation Guide](getting-started/installation.md)** for Docker, docker-compose, local Python, and Home Assistant add-on setup
 - **Home Assistant Add-on**: Install via the [batcontrol_ha_addon repository](https://github.com/MaStr/batcontrol_ha_addon)
 
 ### Quick Setup Guide
