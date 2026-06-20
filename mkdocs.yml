@@ -51,6 +51,7 @@ plugins:
 nav:
   - Home: index.md
   - Getting Started:
+      - Installation: getting-started/installation.md
       - How Batcontrol Works: getting-started/how-batcontrol-works.md
   - Configuration:
       - Main Configuration: configuration/batcontrol-configuration.md
