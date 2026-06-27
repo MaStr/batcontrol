@@ -4,6 +4,8 @@ FROM python:3.13-alpine AS builder
 # Install uv for fast, reliable Python packaging
 COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
 
+WORKDIR /build
+
 # Copy only whats needed for dependencies first
 COPY pyproject.toml LICENSE README.md ./
 
