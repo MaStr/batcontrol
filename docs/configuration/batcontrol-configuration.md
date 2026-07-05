@@ -80,6 +80,7 @@ battery_control:
   always_allow_discharge_limit: 0.90
   max_charging_from_grid_limit: 0.89
   min_grid_charge_soc: 0.55 # optional: grid-charge to this SoC before expensive slots
+  grid_charge_target_strategy: fixed # optional: fixed or forecast
   min_recharge_amount: 100          
 ```
 Details about the Price configuration can be found on [price difference calculation](../features/price-difference-calculation.md) page.
@@ -87,7 +88,14 @@ Details about the Price configuration can be found on [price difference calculat
 
 ![Picture of different parameters on battery soc](../assets/battery_limits_parameter.png)
 
-`min_grid_charge_soc` is optional. When set as a ratio, for example `0.55`, batcontrol grid-charges toward this target when charging is economical. Leave it unset to keep the default behavior. To also preserve this target as reserved energy during cheap/pre-expensive windows, enable the expert option `preserve_min_grid_charge_soc`.
+`min_grid_charge_soc` is optional. When set as a ratio, for example `0.55`, batcontrol grid-charges toward this target when charging is economical. Leave it unset to keep the default behavior.
+
+`grid_charge_target_strategy` controls how `min_grid_charge_soc` is applied:
+
+- `fixed` (default): grid-charge toward `min_grid_charge_soc` when charging is economical.
+- `forecast`: use existing high-price-slot demand as an additional reserve. The target is roughly `min_grid_charge_soc` energy plus the calculated high-price required energy, capped by `max_charging_from_grid_limit`.
+
+To also preserve this target as reserved energy during cheap/pre-expensive windows, enable the expert option `preserve_min_grid_charge_soc`. Without that expert option, the strategy affects grid recharge only and does not add extra discharge blocking.
 
 If `min_grid_charge_soc` is higher than `max_charging_from_grid_limit`, grid charging cannot reach the configured minimum SoC target. Batcontrol will log a warning in this case; increase `max_charging_from_grid_limit` or lower `min_grid_charge_soc` so the settings correlate.
 

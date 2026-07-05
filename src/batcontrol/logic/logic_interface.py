@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Any
 import datetime
 import numpy as np
 
@@ -9,6 +9,12 @@ logger = logging.getLogger(__name__)
 
 # Shared tuple of valid peak-shaving operating modes.
 PEAK_SHAVING_VALID_MODES = ('time', 'price', 'combined')
+
+
+def _default_grid_charge_target_config():
+    """Create default grid-charge target strategy config lazily."""
+    from .grid_charge_target import GridChargeTargetConfig  # pylint: disable=import-outside-toplevel
+    return GridChargeTargetConfig()
 
 
 @dataclass
@@ -117,6 +123,9 @@ class CalculationParameters:
     # Peak shaving sub-configuration. evcc may set ``enabled=False`` for a
     # single calculation cycle via ``dataclasses.replace`` in core.py.
     peak_shaving: PeakShavingConfig = field(default_factory=PeakShavingConfig)
+    # Grid-charge target strategy sub-configuration. The concrete config class
+    # lives in grid_charge_target.py; use a lazy factory to avoid import cycles.
+    grid_charge_target: Any = field(default_factory=_default_grid_charge_target_config)
 
     def __post_init__(self):
         if self.min_grid_charge_soc is not None:
@@ -138,6 +147,7 @@ class CalculationOutput:
     reserved_energy: float = 0.0
     required_recharge_energy: float = 0.0
     min_dynamic_price_difference: float = 0.05
+    effective_min_grid_charge_soc: Optional[float] = None
 
 @dataclass
 class InverterControlSettings:

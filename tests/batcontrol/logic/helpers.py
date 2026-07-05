@@ -4,6 +4,7 @@ import datetime
 import numpy as np
 
 from batcontrol.logic.common import CommonLogic
+from batcontrol.logic.grid_charge_target import GridChargeTargetConfig
 from batcontrol.logic.logic_interface import (
     CalculationInput,
     CalculationParameters,
@@ -30,7 +31,8 @@ def make_logic(logic_cls, *,
                charge_rate_multiplier=1.1,
                always_allow_discharge_limit=0.90,
                min_charge_energy=100,
-               peak_shaving_enabled=False):
+               peak_shaving_enabled=False,
+               grid_charge_target=None):
     """Create a logic instance with common scenario defaults.
 
     The CommonLogic singleton is reset so each helper call applies the
@@ -52,6 +54,7 @@ def make_logic(logic_cls, *,
         min_grid_charge_soc=min_grid_charge_soc,
         preserve_min_grid_charge_soc=preserve_min_grid_charge_soc,
         peak_shaving=PeakShavingConfig(enabled=peak_shaving_enabled),
+        grid_charge_target=grid_charge_target or GridChargeTargetConfig(),
     ))
     return logic
 
