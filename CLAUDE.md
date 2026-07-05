@@ -63,6 +63,15 @@ tmp/                      # Throwaway experiments — NEVER committed
    (`MaStr/batcontrol_ha_addon`: `options:` + `schema:` in the add-on `config.yaml`). That repo
    ships a `port-batcontrol-change` skill which automates the steps.
 
+## Releasing
+
+Use the `release` skill (`.claude/skills/release/SKILL.md`). Short version: versions are
+managed by bump-my-version (`pyproject.toml` + `src/batcontrol/__pkginfo__.py`, never edit by
+hand); the `Prepare Release` workflow drops the `dev` suffix, builds the wheel, and creates a
+draft GitHub release + version-bump PR; the pushed tag triggers the Docker build; afterwards
+`main` is bumped to the next `dev` version and the release is promoted into the HA add-on repo
+(`release-addon` skill there).
+
 ## Known Pitfalls
 
 - ASCII-only in source code — no umlauts, special chars, emoji, even in log messages. Does not
