@@ -109,8 +109,10 @@ See [Forecast Metrics](forecast-metrics.md) for a detailed explanation of these 
 - `house/batcontrol/always_allow_discharge_limit_capacity` - Always discharge limit in Wh
 - `house/batcontrol/max_charging_from_grid_limit` - Max charging from grid limit (0.0-1.0)
 - `house/batcontrol/max_charging_from_grid_limit_percent` - Max charging from grid limit in %
-- `house/batcontrol/min_grid_charge_soc` - Optional minimum grid-charge target (0.0-1.0)
-- `house/batcontrol/min_grid_charge_soc_percent` - Optional minimum grid-charge target in %
+- `house/batcontrol/min_grid_charge_soc` - Optional configured minimum grid-charge target (0.0-1.0)
+- `house/batcontrol/min_grid_charge_soc_percent` - Optional configured minimum grid-charge target in %
+- `house/batcontrol/effective_min_grid_charge_soc` - Runtime effective grid-charge target after strategy calculation (0.0-1.0)
+- `house/batcontrol/effective_min_grid_charge_soc_percent` - Runtime effective grid-charge target after strategy calculation in %
 - `house/batcontrol/production_offset` - Production offset multiplier (`1.0` = 100%, `0.8` = 80%, etc.)
 
 ### Peak Shaving

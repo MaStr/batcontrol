@@ -8,6 +8,10 @@ from .logic_interface import CalculationParameters, CalculationInput
 from .logic_interface import CalculationOutput, InverterControlSettings
 from .common import CommonLogic
 from .decision_logging import GridRechargeDecision, log_grid_recharge_decision
+from .grid_charge_target import (
+    apply_grid_charge_target_to_recharge,
+    apply_grid_charge_target_to_reserve,
+)
 
 # Minimum remaining time in hours to prevent division by very small numbers
 # when calculating charge rates. This constant serves as a safety threshold:
@@ -63,7 +67,10 @@ class DefaultLogic(LogicInterface):
         self.calculation_output = CalculationOutput(
             reserved_energy=0.0,
             required_recharge_energy=0.0,
-            min_dynamic_price_difference=0.0
+            min_dynamic_price_difference=0.0,
+            effective_min_grid_charge_soc=(
+                self.calculation_parameters.min_grid_charge_soc
+            )
        )
 
         self.inverter_control_settings = self.calculate_inverter_mode(
@@ -315,12 +322,24 @@ class DefaultLogic(LogicInterface):
                 min_dynamic_price_difference
             )
         )
-        reserved_storage = self.common.apply_min_grid_charge_soc_reserve(
-            reserved_storage,
-            calc_input.stored_energy,
-            calc_input.stored_usable_energy,
-            self.calculation_parameters.min_grid_charge_soc,
-            min_grid_charge_soc_active
+        min_soc_energy = max(
+            0.0,
+            calc_input.stored_energy - calc_input.stored_usable_energy,
+        )
+        reserve_target = apply_grid_charge_target_to_reserve(
+            config=self.calculation_parameters.grid_charge_target,
+            reserved_energy=reserved_storage,
+            min_soc_energy=min_soc_energy,
+            configured_min_grid_charge_soc=(
+                self.calculation_parameters.min_grid_charge_soc),
+            max_capacity=self.calculation_parameters.max_capacity,
+            max_charging_from_grid_limit=(
+                self.calculation_parameters.max_charging_from_grid_limit),
+            active=min_grid_charge_soc_active,
+        )
+        reserved_storage = reserve_target.energy
+        self.calculation_output.effective_min_grid_charge_soc = (
+            reserve_target.effective_soc
         )
 
         self.calculation_output.reserved_energy = reserved_storage
@@ -458,13 +477,25 @@ class DefaultLogic(LogicInterface):
                 "[Rule] No additional energy required, because stored energy is sufficient."
             )
             recharge_energy = 0.0
+
+        if required_energy == 0.0:
             self.calculation_output.required_recharge_energy = recharge_energy
             return recharge_energy
 
-        recharge_energy = self.common.apply_min_grid_charge_soc_target(
-            recharge_energy,
-            calc_input.stored_energy,
-            self.calculation_parameters.min_grid_charge_soc
+        recharge_target = apply_grid_charge_target_to_recharge(
+            config=self.calculation_parameters.grid_charge_target,
+            recharge_energy=recharge_energy,
+            required_energy=required_energy,
+            stored_energy=calc_input.stored_energy,
+            configured_min_grid_charge_soc=(
+                self.calculation_parameters.min_grid_charge_soc),
+            max_capacity=self.calculation_parameters.max_capacity,
+            max_charging_from_grid_limit=(
+                self.calculation_parameters.max_charging_from_grid_limit),
+        )
+        recharge_energy = recharge_target.energy
+        self.calculation_output.effective_min_grid_charge_soc = (
+            recharge_target.effective_soc
         )
 
         free_capacity = calc_input.free_capacity
