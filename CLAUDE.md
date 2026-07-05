@@ -10,7 +10,7 @@ hours, based on dynamic tariffs, solar forecast, and consumption forecast. Pytho
 ```bash
 ./run_tests.sh                                  # full suite + coverage (creates .venv via uv)
 uv venv --python 3.13 --allow-existing          # setup only
-uv pip install -e '.[test]'
+uv pip install -e '.[test]' pylint autopep8     # lint tools are not part of the test extras
 uv run pytest tests/ -k <name>                  # single test / subset
 uv run pylint src/batcontrol                    # target score >= 9.0 (10 if achievable)
 uv run autopep8 --in-place <file>               # PEP8 formatting
@@ -49,7 +49,7 @@ tmp/                      # Throwaway experiments — NEVER committed
 - **MQTT API:** publishes state and accepts runtime overrides (min/max SoC, charge rate) via
   retained topics.
 - **Interval resolution:** 15-minute internally — see `interval_utils.py` and
-  `docs/15-min-transform.md`.
+  `docs/development/15-min-transform.md`.
 
 ## Change Checklist
 
