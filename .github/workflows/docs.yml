@@ -2,9 +2,12 @@ name: Deploy Documentation
 
 on:
   push:
+    tags:
+      - '*.*.*'
     branches:
       - main
     paths:
+      - 'pyproject.toml'
       - 'docs/**'
       - 'mkdocs.yml'
       - '.github/workflows/docs.yml'
