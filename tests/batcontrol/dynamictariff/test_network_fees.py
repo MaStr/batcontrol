@@ -191,11 +191,11 @@ class TestNetworkFeesIntegration(unittest.TestCase):
         raw_data = {'data': [{
             'start': fixed_ts.isoformat(),
             'end': (fixed_ts + datetime.timedelta(hours=1)).isoformat(),
-            'price': 0.10
+            'price_ct_kwh': 10.0  # 10 ct/kWh = 0.10 EUR/kWh
         }]}
         ef.store_raw_data(raw_data)
 
-        base = 0.10
+        base = 0.10  # price_ct_kwh / 100
         expected = (base + 0.005 + network_fee) * 1.19
 
         with patch('batcontrol.dynamictariff.energyforecast.datetime') as mock_dt:
@@ -225,7 +225,7 @@ class TestNetworkFeesIntegration(unittest.TestCase):
         raw_data = {'data': [
             {'start': (fixed_ts + datetime.timedelta(minutes=15 * i)).isoformat(),
              'end': (fixed_ts + datetime.timedelta(minutes=15 * (i + 1))).isoformat(),
-             'price': 0.10 + 0.01 * i}
+             'price_ct_kwh': (0.10 + 0.01 * i) * 100}  # ct/kWh, code divides by 100
             for i in range(4)
         ]}
         ef.store_raw_data(raw_data)
@@ -253,7 +253,7 @@ class TestNetworkFeesIntegration(unittest.TestCase):
         raw_data = {'data': [{
             'start': fixed_ts.isoformat(),
             'end': (fixed_ts + datetime.timedelta(hours=1)).isoformat(),
-            'price': 0.10
+            'price_ct_kwh': 10.0  # 10 ct/kWh = 0.10 EUR/kWh
         }]}
         ef.store_raw_data(raw_data)
 

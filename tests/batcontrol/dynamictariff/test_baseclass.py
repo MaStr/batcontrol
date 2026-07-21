@@ -332,24 +332,23 @@ class TestEnergyforecastProvider:
         return pytz.timezone('Europe/Berlin')
 
     def test_energyforecast_initialization_hourly(self, timezone):
-        """Test Energyforecast provider initialization with hourly"""
+        """Test Energyforecast provider initialization with hourly target resolution"""
         from batcontrol.dynamictariff.energyforecast import Energyforecast
 
         provider = Energyforecast(timezone, 'test_token', 900, 0,
                                   target_resolution=60)
-        assert provider.native_resolution == 60
+        # API v2 always delivers quarter-hourly; native_resolution is always 15
+        assert provider.native_resolution == 15
         assert provider.target_resolution == 60
-        assert provider.api_resolution == "hourly"
 
     def test_energyforecast_initialization_15min(self, timezone):
-        """Test Energyforecast provider initialization with 15-min"""
+        """Test Energyforecast provider initialization with 15-min target resolution"""
         from batcontrol.dynamictariff.energyforecast import Energyforecast
 
         provider = Energyforecast(timezone, 'test_token', 900, 0,
                                   target_resolution=15)
         assert provider.native_resolution == 15
         assert provider.target_resolution == 15
-        assert provider.api_resolution == "quarter_hourly"
 
 
 class TestDynamicTariffFactory:
@@ -393,3 +392,43 @@ class TestDynamicTariffFactory:
         )
 
         assert provider.target_resolution == 60
+
+    def test_factory_energyforecast_total_price(self, timezone):
+        """Test that energyforecast_total_price is created with use_total_price=True"""
+        from batcontrol.dynamictariff.dynamictariff import DynamicTariff
+
+        config = {
+            'type': 'energyforecast_total_price',
+            'apikey': 'test_key',
+        }
+
+        provider = DynamicTariff.create_tarif_provider(
+            config, timezone, 900, 0, target_resolution=15
+        )
+
+        assert provider.use_total_price is True
+        assert provider.target_resolution == 15
+
+    def test_factory_energyforecast_total_price_requires_apikey(self, timezone):
+        """Test that energyforecast_total_price raises without apikey"""
+        from batcontrol.dynamictariff.dynamictariff import DynamicTariff
+
+        config = {'type': 'energyforecast_total_price'}
+
+        with pytest.raises(RuntimeError, match='apikey'):
+            DynamicTariff.create_tarif_provider(config, timezone, 900, 0)
+
+    def test_factory_energyforecast_total_price_no_vat_required(self, timezone):
+        """Test that energyforecast_total_price does not require vat/fees/markup"""
+        from batcontrol.dynamictariff.dynamictariff import DynamicTariff
+
+        config = {
+            'type': 'energyforecast_total_price',
+            'apikey': 'test_key',
+            'market_zone': 'AT',
+        }
+
+        provider = DynamicTariff.create_tarif_provider(config, timezone, 900, 0)
+
+        assert provider.market_zone == 'AT'
+        assert provider.use_total_price is True

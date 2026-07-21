@@ -128,13 +128,24 @@ utility:
   # zone_2_hours: 0-6,23 # optional: hours assigned to zone 2 (required if tariff_zone_2 is set)
   # tariff_zone_3: 0.2100 # optional third zone price
   # zone_3_hours: 17-20 # optional hours for zone 3 (must not overlap with zone 1 or 2)
-  # apikey: YOUR_API_KEY # MANDATORY for energyforecast and tibber. Uncomment and set if using those providers.
+  # apikey: YOUR_API_KEY # MANDATORY for energyforecast, energyforecast_total_price and tibber.
+  # market_zone: DE # optional for energyforecast/energyforecast_total_price: DE/LU (both map to DE-LU for the API, default), AT, FR, NL, BE, PL, DK1, DK2
+  #
+  # ALTERNATIVE: energyforecast_total_price
+  #   The API computes the full price (dynamic network fees + VAT + markup) in total_ct_kwh.
+  #   batcontrol uses total_ct_kwh as-is -- vat/fees/markup config fields are not needed
+  #   and dynamic_network_fees must not be enabled (the API already includes them).
+  #   Use this if you want the energyforecast.de API to handle all price components.
+  # type: energyforecast_total_price
+  # apikey: YOUR_API_KEY
+  # market_zone: DE  # optional, default: DE
 
 #--------------------------
 #  Dynamic Network Fees (para. 14a EnWG)
 #  Adds time-of-use NT/ST/HT network fees to energy prices.
 #  Only applies to providers that calculate fees locally: awattar, energyforecast.
-#  Not needed for all-inclusive providers: tibber, evcc, tariff_zones.
+#  Not needed for all-inclusive providers: tibber, evcc, tariff_zones,
+#  energyforecast_total_price (the API already includes network fees in total_ct_kwh).
 #  Fee data (NET, excl. VAT) is fetched from dyn-net.batcontrol.software and
 #  added to the price before VAT is applied.
 #  Cache: 12 hours (tariffs change at most quarterly).
