@@ -159,11 +159,12 @@ mqtt:
   password: password
   retry_attempts: 5 # optional, default: 5
   retry_delay: 10 # seconds, optional, default: 10
+  # TLS: set tls to true and provide paths to CA cert and (optional) client cert/key
+  # for mutual TLS. Use port 8883 for TLS-secured brokers.
   tls: false
-  cafile: /etc/ssl/certs/ca-certificates.crt
-  certfile: /etc/ssl/certs/client.crt
-  keyfile: /etc/ssl/certs/client.key
-  tls_version: tlsv1.2
+  cafile: /etc/ssl/certs/ca-certificates.crt  # path to CA certificate (required when tls: true)
+  certfile: /etc/ssl/certs/client.crt          # path to client certificate (optional, for mutual TLS)
+  keyfile: /etc/ssl/certs/client.key           # path to client private key (optional, for mutual TLS)
   auto_discover_enable: true # enables mqtt auto discover => https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
   auto_discover_topic: homeassistant # base topic path for auto discover config messages - default 'homeassistant' -> https://www.home-assistant.io/integrations/mqtt/#discovery-options
 
@@ -250,11 +251,12 @@ evcc:
   block_battery_while_charging: true
   username: user
   password: password
+  # TLS: set tls to true and provide paths to CA cert and (optional) client cert/key
+  # for mutual TLS. Use port 8883 for TLS-secured brokers.
   tls: false
-  cafile: /etc/ssl/certs/ca-certificates.crt
-  certfile: /etc/ssl/certs/client.crt
-  keyfile: /etc/ssl/certs/client.key
-  tls_version: tlsv1.2
+  cafile: /etc/ssl/certs/ca-certificates.crt  # path to CA certificate (required when tls: true)
+  certfile: /etc/ssl/certs/client.crt          # path to client certificate (optional, for mutual TLS)
+  keyfile: /etc/ssl/certs/client.key           # path to client private key (optional, for mutual TLS)
   # Optional:
   # Choose which topic should deliver the limit for the battery
   # below this limit the battery will be locked
