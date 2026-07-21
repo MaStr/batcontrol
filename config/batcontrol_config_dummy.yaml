@@ -176,6 +176,7 @@ mqtt:
 #  - solarprognose.de : needs an API key, see https://www.solarprognose.de/solar-api/ for details
 #  - homeassistant-solar-forecast-ml: HomeAssistant Solar Forecast ML integration (HACS)
 #  - evcc: local instance of evcc via REST API
+#  - solcast: Solcast rooftop API, free hobbyist account, see https://solcast.com/
 #
 #  DEMO: This configuration uses a simple PV installation for demonstration.
 #  For real operation, update the values below with your actual PV system details.
@@ -201,6 +202,14 @@ pvinstallations:
   #   entity_id: sensor.solar_forecast_ml_evcc_solar_prognose  # Forecast sensor entity
   #   sensor_unit: auto                           # Options: 'auto' (detect), 'Wh', or 'kWh'
   #   cache_ttl_hours: 24.0                       # Cache duration in hours
+
+  # ALTERNATIVE: Solcast - https://solcast.com/ (free hobbyist account, 10 requests/day)
+  # Site geometry (lat/lon, tilt, azimuth, kWp) is configured in the Solcast
+  # web toolkit, not here. Set solar_forecast_provider: solcast to use it.
+  # - name: Haus
+  #   resource_id: xxxx-xxxx-xxxx-xxxx  # from your Solcast rooftop site
+  #   apikey: your-solcast-api-key      # from your Solcast account settings
+  #   percentile: 50                    # optional: 10 (pessimistic), 50 (default), 90 (optimistic)
 
 #--------------------------
 #  Forecast Consumption

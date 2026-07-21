@@ -338,3 +338,261 @@ class TestRealWorldScenario:
 
         # Allow some difference due to interpolation
         assert final_total == pytest.approx(original_total, rel=0.15)
+
+
+class TestUpsampleLinear30:
+    """Tests for linear upsampling of 30-minute source data to 15-minute intervals."""
+
+    def test_rising_power_ramp(self):
+        """Test that power is interpolated, not duplicated, on a rising ramp."""
+        buckets_30min = {
+            0: 500,   # Bucket 0: 500 Wh -> avg power 1000 W
+            1: 1000,  # Bucket 1: 1000 Wh -> avg power 2000 W
+        }
+
+        result = upsample_forecast(buckets_30min, target_resolution=15,
+                                   method='linear', source_resolution=30)
+
+        # Linear power ramp 1000 W -> 2000 W:
+        # [0]: 1000 W * 0.25h = 250 Wh
+        # [1]: 1500 W * 0.25h = 375 Wh
+        # [2]: 2000 W * 0.25h = 500 Wh (last bucket, constant)
+        # [3]: 2000 W * 0.25h = 500 Wh
+        assert result[0] == pytest.approx(250, rel=0.01)
+        assert result[1] == pytest.approx(375, rel=0.01)
+        assert result[2] == pytest.approx(500, rel=0.01)
+        assert result[3] == pytest.approx(500, rel=0.01)
+
+        # The two quarters of the first bucket must NOT be identical:
+        # plain halving/doubling of the 30-min value would yield 250/250.
+        assert result[0] != result[1]
+
+    def test_falling_power_ramp(self):
+        """Test interpolation on a falling ramp (power decreases over the bucket)."""
+        buckets_30min = {
+            0: 1000,  # 2000 W
+            1: 500,   # 1000 W
+        }
+
+        result = upsample_forecast(buckets_30min, target_resolution=15,
+                                   method='linear', source_resolution=30)
+
+        # Linear power ramp 2000 W -> 1000 W:
+        # [0]: 2000 W -> 500 Wh, [1]: 1500 W -> 375 Wh
+        # [2]/[3]: last bucket constant at 1000 W -> 250 Wh
+        assert result[0] == pytest.approx(500, rel=0.01)
+        assert result[1] == pytest.approx(375, rel=0.01)
+        assert result[2] == pytest.approx(250, rel=0.01)
+        assert result[3] == pytest.approx(250, rel=0.01)
+        assert result[0] != result[1]
+
+    def test_constant_power(self):
+        """Test that constant power degenerates to equal quarters."""
+        buckets_30min = {
+            0: 500,
+            1: 500,
+            2: 500,
+        }
+
+        result = upsample_forecast(buckets_30min, target_resolution=15,
+                                   method='linear', source_resolution=30)
+
+        # 1000 W constant -> 250 Wh per quarter
+        for i in range(6):  # 3 buckets * 2 quarters
+            assert result[i] == pytest.approx(250, rel=0.01)
+
+    def test_zero_values_sunrise(self):
+        """Test ramp starting from zero (sunrise), no negative values."""
+        buckets_30min = {
+            0: 0,
+            1: 500,  # 1000 W
+        }
+
+        result = upsample_forecast(buckets_30min, target_resolution=15,
+                                   method='linear', source_resolution=30)
+
+        # Ramp 0 W -> 1000 W: [0]: 0 W -> 0 Wh, [1]: 500 W -> 125 Wh
+        assert result[0] == pytest.approx(0, abs=0.001)
+        assert result[1] == pytest.approx(125, rel=0.01)
+        assert all(v >= 0 for v in result.values())
+
+    def test_last_bucket_constant(self):
+        """Test that the last bucket without successor is distributed constantly."""
+        buckets_30min = {
+            0: 500,
+            1: 800,  # last bucket: 1600 W constant
+        }
+
+        result = upsample_forecast(buckets_30min, target_resolution=15,
+                                   method='linear', source_resolution=30)
+
+        assert result[2] == pytest.approx(400, rel=0.01)  # 1600 W * 0.25h
+        assert result[3] == pytest.approx(400, rel=0.01)
+        assert result[2] == result[3]
+
+    def test_realistic_solar_curve(self):
+        """Test upsampling a realistic 30-minute solar day curve."""
+        # Night - ramp up - peak - ramp down - night (30-min buckets)
+        buckets_30min = {
+            0: 0,     # Night
+            1: 0,
+            2: 50,    # Dawn
+            3: 250,
+            4: 750,   # Morning
+            5: 1250,
+            6: 1500,  # Midday peak
+            7: 1250,
+            8: 750,   # Afternoon
+            9: 250,
+            10: 50,   # Dusk
+            11: 0,    # Night
+        }
+
+        result = upsample_forecast(buckets_30min, target_resolution=15,
+                                   method='linear', source_resolution=30)
+
+        # 12 buckets * 2 quarters = 24 intervals
+        assert len(result) == 24
+
+        # All values are non-negative
+        assert all(v >= 0 for v in result.values())
+
+        # Peak is around midday (bucket 6 -> intervals 12/13)
+        max_interval = max(result.items(), key=lambda x: x[1])
+        assert 10 <= max_interval[0] <= 14
+
+
+class TestUpsampleConstant30:
+    """Tests for constant upsampling of 30-minute source data."""
+
+    def test_simple_division(self):
+        """Test that 30-minute values are divided by 2."""
+        buckets_30min = {
+            0: 500,
+            1: 1000,
+        }
+
+        result = upsample_forecast(buckets_30min, target_resolution=15,
+                                   method='constant', source_resolution=30)
+
+        assert result[0] == 250  # 500/2
+        assert result[1] == 250
+        assert result[2] == 500  # 1000/2
+        assert result[3] == 500
+
+    def test_energy_conservation(self):
+        """Test that total energy is exactly conserved per bucket."""
+        buckets_30min = {
+            0: 1234,
+            1: 5678,
+        }
+
+        result = upsample_forecast(buckets_30min, target_resolution=15,
+                                   method='constant', source_resolution=30)
+
+        assert result[0] + result[1] == pytest.approx(1234, abs=0.001)
+        assert result[2] + result[3] == pytest.approx(5678, abs=0.001)
+
+
+class TestDownsample30:
+    """Tests for downsampling 30-minute intervals to hourly."""
+
+    def test_pair_summing(self):
+        """Test that pairs of 30-minute buckets are summed per hour."""
+        data_30min = {
+            0: 500,  # Hour 0
+            1: 700,
+            2: 300,  # Hour 1
+            3: 100,
+        }
+
+        result = downsample_to_hourly(data_30min, source_resolution=30)
+
+        assert result[0] == 1200  # 500+700
+        assert result[1] == 400   # 300+100
+
+    def test_energy_conservation(self):
+        """Test that total energy is exactly conserved."""
+        data_30min = {i: 100 + i * 10 for i in range(10)}  # 5 hours of data
+
+        result = downsample_to_hourly(data_30min, source_resolution=30)
+
+        assert sum(result.values()) == pytest.approx(sum(data_30min.values()), abs=0.001)
+
+    def test_incomplete_hour(self):
+        """Test handling of an hour with only one bucket present."""
+        data_30min = {
+            0: 500,
+            # Missing bucket 1
+        }
+
+        result = downsample_to_hourly(data_30min, source_resolution=30)
+
+        assert result[0] == 500
+
+
+class TestSourceResolutionValidation:
+    """Validation and regression tests for the source_resolution parameter."""
+
+    def test_invalid_source_resolution_upsample(self):
+        """Test that invalid source resolutions raise ValueError on upsampling."""
+        data = {0: 1000}
+
+        for invalid in (20, 45):
+            with pytest.raises(ValueError, match="source resolution"):
+                upsample_forecast(data, target_resolution=15,
+                                  method='linear', source_resolution=invalid)
+
+    def test_invalid_source_resolution_downsample(self):
+        """Test that invalid source resolutions raise ValueError on downsampling."""
+        data = {0: 1000}
+
+        for invalid in (20, 45, 60):
+            with pytest.raises(ValueError, match="source resolution"):
+                downsample_to_hourly(data, source_resolution=invalid)
+
+    def test_target_resolution_30_still_invalid(self):
+        """Test that 30 is only allowed as source, never as target resolution."""
+        data = {0: 1000}
+
+        with pytest.raises(ValueError, match="Only 15-minute resolution"):
+            upsample_forecast(data, target_resolution=30,
+                              method='linear', source_resolution=30)
+
+    def test_empty_input_30min(self):
+        """Test handling of empty input with 30-minute source resolution."""
+        result = upsample_forecast({}, target_resolution=15,
+                                   method='linear', source_resolution=30)
+        assert result == {}
+
+        assert downsample_to_hourly({}, source_resolution=30) == {}
+
+    def test_roundtrip_30_to_15_to_60(self):
+        """Test that 30->15->60 roughly matches the direct 30->60 sum."""
+        data_30min = {
+            0: 500,
+            1: 700,
+            2: 900,
+            3: 600,
+        }
+
+        upsampled = upsample_forecast(data_30min, target_resolution=15,
+                                      method='linear', source_resolution=30)
+        via_15min = downsample_to_hourly(upsampled)
+        direct = downsample_to_hourly(data_30min, source_resolution=30)
+
+        assert sum(via_15min.values()) == pytest.approx(sum(direct.values()), rel=0.15)
+
+    def test_default_source_resolution_unchanged(self):
+        """Test that omitting source_resolution keeps the previous 60/15 behavior."""
+        hourly = {0: 1000, 1: 2000}
+
+        explicit = upsample_forecast(hourly, target_resolution=15,
+                                     method='linear', source_resolution=60)
+        implicit = upsample_forecast(hourly, target_resolution=15, method='linear')
+        assert explicit == implicit
+        assert implicit[0] == pytest.approx(250, rel=0.01)
+
+        data_15min = {0: 250, 1: 300, 2: 350, 3: 400}
+        assert downsample_to_hourly(data_15min) == \
+            downsample_to_hourly(data_15min, source_resolution=15)
