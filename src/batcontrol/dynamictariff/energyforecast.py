@@ -14,9 +14,12 @@ Methods:
                 min_time_between_API_calls=0,
                 delay_evaluation_by_seconds=0,
                 target_resolution=60,
-                market_zone='DE'):
+                market_zone='DE',
+                use_total_price=False):
 
         Initializes the Energyforecast class with the specified parameters.
+        market_zone: config value 'DE' (default) is normalized to 'DE-LU' for the API.
+        use_total_price: if True, use total_ct_kwh (API-calculated) instead of price_ct_kwh.
 
     get_raw_data_from_provider(self):
         Fetches raw data from the energyforecast.de API v2.
@@ -46,8 +49,8 @@ class Energyforecast(DynamicTariffBaseclass):
         API v2 delivers complete calendar days (plan-dependent horizon).
         Data is always quarter-hourly; no resolution parameter is needed.
 
-        Supported market zones: DE (default, normalized to DE-LU), LU (normalized to DE-LU),
-        AT, FR, NL, BE, PL, DK1, DK2
+        Supported market zones (config value -> API value):
+        DE (default) -> DE-LU, LU -> DE-LU, AT, FR, NL, BE, PL, DK1, DK2
 
         use_total_price=True: use the API-calculated total_ct_kwh field (which already
         includes dynamic network fees and VAT) instead of price_ct_kwh. In this mode
@@ -160,7 +163,7 @@ class Energyforecast(DynamicTariffBaseclass):
             ).astimezone(self.timezone)
 
             diff = timestamp - current_hour_start
-            rel_interval = int(diff.total_seconds() / interval_seconds)
+            rel_interval = int(diff.total_seconds() // interval_seconds)
 
             if rel_interval >= 0:
                 if self.use_total_price:

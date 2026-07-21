@@ -48,6 +48,8 @@ class DynamicTariff:
         """
         selected_tariff = None
         provider = config.get('type')
+        if not provider:
+            raise RuntimeError('[DynamicTariff] Missing required field "type" in utility config')
 
         nf_cfg = nf_cfg or {}
         network_fees_enabled = nf_cfg.get('enabled', False)

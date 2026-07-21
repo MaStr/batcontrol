@@ -181,7 +181,7 @@ utility:
   vat: 0.19     # 19% VAT
   fees: 0.15    # Your network fees (Netzentgelt), EUR/kWh excl. VAT
   markup: 0.00  # Optional markup, e.g. supplier margin
-  # market_zone: DE  # optional: DE (default), AT, FR, NL, BE, PL, DK1, DK2
+  # market_zone: DE  # optional: DE/LU (default, both map to DE-LU market zone), AT, FR, NL, BE, PL, DK1, DK2
 ```
 
 The price calculation is: `( price_ct_kwh/100 * (1+markup) + fees ) * (1+vat)`
@@ -205,7 +205,7 @@ This is useful if:
 utility:
   type: energyforecast_total_price
   apikey: xxxxxxxxx
-  # market_zone: DE  # optional: DE (default), AT, FR, NL, BE, PL, DK1, DK2
+  # market_zone: DE  # optional: DE/LU (default, both map to DE-LU market zone), AT, FR, NL, BE, PL, DK1, DK2
 ```
 
 **Important:** Do not set `vat`, `fees`, or `markup` -- they are ignored for this provider
