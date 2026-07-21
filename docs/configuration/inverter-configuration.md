@@ -88,12 +88,12 @@ inverter:
 At startup, batcontrol:
 
 - **Enables the Solar.API** (`SolarAPIv1Enabled`), which is required to read SoC and power values.
-- **Saves a backup** of the current battery settings (min/max SoC, energy-management mode/power, grid-charging flag) to `config/battery_config.json` and of the time-of-use schedule to `config/timeofuse_config.json`.
+- **Saves a backup** of the current battery settings (min/max SoC, energy-management mode/power, grid-charging flag) to `config/battery_config.json` and of the time-of-use schedule to `config/timeofuse_config.json`. The backup files are only written if they do not already exist — after an unclean stop the existing files are kept, so the original pre-batcontrol settings are not overwritten and are reused for the next restore.
 - **Enables charging from grid** (`HYB_EVU_CHARGEFROMGRID`), so batcontrol can charge the battery during cheap price windows.
 
 During operation, batcontrol controls the battery by writing battery settings (min/max SoC in manual mode, energy-management mode and power) and time-of-use schedules.
 
-On a clean shutdown, batcontrol restores the saved battery settings and time-of-use schedule from the backup files. The Solar.API stays enabled — disable it manually in the inverter web UI if no other software needs it (note: the Fronius Wattpilot wallbox requires the Solar.API).
+On a clean shutdown, batcontrol restores the saved battery settings and time-of-use schedule from the backup files and deletes the files after a successful restore. If batcontrol crashes or is killed, the settings are *not* restored — the backup files remain in `config/` and are used on the next clean shutdown. The Solar.API stays enabled — disable it manually in the inverter web UI if no other software needs it (note: the Fronius Wattpilot wallbox requires the Solar.API).
 
 ### Additional Parameters (since 0.5.6)
 - **fronius_inverter_id**: Optional parameter to specify the inverter ID in the Fronius API. Default is '1'.
