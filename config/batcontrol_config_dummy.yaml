@@ -174,7 +174,6 @@ mqtt:
 #
 #  Supported providers:
 #  - fcsolarapi: Third-party solar forecast API (configured below, default)
-#  - solarprognose.de : needs an API key, see https://www.solarprognose.de/solar-api/ for details
 #  - homeassistant-solar-forecast-ml: HomeAssistant Solar Forecast ML integration (HACS)
 #  - evcc: local instance of evcc via REST API
 #  - solcast: Solcast rooftop API, free hobbyist account, see https://solcast.com/

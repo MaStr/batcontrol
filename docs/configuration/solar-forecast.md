@@ -1,7 +1,6 @@
 The following providers are currently available:
 
 * [Forecast Solar](https://forecast.solar/)
-* [Solarprognose.de](https://www.solarprognose.de) - since 0.5.0
 * local evcc instance - since 0.5.3
 * [HomeAssistant Solar Forecast ML](https://zara-toorox.github.io/) - since 0.7.0
 * [Solcast](https://solcast.com/) - since 0.8.1
@@ -66,33 +65,6 @@ If you have an obstructed horizon, you can add a horizon modifier:
     kWp: 15.695 # power in kWp
     horizon: 30,30,30,0,0,0  # leave empty for default PVGIS horizon, only modify if solar array is shaded by trees or houses
 ```
-
-## Solarprognose.de
-Solarprognose offers a free tier for installations below 10KW. Currently, larger tiers are available for free, but this may change. The provider is asking for donations. You need to register on their website and enter you installation. With using the provided API key, you can run batcontrol with following configuration:
-
-```
-solar_forecast_provider: solarprognose
-pvinstallations:
-  - name: Haus #name
-    apikey: 44k4j5j5j5j5j6j6j6j6j6j6j6j6j6j6j6j6
-```
-This configuration delivers the forecast for the first defined location. The API provider asks to add `project: <your@email.com>` as an additional parameter, that he can contact a person in case of issues.
-
-In addition you can change the algorithm using:
-
-```
-pvinstallations:
-  - name: Haus #name
-    apikey: 44k4j5j5j5j5j6j6j6j6j6j6j6j6j6j6j6j6
-    algorithm: own-v1 # (Default is 'mosmix')
-```
-
-If you run multiple installations with you account or want to split up forecasts for reasons, you can use the ITEM and ID syntax.
-
-* item: <location|inverter|module_field>
-* token: <item token>
-
-For further details see: [API description](https://www.solarprognose.de/web/de/solarprediction/page/api)
 
 ## Local evcc instance
 evcc is able to collect its own PV forecast, which can be obtained via REST API. batcontrol can make use of that.
