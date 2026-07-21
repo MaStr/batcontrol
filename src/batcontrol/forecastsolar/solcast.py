@@ -154,7 +154,11 @@ class Solcast(ForecastSolarBaseclass):
         # API key goes into the Authorization header to keep it out of
         # logged URLs.
         headers = {'Authorization': f'Bearer {apikey}'}
-        response = requests.get(url, headers=headers, timeout=60)
+        try:
+            response = requests.get(url, headers=headers, timeout=60)
+        except requests.exceptions.RequestException as e:
+            raise ProviderError(
+                f'[Solcast] API request failed: {e}') from e
 
         if response.status_code == 200:
             try:
