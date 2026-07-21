@@ -33,7 +33,7 @@ Batcontrol combines three critical forecasts to make intelligent decisions:
 - **Purpose**: Identifies when electricity is cheapest for charging
 
 ### 2. Solar Production Forecast
-- **Source**: Solar forecast APIs (Forecast.Solar, Solarprognose, evcc, HomeAssistant Solar Forecast ML) — see [Solar Forecast](../configuration/solar-forecast.md)
+- **Source**: Solar forecast APIs (Forecast.Solar, evcc, HomeAssistant Solar Forecast ML, Solcast) — see [Solar Forecast](../configuration/solar-forecast.md)
 - **Data**: Expected PV generation based on weather predictions
 - **Configuration**: Your PV system specifications (kWp, orientation, location)
 - **Purpose**: Predicts available solar energy

@@ -754,22 +754,6 @@ class FCSolar(ForecastSolarBase):
         return self._parse_response(response)  # Returns {0: 1000, 1: 1500, ...}
 ```
 
-**solarprognose.py**:
-```python
-from .baseclass import ForecastSolarBase
-
-class SolarPrognose(ForecastSolarBase):
-    def __init__(self, config: dict):
-        super().__init__(config)
-        self.native_resolution = 60  # Declares native resolution
-    
-    def _fetch_forecast(self) -> dict[int, float]:
-        # Just fetch and return hourly data
-        # Baseclass handles upsampling automatically
-        response = self._call_api()
-        return self._parse_response(response)  # Returns {0: 2000, 1: 2500, ...}
-```
-
 **evcc_solar.py**:
 ```python
 from .baseclass import ForecastSolarBase
@@ -2868,7 +2852,6 @@ src/batcontrol/
   ├── forecastsolar/
   │   ├── baseclass.py                     # NEW: Base with auto-upsampling
   │   ├── fcsolar.py                       # MODIFIED: Inherits from base
-  │   ├── solarprognose.py                 # MODIFIED: Inherits from base
   │   └── evcc_solar.py                    # MODIFIED: Inherits from base
   │
   ├── dynamictariff/

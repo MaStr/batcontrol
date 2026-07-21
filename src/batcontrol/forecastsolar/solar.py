@@ -2,7 +2,6 @@
 
 from .forecastsolar_interface import ForecastSolarInterface
 from .fcsolar import FCSolar
-from .solarprognose import SolarPrognose
 from .evcc_solar import EvccSolar
 from .forecast_homeassistant_ml import ForecastSolarHomeAssistantML
 from .solcast import Solcast
@@ -24,7 +23,7 @@ class ForecastSolar:
             timezone: Timezone for forecast data
             min_time_between_api_calls: Minimum seconds between API calls
             api_delay: Delay for API evaluation
-            requested_provider: Provider name ('fcsolarapi', 'solarprognose', 'evcc-solar',
+            requested_provider: Provider name ('fcsolarapi', 'evcc-solar',
                                 'homeassistant-solar-forecast-ml', 'solcast')
             target_resolution: Target resolution in minutes (15 or 60)
 
@@ -36,9 +35,6 @@ class ForecastSolar:
         if requested_provider.lower() == 'fcsolarapi':
             provider = FCSolar(config, timezone, min_time_between_api_calls,
                                api_delay, target_resolution)
-        elif requested_provider.lower() == 'solarprognose':
-            provider = SolarPrognose(
-                config, timezone, min_time_between_api_calls, api_delay, target_resolution)
         elif requested_provider.lower() == 'evcc-solar':
             provider = EvccSolar(config, timezone, min_time_between_api_calls,
                                  api_delay, target_resolution)
