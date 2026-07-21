@@ -80,7 +80,7 @@ class Solcast(ForecastSolarBaseclass):
         """
         results = self.get_all_raw_data()
 
-        now = datetime.datetime.now().astimezone(self.timezone)
+        now = datetime.datetime.now(datetime.timezone.utc).astimezone(self.timezone)
         current_hour_start = now.replace(minute=0, second=0, microsecond=0)
 
         prediction = {}
