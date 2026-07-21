@@ -50,8 +50,9 @@ class DynamicTariff:
         provider = config.get('type')
 
         nf_cfg = nf_cfg or {}
+        network_fees_enabled = nf_cfg.get('enabled', False)
         network_fees_fetcher = None
-        if nf_cfg.get('enabled', False):
+        if network_fees_enabled and provider.lower() != 'energyforecast_total_price':
             for field in ('country', 'operator'):
                 if field not in nf_cfg:
                     raise RuntimeError(
@@ -164,6 +165,35 @@ class DynamicTariff:
             selected_tariff.set_price_parameters(vat, fees, markup)
             if network_fees_fetcher is not None:
                 selected_tariff.set_network_fees_fetcher(network_fees_fetcher)
+
+        elif provider.lower() == 'energyforecast_total_price':
+            if 'apikey' not in config:
+                raise RuntimeError(
+                    '[DynTariff] Please include apikey in your configuration file'
+                )
+            for field in ('vat', 'fees', 'markup'):
+                if field in config:
+                    logger.warning(
+                        '[DynTariff] energyforecast_total_price: "%s" is ignored '
+                        '-- the API already includes all charges in total_ct_kwh',
+                        field
+                    )
+            if network_fees_enabled:
+                logger.warning(
+                    '[DynTariff] energyforecast_total_price: dynamic_network_fees '
+                    'is ignored -- the API already includes network fees in total_ct_kwh'
+                )
+            token = config.get('apikey')
+            market_zone = config.get('market_zone', 'DE')
+            selected_tariff = Energyforecast(
+                timezone,
+                token,
+                min_time_between_api_calls,
+                delay_evaluation_by_seconds,
+                target_resolution=target_resolution,
+                market_zone=market_zone,
+                use_total_price=True
+            )
 
         elif provider.lower() == 'tariff_zones':
             # Only tariff_zone_1 is strictly required. A single-zone

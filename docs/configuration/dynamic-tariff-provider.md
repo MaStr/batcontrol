@@ -5,6 +5,7 @@ Currently following data providers are available:
 * Two-Tariff Providers (e.g. Octopus)
 * evcc
 * energyforecast.de
+* energyforecast.de (total price mode)
 
 You can chose one and need to adjust the configuration.
 
@@ -139,7 +140,7 @@ The charge rate is not evenly distributed across low-price hours by default.
 
 - For **more even charging** across low-price hours, enable
   `soften_price_difference_on_charging` and set `max_grid_charge_rate` to a
-  modest value (e.g. battery capacity ÷ low-price hours).
+  modest value (e.g. battery capacity / low-price hours).
 - For a **late charging start** (optimise efficiency, keep the battery at
   high SOC for less time), disable `soften_price_difference_on_charging`.
 
@@ -159,25 +160,64 @@ utility:
 ```
 You may need to adjust hostname + port for your setup. If evcc is running under HomeAssistant, you should use either `http://homeassistant:7070/api/tariff/grid` or `http://<homeassistant-ip>:7070/api/tariff/grid`
 
-## energyforecast.de (0.5.6)
-[energyforecast.de](https://www.energyforecast.de) provides a calculated forecast for upcoming prices. Dayahead prices are populated at 14:00 GMT+2, which is after the lunch-drop in prices and prevents a good energy calculation. Based on different values, energyforecast.de calculates a price expectation with a median of 3 cent of. 
-batcontrol uses the 48h forecast only and it is not possible to activate the 96 hour forecast. You need to setup VAT, markup (+ % on energy price) and fees (Netzentgeld) in the configuration. We are not using the calculation provided by energyforecast.de.
-If you like to use this forecast type, please create a login at [energyforecast.de](https://www.energyforecast.de) to aquire an API key.
+## energyforecast.de
 
-```
+[energyforecast.de](https://www.energyforecast.de) provides a multi-day price forecast using
+API v2. The API delivers quarter-hourly data for a plan-dependent horizon (typically several
+days ahead). Day-ahead prices are populated at around 14:00 CET, which provides good coverage
+for next-day planning.
+
+batcontrol fetches the raw market price (`price_ct_kwh`) from the API and calculates the
+final price locally by applying your configured VAT, fees, and markup — the same approach used
+for aWATTar. This gives you full control over the price components.
+
+To use energyforecast.de, create a login at [energyforecast.de](https://www.energyforecast.de)
+to obtain an API key.
+
+```yaml
 utility:
   type: energyforecast
-  apikey:  xxxxxxxxx
+  apikey: xxxxxxxxx
   vat: 0.19     # 19% VAT
-  fees: 0.15    # Depends on you Netzendgeld
-  markup: 0.00  # Depends on you aWATTar contract
+  fees: 0.15    # Your network fees (Netzentgelt), EUR/kWh excl. VAT
+  markup: 0.00  # Optional markup, e.g. supplier margin
+  # market_zone: DE  # optional: DE (default), AT, FR, NL, BE, PL, DK1, DK2
 ```
 
-To enable the paid 96h forecast, use type: energyforecast_96
+The price calculation is: `( price_ct_kwh/100 * (1+markup) + fees ) * (1+vat)`
 
-## Dynamic network fees (§14a EnWG)
+> **Note:** `energyforecast_96` is deprecated. API v2 automatically delivers a
+> multi-day forecast based on your plan -- use `energyforecast` instead.
 
-Batcontrol can add time-of-use network fees (NT/ST/HT zones according to §14a EnWG) on top of the energy prices. This only applies to providers that calculate fees locally: **awattar** and **energyforecast**. All-inclusive providers (tibber, evcc, tariff_zones) already deliver final prices and do not need this.
+## energyforecast.de -- total price mode
+
+If you prefer to let the energyforecast.de API calculate the full price -- including
+dynamic network fees, VAT, and markup -- use `energyforecast_total_price`. In this mode
+batcontrol reads the API's `total_ct_kwh` field directly without any local calculation.
+
+This is useful if:
+
+- You want the API to handle dynamic network fees automatically (including para. 14a EnWG),
+  without configuring them separately in batcontrol.
+- You trust the API's price model and want a simpler local configuration.
+
+```yaml
+utility:
+  type: energyforecast_total_price
+  apikey: xxxxxxxxx
+  # market_zone: DE  # optional: DE (default), AT, FR, NL, BE, PL, DK1, DK2
+```
+
+**Important:** Do not set `vat`, `fees`, or `markup` -- they are ignored for this provider
+type. Do not enable `dynamic_network_fees` either; the API already includes network fees in
+`total_ct_kwh`.
+
+## Dynamic network fees (para. 14a EnWG)
+
+batcontrol can add time-of-use network fees (NT/ST/HT zones according to para. 14a EnWG)
+on top of the energy prices. This only applies to providers that calculate fees locally:
+**awattar** and **energyforecast**. All-inclusive providers (tibber, evcc, tariff_zones,
+and **energyforecast_total_price**) already deliver final prices and do not need this.
 
 The fee data (NET prices, excluding VAT) is fetched from [dyn-net.batcontrol.software](https://dyn-net.batcontrol.software/) and added to the raw energy price before VAT is applied. Data is cached for 12 hours, as tariffs change at most quarterly.
 

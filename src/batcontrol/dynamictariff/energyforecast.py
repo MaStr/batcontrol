@@ -48,11 +48,16 @@ class Energyforecast(DynamicTariffBaseclass):
 
         Supported market zones: DE (default, normalized to DE-LU), LU (normalized to DE-LU),
         AT, FR, NL, BE, PL, DK1, DK2
+
+        use_total_price=True: use the API-calculated total_ct_kwh field (which already
+        includes dynamic network fees and VAT) instead of price_ct_kwh. In this mode
+        no local fees/markup/vat calculation is applied and the API is called without
+        vat/fixed_cost_cent overrides so the API computes the full price.
     """
 
     def __init__(self, timezone, token, min_time_between_API_calls=0,
                  delay_evaluation_by_seconds=0, target_resolution: int = 60,
-                 market_zone: str = 'DE'):
+                 market_zone: str = 'DE', use_total_price: bool = False):
         """ Initialize Energyforecast class with parameters """
         # Enforce provider-specific minimum refresh interval.
         effective_interval = max(min_time_between_API_calls, _PROVIDER_MIN_INTERVAL)
@@ -69,15 +74,18 @@ class Energyforecast(DynamicTariffBaseclass):
         self.token = token
         normalized = market_zone.strip().upper()
         self.market_zone = _MARKET_ZONE_ALIASES.get(normalized, normalized)
+        self.use_total_price = use_total_price
         self.vat = 0
         self.price_fees = 0
         self.price_markup = 0
         self.network_fees_fetcher = None
 
         logger.info(
-            'Energyforecast: Configured for market_zone=%s, refresh every %d s',
+            'Energyforecast: Configured for market_zone=%s, refresh every %d s, '
+            'price_mode=%s',
             self.market_zone,
-            effective_interval
+            effective_interval,
+            'total_ct_kwh' if use_total_price else 'price_ct_kwh+local'
         )
 
     def set_price_parameters(
@@ -98,14 +106,12 @@ class Energyforecast(DynamicTariffBaseclass):
         if not self.token:
             raise RuntimeError('[Energyforecast] API token is required')
         try:
-            # Request base prices without provider-side calculations;
-            # we apply vat, fees, and markup locally.
-            params = {
-                'token': self.token,
-                'market_zone': self.market_zone,
-                'vat': 0,
-                'fixed_cost_cent': 0
-            }
+            params = {'token': self.token, 'market_zone': self.market_zone}
+            if not self.use_total_price:
+                # Suppress API-side calculation so we can apply fees/markup/vat locally,
+                # consistent with the other locally-calculating providers (awattar).
+                params['vat'] = 0
+                params['fixed_cost_cent'] = 0
             response = requests.get(self.url, params=params, timeout=30)
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
@@ -157,17 +163,22 @@ class Energyforecast(DynamicTariffBaseclass):
             rel_interval = int(diff.total_seconds() / interval_seconds)
 
             if rel_interval >= 0:
-                # price_ct_kwh is in ct/kWh; convert to EUR/kWh for consistency
-                # with fees/markup/vat config values.
-                base_price = item['price_ct_kwh'] / 100
-                network_fee = 0.0
-                if self.network_fees_fetcher is not None:
-                    network_fee = self.network_fees_fetcher.get_fee_at(timestamp)
-                end_price = (
-                    (base_price * (1 + self.price_markup) +
-                     self.price_fees + network_fee)
-                    * (1 + self.vat)
-                )
+                if self.use_total_price:
+                    # total_ct_kwh already includes dynamic network fees, markup,
+                    # and VAT as calculated by the API. No local calculation needed.
+                    end_price = item['total_ct_kwh'] / 100
+                else:
+                    # price_ct_kwh is in ct/kWh; convert to EUR/kWh and apply
+                    # fees/markup/vat locally, consistent with awattar.
+                    base_price = item['price_ct_kwh'] / 100
+                    network_fee = 0.0
+                    if self.network_fees_fetcher is not None:
+                        network_fee = self.network_fees_fetcher.get_fee_at(timestamp)
+                    end_price = (
+                        (base_price * (1 + self.price_markup) +
+                         self.price_fees + network_fee)
+                        * (1 + self.vat)
+                    )
                 prices[rel_interval] = end_price
 
         logger.debug(

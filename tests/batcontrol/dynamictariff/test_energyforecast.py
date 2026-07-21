@@ -298,6 +298,93 @@ class TestEnergyforecast(unittest.TestCase):
         energyforecast = Energyforecast(self.timezone, self.token)
         self.assertIn('/api/v2/forecast', energyforecast.url)
 
+    def test_total_price_uses_total_ct_kwh(self):
+        """Test that use_total_price=True reads total_ct_kwh instead of price_ct_kwh"""
+        ef = Energyforecast(self.timezone, self.token, use_total_price=True)
+
+        raw_data = {
+            'data': [
+                {
+                    'start': '2024-06-20T10:00:00+02:00',
+                    'end': '2024-06-20T10:15:00+02:00',
+                    'price_ct_kwh': 20.0,
+                    'total_ct_kwh': 35.0,
+                    'price_origin': 'market'
+                }
+            ]
+        }
+        ef.store_raw_data(raw_data)
+
+        with patch('batcontrol.dynamictariff.energyforecast.datetime') as mock_datetime:
+            mock_now = self.timezone.localize(datetime.datetime(2024, 6, 20, 10, 0, 0))
+            mock_datetime.datetime.now.return_value = mock_now
+            mock_datetime.datetime.fromisoformat = datetime.datetime.fromisoformat
+
+            prices = ef._get_prices_native()
+
+        # Must use total_ct_kwh (35.0 ct = 0.35 EUR), not price_ct_kwh (20.0 ct)
+        self.assertAlmostEqual(prices[0], 0.35, places=5)
+
+    def test_total_price_no_local_calculation(self):
+        """Test that use_total_price=True does not apply local fees/markup/vat"""
+        ef = Energyforecast(self.timezone, self.token, use_total_price=True)
+        ef.set_price_parameters(vat=0.19, price_fees=0.10, price_markup=0.05)
+
+        raw_data = {
+            'data': [
+                {
+                    'start': '2024-06-20T10:00:00+02:00',
+                    'end': '2024-06-20T10:15:00+02:00',
+                    'price_ct_kwh': 20.0,
+                    'total_ct_kwh': 35.0,
+                    'price_origin': 'market'
+                }
+            ]
+        }
+        ef.store_raw_data(raw_data)
+
+        with patch('batcontrol.dynamictariff.energyforecast.datetime') as mock_datetime:
+            mock_now = self.timezone.localize(datetime.datetime(2024, 6, 20, 10, 0, 0))
+            mock_datetime.datetime.now.return_value = mock_now
+            mock_datetime.datetime.fromisoformat = datetime.datetime.fromisoformat
+
+            prices = ef._get_prices_native()
+
+        # total_ct_kwh / 100 = 0.35, no local vat/fees/markup applied
+        self.assertAlmostEqual(prices[0], 0.35, places=5)
+
+    def test_total_price_api_call_without_overrides(self):
+        """Test that use_total_price=True does not send vat=0/fixed_cost_cent=0"""
+        ef = Energyforecast(self.timezone, self.token, use_total_price=True)
+
+        with patch('batcontrol.dynamictariff.energyforecast.requests.get') as mock_get:
+            mock_response = unittest.mock.Mock()
+            mock_response.json.return_value = {'data': []}
+            mock_response.raise_for_status.return_value = None
+            mock_get.return_value = mock_response
+
+            ef.get_raw_data_from_provider()
+
+            params = mock_get.call_args.kwargs['params']
+            self.assertNotIn('vat', params)
+            self.assertNotIn('fixed_cost_cent', params)
+
+    def test_default_mode_api_call_has_overrides(self):
+        """Test that default mode (use_total_price=False) still sends vat=0/fixed_cost_cent=0"""
+        ef = Energyforecast(self.timezone, self.token)
+
+        with patch('batcontrol.dynamictariff.energyforecast.requests.get') as mock_get:
+            mock_response = unittest.mock.Mock()
+            mock_response.json.return_value = {'data': []}
+            mock_response.raise_for_status.return_value = None
+            mock_get.return_value = mock_response
+
+            ef.get_raw_data_from_provider()
+
+            params = mock_get.call_args.kwargs['params']
+            self.assertEqual(params.get('vat'), 0)
+            self.assertEqual(params.get('fixed_cost_cent'), 0)
+
 
 if __name__ == '__main__':
     unittest.main()
