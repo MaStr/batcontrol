@@ -80,7 +80,7 @@ inverter:
 ### Requirements
 
 - The inverter web interface must be reachable over HTTP from the machine that runs batcontrol (local network).
-- A web interface login is required. Both the **customer** and the **technician** login work — use the login name in lowercase (`customer` or `technician`) together with the matching password.
+- A web interface login is required. Both the **customer** and the **technician** logins work — use the login name in lowercase (`customer` or `technician`) together with the matching password.
 - The Fronius **Solar.API** does *not* need to be enabled manually: batcontrol activates it automatically at startup, since it is required to read the battery state of charge.
 
 ### Changes batcontrol makes to the inverter configuration

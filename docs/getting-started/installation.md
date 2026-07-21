@@ -131,7 +131,7 @@ Before the first run, verify the following:
 - Confirm your inverter login credentials (customer or technician access both work).
 - If you have previously run any third-party tools that use Modbus, or executed Modbus commands directly, disable Modbus and restart the inverter before starting batcontrol.
 
-Batcontrol will enable the Solar.API on first run (local network only), enable charging from grid, and save the current battery and time-of-use configuration, which it restores on a clean shutdown. See [Inverter Configuration](../configuration/inverter-configuration.md#changes-batcontrol-makes-to-the-inverter-configuration) for the full list of changes.
+If you are using the `fronius_gen24` backend, batcontrol will enable the Solar.API on first run (local network only), enable charging from grid, and save the current battery and time-of-use configuration, which it restores on a clean shutdown. See [Inverter Configuration](../configuration/inverter-configuration.md#changes-batcontrol-makes-to-the-inverter-configuration) for the full list of changes.
 
 ## Next Steps
 
