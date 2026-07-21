@@ -29,9 +29,16 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
 
         Supports Full-Hour Alignment strategy:
         - Providers return hour-aligned data (index 0 = start of current hour)
-        - Baseclass handles resolution conversion (hourly <-> 15-min)
+        - Baseclass handles resolution conversion (hourly <-> 15-min, 30-min -> 15/60-min)
         - Baseclass shifts indices to current-interval alignment
         - Core receives data where [0] = current interval
+
+        Provider contract per native_resolution:
+        - 60: index = hour offset from start of current hour, values in Wh per hour
+        - 30: index = 30-min offset from start of current hour
+          (index 0 = :00-:30, index 1 = :30-:00), values in Wh per 30 minutes
+        - 15: index = 15-min offset from start of current hour,
+          values in Wh per 15 minutes
     """
 
     def __init__(self, pvinstallations, timezone, min_time_between_API_calls,
@@ -47,7 +54,7 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
 
         # Resolution configuration
         self.target_resolution = target_resolution  # What core.py expects (15 or 60)
-        self.native_resolution = native_resolution  # What provider returns (15 or 60)
+        self.native_resolution = native_resolution  # What provider returns (15, 30 or 60)
 
         logger.info(
             '%s: native_resolution=%d min, target_resolution=%d min',
@@ -188,6 +195,17 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
             logger.debug('%s: Downsampling 15min -> 60min by summing quarters',
                          self.__class__.__name__)
             return downsample_to_hourly(forecast)
+
+        if self.native_resolution == 30 and self.target_resolution == 15:
+            logger.debug('%s: Upsampling 30min -> 15min using linear interpolation',
+                         self.__class__.__name__)
+            return upsample_forecast(forecast, target_resolution=15,
+                                     method='linear', source_resolution=30)
+
+        if self.native_resolution == 30 and self.target_resolution == 60:
+            logger.debug('%s: Downsampling 30min -> 60min by summing bucket pairs',
+                         self.__class__.__name__)
+            return downsample_to_hourly(forecast, source_resolution=30)
 
         logger.error('%s: Cannot convert %d min -> %d min',
                      self.__class__.__name__,

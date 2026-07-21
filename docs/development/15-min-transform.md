@@ -328,7 +328,7 @@ class ForecastSolarBase(ABC):
     Key Design: Providers return FULL-HOUR aligned data, baseclass shifts to CURRENT interval.
     
     Subclasses must:
-    1. Set self.native_resolution (15 or 60) in __init__
+    1. Set self.native_resolution (15, 30 or 60) in __init__
     2. Implement _fetch_forecast() to return hour-aligned data
     
     Example at 10:20:
@@ -548,7 +548,72 @@ class EvccSolar(ForecastSolarBase):
         return self._parse_15min_data(response)
 ```
 
-##### C. Tibber (Dynamic Resolution)
+##### C. Solcast (30-min Native)
+```python
+# src/batcontrol/forecastsolar/solcast.py
+
+from .baseclass import ForecastSolarBaseclass
+
+class Solcast(ForecastSolarBaseclass):
+    """Solcast rooftop provider - returns 30-minute data."""
+
+    def __init__(self, ...):
+        super().__init__(..., native_resolution=30)  # Declares: "I provide 30-min data"
+        # ... rest of init ...
+
+    def get_forecast_from_raw_data(self) -> Dict[int, float]:
+        """Parse cached 30-minute forecast periods, hour-aligned."""
+        # Returns: {0: 500, 1: 700, 2: 900, ...}  # Wh per 30-min bucket
+        # Index 0 = :00-:30 of the current hour, index 1 = :30-:00, etc.
+        ...
+```
+
+#### 30-Minute Native Resolution
+
+Some providers (e.g. Solcast) deliver forecast periods of 30 minutes. The
+baseclass converts them with the same rules used for the existing 60/15
+paths — implemented in `interval_utils` via the `source_resolution`
+parameter:
+
+| Conversion | Function call | Rule |
+|------------|---------------|------|
+| 30 → 15 | `upsample_forecast(data, target_resolution=15, method='linear', source_resolution=30)` | Linear **power** interpolation between buckets |
+| 30 → 60 | `downsample_to_hourly(data, source_resolution=30)` | Sum of the two 30-min buckets per hour (exact energy) |
+
+**Index contract** (Full-Hour Alignment unchanged): with
+`native_resolution=30` the provider returns hour-aligned data where index 0
+covers `:00`–`:30` of the current hour and index 1 covers `:30`–`:00`.
+Since 30-minute periods always sit on hour/half-hour boundaries, the
+alignment strategy needs no special handling.
+
+**Worked example (30 → 15, linear)** — analogous to the hourly example
+above. Input buckets in Wh per 30 minutes:
+
+```python
+{0: 500, 1: 1000}   # avg power: 1000 W, 2000 W
+```
+
+The values are NOT simply halved/duplicated per quarter — power rises (or
+falls) across the interpolation:
+
+```python
+# 15-min intervals (linear power ramp 1000 W -> 2000 W):
+# [0]: Power = 1000 W -> Energy = 1000 * 0.25 = 250 Wh
+# [1]: Power = 1500 W -> Energy = 1500 * 0.25 = 375 Wh
+# [2]: Power = 2000 W -> Energy = 2000 * 0.25 = 500 Wh  (last bucket)
+# [3]: Power = 2000 W -> Energy = 2000 * 0.25 = 500 Wh
+{0: 250, 1: 375, 2: 500, 3: 500}
+```
+
+Plain duplication would have produced `{0: 250, 1: 250, 2: 500, 3: 500}`
+with a hard step between the buckets — the interpolation produces a smooth
+ramp instead, which matches the physical behavior of solar power.
+
+**Last-bucket rule**: the final bucket has no successor to interpolate
+towards, so its power is kept constant across its quarters (same rule as
+the last hour in the 60 → 15 path).
+
+##### D. Tibber (Dynamic Resolution)
 ```python
 # src/batcontrol/dynamictariff/tibber.py
 

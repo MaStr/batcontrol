@@ -24,7 +24,7 @@ src/batcontrol/
   logic/                  # Battery control decisions (default, next)
   inverter/               # Backends: Fronius HTTP, Fronius Modbus, MQTT, Dummy
   dynamictariff/          # Tariff providers: Awattar, Tibber, evcc, EnergyForecast, NetworkFees
-  forecastsolar/          # Solar forecast: FCSolar, SolarPrognose, evcc, HA-ML
+  forecastsolar/          # Solar forecast: FCSolar, SolarPrognose, evcc, HA-ML, Solcast
   forecastconsumption/    # Consumption forecast: CSV, HomeAssistant
   fetcher/                # HTTP caching helper
   scheduler.py            # Main loop

@@ -17,9 +17,12 @@ class ConcreteForecastSolar(ForecastSolarBaseclass):
     """Concrete implementation of ForecastSolarBaseclass for testing"""
 
     def __init__(self, pvinstallations, timezone, min_time_between_API_calls,
-                 delay_evaluation_by_seconds, mock_provider_func=None, mock_forecast_func=None):
+                 delay_evaluation_by_seconds, mock_provider_func=None, mock_forecast_func=None,
+                 target_resolution=60, native_resolution=60):
         super().__init__(pvinstallations, timezone, min_time_between_API_calls,
-                        delay_evaluation_by_seconds)
+                        delay_evaluation_by_seconds,
+                        target_resolution=target_resolution,
+                        native_resolution=native_resolution)
         self.mock_provider_func = mock_provider_func
         self.mock_forecast_func = mock_forecast_func
 
@@ -469,3 +472,103 @@ class TestForecastSolarBaseclass:
 
         assert instance.timezone == timezone
         assert str(instance.timezone) == 'Europe/Berlin'
+
+
+class TestNativeResolution30:
+    """Tests for the 30-minute native resolution conversion paths."""
+
+    @pytest.fixture
+    def timezone(self):
+        """Fixture for timezone"""
+        return pytz.timezone('Europe/Berlin')
+
+    @pytest.fixture
+    def single_installation(self):
+        """Fixture for single PV installation"""
+        return [{'name': 'single'}]
+
+    def _make_instance(self, single_installation, timezone, target_resolution,
+                       forecast_30min):
+        """Build a ConcreteForecastSolar with native 30-min data."""
+        return ConcreteForecastSolar(
+            single_installation,
+            timezone,
+            min_time_between_API_calls=900,
+            delay_evaluation_by_seconds=0,
+            mock_provider_func=lambda name: {'data': 'test'},
+            mock_forecast_func=lambda: forecast_30min,
+            target_resolution=target_resolution,
+            native_resolution=30
+        )
+
+    def test_convert_resolution_30_to_15_interpolates(self, single_installation, timezone):
+        """30 -> 15 conversion must interpolate power, not duplicate values."""
+        instance = self._make_instance(single_installation, timezone, 15, {})
+
+        # Bucket 0: 500 Wh (1000 W), bucket 1: 1000 Wh (2000 W)
+        result = instance._convert_resolution({0: 500.0, 1: 1000.0})
+
+        assert result[0] == pytest.approx(250, rel=0.01)
+        assert result[1] == pytest.approx(375, rel=0.01)
+        assert result[2] == pytest.approx(500, rel=0.01)
+        assert result[3] == pytest.approx(500, rel=0.01)
+        # Plain doubling of the 30-min bucket would yield identical quarters
+        assert result[0] != result[1]
+
+    def test_convert_resolution_30_to_60_sums_pairs(self, single_installation, timezone):
+        """30 -> 60 conversion must sum bucket pairs exactly."""
+        instance = self._make_instance(single_installation, timezone, 60, {})
+
+        result = instance._convert_resolution({0: 500.0, 1: 700.0, 2: 300.0, 3: 100.0})
+
+        assert result[0] == pytest.approx(1200, abs=0.001)
+        assert result[1] == pytest.approx(400, abs=0.001)
+
+    def test_get_forecast_native_30_target_15(self, single_installation, timezone):
+        """Full get_forecast() path with native 30-min data and 15-min target."""
+        import datetime as dt
+
+        # 24 buckets = 12 hours of 30-min data with a rising ramp
+        forecast_30min = {i: float(100 * i) for i in range(24)}
+
+        instance = self._make_instance(single_installation, timezone, 15, forecast_30min)
+
+        fixed_now = timezone.localize(dt.datetime(2024, 6, 1, 10, 0, 0))
+        with patch('batcontrol.forecastsolar.baseclass.datetime') as mock_dt:
+            mock_dt.datetime.now.return_value = fixed_now
+            mock_dt.timedelta = dt.timedelta
+            mock_dt.timezone = dt.timezone
+            forecast = instance.get_forecast()
+
+        # 12 hours of data, padded to midnight (14 hours) = 56 intervals minimum
+        assert len(forecast) >= 48
+
+        # Bucket 0 = 0 Wh (0 W), bucket 1 = 100 Wh (200 W):
+        # quarters of bucket 0 ramp from 0 W to 200 W -> 0 W and 100 W
+        # -> 0 Wh and 100 W * 0.25h = 25 Wh
+        assert forecast[0] == pytest.approx(0, abs=0.001)
+        assert forecast[1] == pytest.approx(25.0, rel=0.01)
+        # Interpolated output: adjacent quarters of a bucket differ on a ramp
+        assert forecast[2] != forecast[3]
+
+    def test_get_forecast_native_30_target_60(self, single_installation, timezone):
+        """Full get_forecast() path with native 30-min data and 60-min target."""
+        import datetime as dt
+
+        forecast_30min = {i: float(100 * i) for i in range(24)}
+
+        instance = self._make_instance(single_installation, timezone, 60, forecast_30min)
+
+        fixed_now = timezone.localize(dt.datetime(2024, 6, 1, 10, 0, 0))
+        with patch('batcontrol.forecastsolar.baseclass.datetime') as mock_dt:
+            mock_dt.datetime.now.return_value = fixed_now
+            mock_dt.timedelta = dt.timedelta
+            mock_dt.timezone = dt.timezone
+            forecast = instance.get_forecast()
+
+        assert len(forecast) >= 12
+
+        # Hourly values are the exact bucket pair sums
+        assert forecast[0] == pytest.approx(0 + 100, abs=0.001)
+        assert forecast[1] == pytest.approx(200 + 300, abs=0.001)
+        assert forecast[11] == pytest.approx(2200 + 2300, abs=0.001)
