@@ -44,7 +44,26 @@ mqtt:
 
 ### TLS/SSL Configuration
 
-> ⚠️ **Note**: TLS/SSL support is currently **untested and known to be non-functional**: the implementation expects the certificate options nested below `tls`, while the enable check expects a boolean — these requirements contradict each other. Track progress or report your use case in the project issues before relying on TLS.
+To connect to a TLS-secured MQTT broker, set `tls: true` and provide the path to your CA certificate. For mutual TLS, also supply a client certificate and key.
+
+```yaml
+mqtt:
+  enabled: true
+  broker: mqtt.example.com
+  port: 8883
+  topic: house/batcontrol
+  tls: true
+  cafile: /etc/ssl/certs/ca-certificates.crt   # required when tls: true
+  certfile: /etc/ssl/certs/client.crt           # optional, for mutual TLS
+  keyfile: /etc/ssl/certs/client.key            # optional, for mutual TLS
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `tls` | boolean | `false` | Enable TLS/SSL for the broker connection |
+| `cafile` | string | — | Path to the CA certificate file (required when `tls: true`) |
+| `certfile` | string | — | Path to the client certificate (optional, for mutual TLS) |
+| `keyfile` | string | — | Path to the client private key (optional, for mutual TLS) |
 
 ## Home Assistant Auto-Discovery
 
@@ -279,6 +298,6 @@ This will provide detailed information about MQTT connections, published message
 ## Security Considerations
 
 - Always use authentication (`username`/`password`) in production
-- TLS encryption is currently not functional (see above) — keep MQTT traffic on a trusted local network
+- Use TLS encryption (`tls: true`) when the MQTT broker is reachable over an untrusted network
 - Limit MQTT user permissions to only necessary topics
 - Use strong, unique passwords for MQTT authentication

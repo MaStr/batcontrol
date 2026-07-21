@@ -55,7 +55,26 @@ evcc:
 
 ### TLS/SSL Support
 
-> ⚠️ **Note**: TLS/SSL support is currently **untested and known to be non-functional** (same limitation as in the [MQTT API](mqtt-api.md)). Keep MQTT traffic on a trusted local network.
+Batcontrol supports TLS-encrypted MQTT connections to the evcc broker. Configure TLS with flat keys at the same level as other evcc connection parameters:
+
+```yaml
+evcc:
+  broker: mqtt.home.local
+  port: 8883
+  tls: true
+  cafile: /etc/ssl/certs/ca-certificates.crt   # path to CA certificate (required when tls: true)
+  certfile: /etc/ssl/certs/client.crt           # path to client certificate (optional, for mutual TLS)
+  keyfile: /etc/ssl/certs/client.key            # path to client private key (optional, for mutual TLS)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `tls` | boolean | Enable TLS encryption (default: `false`). Use port 8883 for TLS-secured brokers |
+| `cafile` | string | Path to the CA certificate file. **Required** when `tls: true` |
+| `certfile` | string | Path to the client certificate file. Optional; required for mutual TLS |
+| `keyfile` | string | Path to the client private key file. Optional; required for mutual TLS (must be set together with `certfile`) |
+
+> **Note**: `certfile` and `keyfile` must both be set or both be absent — partial mutual TLS configuration raises an error at startup.
 
 ### Battery Management Options
 
@@ -237,6 +256,6 @@ When using both batcontrol and evcc with Home Assistant:
 ## Security Considerations
 
 - Use authentication for production MQTT brokers
-- TLS encryption is currently not functional (see above) — keep MQTT traffic on a trusted local network
+- Use TLS encryption (`tls: true` with a valid `cafile`) when the MQTT broker is not on a fully trusted local network
 - Ensure MQTT user has appropriate topic permissions
 - Keep MQTT credentials secure and unique

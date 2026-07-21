@@ -72,6 +72,14 @@ draft GitHub release + version-bump PR; the pushed tag triggers the Docker build
 `main` is bumped to the next `dev` version and the release is promoted into the HA add-on repo
 (`release-addon` skill there).
 
+## CLI
+
+```
+python -m batcontrol [--config PATH] [--one-shot]
+```
+
+- `--one-shot` — fetch data, run the control loop once, then exit. Useful for testing. Not `--once`.
+
 ## Known Pitfalls
 
 - ASCII-only in source code — no umlauts, special chars, emoji, even in log messages. Does not
