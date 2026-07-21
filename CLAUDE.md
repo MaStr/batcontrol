@@ -26,6 +26,14 @@ src/batcontrol/
 - **MQTT API:** publishes state and accepts runtime overrides (min/max SoC, charge rate) via retained topics.
 - **Interval resolution:** 15-minute internally — see `interval_utils.py` and `docs/15-min-transform.md`.
 
+## CLI
+
+```
+python -m batcontrol [--config PATH] [--one-shot]
+```
+
+- `--one-shot` — fetch data, run the control loop once, then exit. Useful for testing. Not `--once`.
+
 ## Known Pitfalls
 
 - ASCII-only in source code — no umlauts, special chars, emoji, even in log messages. Does not apply to documentation in `docs/`.
