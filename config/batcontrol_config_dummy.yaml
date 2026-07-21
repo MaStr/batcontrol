@@ -105,7 +105,7 @@ inverter:
                         # Only affects mode 8; ignored in other modes.
   # fronius_inverter_id: '1' # Optional: ID of the inverter in Fronius API (default: '1')
   # fronius_controller_id: '0' # Optional: ID of the controller in Fronius API (default: '0')
-  enable_resilient_wrapper: false # Skip a control cycle on transient inverter outages instead of terminating (default: false)
+  enable_resilient_wrapper: true # Skip a control cycle on transient inverter outages instead of terminating (default: true)
   outage_tolerance_minutes: 24 # Minutes to tolerate inverter outages before terminating (default: 24)
 
 #--------------------------

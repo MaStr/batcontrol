@@ -20,6 +20,7 @@ def test_factory_creates_mqtt_inverter():
         "type": "mqtt",
         "capacity": 10000,
         "max_grid_charge_rate": 5000,
+        "enable_resilient_wrapper": False,
     }
 
     inverter = Inverter.create_inverter(config)
@@ -35,6 +36,7 @@ def test_factory_uses_max_charge_rate_alias_for_mqtt():
         "type": "mqtt",
         "capacity": 10000,
         "max_charge_rate": 4200,
+        "enable_resilient_wrapper": False,
     }
 
     inverter = Inverter.create_inverter(config)
@@ -50,6 +52,7 @@ def test_factory_prefers_max_grid_charge_rate_over_alias():
         "capacity": 10000,
         "max_grid_charge_rate": 5000,
         "max_charge_rate": 4200,
+        "enable_resilient_wrapper": False,
     }
 
     inverter = Inverter.create_inverter(config)
@@ -64,6 +67,7 @@ def test_factory_accepts_mqtt_type_case_insensitively():
         "type": "MQTT",
         "capacity": 10000,
         "max_grid_charge_rate": 5000,
+        "enable_resilient_wrapper": False,
     }
 
     inverter = Inverter.create_inverter(config)
@@ -77,6 +81,7 @@ def test_factory_applies_mqtt_defaults():
         "type": "mqtt",
         "capacity": 10000,
         "max_grid_charge_rate": 5000,
+        "enable_resilient_wrapper": False,
     }
 
     inverter = Inverter.create_inverter(config)
@@ -115,6 +120,7 @@ def test_factory_builds_fronius_with_expected_config(mocker):
         "max_pv_charge_rate": 1700,
         "fronius_inverter_id": 3,
         "fronius_controller_id": 4,
+        "enable_resilient_wrapper": False,
     }
 
     inverter = Inverter.create_inverter(config)

@@ -30,7 +30,7 @@ Why not just let batcontrol crash and rely on the container restart policy? With
 
 Default:
 ```
-enable_resilient_wrapper: false
+enable_resilient_wrapper: true
 ```
 
 ### outage_tolerance_minutes
