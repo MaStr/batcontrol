@@ -8,8 +8,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 import pytz
 
+import requests
+
 from batcontrol.forecastsolar.solcast import Solcast
 from batcontrol.forecastsolar.baseclass import ProviderError, RateLimitException
+
+# Fixed reference time (mid-hour, away from hour boundaries) so all time
+# calculations in the tests and in the provider share the same clock.
+TZ = pytz.timezone('Europe/Berlin')
+FIXED_NOW = TZ.localize(datetime.datetime(2026, 6, 1, 12, 20, 0))
 
 
 def _period_end_str(dt_utc: datetime.datetime) -> str:
@@ -20,10 +27,27 @@ def _period_end_str(dt_utc: datetime.datetime) -> str:
 class TestSolcast:
     """Tests for the Solcast provider."""
 
+    @pytest.fixture(autouse=True)
+    def frozen_time(self):
+        """Freeze datetime.now() in the solcast and baseclass modules.
+
+        Without this, the hour start computed in a test could differ from
+        the provider's hour start when a real hour boundary is crossed
+        mid-test, shifting interval indices and causing flaky failures.
+        """
+        with patch('batcontrol.forecastsolar.solcast.datetime') as mock_solcast_dt, \
+                patch('batcontrol.forecastsolar.baseclass.datetime') as mock_base_dt:
+            for mock_dt in (mock_solcast_dt, mock_base_dt):
+                mock_dt.datetime.now.return_value = FIXED_NOW
+                mock_dt.timedelta = datetime.timedelta
+                mock_dt.timezone = datetime.timezone
+            mock_solcast_dt.datetime.fromisoformat = datetime.datetime.fromisoformat
+            yield FIXED_NOW
+
     @pytest.fixture
     def timezone(self):
         """Fixture for timezone"""
-        return pytz.timezone('Europe/Berlin')
+        return TZ
 
     @pytest.fixture
     def pvinstallations(self):
@@ -45,9 +69,9 @@ class TestSolcast:
         )
 
     def _current_hour_start_utc(self, timezone):
-        """Start of the current hour as a UTC datetime."""
-        now = datetime.datetime.now().astimezone(timezone)
-        local_hour_start = now.replace(minute=0, second=0, microsecond=0)
+        """Start of the (frozen) current hour as a UTC datetime."""
+        local_hour_start = FIXED_NOW.astimezone(timezone).replace(
+            minute=0, second=0, microsecond=0)
         return local_hour_start.astimezone(datetime.timezone.utc)
 
     # ------------------------------------------------------------------
@@ -354,6 +378,23 @@ class TestSolcast:
         with patch('batcontrol.forecastsolar.solcast.requests.get',
                    return_value=self._mock_response(500)):
             with pytest.raises(ProviderError):
+                instance.get_raw_data_from_provider('default')
+
+    @pytest.mark.parametrize('exception', [
+        requests.exceptions.ConnectTimeout('timed out'),
+        requests.exceptions.ConnectionError('dns failure'),
+        requests.exceptions.ReadTimeout('read timed out'),
+    ])
+    def test_network_errors_raise_provider_error(self, instance, exception):
+        """Test that network-level errors are wrapped as ProviderError.
+
+        The baseclass only catches (ConnectionError, TimeoutError,
+        ProviderError); raw requests exceptions would escape refresh_data
+        and crash the refresh scheduling instead of falling back to cache.
+        """
+        with patch('batcontrol.forecastsolar.solcast.requests.get',
+                   side_effect=exception):
+            with pytest.raises(ProviderError, match='request failed'):
                 instance.get_raw_data_from_provider('default')
 
     # ------------------------------------------------------------------
