@@ -77,6 +77,24 @@ inverter:
   fronius_controller_id: '0' # Optional: ID of the controller in Fronius API (default: '0') (ab 0.5.6)
 ```
 
+### Requirements
+
+- The inverter web interface must be reachable over HTTP from the machine that runs batcontrol (local network).
+- A web interface login is required. Both the **customer** and the **technician** login work — use the login name in lowercase (`customer` or `technician`) together with the matching password.
+- The Fronius **Solar.API** does *not* need to be enabled manually: batcontrol activates it automatically at startup, since it is required to read the battery state of charge.
+
+### Changes batcontrol makes to the inverter configuration
+
+At startup, batcontrol:
+
+- **Enables the Solar.API** (`SolarAPIv1Enabled`), which is required to read SoC and power values.
+- **Saves a backup** of the current battery settings (min/max SoC, energy-management mode/power, grid-charging flag) to `config/battery_config.json` and of the time-of-use schedule to `config/timeofuse_config.json`.
+- **Enables charging from grid** (`HYB_EVU_CHARGEFROMGRID`), so batcontrol can charge the battery during cheap price windows.
+
+During operation, batcontrol controls the battery by writing battery settings (min/max SoC in manual mode, energy-management mode and power) and time-of-use schedules.
+
+On a clean shutdown, batcontrol restores the saved battery settings and time-of-use schedule from the backup files. The Solar.API stays enabled — disable it manually in the inverter web UI if no other software needs it (note: the Fronius Wattpilot wallbox requires the Solar.API).
+
 ### Additional Parameters (since 0.5.6)
 - **fronius_inverter_id**: Optional parameter to specify the inverter ID in the Fronius API. Default is '1'.
 - **fronius_controller_id**: Optional parameter to specify the controller ID in the Fronius API. Default is '0'.
