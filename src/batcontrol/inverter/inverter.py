@@ -106,8 +106,8 @@ class Inverter:
         inverter.inverter_num = Inverter.num_inverters
         Inverter.num_inverters += 1
 
-        # Check if resilient wrapper is enabled (default: False)
-        enable_resilient_wrapper = config.get('enable_resilient_wrapper', False)
+        # Check if resilient wrapper is enabled (default: True)
+        enable_resilient_wrapper = config.get('enable_resilient_wrapper', True)
 
         if not enable_resilient_wrapper:
             logger.info('Resilient wrapper disabled by configuration')

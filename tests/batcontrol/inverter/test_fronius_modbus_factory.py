@@ -27,6 +27,7 @@ def test_factory_creates_fronius_modbus_inverter_with_expected_defaults(mocker):
         "address": "192.168.1.100",
         "capacity": 10000,
         "max_grid_charge_rate": 5000,
+        "enable_resilient_wrapper": False,
     }
 
     inverter = Inverter.create_inverter(config)
@@ -57,6 +58,7 @@ def test_factory_passes_explicit_fronius_modbus_config_values(mocker):
         "max_soc": 95,
         "max_grid_charge_rate": 6000,
         "revert_seconds": 900,
+        "enable_resilient_wrapper": False,
     }
 
     inverter = Inverter.create_inverter(config)
@@ -82,6 +84,7 @@ def test_factory_accepts_fronius_modbus_type_case_insensitively(mocker):
         "address": "192.168.1.100",
         "capacity": 10000,
         "max_grid_charge_rate": 5000,
+        "enable_resilient_wrapper": False,
     }
 
     inverter = Inverter.create_inverter(config)
@@ -126,6 +129,7 @@ def test_factory_accepts_legacy_max_charge_rate_alias_for_fronius_modbus(mocker)
         "address": "192.168.1.100",
         "capacity": 10000,
         "max_charge_rate": 4200,
+        "enable_resilient_wrapper": False,
     }
 
     inverter = Inverter.create_inverter(config)
