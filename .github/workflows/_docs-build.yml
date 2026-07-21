@@ -1,0 +1,36 @@
+name: Build Documentation
+
+on:
+  workflow_call:
+    outputs:
+      artifact-id:
+        description: "ID of the uploaded pages artifact"
+        value: ${{ jobs.build.outputs.artifact-id }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install documentation dependencies
+        run: pip install "mkdocs-material>=9.5,<10" "mkdocs-llmstxt>=0.5.0,<1.0"
+
+      - name: Build documentation
+        run: mkdocs build --strict
+
+      - name: Upload artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-site
+          path: site
+          retention-days: 1
