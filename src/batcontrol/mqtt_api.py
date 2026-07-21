@@ -104,10 +104,21 @@ class MqttApi:
             retain=True)
 
         if config.get('tls') is True:
+            cafile = config.get('cafile')
+            if not cafile:
+                raise ValueError(
+                    'mqtt: tls is enabled but cafile is missing or empty'
+                )
+            certfile = config.get('certfile') or None
+            keyfile = config.get('keyfile') or None
+            if bool(certfile) != bool(keyfile):
+                raise ValueError(
+                    'mqtt: certfile and keyfile must both be set or both be absent'
+                )
             self.client.tls_set(
-                ca_certs=config.get('cafile'),
-                certfile=config.get('certfile') or None,
-                keyfile=config.get('keyfile') or None,
+                ca_certs=cafile,
+                certfile=certfile,
+                keyfile=keyfile,
                 ciphers=config.get('ciphers') or None,
             )
 

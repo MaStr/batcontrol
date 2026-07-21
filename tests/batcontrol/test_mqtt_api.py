@@ -1,5 +1,7 @@
 """Tests for MqttApi._handle_message, focusing on bytes payload decoding."""
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock, call, patch
+
+import pytest
 
 from batcontrol.core import Batcontrol
 from batcontrol.logic import PeakShavingConfig
@@ -465,6 +467,89 @@ class TestPublishSolarSurplus:
         api.client.is_connected.return_value = False
         api.publish_solar_surplus(500.0)
         api.client.publish.assert_not_called()
+
+
+class TestTlsSetup:
+    """MqttApi.__init__ must configure TLS correctly and reject bad configs."""
+
+    BASE_CONFIG = {
+        'topic': 'house/batcontrol',
+        'broker': 'localhost',
+        'port': 8883,
+        'retry_attempts': 1,
+        'retry_delay': 0,
+    }
+
+    def _make_config(self, **overrides):
+        return {**self.BASE_CONFIG, **overrides}
+
+    def test_tls_disabled_does_not_call_tls_set(self):
+        with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient:
+            client = MockClient.return_value
+            client.is_connected.return_value = True
+            cfg = self._make_config(tls=False)
+            MqttApi(cfg)
+            client.tls_set.assert_not_called()
+
+    def test_tls_true_calls_tls_set_with_cafile(self):
+        with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient:
+            client = MockClient.return_value
+            client.is_connected.return_value = True
+            cfg = self._make_config(
+                tls=True,
+                cafile='/etc/ssl/ca.crt',
+            )
+            MqttApi(cfg)
+            client.tls_set.assert_called_once_with(
+                ca_certs='/etc/ssl/ca.crt',
+                certfile=None,
+                keyfile=None,
+                ciphers=None,
+            )
+
+    def test_tls_true_passes_mutual_tls_params(self):
+        with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient:
+            client = MockClient.return_value
+            client.is_connected.return_value = True
+            cfg = self._make_config(
+                tls=True,
+                cafile='/etc/ssl/ca.crt',
+                certfile='/etc/ssl/client.crt',
+                keyfile='/etc/ssl/client.key',
+            )
+            MqttApi(cfg)
+            client.tls_set.assert_called_once_with(
+                ca_certs='/etc/ssl/ca.crt',
+                certfile='/etc/ssl/client.crt',
+                keyfile='/etc/ssl/client.key',
+                ciphers=None,
+            )
+
+    def test_tls_missing_cafile_raises_valueerror(self):
+        with patch('batcontrol.mqtt_api.mqtt.Client'):
+            cfg = self._make_config(tls=True)
+            with pytest.raises(ValueError, match='cafile'):
+                MqttApi(cfg)
+
+    def test_tls_certfile_without_keyfile_raises_valueerror(self):
+        with patch('batcontrol.mqtt_api.mqtt.Client'):
+            cfg = self._make_config(
+                tls=True,
+                cafile='/etc/ssl/ca.crt',
+                certfile='/etc/ssl/client.crt',
+            )
+            with pytest.raises(ValueError, match='certfile and keyfile'):
+                MqttApi(cfg)
+
+    def test_tls_keyfile_without_certfile_raises_valueerror(self):
+        with patch('batcontrol.mqtt_api.mqtt.Client'):
+            cfg = self._make_config(
+                tls=True,
+                cafile='/etc/ssl/ca.crt',
+                keyfile='/etc/ssl/client.key',
+            )
+            with pytest.raises(ValueError, match='certfile and keyfile'):
+                MqttApi(cfg)
 
 
 class TestPublishSolarActive:
