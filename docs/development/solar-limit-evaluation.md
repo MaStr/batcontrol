@@ -51,9 +51,14 @@ distinguishes two cases. Per slot `k` (up to the end of the production window):
 
 ```
 surplus_wh[k]    = max(0, production[k] - consumption[k])
+surplus_hr_wh[k] = surplus_wh[k] * headroom          # headroom acts on the surplus
 feed_allow_wh[k] = feed_in_limit_w * slot_h[k]
-clip_wh[k]       = min(surplus_wh[k], max(0, surplus_wh[k] - feed_allow_wh[k]) * headroom)
+clip_wh[k]       = max(0, surplus_hr_wh[k] - feed_allow_wh[k])
 ```
+
+The "everything fits, no cap needed" check in case B compares the **raw** (not
+headroom-adjusted) total surplus against the free capacity — it is a physical
+check, not a safety margin.
 
 **Case A — before the clip window: reservation cap.**
 Free capacity minus the predicted clip energy is spread evenly over the slots until
