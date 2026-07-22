@@ -75,6 +75,7 @@ inverter:
   max_grid_charge_rate: 5000 # Watt
   fronius_inverter_id: '1' # Optional: ID of the inverter in Fronius API (default: '1') (ab 0.5.6)
   fronius_controller_id: '0' # Optional: ID of the controller in Fronius API (default: '0') (ab 0.5.6)
+  capacity: 10000 # Optional: fixed battery capacity in Wh, overrides the value queried from the inverter
 ```
 
 ### Requirements
@@ -103,6 +104,8 @@ Both files are deleted after a successful restore. The Solar.API stays enabled â
 ### Additional Parameters (since 0.5.6)
 - **fronius_inverter_id**: Optional parameter to specify the inverter ID in the Fronius API. Default is '1'.
 - **fronius_controller_id**: Optional parameter to specify the controller ID in the Fronius API. Default is '0'.
+- **capacity**: Optional parameter to specify a fixed battery capacity in Wh. If set, batcontrol uses
+  this value instead of querying `DesignedCapacity` from the inverter's Solar.API at startup.
 
 ## fronius-modbus
 This enables the Fronius Modbus TCP inverter backend. It controls a Fronius GEN24/BYD battery through SunSpec storage-control registers and does not require inverter web-login credentials.

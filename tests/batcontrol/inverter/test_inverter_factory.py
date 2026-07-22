@@ -134,6 +134,7 @@ def test_factory_builds_fronius_with_expected_config(mocker):
             "max_pv_charge_rate": 1700,
             "fronius_inverter_id": 3,
             "fronius_controller_id": 4,
+            "capacity": -1,
         }
     )
     assert inverter is mock_instance
@@ -167,6 +168,7 @@ def test_factory_defaults_max_pv_charge_rate_for_fronius(mocker):
             "max_pv_charge_rate": 0,
             "fronius_inverter_id": 1,
             "fronius_controller_id": 0,
+            "capacity": -1,
         }
     )
 
@@ -200,5 +202,41 @@ def test_factory_applies_fronius_id_defaults(mocker):
             "max_pv_charge_rate": 1200,
             "fronius_inverter_id": 1,
             "fronius_controller_id": 0,
+            "capacity": -1,
+        }
+    )
+
+
+def test_factory_forwards_fronius_capacity_override(mocker):
+    """Factory should forward an explicit 'capacity' override to FroniusWR."""
+    mock_instance = mocker.MagicMock()
+    mock_fronius = mocker.patch(
+        "batcontrol.inverter.fronius.FroniusWR",
+        autospec=True,
+        return_value=mock_instance,
+    )
+
+    config = {
+        "type": "fronius_gen24",
+        "address": "192.168.1.100",
+        "user": "customer",
+        "password": "secret",
+        "max_grid_charge_rate": 5000,
+        "max_pv_charge_rate": 1200,
+        "capacity": 9600,
+    }
+
+    Inverter.create_inverter(config)
+
+    mock_fronius.assert_called_once_with(
+        {
+            "address": "192.168.1.100",
+            "user": "customer",
+            "password": "secret",
+            "max_grid_charge_rate": 5000,
+            "max_pv_charge_rate": 1200,
+            "fronius_inverter_id": 1,
+            "fronius_controller_id": 0,
+            "capacity": 9600,
         }
     )

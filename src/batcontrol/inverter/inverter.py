@@ -43,7 +43,8 @@ class Inverter:
                 'max_grid_charge_rate': config['max_grid_charge_rate'],
                 'max_pv_charge_rate': config['max_pv_charge_rate'],
                 'fronius_inverter_id': config.get('fronius_inverter_id', 1),
-                'fronius_controller_id': config.get('fronius_controller_id', 0)
+                'fronius_controller_id': config.get('fronius_controller_id', 0),
+                'capacity': config.get('capacity', -1)
             }
             inverter=FroniusWR(iv_config)
         elif config['type'].lower() == 'dummy':

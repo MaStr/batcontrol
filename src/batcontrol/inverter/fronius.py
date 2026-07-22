@@ -183,7 +183,9 @@ class FroniusWR(InverterBaseclass):
         self.cnonce = hashlib.md5(os.urandom(8)).hexdigest()
         self.login_attempts = 0
         self.address = config['address']
-        self.capacity = -1
+        # Optional override: use a fixed capacity from config instead of
+        # querying it from the inverter (DesignedCapacity via Solar.API).
+        self.capacity = config.get('capacity', -1)
         self.max_grid_charge_rate = config['max_grid_charge_rate']
         self.max_pv_charge_rate = config['max_pv_charge_rate']
         self.nonce = 0
@@ -684,7 +686,10 @@ class FroniusWR(InverterBaseclass):
         return response
 
     def get_capacity(self):
-        """ Get the full and raw capacity of the battery in Wh."""
+        """ Get the full and raw capacity of the battery in Wh.
+            Returns the configured capacity override if set, otherwise
+            queries and caches DesignedCapacity from the inverter.
+        """
         if self.capacity >= 0:
             return self.capacity
 
