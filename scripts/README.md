@@ -36,6 +36,19 @@ python scripts/simulate_solar_limit_day.py
 
 See `docs/development/solar-limit-evaluation.md` for results and design.
 
+### plot_solar_limit_day.py
+
+Generates the figures for `docs/development/solar-limit-evaluation.md` into
+`docs/assets/` (clipping concept, algorithm behaviour on the reference day,
+headroom explainer). Imports profiles and the candidate algorithm from
+`simulate_solar_limit_day.py`.
+
+**Usage:**
+```bash
+uv pip install matplotlib  # not part of the project dependencies
+python scripts/plot_solar_limit_day.py
+```
+
 ### test_evcc.py
 
 Standalone test script for the evcc dynamic tariff module.
