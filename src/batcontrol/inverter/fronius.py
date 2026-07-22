@@ -185,7 +185,7 @@ class FroniusWR(InverterBaseclass):
         self.address = config['address']
         # Optional override: use a fixed capacity from config instead of
         # querying it from the inverter (DesignedCapacity via Solar.API).
-        self.capacity = config.get('capacity', -1)
+        self.capacity = self._parse_capacity_config(config.get('capacity', -1))
         self.max_grid_charge_rate = config['max_grid_charge_rate']
         self.max_pv_charge_rate = config['max_pv_charge_rate']
         self.nonce = 0
@@ -684,6 +684,20 @@ class FroniusWR(InverterBaseclass):
             logger.debug("Invalidated time of use cache after update")
 
         return response
+
+    @staticmethod
+    def _parse_capacity_config(capacity) -> float:
+        """ Coerce the configured 'capacity' value to a float.
+            Accepts numbers or numeric strings (as YAML may quote them),
+            so runtime behavior stays deterministic instead of raising a
+            TypeError later out of get_capacity().
+        """
+        try:
+            return float(capacity)
+        except (TypeError, ValueError) as e:
+            raise RuntimeError(
+                f"Invalid 'capacity' config value: {capacity!r}. Must be a number (Wh)."
+            ) from e
 
     def get_capacity(self):
         """ Get the full and raw capacity of the battery in Wh.
