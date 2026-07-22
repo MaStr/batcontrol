@@ -79,7 +79,7 @@ PROFILE_EAST_WEST_W = np.array([
 # ---------------------------------------------------------------------------
 def compute_solar_limit(production_wh, consumption_wh, feed_in_limit_w,
                         interval_h, free_capacity_wh, max_capacity_wh,
-                        headroom=1.0, slot0_hours=None):
+                        headroom=1.0, slot0_hours=None, headroom_on='clip'):
     """Compute the solar-cap rule output for the current slot.
 
     Args:
@@ -90,11 +90,18 @@ def compute_solar_limit(production_wh, consumption_wh, feed_in_limit_w,
         interval_h:      slot length in hours (0.25 or 1.0).
         free_capacity_wh: battery free capacity (Wh).
         max_capacity_wh: battery max capacity (Wh).
-        headroom:        safety factor >= 1.0 on predicted clip energy for
-                         RESERVATION sizing only (hourly averages understate
-                         instantaneous clipping). Never applied to the floor.
+        headroom:        safety factor >= 1.0 for RESERVATION sizing only
+                         (forecasts understate clipping). Never applied to
+                         the floor.
         slot0_hours:     remaining hours in the current slot (partial slot).
                          Defaults to interval_h.
+        headroom_on:     'clip'    - multiply predicted clip energy (weak
+                                     against underestimated production: slots
+                                     forecast below the limit stay invisible)
+                         'surplus' - multiply predicted surplus BEFORE the
+                                     clip computation (reconstructs an
+                                     underestimated production curve and also
+                                     finds clip slots the raw forecast misses)
 
     Returns:
         (floor_w, cap_w):
@@ -129,10 +136,16 @@ def compute_solar_limit(production_wh, consumption_wh, feed_in_limit_w,
     feed_allow_wh = feed_in_limit_w * slot_h
     clip_raw_wh = np.clip(surplus_wh - feed_allow_wh, 0, None)
     # Headroom only inflates the reservation; a slot can never clip more
-    # than its surplus.
-    clip_wh = np.minimum(surplus_wh, clip_raw_wh * headroom)
+    # than its (headroom-adjusted) surplus. The floor always uses the raw
+    # clip so we never force absorbing exportable energy.
+    if headroom_on == 'surplus':
+        surplus_hr_wh = surplus_wh * headroom
+        clip_wh = np.minimum(surplus_hr_wh,
+                             np.clip(surplus_hr_wh - feed_allow_wh, 0, None))
+    else:
+        clip_wh = np.minimum(surplus_wh, clip_raw_wh * headroom)
 
-    clip_slots = np.nonzero(clip_raw_wh > 0)[0]
+    clip_slots = np.nonzero(clip_wh > 0)[0]
     if len(clip_slots) == 0:
         return 0, -1
 
@@ -217,9 +230,17 @@ def run_day(prod_actual_w, cons_actual_w, capacity_wh,
             time_active=False, solar_cap_active=False,
             forecast_prod_w=None, forecast_cons_w=None,
             feed_in_limit_w=FEED_IN_LIMIT_W, headroom=1.0,
+            headroom_on='clip', live_floor=False,
             interval_min=60, allow_full_after=ALLOW_FULL_AFTER,
             initial_soc_wh=None, collect_rows=False):
-    """Simulate one day and return metrics (and per-slot rows on request)."""
+    """Simulate one day and return metrics (and per-slot rows on request).
+
+    live_floor: derive the slot-0 floor additionally from the ACTUAL current
+    production (simulates using the live inverter measurement instead of the
+    forecast -- batcontrol re-evaluates every ~3 minutes and knows the
+    current production). Protects the floor against forecast errors; the
+    reservation still depends on the forecast.
+    """
     interval_h = interval_min / 60.0
     n_slots = len(prod_actual_w)
     if forecast_prod_w is None:
@@ -266,7 +287,11 @@ def run_day(prod_actual_w, cons_actual_w, capacity_wh,
         if solar_cap_active:
             floor_w, solar_cap_w = compute_solar_limit(
                 fc_prod_wh, fc_cons_wh, feed_in_limit_w, interval_h,
-                free_cap, capacity_wh, headroom=headroom)
+                free_cap, capacity_wh, headroom=headroom,
+                headroom_on=headroom_on)
+            if live_floor:
+                live_clip_w = max(0.0, (prod_w - cons_w) - feed_in_limit_w)
+                floor_w = max(floor_w, live_clip_w)
 
         time_cap_w = -1
         if time_active and fc_prod_wh[0] > 0:
@@ -468,6 +493,43 @@ def scenario_forecast_error():
     ], potential)
 
 
+def scenario_forecast_error_125():
+    cons = np.full(24, CONSUMPTION_W, dtype=float)
+    cap = 10_000
+    forecast = PROFILE_SOUTH_W / 1.25  # actual = 125% of forecast
+    potential = clip_potential_wh(PROFILE_SOUTH_W, cons, FEED_IN_LIMIT_W, 1.0)
+    fc_potential = clip_potential_wh(forecast, cons, FEED_IN_LIMIT_W, 1.0)
+    base = run_day(PROFILE_SOUTH_W, cons, cap)
+    clip_hr = run_day(PROFILE_SOUTH_W, cons, cap, solar_cap_active=True,
+                      forecast_prod_w=forecast, headroom=1.25,
+                      headroom_on='clip')
+    surp_hr = run_day(PROFILE_SOUTH_W, cons, cap, solar_cap_active=True,
+                      forecast_prod_w=forecast, headroom=1.25,
+                      headroom_on='surplus')
+    live_only = run_day(PROFILE_SOUTH_W, cons, cap, solar_cap_active=True,
+                        forecast_prod_w=forecast, live_floor=True)
+    combined = run_day(PROFILE_SOUTH_W, cons, cap, solar_cap_active=True,
+                       forecast_prod_w=forecast, headroom=1.25,
+                       headroom_on='surplus', live_floor=True)
+    perfect = run_day(PROFILE_SOUTH_W, cons, cap, solar_cap_active=True)
+    print('=' * 88)
+    print('  SCENARIO 4b -- Severe forecast error: actual = 125% of forecast')
+    print('=' * 88)
+    print(f'  Forecast sees only {fc_potential/1000:.2f} kWh clip potential '
+          f'(actual: {potential/1000:.2f} kWh) and')
+    print('  misses entire clip slots -- multiplying the predicted CLIP '
+          'energy cannot fix that.')
+    print()
+    print_summary('Mitigation comparison (headroom target vs. live floor):', [
+        ('baseline', base),
+        ('solar, headroom 1.25 on clip', clip_hr),
+        ('solar, headroom 1.25 on surplus', surp_hr),
+        ('solar, live floor only', live_only),
+        ('solar, surplus 1.25 + live floor', combined),
+        ('solar, perfect forecast (ref)', perfect),
+    ], potential)
+
+
 def scenario_consumption_spike():
     cons = np.full(24, CONSUMPTION_W, dtype=float)
     cons[12:14] = 2_400  # cooking 12:00-14:00
@@ -514,5 +576,6 @@ if __name__ == '__main__':
     scenario_east_west()
     scenario_small_battery()
     scenario_forecast_error()
+    scenario_forecast_error_125()
     scenario_consumption_spike()
     scenario_15min()
