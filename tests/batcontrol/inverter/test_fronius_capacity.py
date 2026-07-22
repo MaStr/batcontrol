@@ -115,6 +115,45 @@ class TestFroniusCapacityOverride(unittest.TestCase):
         # BAT_M0_SOC_MAX is 100 in the mocked battery config.
         self.assertEqual(inverter.get_max_capacity(), 8000)
 
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_firmware_version')
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_battery_config')
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_powerunit_config')
+    @patch('batcontrol.inverter.fronius.FroniusWR.backup_time_of_use')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_solar_api_active')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_allow_grid_charging')
+    @patch('batcontrol.inverter.fronius.FroniusWR.send_request')
+    def test_capacity_string_from_yaml_is_coerced(
+        self, mock_send_request, mock_set_allow, mock_set_solar, mock_backup_tou,
+        mock_get_powerunit, mock_get_battery, mock_get_firmware):
+        """A quoted numeric string in YAML (e.g. '10000') is coerced to a number."""
+        self._setup_mocks(mock_get_firmware, mock_get_battery, mock_get_powerunit,
+                          mock_send_request, designed_capacity=10000)
+
+        config = self.base_config.copy()
+        config['capacity'] = '7500'
+        inverter = FroniusWR(config)
+
+        self.assertEqual(inverter.get_capacity(), 7500)
+
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_firmware_version')
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_battery_config')
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_powerunit_config')
+    @patch('batcontrol.inverter.fronius.FroniusWR.backup_time_of_use')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_solar_api_active')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_allow_grid_charging')
+    @patch('batcontrol.inverter.fronius.FroniusWR.send_request')
+    def test_invalid_capacity_raises_error(
+        self, mock_send_request, mock_set_allow, mock_set_solar, mock_backup_tou,
+        mock_get_powerunit, mock_get_battery, mock_get_firmware):
+        """A non-numeric capacity value raises a clear RuntimeError."""
+        config = self.base_config.copy()
+        config['capacity'] = 'not-a-number'
+
+        with self.assertRaises(RuntimeError) as context:
+            FroniusWR(config)
+
+        self.assertIn('capacity', str(context.exception))
+
 
 if __name__ == '__main__':
     unittest.main()
