@@ -154,6 +154,26 @@ class TestFroniusCapacityOverride(unittest.TestCase):
 
         self.assertIn('capacity', str(context.exception))
 
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_firmware_version')
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_battery_config')
+    @patch('batcontrol.inverter.fronius.FroniusWR.get_powerunit_config')
+    @patch('batcontrol.inverter.fronius.FroniusWR.backup_time_of_use')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_solar_api_active')
+    @patch('batcontrol.inverter.fronius.FroniusWR.set_allow_grid_charging')
+    @patch('batcontrol.inverter.fronius.FroniusWR.send_request')
+    def test_non_finite_capacity_raises_error(
+        self, mock_send_request, mock_set_allow, mock_set_solar, mock_backup_tou,
+        mock_get_powerunit, mock_get_battery, mock_get_firmware):
+        """'inf'/'nan' capacity values are rejected instead of propagating NaN/inf."""
+        for bad_value in ('inf', '-inf', 'nan', float('inf'), float('nan')):
+            config = self.base_config.copy()
+            config['capacity'] = bad_value
+
+            with self.assertRaises(RuntimeError) as context:
+                FroniusWR(config)
+
+            self.assertIn('capacity', str(context.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

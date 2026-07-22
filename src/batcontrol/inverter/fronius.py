@@ -22,6 +22,7 @@ import os
 import logging
 import json
 import hashlib
+import math
 from dataclasses import dataclass
 import requests
 from packaging import version
@@ -693,11 +694,16 @@ class FroniusWR(InverterBaseclass):
             TypeError later out of get_capacity().
         """
         try:
-            return float(capacity)
+            parsed_capacity = float(capacity)
         except (TypeError, ValueError) as e:
             raise RuntimeError(
                 f"Invalid 'capacity' config value: {capacity!r}. Must be a number (Wh)."
             ) from e
+        if not math.isfinite(parsed_capacity):
+            raise RuntimeError(
+                f"Invalid 'capacity' config value: {capacity!r}. Must be a finite number (Wh)."
+            )
+        return parsed_capacity
 
     def get_capacity(self):
         """ Get the full and raw capacity of the battery in Wh.
