@@ -79,7 +79,8 @@ PROFILE_EAST_WEST_W = np.array([
 # ---------------------------------------------------------------------------
 def compute_solar_limit(production_wh, consumption_wh, feed_in_limit_w,
                         interval_h, free_capacity_wh, max_capacity_wh,
-                        headroom=1.0, slot0_hours=None, headroom_on='clip'):
+                        headroom=1.0, slot0_hours=None, headroom_on='clip',
+                        floor_source='raw'):
     """Compute the solar-cap rule output for the current slot.
 
     Args:
@@ -102,6 +103,15 @@ def compute_solar_limit(production_wh, consumption_wh, feed_in_limit_w,
                                      clip computation (reconstructs an
                                      underestimated production curve and also
                                      finds clip slots the raw forecast misses)
+        floor_source:    'raw'      - floor from the raw forecast clip
+                         'headroom' - floor from the headroom-adjusted clip.
+                                      With a greedy-charging inverter the
+                                      floor only RAISES the allowed cap, so
+                                      this permits (never forces) absorbing
+                                      more than the raw forecast predicts;
+                                      cost: when the forecast is correct,
+                                      some exportable surplus is charged
+                                      instead of fed in (no energy loss).
 
     Returns:
         (floor_w, cap_w):
@@ -161,9 +171,12 @@ def compute_solar_limit(production_wh, consumption_wh, feed_in_limit_w,
         return 0, int(allowed_wh / hours_before)
 
     # -- Case B: inside a clip slot -> floor + capacity-preserving cap ---- #
-    # Floor from the RAW clip (no headroom): never force absorbing energy
-    # that could legally be exported.
-    floor_w = clip_raw_wh[0] / slot0_hours
+    # Default floor from the RAW clip (no headroom): never lift the cap
+    # beyond what the raw forecast predicts as curtailed.
+    if floor_source == 'headroom':
+        floor_w = clip_wh[0] / slot0_hours
+    else:
+        floor_w = clip_raw_wh[0] / slot0_hours
     total_surplus_wh = float(np.sum(surplus_wh))
     if total_surplus_wh <= free_capacity_wh:
         return int(floor_w), -1  # everything fits, no cap needed
@@ -230,17 +243,10 @@ def run_day(prod_actual_w, cons_actual_w, capacity_wh,
             time_active=False, solar_cap_active=False,
             forecast_prod_w=None, forecast_cons_w=None,
             feed_in_limit_w=FEED_IN_LIMIT_W, headroom=1.0,
-            headroom_on='clip', live_floor=False,
+            headroom_on='clip', floor_source='raw',
             interval_min=60, allow_full_after=ALLOW_FULL_AFTER,
             initial_soc_wh=None, collect_rows=False):
-    """Simulate one day and return metrics (and per-slot rows on request).
-
-    live_floor: derive the slot-0 floor additionally from the ACTUAL current
-    production (simulates using the live inverter measurement instead of the
-    forecast -- batcontrol re-evaluates every ~3 minutes and knows the
-    current production). Protects the floor against forecast errors; the
-    reservation still depends on the forecast.
-    """
+    """Simulate one day and return metrics (and per-slot rows on request)."""
     interval_h = interval_min / 60.0
     n_slots = len(prod_actual_w)
     if forecast_prod_w is None:
@@ -288,10 +294,7 @@ def run_day(prod_actual_w, cons_actual_w, capacity_wh,
             floor_w, solar_cap_w = compute_solar_limit(
                 fc_prod_wh, fc_cons_wh, feed_in_limit_w, interval_h,
                 free_cap, capacity_wh, headroom=headroom,
-                headroom_on=headroom_on)
-            if live_floor:
-                live_clip_w = max(0.0, (prod_w - cons_w) - feed_in_limit_w)
-                floor_w = max(floor_w, live_clip_w)
+                headroom_on=headroom_on, floor_source=floor_source)
 
         time_cap_w = -1
         if time_active and fc_prod_wh[0] > 0:
@@ -506,12 +509,23 @@ def scenario_forecast_error_125():
     surp_hr = run_day(PROFILE_SOUTH_W, cons, cap, solar_cap_active=True,
                       forecast_prod_w=forecast, headroom=1.25,
                       headroom_on='surplus')
-    live_only = run_day(PROFILE_SOUTH_W, cons, cap, solar_cap_active=True,
-                        forecast_prod_w=forecast, live_floor=True)
+    moderate = run_day(PROFILE_SOUTH_W, cons, cap, solar_cap_active=True,
+                       forecast_prod_w=forecast, headroom=1.1,
+                       headroom_on='surplus', floor_source='headroom')
     combined = run_day(PROFILE_SOUTH_W, cons, cap, solar_cap_active=True,
                        forecast_prod_w=forecast, headroom=1.25,
-                       headroom_on='surplus', live_floor=True)
+                       headroom_on='surplus', floor_source='headroom')
     perfect = run_day(PROFILE_SOUTH_W, cons, cap, solar_cap_active=True)
+    # Regression: what do the same settings cost when the forecast is
+    # already correct? The inflated floor lets the battery absorb
+    # exportable energy inside the window, displacing clip energy 1:1
+    # (the day is capacity-scarce: total surplus >> free capacity).
+    perfect_mod = run_day(PROFILE_SOUTH_W, cons, cap, solar_cap_active=True,
+                          headroom=1.1, headroom_on='surplus',
+                          floor_source='headroom')
+    perfect_aggr = run_day(PROFILE_SOUTH_W, cons, cap, solar_cap_active=True,
+                           headroom=1.25, headroom_on='surplus',
+                           floor_source='headroom')
     print('=' * 88)
     print('  SCENARIO 4b -- Severe forecast error: actual = 125% of forecast')
     print('=' * 88)
@@ -519,14 +533,18 @@ def scenario_forecast_error_125():
           f'(actual: {potential/1000:.2f} kWh) and')
     print('  misses entire clip slots -- multiplying the predicted CLIP '
           'energy cannot fix that.')
+    print('  All mitigations below are forecast-only (batcontrol has no '
+          'live production measurement).')
     print()
-    print_summary('Mitigation comparison (headroom target vs. live floor):', [
+    print_summary('Mitigation comparison (headroom target + floor source):', [
         ('baseline', base),
         ('solar, headroom 1.25 on clip', clip_hr),
         ('solar, headroom 1.25 on surplus', surp_hr),
-        ('solar, live floor only', live_only),
-        ('solar, surplus 1.25 + live floor', combined),
+        ('solar, surplus 1.1 + hr floor', moderate),
+        ('solar, surplus 1.25 + hr floor', combined),
         ('solar, perfect forecast (ref)', perfect),
+        ('solar, perfect fc + surplus 1.1', perfect_mod),
+        ('solar, perfect fc + surplus 1.25', perfect_aggr),
     ], potential)
 
 

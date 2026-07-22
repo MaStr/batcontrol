@@ -179,47 +179,59 @@ Szenario 4b entwickelt und quantifiziert.
 
 Die Prognose sieht nur **1,36 kWh** Kappungspotenzial statt real 7,50 kWh und erkennt
 ganze Kappungs-Slots (11:00, 14:00) **gar nicht** als solche — ein Multiplikator auf die
-prognostizierte Kappungsenergie kann das strukturell nicht reparieren. Zwei
-Gegenmaßnahmen wurden implementiert und verglichen:
+prognostizierte Kappungsenergie kann das strukturell nicht reparieren. Da batcontrol
+**keine Live-Messung der aktuellen Produktion** hat, stehen nur prognosebasierte
+Gegenmaßnahmen zur Verfügung; zwei wurden implementiert und verglichen:
 
 - **headroom auf den Überschuss** (`headroom_on='surplus'`): Der Faktor wird vor der
   Kappungsberechnung auf den prognostizierten Überschuss angewandt. Das rekonstruiert
   eine unterschätzte Produktionskurve und findet auch übersehene Kappungs-Slots —
-  repariert also die **Reservierung**.
-- **Live-Floor**: Der Floor in Slot 0 wird zusätzlich aus der **Ist-Messung** des
-  Wechselrichters gebildet (`max(floor_forecast, ist_leistung - grenze)`). batcontrol
-  evaluiert alle ~3 Minuten und kennt die aktuelle Produktion — repariert also die
-  **Absorption im Fenster**.
+  repariert die **Reservierung** vor dem Fenster.
+- **headroom-Floor** (`floor_source='headroom'`): Der Floor im Fenster wird aus der
+  headroom-korrigierten statt der Roh-Kappung berechnet. Bei greedy ladenden Invertern
+  ist der Floor ohnehin nur eine **Erlaubnis** (der angewandte Cap wird angehoben, der
+  Inverter lädt `min(Ist-Überschuss, Cap)`) — es wird nie Ladung erzwungen, die es
+  physisch nicht gibt. Repariert die **Absorption im Fenster**.
 
-| Trace                              | Abgeregelt | Rückgewinnung |
-|------------------------------------|-----------:|--------------:|
-| Baseline                           | 7,50 kWh   | 0 %           |
-| headroom 1.25 auf Kappung          | 4,60 kWh   | 38,7 %        |
-| headroom 1.25 auf Überschuss       | 5,12 kWh   | 31,8 %        |
-| nur Live-Floor                     | 4,94 kWh   | 34,1 %        |
-| **Überschuss 1.25 + Live-Floor**   | **0,40 kWh** | **94,7 %**  |
-| perfekter Forecast (Referenz)      | 0,00 kWh   | 100 %         |
+Ergebnis unter beiden Bedingungen (Ist = 125 % der Prognose bzw. Prognose korrekt):
 
-Zentrales Ergebnis: **Die Einzelmaßnahmen bringen jeweils nur ~32–39 %, die Kombination
-94,7 %.** Die Maßnahmen adressieren komplementäre Fehler: Ohne Live-Floor ist die
-perfekte Reservierung wertlos (der forecast-basierte Cap im Fenster blockt das Laden,
-während real gekappt wird — deshalb ist "Überschuss allein" sogar leicht schlechter als
-"Kappung allein"); ohne Überschuss-headroom ist der Akku bei Fensterbeginn schon
-vorgefüllt.
+| Einstellung                              | Rückgew. bei +25 % Fehler | Rückgew. bei korrekter Prognose |
+|------------------------------------------|--------------------------:|--------------------------------:|
+| headroom 1.25 auf Kappung (Roh-Floor)    | 38,7 %                    | —                                |
+| headroom 1.25 auf Überschuss (Roh-Floor) | 31,8 %                    | —                                |
+| Überschuss 1.1 + headroom-Floor          | 44,9 %                    | 94,5 % (Verlust 0,41 kWh)        |
+| Überschuss 1.25 + headroom-Floor         | **94,7 %**                | 62,7 % (Verlust 2,80 kWh)        |
+| Neutral (headroom 1.0)                   | 31,8–38,7 %               | **100 %**                        |
 
-**Plan für Prognosefehler (verbindlich für die Integration):**
+Zentrale Erkenntnisse:
 
-1. **Live-Floor ist Pflichtbestandteil von v1**, keine Option: Slot-0-Floor =
-   `max(forecast_floor, ist_produktion - ist_verbrauch - feed_in_limit_w)`. Die
-   benötigten Ist-Werte liegen in `core.py` bereits vor.
-2. **`feed_in_limit_headroom` wirkt auf den prognostizierten Überschuss**, nicht auf
-   die Kappungsenergie (Semantik-Festlegung für den Config-Key). Default `1.0`;
-   dokumentierte Empfehlung `1.2–1.3` — deckt Unterschätzungen bis ~25 % weitgehend ab.
-3. Nebenwirkung dokumentieren: Überschuss-headroom kann an Tagen knapp unterhalb der
-   Grenze eine unnötige (harmlose) Reservierung auslösen — Kosten ist etwas später
-   voller Akku, nie Energieverlust.
-4. Das 15-Minuten-Raster (`time_resolution_minutes: 15`) reduziert den systematischen
+1. Beide Maßnahmen sind **nur zusammen** wirksam: Ohne headroom-Floor ist die perfekte
+   Reservierung wertlos (der forecast-basierte Cap blockt das Laden, während real
+   gekappt wird — deshalb ist "Überschuss allein" sogar leicht schlechter als "Kappung
+   allein"); ohne Überschuss-headroom ist der Akku bei Fensterbeginn schon vorgefüllt.
+2. **Ohne Live-Messung ist der headroom ein echter Trade-off**: Er muss ungefähr zum
+   typischen Prognosefehler passen. Ein zu hoher Wert (1.25 bei korrekter Prognose)
+   lädt im Fenster einspeisbare Energie und verdrängt an kapazitätsknappen Tagen
+   Kappungsenergie 1:1 (2,8 kWh Verlust). Ein zu niedriger Wert lässt Kappung liegen.
+3. **1.1 ist der robuste Kompromiss**: kostet bei korrekter Prognose nur 0,41 kWh und
+   verbessert den Fehlerfall bereits deutlich.
+
+**Plan für Prognosefehler (Festlegung für die Integration, rein prognosebasiert):**
+
+1. **`feed_in_limit_headroom` wirkt auf den prognostizierten Überschuss** und der
+   **Floor wird aus der headroom-korrigierten Kappung** berechnet (eine gemeinsame
+   Stellschraube, kein zweiter Config-Key). Default `1.0` (neutral, verlustfrei bei
+   korrekter Prognose); dokumentierte Empfehlung `1.1`, bei bekannt schlechter
+   Prognosequelle bis `1.25`.
+2. Nebenwirkungen dokumentieren: headroom > 1 kann an Tagen knapp unterhalb der Grenze
+   eine unnötige Reservierung auslösen (Akku später voll, kein Energieverlust) und an
+   kapazitätsknappen Kappungstagen bei korrekter Prognose einen kleinen Teil der
+   Kappung verdrängen (quantifiziert oben).
+3. Das 15-Minuten-Raster (`time_resolution_minutes: 15`) reduziert den systematischen
    Anteil des Fehlers zusätzlich (Szenario 6).
+4. **Zukunftsoption** (nicht v1, erfordert neuen Datenpfad): eine Live-Messung der
+   aktuellen Produktion/Einspeisung würde den Floor prognoseunabhängig machen und den
+   Trade-off auflösen — batcontrol erfasst diese Werte derzeit nicht.
 
 ### Szenario 5 — Mittags-Verbrauchsspitze (2,4 kW, 12–14 Uhr)
 
@@ -245,11 +257,11 @@ Der Algorithmus erfüllt die Anforderungen:
 4. **Er ist neutral, wenn er nichts zu tun hat** (Ost/West-Szenario) und per
    `feed_in_limit_w: 0` bzw. `solar_cap_active: false` vollständig abschaltbar.
 
-Bekannte Grenzen: Forecast-Sensitivität (Szenarien 4/4b; Mitigation: Live-Floor als
-Pflichtbestandteil + headroom auf den Überschuss, zusammen 94,7 % Rückgewinnung selbst
-bei 25 % Unterschätzung) und Stundenmittel vs. Momentanleistung (ein Slot mit Mittel
-knapp unter der Grenze kann real kurzzeitig kappen — durch Live-Floor und headroom
-weitgehend abgedeckt).
+Bekannte Grenzen: Forecast-Sensitivität (Szenarien 4/4b) — ohne Live-Messung der
+aktuellen Produktion (derzeit nicht Bestandteil von batcontrol) bleibt der headroom ein
+Trade-off, dessen Wert zum typischen Prognosefehler passen muss (Empfehlung 1.1);
+Stundenmittel vs. Momentanleistung (ein Slot mit Mittel knapp unter der Grenze kann
+real kurzzeitig kappen — durch headroom teilweise abgedeckt).
 
 ## Integrations-Roadmap (Folgeschritt)
 
@@ -266,10 +278,10 @@ weitgehend abgedeckt).
    `allow_discharge == False` (dort lädt der Inverter Überschuss ohnehin ungebremst).
    Merge nach der Prioritätsregel oben; `enforce_min_pv_charge_rate` einmalig auf den
    final gemergten Wert. Helper `_remaining_interval_hours()` extrahieren
-   (anteiliger Slot 0, vgl. Grid-Recharge-Block). **Live-Floor (Pflicht, Szenario 4b)**:
-   aktuelle Produktion/Verbrauch aus `core.py` in die Floor-Berechnung einspeisen;
-   `feed_in_limit_headroom` wirkt auf den prognostizierten Überschuss
-   (`headroom_on='surplus'` im Simulationsskript).
+   (anteiliger Slot 0, vgl. Grid-Recharge-Block). `feed_in_limit_headroom` wirkt auf
+   den prognostizierten Überschuss und der Floor nutzt die headroom-korrigierte
+   Kappung (`headroom_on='surplus'`, `floor_source='headroom'` im Simulationsskript;
+   Trade-off siehe Szenario 4b).
 4. `core.py`: Startup-Warnung wenn `feed_in_limit_w > 0` und `max_pv_charge_rate > 0`.
 5. Tests: `tests/batcontrol/logic/test_solar_limit.py` (pure Funktionen) + Integrationsfälle
    in `test_peak_shaving.py` (Floor überstimmt Cap inkl. Cap 0, Reservierung, Knappheit
