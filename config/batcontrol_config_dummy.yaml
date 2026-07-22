@@ -41,32 +41,43 @@ battery_control_expert:
 
 #--------------------------
 #  Peak Shaving
-#  Manages PV battery charging rate to limit PV charging before cheap-price
-#  or high-production hours so the battery can absorb as much PV as possible.
+#  Three independent rules manage PV battery charging: spread charging until a target
+#  hour (time rule), reserve capacity for cheap-price windows (price rule), and absorb
+#  PV power above the feed-in limit to prevent clipping (solar rule).
 #  Requires logic type 'next' in battery_control section.
 #
-#  mode:
-#    'time'     - limit by target hour only (allow_full_battery_after)
-#    'price'    - reserve capacity for cheap-price slots (price_limit required)
-#    'combined' - both active, stricter limit wins  [default]
+#  Rule switches (each independently toggle-able):
+#    time_active      - spread charging until allow_full_battery_after
+#    price_active     - reserve capacity for slots at or below price_limit
+#    solar_cap_active - absorb PV power above feed_in_limit_w (German 60% rule)
 #
-#  price_limit: slots where price (Euro/kWh) is at or below this value are
-#  treated as cheap PV windows. Battery capacity is reserved so the PV
-#  surplus during those cheap slots can be fully absorbed.
-#  Use -1 to disable the price component without changing mode.
-#  Required for mode 'price'. For mode 'combined' it is optional:
-#  when omitted, combined mode falls back to time-only behaviour and logs
-#  a warning. Ignored for mode 'time'.
+#  Priority: all active caps are combined, strictest (minimum) wins. The solar floor
+#  (charge needed to absorb clipped power) overrides all caps, because clipped energy
+#  is physically lost and takes precedence over economic optimization. The floor also
+#  applies after allow_full_battery_after and at high SoC, so the battery may reach
+#  100% later than the target hour on clipping days.
 #
-#  Runtime control via MQTT is limited to 'enabled' and
-#  'allow_full_battery_after'. Changes to 'mode' or 'price_limit' require
-#  a restart of batcontrol.
+#  Deprecated: 'mode' parameter (maps to switches at load time). Old syntax is
+#  still accepted: time->time_active, price->price_active, combined->both.
+#  See docs for full details.
+#
+#  Runtime control via MQTT: limited to 'enabled' and 'allow_full_battery_after'.
+#  All other parameters require a restart.
 #--------------------------
 peak_shaving:
   enabled: false
-  mode: combined               # 'time' | 'price' | 'combined'
-  allow_full_battery_after: 14 # Hour (0-23) - battery should be full by this hour
-  price_limit: 0.05            # Euro/kWh - keep battery empty for slots at or below this price
+  time_active: true              # target-time rule: spread charging until allow_full_battery_after
+  price_active: true             # price rule: reserve capacity for cheap-price PV windows
+  solar_cap_active: false        # solar feed-in limit rule: absorb PV power above feed_in_limit_w
+  allow_full_battery_after: 14   # Hour (0-23) - battery should be full by this hour (time rule)
+  price_limit: 0.05              # Euro/kWh - cheap-slot threshold (price rule); -1 disables the price rule component
+  feed_in_limit_w: 0             # Watt - grid feed-in power limit (solar rule). 0 = neutral/off.
+                                 # German Solarspitzengesetz: 60% of installed power,
+                                 # formula: 0.6 * kWp * 1000 (e.g. 6000 for a 10 kWp plant).
+  feed_in_limit_headroom: 1.0    # Safety factor >= 1.0 on the forecast surplus (solar rule).
+                                 # Solar forecasts underestimate clear-day peaks; 1.1 recommended
+                                 # if curtailment losses are observed. Do NOT use
+                                 # battery_control_expert.production_offset_percent for this.
 
 #--------------------------
 #  Inverter
