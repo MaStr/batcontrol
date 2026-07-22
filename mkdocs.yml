@@ -79,6 +79,7 @@ plugins:
           - integrations/forecast-metrics.md: Forecast data exposed via MQTT
         Optional:
           - development/15-min-transform.md: Internal 15-minute interval resolution
+          - development/solar-limit-evaluation.md: Solar feed-in limit (Solarspitzengesetz) evaluation
 
 nav:
   - Home: index.md
@@ -102,6 +103,7 @@ nav:
       - evcc Connection: integrations/evcc-connection.md
   - Development:
       - 15-Minute Interval Transformation: development/15-min-transform.md
+      - Solar Feed-in Limit Evaluation: development/solar-limit-evaluation.md
 
 validation:
   links:

@@ -13,6 +13,29 @@ The `scripts` folder is separate from the `tests` folder to avoid interference w
 
 ## Available Scripts
 
+### simulate_solar_limit_day.py
+
+Day simulation for the proposed solar feed-in limit rule (Solarspitzengesetz,
+60% feed-in cap for uncontrolled PV plants). Evaluates the "solar_cap" peak
+shaving rule: reserve battery capacity before the predicted clipping window
+and enforce a charge floor during it so the battery absorbs energy the
+inverter would otherwise curtail.
+
+**Usage:**
+```bash
+python scripts/simulate_solar_limit_day.py
+```
+
+**Features:**
+- Six scenarios: reference summer day, east-west profile, small battery,
+  forecast error with headroom sweep, midday consumption spike, 15-min interval
+- Compares baseline, legacy time-based peak shaving, and the new rule
+- Prints curtailed/feed-in energy, end SoC and clip-recovery percentage
+- Contains the candidate algorithm (`compute_solar_limit`, `merge_limits`)
+  intended to move to `src/batcontrol/logic/solar_limit.py`
+
+See `docs/development/solar-limit-evaluation.md` for results and design.
+
 ### test_evcc.py
 
 Standalone test script for the evcc dynamic tariff module.
