@@ -104,6 +104,33 @@ Solcast), and the limit applies at the grid connection point of the whole plant.
 `0` is the neutral value — in addition to the switch, so an unconfigured limit can
 never be misread as "0 W of feed-in allowed".
 
+### Relation to production_offset_percent
+
+`battery_control_expert.production_offset_percent` also scales the production
+forecast, so the overlap was evaluated. Measured inside the solar rule the two
+knobs are indeed equivalent — same effect, same trade-off:
+
+| Setting (rule view)                  | Recovery at +25% error | Recovery with correct forecast |
+|--------------------------------------|-----------------------:|-------------------------------:|
+| `production_offset_percent: 1.25`    | 100.0%                 | 58.7%                           |
+| `feed_in_limit_headroom: 1.25`       | 94.7%                  | 62.7%                           |
+
+They differ in **scope**, which is why the rule gets its own key:
+
+- `production_offset_percent` is applied globally in `core.py` before the forecast
+  enters the logic. A value > 1 distorts every downstream decision: less grid
+  recharge is planned, discharge decisions become more generous, time/price caps
+  engage too early. Its documented purpose is the opposite direction (winter mode
+  `0.7`, snow, degradation).
+- `feed_in_limit_headroom` affects only the solar rule's reservation and floor.
+  The clipping-relevant forecast error is a *shape* error (underestimated midday
+  peak on clear days), not a whole-day energy error.
+
+**Do not use `production_offset_percent` (> 1) to tune clip absorption.** The two
+compose cleanly instead: the solar rule consumes the already offset-adjusted
+production array, so a winter user at `0.7` automatically gets a conservative
+(smaller) clip prediction — harmless, since nothing clips in winter.
+
 ### Priorities between the rule flavors
 
 Documented, fixed order of precedence (no configuration needed):
@@ -246,7 +273,7 @@ Key insights:
    correct forecast (quantified above).
 3. The 15-minute resolution (`time_resolution_minutes: 15`) additionally reduces
    the systematic part of the error (scenario 6).
-4. **Future option** (not v1, requires a new data path): a live measurement of the
+4. **Future option** (requires a new data path): a live measurement of the
    current production/feed-in would make the floor forecast-independent and
    dissolve the trade-off — batcontrol does not capture these values today.
 
@@ -293,7 +320,7 @@ limit can still clip briefly — partially covered by headroom).
    `grid_charge_target.py`).
 3. `logic/next.py`: own post-processing step `_apply_solar_limit()` **after**
    `_apply_peak_shaving()` with its own (smaller) skip list: also runs at high SoC
-   and after `allow_full_battery_after`; still skips on force-charge and (v1) on
+   and after `allow_full_battery_after`; still skips on force-charge and on
    `allow_discharge == False` (there the inverter charges surplus unrestricted
    anyway). Merge according to the priority rule above;
    `enforce_min_pv_charge_rate` once on the final merged value. Extract the helper
@@ -310,5 +337,5 @@ limit can still clip briefly — partially covered by headroom).
 6. `config/batcontrol_config_dummy.yaml` + `docs/features/peak-shaving.md` +
    HA add-on mirroring (`MaStr/batcontrol_ha_addon`).
 7. Open for the integration: live measurement as floor source for slot 0 (see
-   scenario 4b); active discharging before the window (v1: no, passive
+   scenario 4b); active discharging before the window (deferred, passive
    reservation only); MQTT topic `predicted_clip_wh` (read-only, optional).
