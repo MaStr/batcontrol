@@ -21,6 +21,7 @@ from batcontrol.logic.logic_interface import (
     PeakShavingConfig,
 )
 from batcontrol.logic.common import CommonLogic
+from .helpers import make_logic
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -841,7 +842,7 @@ class TestPeakShavingMinChargeRate(unittest.TestCase):
         to isolate the charge-limit computation from the guard check.
         """
         if stored_energy is None:
-            stored_energy = self._MAX_CAPACITY * 0.5  # 5 000 Wh – below gate
+            stored_energy = self._MAX_CAPACITY * 0.5  # 5 000 Wh - below gate
         n = len(production)
         return CalculationInput(
             production=np.array(production, dtype=float),
@@ -1045,3 +1046,238 @@ class TestNextLogicGridRechargeLogging(unittest.TestCase):
 
         self.assertTrue(result.allow_discharge)
         self.assertFalse(result.charge_from_grid)
+
+
+class TestSolarLimitIntegration(unittest.TestCase):
+    """Integration tests for the solar_cap rule via NextLogic.
+
+    Logic instances are built with tests/batcontrol/logic/helpers.py's
+    make_logic(), extended to accept a full PeakShavingConfig directly.
+    max_capacity=10000 throughout (matches the CommonLogic setup used by
+    the rest of this file).
+
+    Shared clip scenario (headroom=1.0, interval=1h, slot0_hours=1.0,
+    i.e. calc_timestamp on the hour):
+        production = [9000, 9000, 9000, 0], consumption = [400]*4
+        surplus    = 8600 W/slot for slots 0..2 (prod_end=3)
+        feed_allow = 6000 Wh/slot (feed_in_limit_w=6000)
+        clip       = 2600 Wh/slot -> currently clipping (first_clip=0)
+        floor      = clip_wh[0] / 1.0 = 2600 W
+        total_surplus (raw) = 3 * 8600 = 25800 Wh
+        remaining_clip      = 3 * 2600 = 7800 Wh
+    """
+
+    PRODUCTION = [9000, 9000, 9000, 0]
+    CONSUMPTION = [400, 400, 400, 400]
+    FEED_IN_LIMIT_W = 6000
+    MAX_CAPACITY = 10000
+    TS = datetime.datetime(2025, 6, 20, 11, 0, tzinfo=datetime.timezone.utc)
+
+    def _make_settings(self, allow_discharge=True, charge_from_grid=False,
+                       charge_rate=0, limit_battery_charge_rate=-1):
+        return InverterControlSettings(
+            allow_discharge=allow_discharge,
+            charge_from_grid=charge_from_grid,
+            charge_rate=charge_rate,
+            limit_battery_charge_rate=limit_battery_charge_rate,
+        )
+
+    def _make_calc_input(self, free_capacity, production=None,
+                         consumption=None, prices=None):
+        production = production if production is not None else self.PRODUCTION
+        consumption = consumption if consumption is not None else self.CONSUMPTION
+        stored_energy = self.MAX_CAPACITY - free_capacity
+        if prices is None:
+            prices = np.zeros(len(production))
+        return CalculationInput(
+            production=np.array(production, dtype=float),
+            consumption=np.array(consumption, dtype=float),
+            prices=np.array(prices, dtype=float),
+            stored_energy=stored_energy,
+            stored_usable_energy=stored_energy,
+            free_capacity=free_capacity,
+        )
+
+    def _make_logic(self, peak_shaving):
+        return make_logic(NextLogic, capacity_wh=self.MAX_CAPACITY,
+                          peak_shaving=peak_shaving)
+
+    def test_floor_overrides_time_cap(self):
+        """Floor (2600 W) overrides the time-ramp cap while clipping now.
+
+        free_capacity=9500 Wh (battery mostly empty), time_active only
+        (price_active off).
+        Time ramp: n=3 slots to 14:00 (target hour), free=9500 Wh
+          expected_surplus = 3*8600 = 25800 Wh > free -> ramp applies
+          wh_current = 2*9500/(3*4) = 1583.3 -> 1583 W
+        Solar rule: scarcity (25800 > 9500 free), and free(9500) >
+          remaining_clip(7800) -> extra=1700, remaining_prod_h=3
+          cap = 2600 + 1700/3 = 3166 W; floor stays 2600 W.
+        merge_limits(2600, [1583, 3166]) = max(2600, 1583) = 2600.
+        """
+        peak_shaving = PeakShavingConfig(
+            enabled=True, time_active=True, price_active=False,
+            solar_cap_active=True, feed_in_limit_w=self.FEED_IN_LIMIT_W,
+            allow_full_battery_after=14)
+        logic = self._make_logic(peak_shaving)
+        calc_input = self._make_calc_input(free_capacity=9500)
+        settings = self._make_settings()
+
+        result = logic._apply_peak_shaving(settings, calc_input, self.TS)
+        self.assertEqual(result.limit_battery_charge_rate, 1583)
+
+        result = logic._apply_solar_limit(result, calc_input, self.TS)
+        self.assertEqual(result.limit_battery_charge_rate, 2600)
+        self.assertGreater(result.limit_battery_charge_rate, 1583)
+
+    def test_floor_overrides_price_cap_zero(self):
+        """Floor overrides a blocking (0 W) price cap while clipping now.
+
+        free_capacity=5000 Wh. Price rule (price_active, price_limit=0.05):
+        the only cheap slot is index 2 (price 0), first_cheap_slot=2 > 0
+        -> reserve = surplus[2] = 8600 Wh, additional_allowed = 5000-8600
+        < 0 -> price cap = 0 (block PV charging).
+        Solar rule: scarcity, free(5000) <= remaining_clip(7800)
+        -> cap == floor == 2600 W.
+        merge_limits(2600, [0, 2600]) = max(2600, min(0, 2600)) = 2600.
+        """
+        peak_shaving = PeakShavingConfig(
+            enabled=True, time_active=False, price_active=True,
+            price_limit=0.05, solar_cap_active=True,
+            feed_in_limit_w=self.FEED_IN_LIMIT_W, allow_full_battery_after=14)
+        logic = self._make_logic(peak_shaving)
+        prices = [10.0, 10.0, 0.0, 10.0]
+        calc_input = self._make_calc_input(free_capacity=5000, prices=prices)
+        settings = self._make_settings()
+
+        result = logic._apply_peak_shaving(settings, calc_input, self.TS)
+        self.assertEqual(result.limit_battery_charge_rate, 0)
+
+        result = logic._apply_solar_limit(result, calc_input, self.TS)
+        self.assertEqual(result.limit_battery_charge_rate, 2600)
+
+    def test_neutral_by_default(self):
+        """solar_cap_active=False -> _apply_solar_limit is a no-op.
+
+        Same setup as test_floor_overrides_time_cap, but with the solar
+        switch off: the settings after _apply_solar_limit must be
+        bit-identical to the settings right after _apply_peak_shaving.
+        """
+        peak_shaving = PeakShavingConfig(
+            enabled=True, time_active=True, price_active=False,
+            solar_cap_active=False, feed_in_limit_w=self.FEED_IN_LIMIT_W,
+            allow_full_battery_after=14)
+        logic = self._make_logic(peak_shaving)
+        calc_input = self._make_calc_input(free_capacity=9500)
+        settings = self._make_settings()
+
+        before = logic._apply_peak_shaving(settings, calc_input, self.TS)
+        before_snapshot = InverterControlSettings(
+            allow_discharge=before.allow_discharge,
+            charge_from_grid=before.charge_from_grid,
+            charge_rate=before.charge_rate,
+            limit_battery_charge_rate=before.limit_battery_charge_rate,
+        )
+
+        after = logic._apply_solar_limit(before, calc_input, self.TS)
+        self.assertEqual(after, before_snapshot)
+
+    def test_high_soc_solar_floor_still_applies(self):
+        """always_allow_discharge region: peak shaving skips, solar acts.
+
+        free_capacity=500 Wh -> stored=9500/10000=95% >= 90% threshold
+        -> _apply_peak_shaving skips (limit stays -1).
+        Solar rule: scarcity, free(500) <= remaining_clip(7800)
+        -> cap == floor == 2600 W. merge_limits(2600, [-1, 2600]) = 2600.
+        """
+        peak_shaving = PeakShavingConfig(
+            enabled=True, time_active=True, price_active=False,
+            solar_cap_active=True, feed_in_limit_w=self.FEED_IN_LIMIT_W,
+            allow_full_battery_after=14)
+        logic = self._make_logic(peak_shaving)
+        calc_input = self._make_calc_input(free_capacity=500)
+        settings = self._make_settings()
+
+        result = logic._apply_peak_shaving(settings, calc_input, self.TS)
+        self.assertEqual(result.limit_battery_charge_rate, -1)
+
+        result = logic._apply_solar_limit(result, calc_input, self.TS)
+        self.assertEqual(result.limit_battery_charge_rate, 2600)
+
+    def test_past_allow_full_battery_after_solar_floor_still_applies(self):
+        """Past the target hour: peak shaving skips, solar floor still acts.
+
+        ts hour=15 >= allow_full_battery_after=14 -> _apply_peak_shaving
+        skips (limit stays -1). free_capacity=5000 Wh gives the same
+        scarcity math as test_floor_overrides_price_cap_zero: cap == floor
+        == 2600 W.
+        """
+        peak_shaving = PeakShavingConfig(
+            enabled=True, time_active=True, price_active=False,
+            solar_cap_active=True, feed_in_limit_w=self.FEED_IN_LIMIT_W,
+            allow_full_battery_after=14)
+        logic = self._make_logic(peak_shaving)
+        calc_input = self._make_calc_input(free_capacity=5000)
+        settings = self._make_settings()
+        ts = datetime.datetime(2025, 6, 20, 15, 0,
+                               tzinfo=datetime.timezone.utc)
+
+        result = logic._apply_peak_shaving(settings, calc_input, ts)
+        self.assertEqual(result.limit_battery_charge_rate, -1)
+
+        result = logic._apply_solar_limit(result, calc_input, ts)
+        self.assertEqual(result.limit_battery_charge_rate, 2600)
+
+    def test_force_charge_skips_solar_limit(self):
+        """charge_from_grid active -> _apply_solar_limit leaves settings unchanged."""
+        peak_shaving = PeakShavingConfig(
+            enabled=True, solar_cap_active=True,
+            feed_in_limit_w=self.FEED_IN_LIMIT_W)
+        logic = self._make_logic(peak_shaving)
+        calc_input = self._make_calc_input(free_capacity=5000)
+        settings = self._make_settings(
+            allow_discharge=False, charge_from_grid=True, charge_rate=3000)
+
+        result = logic._apply_solar_limit(settings, calc_input, self.TS)
+
+        self.assertEqual(result.limit_battery_charge_rate, -1)
+        self.assertTrue(result.charge_from_grid)
+
+    def test_allow_discharge_false_skips_solar_limit(self):
+        """allow_discharge=False -> _apply_solar_limit leaves settings unchanged."""
+        peak_shaving = PeakShavingConfig(
+            enabled=True, solar_cap_active=True,
+            feed_in_limit_w=self.FEED_IN_LIMIT_W)
+        logic = self._make_logic(peak_shaving)
+        calc_input = self._make_calc_input(free_capacity=5000)
+        settings = self._make_settings(allow_discharge=False)
+
+        result = logic._apply_solar_limit(settings, calc_input, self.TS)
+
+        self.assertEqual(result.limit_battery_charge_rate, -1)
+        self.assertFalse(result.allow_discharge)
+
+    def test_enforce_min_pv_charge_rate_on_solar_limit(self):
+        """A small positive solar cap (<500 W) is raised to 500 W.
+
+        Case A reservation: production=[3000,3000,9000,9000,0],
+        consumption=400/slot, feed_in_limit_w=6000 -> clip slots 2,3,
+        clip=2600 Wh each, total=5200 Wh. free_capacity=5400
+        -> allowed=200, hours_before=2 -> cap=int(200/2)=100 W, floor=0.
+        merge_limits(0, [-1, 100]) = 100 -> enforced up to 500 W.
+        """
+        peak_shaving = PeakShavingConfig(
+            enabled=True, solar_cap_active=True,
+            feed_in_limit_w=self.FEED_IN_LIMIT_W)
+        logic = self._make_logic(peak_shaving)
+        production = [3000, 3000, 9000, 9000, 0]
+        consumption = [400] * 5
+        calc_input = self._make_calc_input(
+            free_capacity=5400, production=production, consumption=consumption)
+        settings = self._make_settings()
+        ts = datetime.datetime(2025, 6, 20, 8, 0,
+                               tzinfo=datetime.timezone.utc)
+
+        result = logic._apply_solar_limit(settings, calc_input, ts)
+
+        self.assertEqual(result.limit_battery_charge_rate, 500)
