@@ -25,6 +25,7 @@ from .grid_charge_target import (
     apply_grid_charge_target_to_recharge,
     apply_grid_charge_target_to_reserve,
 )
+from . import solar_limit
 
 # Minimum remaining time in hours to prevent division by very small numbers
 # when calculating charge rates. This constant serves as a safety threshold:
@@ -180,18 +181,7 @@ class NextLogic(LogicInterface):
 
             # charge if battery capacity available and more stored energy is required
             if is_charging_possible and required_recharge_energy > 0:
-                current_minute = calc_timestamp.minute
-                current_second = calc_timestamp.second
-
-                if self.interval_minutes == 15:
-                    current_interval_start = (current_minute // 15) * 15
-                    remaining_minutes = (current_interval_start + 15
-                                         - current_minute - current_second / 60)
-                else:  # 60 minutes
-                    remaining_minutes = 60 - current_minute - current_second / 60
-
-                remaining_time = remaining_minutes / 60
-                remaining_time = max(remaining_time, MIN_REMAINING_TIME_HOURS)
+                remaining_time = self._remaining_interval_hours(calc_timestamp)
 
                 charge_rate = required_recharge_energy / remaining_time
                 charge_rate = self.common.calculate_charge_rate(charge_rate)
@@ -219,8 +209,36 @@ class NextLogic(LogicInterface):
         if self.calculation_parameters.peak_shaving.enabled:
             inverter_control_settings = self._apply_peak_shaving(
                 inverter_control_settings, calc_input, calc_timestamp)
+            inverter_control_settings = self._apply_solar_limit(
+                inverter_control_settings, calc_input, calc_timestamp)
 
         return inverter_control_settings
+
+    # ------------------------------------------------------------------ #
+    #  Shared helpers                                                     #
+    # ------------------------------------------------------------------ #
+
+    def _remaining_interval_hours(self, calc_timestamp: datetime.datetime) -> float:
+        """Return the remaining time (in hours) within the current interval.
+
+        For 15-minute resolution this is the time until the next quarter-hour
+        boundary; for 60-minute resolution the time until the next full hour.
+        Floored at ``MIN_REMAINING_TIME_HOURS`` to avoid division by very
+        small numbers (and the resulting unreasonably high charge rates) when
+        called close to an interval boundary.
+        """
+        current_minute = calc_timestamp.minute
+        current_second = calc_timestamp.second
+
+        if self.interval_minutes == 15:
+            current_interval_start = (current_minute // 15) * 15
+            remaining_minutes = (current_interval_start + 15
+                                 - current_minute - current_second / 60)
+        else:  # 60 minutes
+            remaining_minutes = 60 - current_minute - current_second / 60
+
+        remaining_time = remaining_minutes / 60
+        return max(remaining_time, MIN_REMAINING_TIME_HOURS)
 
     # ------------------------------------------------------------------ #
     #  Peak Shaving                                                       #
@@ -230,45 +248,50 @@ class NextLogic(LogicInterface):
                             calc_input: CalculationInput,
                             calc_timestamp: datetime.datetime
                             ) -> InverterControlSettings:
-        """Limit PV charge rate based on the configured peak shaving mode.
+        """Limit PV charge rate based on the active peak shaving switches.
 
-        Mode behaviour (peak_shaving.mode):
-          'time'     - spread remaining capacity until allow_full_battery_after
-          'price'    - reserve capacity for upcoming cheap-price PV slots;
-                       inside cheap window, spread if surplus > free capacity
-          'combined' - both limits active, stricter one wins
+        Switch behaviour (peak_shaving.time_active / peak_shaving.price_active):
+          time_active  - spread remaining capacity until allow_full_battery_after
+          price_active - reserve capacity for upcoming cheap-price PV slots;
+                         inside cheap window, spread if surplus > free capacity
+          both active  - both limits computed, stricter one wins
 
         Skipped when:
-        - 'price' mode and price_limit is not configured
+        - price_active and price_limit is not configured, and time_active is
+          also not active (no other component to fall back to)
         - No PV production right now (nighttime)
-        - Past allow_full_battery_after hour (all modes)
+        - Past allow_full_battery_after hour (both components)
         - Battery in always_allow_discharge region (high SOC)
         - Force-charge from grid active (MODE -1)
         - Discharge not allowed (battery preserved for high-price hours)
 
-        In 'combined' mode with price_limit=None, falls back to time-only
-        behaviour (the time component does not require price_limit).
+        If both time_active and price_active are set but price_limit is
+        None, falls back to time-only behaviour (the time component does
+        not require price_limit).
 
         Note: evcc checks (charging, connected+pv mode) are handled in
-              core.py, not here.
+              core.py, not here. The solar_cap rule is a separate
+              post-processing step, see :py:meth:`_apply_solar_limit`.
         """
-        mode = self.calculation_parameters.peak_shaving.mode
+        time_active = self.calculation_parameters.peak_shaving.time_active
+        price_active = self.calculation_parameters.peak_shaving.price_active
         price_limit = self.calculation_parameters.peak_shaving.price_limit
 
         # Price component needs price_limit configured.
-        # For 'price' mode: skip entirely (no other component to fall back to).
-        # For 'combined' mode: fall back to time-only behaviour. The user is
-        # informed once at config-load time by PeakShavingConfig, so this
-        # path stays at debug level to avoid per-cycle log spam.
-        if price_limit is None:
-            if mode == 'price':
+        # If time_active is also off: skip entirely (no other component to
+        # fall back to). If time_active is on: fall back to time-only
+        # behaviour. The user is informed once at config-load time by
+        # PeakShavingConfig, so this path stays at debug level to avoid
+        # per-cycle log spam.
+        if price_active and price_limit is None:
+            if not time_active:
                 logger.debug('[PeakShaving] Skipped: price_limit not '
-                             'configured for mode price')
+                             'configured and price_active is the only '
+                             'active component')
                 return settings
-            if mode == 'combined':
-                logger.debug('[PeakShaving] price_limit not configured; '
-                             'combined mode using time-only component')
-                mode = 'time'
+            logger.debug('[PeakShaving] price_limit not configured; '
+                         'using time-only component')
+            price_active = False
 
         # No production right now: skip
         if calc_input.production[0] <= 0:
@@ -295,13 +318,13 @@ class NextLogic(LogicInterface):
                          'battery preserved for high-price hours')
             return settings
 
-        # Compute limits according to mode
+        # Compute limits according to the active switches
         price_limit_w = -1
         time_limit_w = -1
 
-        if mode in ('price', 'combined'):
+        if price_active:
             price_limit_w = self._calculate_peak_shaving_charge_limit_price_based(calc_input)
-        if mode in ('time', 'combined'):
+        if time_active:
             time_limit_w = self._calculate_peak_shaving_charge_limit(calc_input, calc_timestamp)
 
         candidates = [v for v in (price_limit_w, time_limit_w) if v >= 0]
@@ -326,12 +349,95 @@ class NextLogic(LogicInterface):
         # The limit_battery_charge_rate mode in the inverter layer requires
         # allow_discharge=True to work correctly.
 
-        logger.info('[PeakShaving] mode=%s, PV limit: %d W '
+        active_components = ','.join(
+            name for name, active in
+            (('time', time_active), ('price', price_active)) if active
+        ) or 'none'
+        logger.info('[PeakShaving] active=%s, PV limit: %d W '
                     '(price-based=%s W, time-based=%s W, full by %d:00)',
-                    mode, settings.limit_battery_charge_rate,
+                    active_components, settings.limit_battery_charge_rate,
                     price_limit_w if price_limit_w >= 0 else 'off',
                     time_limit_w if time_limit_w >= 0 else 'off',
                     self.calculation_parameters.peak_shaving.allow_full_battery_after)
+
+        return settings
+
+    def _apply_solar_limit(self, settings: InverterControlSettings,
+                           calc_input: CalculationInput,
+                           calc_timestamp: datetime.datetime
+                           ) -> InverterControlSettings:
+        """Apply the solar_cap rule (feed-in limit clip absorption).
+
+        See docs/development/solar-limit-evaluation.md for the algorithm and
+        the priority rule between rule flavours. In short: this rule emits a
+        reservation cap ahead of the predicted clip window and a floor
+        (minimum permitted charge rate) plus capacity-preserving cap inside
+        it, so the existing time/price peak-shaving caps do not cause
+        curtailment. The floor overrides every cap (``final = max(floor,
+        min(caps))``) because a cap below the floor destroys energy.
+
+        Gated on peak_shaving.enabled (checked by the caller),
+        peak_shaving.solar_cap_active and a configured feed_in_limit_w > 0.
+
+        Deliberately smaller skip list than :py:meth:`_apply_peak_shaving`:
+        this rule must still act at high SoC (always_allow_discharge region)
+        and past allow_full_battery_after -- the clip window physically
+        outlasts the target hour. Skipped only when:
+        - No PV production right now (nighttime)
+        - Force-charge from grid active (MODE -1)
+        - Discharge not allowed (inverter charges surplus unrestricted there
+          anyway)
+        """
+        peak_shaving = self.calculation_parameters.peak_shaving
+        if not peak_shaving.solar_cap_active or peak_shaving.feed_in_limit_w <= 0:
+            return settings
+
+        if calc_input.production[0] <= 0:
+            return settings
+
+        if settings.charge_from_grid:
+            logger.debug('[SolarLimit] Skipped: force_charge (MODE -1) active, '
+                         'grid charging takes priority')
+            return settings
+
+        if not settings.allow_discharge:
+            logger.debug('[SolarLimit] Skipped: discharge not allowed, '
+                         'inverter charges surplus unrestricted')
+            return settings
+
+        interval_h = self.interval_minutes / 60.0
+        slot0_hours = self._remaining_interval_hours(calc_timestamp)
+
+        floor_w, cap_w = solar_limit.compute_solar_limit(
+            calc_input.production,
+            calc_input.consumption,
+            peak_shaving.feed_in_limit_w,
+            interval_h,
+            calc_input.free_capacity,
+            self.common.max_capacity,
+            headroom=peak_shaving.feed_in_limit_headroom,
+            slot0_hours=slot0_hours,
+        )
+
+        if floor_w == 0 and cap_w < 0:
+            logger.debug('[SolarLimit] Evaluated: no clip predicted, '
+                         'no limit needed')
+            return settings
+
+        final_w = solar_limit.merge_limits(
+            floor_w, [settings.limit_battery_charge_rate, cap_w])
+
+        if final_w > 0:
+            final_w = self.common.enforce_min_pv_charge_rate(final_w)
+
+        settings.limit_battery_charge_rate = final_w
+
+        logger.info('[SolarLimit] floor=%d W, cap=%s W, final PV limit=%s W '
+                    '(feed_in_limit=%d W)',
+                    floor_w,
+                    cap_w if cap_w >= 0 else 'off',
+                    final_w if final_w >= 0 else 'off',
+                    peak_shaving.feed_in_limit_w)
 
         return settings
 
