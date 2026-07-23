@@ -119,12 +119,16 @@ class PeakShavingConfig:  # pylint: disable=too-many-instance-attributes
         ``mode`` is deprecated in favour of the explicit switches
         ``time_active``/``price_active``/``solar_cap_active``. If any switch
         key is present in the config, the switches win; a ``mode`` key
-        present alongside them is ignored (warning logged). If only ``mode``
-        is present, it is mapped onto the switches (``time`` ->
-        ``time_active=True, price_active=False``; ``price`` ->
-        ``price_active=True, time_active=False``; ``combined`` -> both
-        True) and a one-time deprecation warning is logged. If neither is
-        present, the defaults apply (equivalent to ``combined``).
+        present alongside them has no effect on the switches (warning
+        logged), but its value is still validated -- an invalid ``mode``
+        raises ValueError so configuration typos fail fast instead of being
+        silently swallowed. If only ``mode`` is present, it is mapped onto
+        the switches (``time`` -> ``time_active=True, price_active=False``;
+        ``price`` -> ``price_active=True, time_active=False``;
+        ``combined`` -> both True) and a debug-level deprecation notice is
+        logged (deliberately below WARNING so unmigrated configs keep
+        loading quietly). If neither is present, the defaults apply
+        (equivalent to ``combined``).
         """
         ps = config.get('peak_shaving', {})
         price_limit_raw = ps.get('price_limit', None)
