@@ -251,7 +251,8 @@ class Batcontrol:
         self.time_at_forecast_error = -1
 
         self.peak_shaving_config = PeakShavingConfig.from_config(config)
-        if (self.peak_shaving_config.feed_in_limit_w > 0
+        if (self.peak_shaving_config.solar_cap_active
+                and self.peak_shaving_config.feed_in_limit_w > 0
                 and self.max_pv_charge_rate > 0):
             logger.warning(
                 'peak_shaving.feed_in_limit_w (%.0f W) is configured together '

@@ -24,8 +24,10 @@ Priority between rules:
     -1 = no cap. The floor overrides every cap because a cap below the floor
     burns energy (curtailment); caps only optimize economics.
 
-The candidate algorithm lives in the "proposed algorithm" section below and
-is cut so it can move to src/batcontrol/logic/solar_limit.py unchanged.
+The "reference algorithm" section below is the standalone copy this
+evaluation was run with; the authoritative production implementation now
+lives in src/batcontrol/logic/solar_limit.py (ported from here, with the
+surplus-headroom and headroom-floor variants baked in).
 
 Usage:
     python scripts/simulate_solar_limit_day.py
@@ -75,7 +77,7 @@ PROFILE_EAST_WEST_W = np.array([
 
 
 # ---------------------------------------------------------------------------
-# Proposed algorithm (candidate for src/batcontrol/logic/solar_limit.py)
+# Reference algorithm (production version: src/batcontrol/logic/solar_limit.py)
 # ---------------------------------------------------------------------------
 def compute_solar_limit(production_wh, consumption_wh, feed_in_limit_w,
                         interval_h, free_capacity_wh, max_capacity_wh,

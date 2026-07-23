@@ -31,8 +31,9 @@ python scripts/simulate_solar_limit_day.py
   forecast error with headroom sweep, midday consumption spike, 15-min interval
 - Compares baseline, legacy time-based peak shaving, and the new rule
 - Prints curtailed/feed-in energy, end SoC and clip-recovery percentage
-- Contains the candidate algorithm (`compute_solar_limit`, `merge_limits`)
-  intended to move to `src/batcontrol/logic/solar_limit.py`
+- Contains a standalone reference copy of the algorithm (`compute_solar_limit`,
+  `merge_limits`); the authoritative production implementation lives in
+  `src/batcontrol/logic/solar_limit.py`
 
 See `docs/development/solar-limit-evaluation.md` for results and design.
 
@@ -40,7 +41,7 @@ See `docs/development/solar-limit-evaluation.md` for results and design.
 
 Generates the figures for `docs/development/solar-limit-evaluation.md` into
 `docs/assets/` (clipping concept, algorithm behaviour on the reference day,
-headroom explainer). Imports profiles and the candidate algorithm from
+headroom explainer). Imports profiles and the reference algorithm from
 `simulate_solar_limit_day.py`.
 
 **Usage:**
