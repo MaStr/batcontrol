@@ -57,9 +57,9 @@ battery_control_expert:
 #  applies after allow_full_battery_after and at high SoC, so the battery may reach
 #  100% later than the target hour on clipping days.
 #
-#  Deprecated: 'mode' parameter (maps to switches at load time). Old syntax is
-#  still accepted: time->time_active, price->price_active, combined->both.
-#  See docs for full details.
+#  Deprecated: 'mode' parameter (maps to switches at load time, logs a
+#  deprecation warning). Old syntax is still accepted: time->time_active,
+#  price->price_active, combined->both. See docs for full details.
 #
 #  Runtime control via MQTT: 'enabled', 'allow_full_battery_after', 'price_limit'
 #  and the deprecated 'mode' (mapped onto the switches). The rule switches and

@@ -125,9 +125,8 @@ class PeakShavingConfig:  # pylint: disable=too-many-instance-attributes
         silently swallowed. If only ``mode`` is present, it is mapped onto
         the switches (``time`` -> ``time_active=True, price_active=False``;
         ``price`` -> ``price_active=True, time_active=False``;
-        ``combined`` -> both True) and a debug-level deprecation notice is
-        logged (deliberately below WARNING so unmigrated configs keep
-        loading quietly). If neither is present, the defaults apply
+        ``combined`` -> both True) and a one-time deprecation warning is
+        logged at config load. If neither is present, the defaults apply
         (equivalent to ``combined``).
         """
         ps = config.get('peak_shaving', {})
@@ -161,11 +160,10 @@ class PeakShavingConfig:  # pylint: disable=too-many-instance-attributes
             time_active = ps.get('time_active', True)
             price_active = ps.get('price_active', True)
         elif mode_present:
-            # Deprecation notice at debug level: the existing test suite
-            # (and users who have not yet migrated) expect a plain mode=
-            # config to load silently at WARNING level; the combined+missing
-            # price_limit fallback below still warns as before.
-            logger.debug(
+            # One-time deprecation warning at config load; the per-cycle
+            # dataclasses.replace path does not go through from_config, so
+            # this does not repeat on every evaluation.
+            logger.warning(
                 "peak_shaving.mode is deprecated; use the explicit switches "
                 "time_active/price_active/solar_cap_active instead. Mapping "
                 "mode='%s' onto the switches for now.", mode

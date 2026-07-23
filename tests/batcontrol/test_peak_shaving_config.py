@@ -160,14 +160,22 @@ class TestPeakShavingConfigFallbackWarning:
                     if r.levelname == 'WARNING']
         assert any("combined" in m and "price_limit" in m for m in messages)
 
+    @staticmethod
+    def _non_deprecation_warnings(caplog):
+        # A config that still uses `mode` now always gets the one-time
+        # deprecation warning; these tests only guard the price_limit
+        # fallback warning, so the deprecation notice is filtered out.
+        return [r for r in caplog.records
+                if r.levelname == 'WARNING'
+                and 'deprecated' not in r.getMessage()]
+
     def test_disabled_combined_without_price_limit_does_not_warn(self, caplog):
         # When peak shaving is disabled there is no user-visible problem.
         with caplog.at_level('WARNING', logger=self.LOGGER):
             PeakShavingConfig.from_config({
                 'peak_shaving': {'enabled': False, 'mode': 'combined'},
             })
-        warnings = [r for r in caplog.records if r.levelname == 'WARNING']
-        assert warnings == []
+        assert self._non_deprecation_warnings(caplog) == []
 
     def test_combined_with_price_limit_does_not_warn(self, caplog):
         with caplog.at_level('WARNING', logger=self.LOGGER):
@@ -175,16 +183,14 @@ class TestPeakShavingConfigFallbackWarning:
                 'peak_shaving': {
                     'enabled': True, 'mode': 'combined', 'price_limit': 0.05},
             })
-        warnings = [r for r in caplog.records if r.levelname == 'WARNING']
-        assert warnings == []
+        assert self._non_deprecation_warnings(caplog) == []
 
     def test_time_mode_without_price_limit_does_not_warn(self, caplog):
         with caplog.at_level('WARNING', logger=self.LOGGER):
             PeakShavingConfig.from_config({
                 'peak_shaving': {'enabled': True, 'mode': 'time'},
             })
-        warnings = [r for r in caplog.records if r.levelname == 'WARNING']
-        assert warnings == []
+        assert self._non_deprecation_warnings(caplog) == []
 
     def test_replace_does_not_re_emit_warning(self, caplog):
         # dataclasses.replace re-runs __post_init__ but must not trigger
@@ -214,6 +220,16 @@ class TestPeakShavingConfigModeDeprecationMapping:
         })
         assert cfg.time_active is True
         assert cfg.price_active is False
+
+    def test_mode_only_config_logs_deprecation_warning(self, caplog):
+        """A config still using `mode` gets a one-time deprecation warning."""
+        with caplog.at_level('WARNING', logger=TestPeakShavingConfigFallbackWarning.LOGGER):
+            PeakShavingConfig.from_config({
+                'peak_shaving': {'mode': 'time'}
+            })
+        messages = [r.getMessage() for r in caplog.records
+                    if r.levelname == 'WARNING']
+        assert any('mode' in m and 'deprecated' in m for m in messages)
 
     def test_mode_price_maps_to_price_only(self):
         cfg = PeakShavingConfig.from_config({

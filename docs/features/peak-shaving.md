@@ -50,7 +50,7 @@ peak_shaving:
 | `feed_in_limit_w` | int | `0` | Absolute feed-in power limit in watts (solar rule). Formula: `0.6 * kWp * 1000`. Set to `0` to disable. |
 | `feed_in_limit_headroom` | float | `1.0` | Safety factor (>= 1.0) on the forecast surplus (solar rule). Recommended: `1.1` if clipping is observed. |
 
-**Deprecated:** The old `mode` parameter (`time` / `price` / `combined`) is still accepted for backward compatibility and mapped to the switches at startup. New configurations should use the switch-based design above.
+**Deprecated:** The old `mode` parameter (`time` / `price` / `combined`) is still accepted for backward compatibility and mapped to the switches at startup; a deprecation warning is logged. New configurations should use the switch-based design above.
 
 ### MQTT Runtime Control
 
