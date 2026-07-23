@@ -433,7 +433,7 @@ class NextLogic(LogicInterface):
         settings.limit_battery_charge_rate = final_w
 
         logger.info('[SolarLimit] floor=%d W, cap=%s W, final PV limit=%s W '
-                    '(feed_in_limit=%d W)',
+                    '(feed_in_limit=%.0f W)',
                     floor_w,
                     cap_w if cap_w >= 0 else 'off',
                     final_w if final_w >= 0 else 'off',

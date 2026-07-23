@@ -254,8 +254,8 @@ class Batcontrol:
         if (self.peak_shaving_config.feed_in_limit_w > 0
                 and self.max_pv_charge_rate > 0):
             logger.warning(
-                'peak_shaving.feed_in_limit_w (%d W) is configured together '
-                'with a static max_pv_charge_rate (%d W): if the solar_cap '
+                'peak_shaving.feed_in_limit_w (%.0f W) is configured together '
+                'with a static max_pv_charge_rate (%.0f W): if the solar_cap '
                 'clip absorption needs a higher charge rate than this static '
                 'cap allows, curtailment cannot be fully avoided. Consider '
                 'raising max_pv_charge_rate or removing it.',

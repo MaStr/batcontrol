@@ -61,8 +61,9 @@ battery_control_expert:
 #  still accepted: time->time_active, price->price_active, combined->both.
 #  See docs for full details.
 #
-#  Runtime control via MQTT: limited to 'enabled' and 'allow_full_battery_after'.
-#  All other parameters require a restart.
+#  Runtime control via MQTT: 'enabled', 'allow_full_battery_after', 'price_limit'
+#  and the deprecated 'mode' (mapped onto the switches). The rule switches and
+#  the feed_in_limit_* parameters require a restart.
 #--------------------------
 peak_shaving:
   enabled: false

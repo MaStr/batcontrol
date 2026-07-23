@@ -46,7 +46,7 @@ peak_shaving:
 | `price_active` | bool | `true` | Enable price rule (reserve capacity for cheap slots) |
 | `solar_cap_active` | bool | `false` | Enable solar feed-in limit rule (absorb PV above `feed_in_limit_w`) |
 | `allow_full_battery_after` | int | `14` | Target hour (0-23) for the time rule |
-| `price_limit` | float | `0.05` | Price threshold in Euro/kWh. Set `-1` to disable the price rule. |
+| `price_limit` | float | unset (`None`) | Price threshold in Euro/kWh. The price rule only acts when a value is configured (e.g. `0.05`). Set `-1` to disable the price component explicitly. |
 | `feed_in_limit_w` | int | `0` | Absolute feed-in power limit in watts (solar rule). Formula: `0.6 * kWp * 1000`. Set to `0` to disable. |
 | `feed_in_limit_headroom` | float | `1.0` | Safety factor (>= 1.0) on the forecast surplus (solar rule). Recommended: `1.1` if clipping is observed. |
 
@@ -54,14 +54,16 @@ peak_shaving:
 
 ### MQTT Runtime Control
 
-Only `enabled` and `allow_full_battery_after` can be changed at runtime via MQTT without restarting batcontrol:
+The following parameters can be changed at runtime via MQTT without restarting batcontrol:
 
 | Topic | Accepts | Description |
 |-------|---------|-------------|
 | `{base}/peak_shaving/enabled/set` | `true` / `false` | Enable or disable peak shaving |
 | `{base}/peak_shaving/allow_full_battery_after/set` | int 0-23 | Change the target hour for the time rule |
+| `{base}/peak_shaving/price_limit/set` | float | Change the price threshold for the price rule |
+| `{base}/peak_shaving/mode/set` | `time` / `price` / `combined` | Deprecated: kept for backward compatibility, mapped onto `time_active`/`price_active` |
 
-All other parameters (`time_active`, `price_active`, `solar_cap_active`, `price_limit`, `feed_in_limit_w`, `feed_in_limit_headroom`) require restarting batcontrol to take effect.
+The rule switches themselves (`time_active`, `price_active`, `solar_cap_active`) and the solar parameters (`feed_in_limit_w`, `feed_in_limit_headroom`) have no MQTT setters and require restarting batcontrol to take effect.
 
 Runtime changes are temporary and are not written back to the configuration file.
 
@@ -206,7 +208,7 @@ Peak shaving cap rules (time and price) are automatically bypassed in the follow
 | Past `allow_full_battery_after` hour | Bypassed | Still applies (if clipping predicted) |
 | Battery in `always_allow_discharge` region (high SOC) | Bypassed | Still applies (if clipping predicted) |
 | Force-charge from grid active (Mode -1) | Bypassed | Not applied |
-| Discharge not allowed | Bypassed | Still applies (if clipping predicted) |
+| Discharge not allowed (battery preserved) | Bypassed | Not applied (no charge cap is active in this state, the inverter charges all surplus anyway) |
 | evcc is actively charging the EV | Bypassed | Not applied |
 | EV connected in PV mode (evcc) | Bypassed | Not applied |
 | `price_limit` not configured | Price rule inactive | Not affected |
