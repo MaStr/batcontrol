@@ -113,7 +113,12 @@ class FCSolar(ForecastSolarBaseclass):
         logger.info(
             'Requesting Information for PV Installation %s', name)
 
-        response = requests.get(url, timeout=60)
+        try:
+            response = requests.get(url, timeout=60)
+        except requests.exceptions.RequestException:
+            raise ProviderError(
+                'Forecast solar API request failed'
+            ) from None
         if response.status_code == 200:
             return json.loads(response.text)
         elif response.status_code == 429:
