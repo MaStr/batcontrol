@@ -108,14 +108,28 @@ class Evcc(DynamicTariffBaseclass):
             diff = timestamp - current_hour_start
             rel_interval = int(diff.total_seconds() / 900)  # 900 seconds = 15 minutes
 
-            if rel_interval >= 0:
-                # since evcc 0.203.0 value is the name of the price field.
-                if item.get('value', None) is not None:
-                    price = item['value']
-                else:
-                    price = item['price']
+            # evcc may mix granularities: near-term rates are 15-min slots,
+            # but rates further out are sometimes returned as single hourly
+            # (or 30-min) entries. Use start/end to fill every 15-min slot
+            # the entry actually covers, so downstream consumers never see
+            # gaps in the index sequence.
+            span = 1
+            if item.get('end', None) is not None:
+                end_timestamp = datetime.datetime.fromisoformat(
+                    item['end']).astimezone(self.timezone)
+                duration_seconds = (end_timestamp - timestamp).total_seconds()
+                span = max(1, round(duration_seconds / 900))
 
-                prices[rel_interval] = price
+            # since evcc 0.203.0 value is the name of the price field.
+            if item.get('value', None) is not None:
+                price = item['value']
+            else:
+                price = item['price']
+
+            for offset in range(span):
+                idx = rel_interval + offset
+                if idx >= 0:
+                    prices[idx] = price
 
         logger.debug(
             'evcc: Retrieved %d prices at 15-min resolution (hour-aligned)',
