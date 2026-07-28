@@ -228,15 +228,25 @@ class TestEvcc(unittest.TestCase):
 
             prices = evcc._get_prices_native()
 
-        # Hour 0: interval 0 = 0.25 (hourly price at start of hour)
+        # Hour 0: hourly price must be filled across all 4 quarters, not just
+        # the first one, otherwise downstream consumers (core.py) see gaps
+        # in the index sequence and crash with a KeyError.
         self.assertEqual(prices[0], 0.25)
+        self.assertEqual(prices[1], 0.25)
+        self.assertEqual(prices[2], 0.25)
+        self.assertEqual(prices[3], 0.25)
         # Hour 1: intervals 4-7 = individual 15-min prices
         self.assertEqual(prices[4], 0.30)
         self.assertEqual(prices[5], 0.32)
         self.assertEqual(prices[6], 0.34)
         self.assertEqual(prices[7], 0.36)
-        # Hour 2: interval 8 = 0.28 (hourly price at start of hour)
+        # Hour 2: hourly price filled across all 4 quarters again
         self.assertEqual(prices[8], 0.28)
+        self.assertEqual(prices[9], 0.28)
+        self.assertEqual(prices[10], 0.28)
+        self.assertEqual(prices[11], 0.28)
+        # No gaps anywhere in the produced index range
+        self.assertEqual(sorted(prices.keys()), list(range(12)))
 
     def test_native_resolution_is_15min(self):
         """Test that evcc provider has native 15-min resolution"""
