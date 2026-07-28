@@ -24,6 +24,7 @@ Methods:
 """
 import datetime
 import logging
+import math
 import requests
 from .baseclass import DynamicTariffBaseclass
 
@@ -118,7 +119,12 @@ class Evcc(DynamicTariffBaseclass):
                 end_timestamp = datetime.datetime.fromisoformat(
                     item['end']).astimezone(self.timezone)
                 duration_seconds = (end_timestamp - timestamp).total_seconds()
-                span = max(1, round(duration_seconds / 900))
+                # Round up: an entry slightly wider than an exact multiple of
+                # 15 minutes (e.g. due to timestamp rounding or a DST
+                # transition) must still have its trailing slot filled.
+                # Undercounting here would recreate the exact gap this fix
+                # is meant to eliminate.
+                span = max(1, math.ceil(duration_seconds / 900))
 
             # since evcc 0.203.0 value is the name of the price field.
             if item.get('value', None) is not None:
