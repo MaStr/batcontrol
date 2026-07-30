@@ -251,6 +251,18 @@ class Batcontrol:
         self.time_at_forecast_error = -1
 
         self.peak_shaving_config = PeakShavingConfig.from_config(config)
+        if (self.peak_shaving_config.solar_cap_active
+                and self.peak_shaving_config.feed_in_limit_w > 0
+                and self.max_pv_charge_rate > 0):
+            logger.warning(
+                'peak_shaving.feed_in_limit_w (%.0f W) is configured together '
+                'with a static max_pv_charge_rate (%.0f W): if the solar_cap '
+                'clip absorption needs a higher charge rate than this static '
+                'cap allows, curtailment cannot be fully avoided. Consider '
+                'raising max_pv_charge_rate or removing it.',
+                self.peak_shaving_config.feed_in_limit_w,
+                self.max_pv_charge_rate,
+            )
 
         self.max_charging_from_grid_limit = self.batconfig.get(
             'max_charging_from_grid_limit', 0.8)
@@ -1272,11 +1284,20 @@ class Batcontrol:
     def api_set_peak_shaving_mode(self, mode: str):
         """ Set peak shaving operating mode via external API request.
             The change is temporary and will not be written to the config file.
+
+            ``mode`` is deprecated (see PeakShavingConfig.from_config), but
+            this setter is kept for backward compatibility: it also updates
+            the underlying time_active/price_active switches using the same
+            mapping so runtime mode changes keep working.
         """
         normalized = (mode or '').strip().lower()
         try:
             new_config = dataclasses.replace(
-                self.peak_shaving_config, mode=normalized)
+                self.peak_shaving_config,
+                mode=normalized,
+                time_active=normalized in ('time', 'combined'),
+                price_active=normalized in ('price', 'combined'),
+            )
         except ValueError as exc:
             logger.warning(
                 'API: Invalid peak_shaving mode %r: %s', mode, exc)

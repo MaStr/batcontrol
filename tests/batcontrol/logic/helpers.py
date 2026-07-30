@@ -32,11 +32,18 @@ def make_logic(logic_cls, *,
                always_allow_discharge_limit=0.90,
                min_charge_energy=100,
                peak_shaving_enabled=False,
-               grid_charge_target=None):
+               peak_shaving=None,
+               grid_charge_target=None,
+               interval_minutes=60):
     """Create a logic instance with common scenario defaults.
 
     The CommonLogic singleton is reset so each helper call applies the
     requested singleton-backed tuning values independently.
+
+    ``peak_shaving``, if given, is used as-is (a full ``PeakShavingConfig``
+    instance) and takes priority over ``peak_shaving_enabled`` -- pass it
+    when a test needs to configure switches/feed_in_limit_w/etc. beyond the
+    simple enabled/disabled toggle.
     """
     CommonLogic._instance = None
     CommonLogic.get_instance(
@@ -45,7 +52,7 @@ def make_logic(logic_cls, *,
         max_capacity=capacity_wh,
         min_charge_energy=min_charge_energy,
     )
-    logic = logic_cls(timezone=timezone, interval_minutes=60)
+    logic = logic_cls(timezone=timezone, interval_minutes=interval_minutes)
     logic.set_calculation_parameters(CalculationParameters(
         max_charging_from_grid_limit=max_charging_from_grid_limit,
         min_price_difference=min_price_difference,
@@ -53,7 +60,10 @@ def make_logic(logic_cls, *,
         max_capacity=capacity_wh,
         min_grid_charge_soc=min_grid_charge_soc,
         preserve_min_grid_charge_soc=preserve_min_grid_charge_soc,
-        peak_shaving=PeakShavingConfig(enabled=peak_shaving_enabled),
+        peak_shaving=(
+            peak_shaving if peak_shaving is not None
+            else PeakShavingConfig(enabled=peak_shaving_enabled)
+        ),
         grid_charge_target=grid_charge_target or GridChargeTargetConfig(),
     ))
     return logic
