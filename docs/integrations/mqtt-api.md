@@ -149,10 +149,13 @@ See [Peak Shaving](../features/peak-shaving.md) for details:
 - `house/batcontrol/min_dynamic_price_difference` - Dynamic price difference limit in EUR
 
 ### Forecasts (JSON Arrays)
-- `house/batcontrol/FCST/production` - Forecasted solar production in W
-- `house/batcontrol/FCST/consumption` - Forecasted consumption in W
+- `house/batcontrol/FCST/production` - Forecasted solar production, Wh per interval (plus average W)
+- `house/batcontrol/FCST/consumption` - Forecasted consumption, Wh per interval (plus average W)
 - `house/batcontrol/FCST/prices` - Forecasted electricity prices in EUR
-- `house/batcontrol/FCST/net_consumption` - Forecasted net consumption in W
+- `house/batcontrol/FCST/net_consumption` - Forecasted net consumption, Wh per interval (plus average W)
+
+Each interval is 15 or 60 minutes, depending on `time_resolution_minutes` -
+see the Forecast Data Format section below.
 
 ### Inverter-Specific Topics (per inverter, e.g., inverter 0)
 - `house/batcontrol/inverters/0/SOC` - Inverter SOC in %
@@ -210,22 +213,29 @@ The forecast topics (`/FCST/*`) publish JSON data with the following structure:
   "data": [
     {
       "time_start": 1696435200,
-      "value": 2500.5,
-      "time_end": 1696438800
+      "value": 625.1,
+      "power_w": 2500.5,
+      "time_end": 1696436100
     },
     {
-      "time_start": 1696438800,
-      "value": 3200.0,
-      "time_end": 1696442400
+      "time_start": 1696436100,
+      "value": 800.0,
+      "power_w": 3200.0,
+      "time_end": 1696436999
     }
   ]
 }
 ```
 
 Where:
-- `time_start` - Unix timestamp for start of hour
-- `time_end` - Unix timestamp for end of hour
-- `value` - Forecasted value (W for production/consumption, EUR for prices)
+- `time_start` - Unix timestamp for start of the interval
+- `time_end` - Unix timestamp for end of the interval (15 or 60 minutes later,
+  depending on `general.time_resolution_minutes`)
+- `value` - Forecasted value for that interval: Wh for production/consumption/net_consumption,
+  EUR for prices
+- `power_w` - Only present for production/consumption/net_consumption: the same
+  quantity expressed as average power in W (`value / interval_hours`), so it
+  stays comparable regardless of the configured interval length
 
 ## Example Configurations
 

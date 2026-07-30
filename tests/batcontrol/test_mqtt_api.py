@@ -1,6 +1,8 @@
 """Tests for MqttApi._handle_message, focusing on bytes payload decoding."""
+import json
 from unittest.mock import MagicMock, call, patch
 
+import numpy as np
 import pytest
 
 from batcontrol.core import Batcontrol
@@ -195,6 +197,76 @@ class TestPublishedState:
             call('batcontrol/effective_min_grid_charge_soc_percent', '79'),
             call('batcontrol/effective_min_grid_charge_soc', '0.79'),
         ]
+
+
+def _make_forecast_publish_stub(interval_minutes: int):
+    """Stub for FCST/* forecast publish tests."""
+    api = MagicMock(spec=MqttApi)
+    api.base_topic = 'batcontrol'
+    api.interval_minutes = interval_minutes
+    api.client = MagicMock()
+    api.client.is_connected.return_value = True
+    api._energy_to_power = MqttApi._energy_to_power.__get__(api, MqttApi)
+    api._create_forecast = MqttApi._create_forecast.__get__(api, MqttApi)
+    api.publish_production = MqttApi.publish_production.__get__(api, MqttApi)
+    api.publish_consumption = MqttApi.publish_consumption.__get__(api, MqttApi)
+    api.publish_net_consumption = MqttApi.publish_net_consumption.__get__(api, MqttApi)
+    api.publish_prices = MqttApi.publish_prices.__get__(api, MqttApi)
+    return api
+
+
+class TestForecastPublishing:
+    """FCST/production, /consumption and /net_consumption always publish the
+    raw Wh-per-interval value in 'value' (consistent regardless of interval
+    length), plus a derived 'power_w' field with the average power in W, so
+    consumers get an unambiguous, resolution-independent number without
+    having to know the configured time_resolution_minutes themselves.
+    """
+
+    def test_publish_production_keeps_wh_and_adds_power_w_at_15min(self):
+        api = _make_forecast_publish_stub(interval_minutes=15)
+
+        api.publish_production(np.array([1000.0, 500.0]), timestamp=0.0)
+
+        payload = json.loads(api.client.publish.call_args[0][1])
+        assert [entry['value'] for entry in payload['data']] == [1000.0, 500.0]
+        assert [entry['power_w'] for entry in payload['data']] == [4000.0, 2000.0]
+
+    def test_publish_consumption_keeps_wh_and_adds_power_w_at_15min(self):
+        api = _make_forecast_publish_stub(interval_minutes=15)
+
+        api.publish_consumption(np.array([250.0]), timestamp=0.0)
+
+        payload = json.loads(api.client.publish.call_args[0][1])
+        assert payload['data'][0]['value'] == 250.0
+        assert payload['data'][0]['power_w'] == 1000.0
+
+    def test_publish_net_consumption_keeps_wh_and_adds_power_w_at_15min(self):
+        api = _make_forecast_publish_stub(interval_minutes=15)
+
+        api.publish_net_consumption(np.array([-100.0]), timestamp=0.0)
+
+        payload = json.loads(api.client.publish.call_args[0][1])
+        assert payload['data'][0]['value'] == -100.0
+        assert payload['data'][0]['power_w'] == -400.0
+
+    def test_publish_production_power_w_matches_value_at_60min(self):
+        api = _make_forecast_publish_stub(interval_minutes=60)
+
+        api.publish_production(np.array([1000.0]), timestamp=0.0)
+
+        payload = json.loads(api.client.publish.call_args[0][1])
+        assert payload['data'][0]['value'] == 1000.0
+        assert payload['data'][0]['power_w'] == 1000.0
+
+    def test_publish_prices_have_no_power_w_field(self):
+        api = _make_forecast_publish_stub(interval_minutes=15)
+
+        api.publish_prices(np.array([0.25]), timestamp=0.0)
+
+        payload = json.loads(api.client.publish.call_args[0][1])
+        assert payload['data'][0]['value'] == 0.25
+        assert 'power_w' not in payload['data'][0]
 
 
 class TestModeDiscovery:
