@@ -154,7 +154,7 @@ See [Peak Shaving](../features/peak-shaving.md) for details:
 - `house/batcontrol/FCST/prices` - Forecasted electricity prices in EUR
 - `house/batcontrol/FCST/net_consumption` - Forecasted net consumption, Wh per interval (plus average W)
 
-Each interval is 15 or 60 minutes, depending on `general.time_resolution_minutes` -
+Each interval is 15 or 60 minutes, depending on `time_resolution_minutes` -
 see the Forecast Data Format section below.
 
 ### Inverter-Specific Topics (per inverter, e.g., inverter 0)

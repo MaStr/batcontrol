@@ -39,7 +39,7 @@ The following statistical arrays are published as JSON arrays:
 - /FCST/prices: forecasted price in EUR
 - /FCST/net_consumption: forecasted net consumption, Wh per interval (plus power_w: average W)
 
-Note: "interval" is 15 or 60 minutes depending on general.time_resolution_minutes.
+Note: "interval" is 15 or 60 minutes depending on time_resolution_minutes.
 The Wh value is energy for that interval; power_w is the same quantity expressed
 as average power, so it stays comparable across both interval lengths.
 
