@@ -34,10 +34,14 @@ The following topics are published:
 - /forecast_min_battery_wh: minimum battery level in Wh (above MIN_SOC) over the entire forecast horizon (0 = shortage expected)
 
 The following statistical arrays are published as JSON arrays:
-- /FCST/production: forecasted production in W
-- /FCST/consumption: forecasted consumption in W
+- /FCST/production: forecasted production, Wh per interval (plus power_w: average W)
+- /FCST/consumption: forecasted consumption, Wh per interval (plus power_w: average W)
 - /FCST/prices: forecasted price in EUR
-- /FCST/net_consumption: forecasted net consumption in W
+- /FCST/net_consumption: forecasted net consumption, Wh per interval (plus power_w: average W)
+
+Note: "interval" is 15 or 60 minutes depending on general.time_resolution_minutes.
+The Wh value is energy for that interval; power_w is the same quantity expressed
+as average power, so it stays comparable across both interval lengths.
 
 Implemented Input-API:
 - /mode/set: set mode (-1 = charge from grid, 0 = avoid discharge, 8 = limit battery charge, 10 = discharge allowed)
@@ -248,35 +252,55 @@ class MqttApi:
             timestamp: float) -> None:
         """ Publish the production to MQTT
             /FCST/production
-            The value is in W and based of solar forecast API.
+            The value is in Wh per interval, based on the solar forecast API.
+            Each entry also carries a power_w field (average power in W).
             The length is the same as used in internal arrays.
         """
         if self.client.is_connected():
             self.client.publish(
                 self.base_topic + '/FCST/production',
-                json.dumps(self._create_forecast(production, timestamp))
+                json.dumps(self._create_forecast(
+                    production, timestamp, include_power=True))
             )
 
-    def _create_forecast(self, forecast: np.ndarray, timestamp: float) -> dict:
+    def _energy_to_power(self, energy_wh: np.ndarray) -> np.ndarray:
+        """ Convert Wh-per-interval energy values to average power in W.
+
+        Numerically this equals the Wh value only when the interval is
+        60 minutes; at 15-minute resolution the average power is 4x the
+        Wh-per-interval value.
+        """
+        return energy_wh * (60 / self.interval_minutes)
+
+    def _create_forecast(
+            self,
+            forecast: np.ndarray,
+            timestamp: float,
+            include_power: bool = False) -> dict:
         """ Create a forecast JSON object from a numpy array and a timestamp.
 
         Handles both 15-minute and 60-minute intervals based on self.interval_minutes.
         Timestamps are aligned to the start of the current interval.
+        'value' is always Wh per interval; set include_power=True to also add
+        a power_w field (average power in W) for energy-based forecasts.
         """
         interval_seconds = self.interval_minutes * 60
 
         # Align timestamp to the start of the current interval
         now = timestamp - (timestamp % interval_seconds)
 
+        power = self._energy_to_power(forecast) if include_power else None
+
         data_list = []
         for i, value in enumerate(forecast):
-            data_list.append(
-                {
-                    'time_start': now + i * interval_seconds,
-                    'value': value,
-                    'time_end': now + (i + 1) * interval_seconds
-                }
-            )
+            entry = {
+                'time_start': now + i * interval_seconds,
+                'value': value,
+                'time_end': now + (i + 1) * interval_seconds
+            }
+            if include_power:
+                entry['power_w'] = power[i]
+            data_list.append(entry)
 
         data = {'data': data_list}
         return data
@@ -287,14 +311,16 @@ class MqttApi:
             timestamp: float) -> None:
         """ Publish the consumption to MQTT
             /FCST/consumption
-            The value is in W and based of load profile and multiplied with
-                personal yearly consumption.
+            The value is in Wh per interval, based on load profile and
+            multiplied with personal yearly consumption.
+            Each entry also carries a power_w field (average power in W).
             The length is the same as used in internal arrays.
         """
         if self.client.is_connected():
             self.client.publish(
                 self.base_topic + '/FCST/consumption',
-                json.dumps(self._create_forecast(consumption, timestamp))
+                json.dumps(self._create_forecast(
+                    consumption, timestamp, include_power=True))
             )
 
     def publish_prices(self, price: np.ndarray, timestamp: float) -> None:
@@ -312,15 +338,18 @@ class MqttApi:
             self,
             net_consumption: np.ndarray,
             timestamp: float) -> None:
-        """ Publish the net consumption in W to MQTT
+        """ Publish the net consumption to MQTT
             /FCST/net_consumption
+            The value is in Wh per interval. Each entry also carries a
+            power_w field (average power in W).
             The length is the same as used in internal arrays.
             This is the difference between production and consumption.
         """
         if self.client.is_connected():
             self.client.publish(
                 self.base_topic + '/FCST/net_consumption',
-                json.dumps(self._create_forecast(net_consumption, timestamp))
+                json.dumps(self._create_forecast(
+                    net_consumption, timestamp, include_power=True))
             )
 
     def publish_SOC(self, soc: float) -> None:       # pylint: disable=invalid-name
