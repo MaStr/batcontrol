@@ -70,6 +70,7 @@ plugins:
           - configuration/consumption-forecast.md: CSV load profile and Home Assistant API forecast
         Features:
           - features/peak-shaving.md: Dynamic PV charge rate limiting to maximize solar absorption
+          - features/peak-shaving-scenarios.md: Worked example day for every peak shaving rule combination
           - features/battery-control-expert.md: Advanced tuning parameters
           - features/price-difference-calculation.md: How price thresholds are calculated
         Integrations:
@@ -95,6 +96,7 @@ nav:
   - Features:
       - Battery Control Expert: features/battery-control-expert.md
       - Peak Shaving: features/peak-shaving.md
+      - Peak Shaving Scenarios: features/peak-shaving-scenarios.md
       - Price Difference Calculation: features/price-difference-calculation.md
   - Integrations:
       - MQTT API: integrations/mqtt-api.md
@@ -104,6 +106,13 @@ nav:
   - Development:
       - 15-Minute Interval Transformation: development/15-min-transform.md
       - Solar Feed-in Limit Evaluation: development/solar-limit-evaluation.md
+
+extra_javascript:
+  - assets/js/vendor/chart.umd.js
+  - assets/js/peak-shaving-charts.js
+
+extra_css:
+  - assets/css/peak-shaving-charts.css
 
 validation:
   links:

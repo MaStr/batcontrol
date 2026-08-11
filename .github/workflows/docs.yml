@@ -31,6 +31,12 @@ jobs:
       - name: Install documentation dependencies
         run: pip install "mkdocs-material>=9.5,<10" "mkdocs-llmstxt>=0.5.0,<1.0"
 
+      - name: Install batcontrol (for documentation data generation)
+        run: pip install -e .
+
+      - name: Generate peak shaving scenario data
+        run: python scripts/generate_peak_shaving_csv.py
+
       - name: Build documentation
         run: mkdocs build --strict
 
