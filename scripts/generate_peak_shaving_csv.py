@@ -1,11 +1,22 @@
 #!/usr/bin/env python3
 """Generate the peak shaving scenario datasets for the documentation.
 
-Simulates one example day for every combination of the three peak shaving
-rules and writes one CSV per configuration into
-``docs/assets/data/peak_shaving/``. The documentation renders those CSVs as
-interactive charts (see ``docs/assets/js/peak-shaving-charts.js``), so this
-script produces data only -- no images.
+Reads one example day (PV, consumption, price) plus the scenario parameters
+from ``scripts/data/`` and simulates it for every combination of the three
+peak shaving rules. Writes one CSV per configuration into
+``docs/assets/data/peak_shaving/``, which the documentation renders as
+interactive charts (see ``docs/assets/js/peak-shaving-charts.js``).
+
+Input (committed):
+    scripts/data/peak_shaving_example_day.csv   time series
+    scripts/data/peak_shaving_example_day.yaml  battery / rule parameters
+
+Output (generated, not committed):
+    docs/assets/data/peak_shaving/<configuration>.csv
+    docs/assets/data/peak_shaving/summary.csv
+
+The output is produced during the documentation build, so it is gitignored.
+Run this once before ``mkdocs serve`` to preview the charts locally.
 
 The simulation drives the REAL implementation: it builds a ``CalculationInput``
 per slot and calls ``NextLogic._apply_peak_shaving`` and
@@ -20,10 +31,8 @@ the battery for expensive hours, which skips the time and price rules
 entirely -- see docs/features/peak-shaving.md for that gating.
 
 Usage:
-    python scripts/generate_peak_shaving_csv.py [--out DIR]
-
-Requires numpy and the batcontrol package (both satisfied by an editable
-install of the project). No plotting dependencies.
+    python scripts/generate_peak_shaving_csv.py [--day CSV] [--params YAML]
+                                                [--out DIR]
 """
 import argparse
 import csv
@@ -32,6 +41,7 @@ import os
 import sys
 
 import numpy as np
+import yaml
 
 # Add the src directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -47,42 +57,10 @@ from batcontrol.logic.logic_interface import (
 )
 from batcontrol.logic.next import NextLogic
 
-# --------------------------------------------------------------------------- #
-#  Example day
-# --------------------------------------------------------------------------- #
-
-INTERVAL_MINUTES = 15
-SLOTS_PER_DAY = 96
-INTERVAL_H = INTERVAL_MINUTES / 60.0
-
-MAX_CAPACITY_WH = 10000.0          # 10 kWh battery
-START_SOC = 0.20                   # 20 % at midnight
-FEED_IN_LIMIT_W = 4000.0           # 60 % of a 6.7 kWp plant
-FEED_IN_HEADROOM = 1.0
-PRICE_LIMIT = 0.05                 # EUR/kWh, "cheap" threshold
-ALLOW_FULL_BATTERY_AFTER = 14      # target hour
-ALWAYS_ALLOW_DISCHARGE_LIMIT = 0.90
-
-PV_PEAK_W = 5000.0                 # clear summer day, peak at 13:00
-PV_PEAK_HOUR = 13.0
-PV_WIDTH_H = 2.6
-HOUSE_LOAD_W = 400.0
-
-PRICE_BASE = 0.28                  # EUR/kWh
-PRICE_CHEAP = 0.03                 # 11:00 - 14:00
-PRICE_EVENING = 0.42               # 17:00 - 20:00
-
-# name, label, time_active, price_active, solar_cap_active
-CONFIGURATIONS = [
-    ('baseline', 'No peak shaving', False, False, False),
-    ('time', 'Time based only', True, False, False),
-    ('price', 'Price based only', False, True, False),
-    ('solar', 'Solar cap only', False, False, True),
-    ('time_price', 'Time + Price', True, True, False),
-    ('time_solar', 'Time + Solar cap', True, False, True),
-    ('price_solar', 'Price + Solar cap', False, True, True),
-    ('all', 'All three rules', True, True, True),
-]
+HERE = os.path.dirname(__file__)
+DEFAULT_DAY = os.path.join(HERE, 'data', 'peak_shaving_example_day.csv')
+DEFAULT_PARAMS = os.path.join(HERE, 'data', 'peak_shaving_example_day.yaml')
+DEFAULT_OUT = os.path.join(HERE, '..', 'docs', 'assets', 'data', 'peak_shaving')
 
 CSV_COLUMNS = [
     'time', 'hour', 'pv_w', 'surplus_w', 'price',
@@ -92,52 +70,76 @@ CSV_COLUMNS = [
 ]
 
 
-def build_day():
-    """Return (hours, pv_w, consumption_w, price) arrays for the example day."""
-    hours = np.arange(SLOTS_PER_DAY) * INTERVAL_H
+# pylint: disable=too-many-instance-attributes,too-few-public-methods
+class Scenario:
+    """The example day and its parameters, loaded from the input files."""
 
-    pv_w = PV_PEAK_W * np.exp(
-        -((hours - PV_PEAK_HOUR) ** 2) / (2 * PV_WIDTH_H ** 2))
-    pv_w = np.where((hours >= 7.0) & (hours <= 19.0), pv_w, 0.0)
-    # Cut the numerical tail so the production window has a clean start/end
-    pv_w = np.where(pv_w < 60.0, 0.0, pv_w)
+    def __init__(self, day_path, params_path):
+        with open(params_path, encoding='utf-8') as handle:
+            params = yaml.safe_load(handle)
 
-    consumption_w = np.full(SLOTS_PER_DAY, HOUSE_LOAD_W)
+        self.interval_minutes = int(params['interval_minutes'])
+        self.interval_h = self.interval_minutes / 60.0
 
-    price = np.full(SLOTS_PER_DAY, PRICE_BASE)
-    price[(hours >= 11.0) & (hours < 14.0)] = PRICE_CHEAP
-    price[(hours >= 17.0) & (hours < 20.0)] = PRICE_EVENING
+        battery = params['battery']
+        self.max_capacity_wh = float(battery['max_capacity_wh'])
+        self.start_soc = float(battery['start_soc'])
+        self.always_allow_discharge_limit = float(
+            battery['always_allow_discharge_limit'])
 
-    return hours, pv_w, consumption_w, price
+        shaving = params['peak_shaving']
+        self.allow_full_battery_after = int(shaving['allow_full_battery_after'])
+        self.price_limit = float(shaving['price_limit'])
+        self.feed_in_limit_w = float(shaving['feed_in_limit_w'])
+        self.feed_in_limit_headroom = float(shaving['feed_in_limit_headroom'])
 
+        self.configurations = params['configurations']
 
-def make_logic(time_active, price_active, solar_cap_active, enabled=True):
-    """Build a NextLogic instance with the requested rule switches."""
-    logic = NextLogic(timezone=datetime.timezone.utc,
-                      interval_minutes=INTERVAL_MINUTES)
-    logic.set_calculation_parameters(CalculationParameters(
-        max_charging_from_grid_limit=0.79,
-        min_price_difference=0.05,
-        min_price_difference_rel=0.2,
-        max_capacity=MAX_CAPACITY_WH,
-        peak_shaving=PeakShavingConfig(
-            enabled=enabled,
-            allow_full_battery_after=ALLOW_FULL_BATTERY_AFTER,
-            time_active=time_active,
-            price_active=price_active,
-            solar_cap_active=solar_cap_active,
-            price_limit=PRICE_LIMIT,
-            feed_in_limit_w=FEED_IN_LIMIT_W,
-            feed_in_limit_headroom=FEED_IN_HEADROOM,
-        ),
-    ))
-    return logic
+        times, pv_w, consumption_w, price = [], [], [], []
+        with open(day_path, newline='', encoding='utf-8') as handle:
+            for row in csv.DictReader(handle):
+                times.append(row['time'])
+                pv_w.append(float(row['pv_w']))
+                consumption_w.append(float(row['consumption_w']))
+                price.append(float(row['price']))
+
+        if not times:
+            raise ValueError(f'No rows in {day_path}')
+
+        self.times = times
+        self.pv_w = np.array(pv_w, dtype=float)
+        self.consumption_w = np.array(consumption_w, dtype=float)
+        self.price = np.array(price, dtype=float)
+        self.slots = len(times)
+        self.hours = np.arange(self.slots) * self.interval_h
+
+    def make_logic(self, time_active, price_active, solar_cap_active, enabled):
+        """Build a NextLogic instance with the requested rule switches."""
+        logic = NextLogic(timezone=datetime.timezone.utc,
+                          interval_minutes=self.interval_minutes)
+        logic.set_calculation_parameters(CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity_wh,
+            peak_shaving=PeakShavingConfig(
+                enabled=enabled,
+                allow_full_battery_after=self.allow_full_battery_after,
+                time_active=time_active,
+                price_active=price_active,
+                solar_cap_active=solar_cap_active,
+                price_limit=self.price_limit,
+                feed_in_limit_w=self.feed_in_limit_w,
+                feed_in_limit_headroom=self.feed_in_limit_headroom,
+            ),
+        ))
+        return logic
 
 
 # The simulation deliberately calls the two post-processing steps directly so
 # the charts show exactly what the shipped rules do.
-# pylint: disable=protected-access
-def _rule_values(logic, calc_input, timestamp, stored_wh, common):
+# pylint: disable=protected-access,too-many-arguments,too-many-positional-arguments
+def _rule_values(scenario, logic, calc_input, timestamp, stored_wh, common):
     """Return the raw per-rule outputs for charting (-1 means 'not active')."""
     peak_shaving = logic.calculation_parameters.peak_shaving
     time_w, price_w, floor_w, solar_cap_w = -1, -1, 0, -1
@@ -160,46 +162,49 @@ def _rule_values(logic, calc_input, timestamp, stored_wh, common):
         # Mirrors _apply_solar_limit's own call
         floor_w, solar_cap_w = solar_limit.compute_solar_limit(
             calc_input.production, calc_input.consumption,
-            peak_shaving.feed_in_limit_w, INTERVAL_H,
-            calc_input.free_capacity, MAX_CAPACITY_WH,
+            peak_shaving.feed_in_limit_w, scenario.interval_h,
+            calc_input.free_capacity, scenario.max_capacity_wh,
             headroom=peak_shaving.feed_in_limit_headroom,
-            slot0_hours=INTERVAL_H)
+            slot0_hours=scenario.interval_h)
 
     return time_w, price_w, floor_w, solar_cap_w
 
 
 # pylint: disable=too-many-locals
-def simulate(config, day, baseline_soc=None):
-    """Run one example day and return (rows, summary)."""
-    _name, _label, time_active, price_active, solar_cap_active = config
-    hours, pv_w, consumption_w, price = day
+def simulate(scenario, config, baseline_soc=None):
+    """Run the example day for one configuration and return (rows, summary)."""
+    time_active = bool(config['time_active'])
+    price_active = bool(config['price_active'])
+    solar_cap_active = bool(config['solar_cap_active'])
 
     enabled = time_active or price_active or solar_cap_active
-    logic = make_logic(time_active, price_active, solar_cap_active,
-                       enabled=enabled)
+    logic = scenario.make_logic(time_active, price_active, solar_cap_active,
+                                enabled)
 
     common = CommonLogic.get_instance()
-    common.max_capacity = MAX_CAPACITY_WH
-    common.always_allow_discharge_limit = ALWAYS_ALLOW_DISCHARGE_LIMIT
+    common.max_capacity = scenario.max_capacity_wh
+    common.always_allow_discharge_limit = scenario.always_allow_discharge_limit
 
-    production_wh = pv_w * INTERVAL_H
-    consumption_wh = consumption_w * INTERVAL_H
+    interval_h = scenario.interval_h
+    production_wh = scenario.pv_w * interval_h
+    consumption_wh = scenario.consumption_w * interval_h
 
-    stored_wh = MAX_CAPACITY_WH * START_SOC
+    stored_wh = scenario.max_capacity_wh * scenario.start_soc
     midnight = datetime.datetime(2025, 6, 21, tzinfo=datetime.timezone.utc)
 
     rows = []
     charged_wh = exported_wh = curtailed_wh = 0.0
     full_at = ''
 
-    for i in range(SLOTS_PER_DAY):
-        free_wh = MAX_CAPACITY_WH - stored_wh
-        timestamp = midnight + datetime.timedelta(minutes=INTERVAL_MINUTES * i)
+    for i in range(scenario.slots):
+        free_wh = scenario.max_capacity_wh - stored_wh
+        timestamp = midnight + datetime.timedelta(
+            minutes=scenario.interval_minutes * i)
 
         calc_input = CalculationInput(
             production=production_wh[i:],
             consumption=consumption_wh[i:],
-            prices=price[i:],
+            prices=scenario.price[i:],
             stored_energy=stored_wh,
             stored_usable_energy=stored_wh * 0.95,
             free_capacity=free_wh,
@@ -216,32 +221,32 @@ def simulate(config, day, baseline_soc=None):
         limit_w = settings.limit_battery_charge_rate
 
         time_w, price_w, floor_w, solar_cap_w = _rule_values(
-            logic, calc_input, timestamp, stored_wh, common)
+            scenario, logic, calc_input, timestamp, stored_wh, common)
 
-        surplus_w = max(0.0, pv_w[i] - consumption_w[i])
+        surplus_w = max(0.0, scenario.pv_w[i] - scenario.consumption_w[i])
         allowed_w = surplus_w if limit_w < 0 else min(surplus_w, float(limit_w))
-        charge_wh_slot = min(allowed_w * INTERVAL_H, free_wh)
-        charge_w = charge_wh_slot / INTERVAL_H
+        charge_wh_slot = min(allowed_w * interval_h, free_wh)
+        charge_w = charge_wh_slot / interval_h
 
         to_grid_w = surplus_w - charge_w
-        curtailed_w = max(0.0, to_grid_w - FEED_IN_LIMIT_W)
+        curtailed_w = max(0.0, to_grid_w - scenario.feed_in_limit_w)
         exported_w = to_grid_w - curtailed_w
 
         stored_wh += charge_wh_slot
         charged_wh += charge_wh_slot
-        exported_wh += exported_w * INTERVAL_H
-        curtailed_wh += curtailed_w * INTERVAL_H
+        exported_wh += exported_w * interval_h
+        curtailed_wh += curtailed_w * interval_h
 
-        soc_pct = stored_wh / MAX_CAPACITY_WH * 100.0
+        soc_pct = stored_wh / scenario.max_capacity_wh * 100.0
         if not full_at and soc_pct >= 99.9:
-            full_at = timestamp.strftime('%H:%M')
+            full_at = scenario.times[i]
 
         rows.append({
-            'time': timestamp.strftime('%H:%M'),
-            'hour': round(float(hours[i]), 3),
-            'pv_w': round(float(pv_w[i]), 1),
+            'time': scenario.times[i],
+            'hour': round(float(scenario.hours[i]), 3),
+            'pv_w': round(float(scenario.pv_w[i]), 1),
             'surplus_w': round(surplus_w, 1),
-            'price': round(float(price[i]), 4),
+            'price': round(float(scenario.price[i]), 4),
             'limit_w': '' if limit_w < 0 else int(limit_w),
             'charge_w': round(charge_w, 1),
             'to_grid_w': round(to_grid_w, 1),
@@ -256,7 +261,7 @@ def simulate(config, day, baseline_soc=None):
         })
 
     summary = {
-        'end_soc_pct': round(stored_wh / MAX_CAPACITY_WH * 100.0, 1),
+        'end_soc_pct': round(stored_wh / scenario.max_capacity_wh * 100.0, 1),
         'charged_kwh': round(charged_wh / 1000.0, 2),
         'exported_kwh': round(exported_wh / 1000.0, 2),
         'curtailed_kwh': round(curtailed_wh / 1000.0, 2),
@@ -273,47 +278,53 @@ def write_csv(path, rows, columns):
         writer.writerows(rows)
 
 
-# pylint: disable=too-many-locals
 def main():
-    """Generate all scenario CSVs."""
-    default_out = os.path.join(
-        os.path.dirname(__file__), '..', 'docs', 'assets', 'data',
-        'peak_shaving')
-    parser = argparse.ArgumentParser(description=__doc__.split('\n', maxsplit=1)[0])
-    parser.add_argument('--out', default=default_out,
-                        help='output directory for the CSV files')
+    """Generate all scenario CSVs from the committed input files."""
+    parser = argparse.ArgumentParser(
+        description='Generate the peak shaving scenario datasets.')
+    parser.add_argument('--day', default=DEFAULT_DAY,
+                        help='input CSV with the example day time series')
+    parser.add_argument('--params', default=DEFAULT_PARAMS,
+                        help='input YAML with battery and rule parameters')
+    parser.add_argument('--out', default=DEFAULT_OUT,
+                        help='output directory for the generated CSV files')
     args = parser.parse_args()
 
+    scenario = Scenario(args.day, args.params)
     out_dir = os.path.abspath(args.out)
     os.makedirs(out_dir, exist_ok=True)
 
-    day = build_day()
+    print(f"Input : {os.path.relpath(args.day)} "
+          f"({scenario.slots} slots, {scenario.interval_minutes} min)")
+    print(f"        {os.path.relpath(args.params)}")
+    print(f"Output: {out_dir}\n")
 
     # Baseline first: its SoC curve is the reference line in every chart.
-    baseline_rows, baseline_summary = simulate(CONFIGURATIONS[0], day)
+    baseline_config = scenario.configurations[0]
+    baseline_rows, baseline_summary = simulate(scenario, baseline_config)
     baseline_soc = [row['soc_pct'] for row in baseline_rows]
 
     summaries = []
-    for config in CONFIGURATIONS:
-        name, label, time_a, price_a, solar_a = config
-        if name == 'baseline':
+    for config in scenario.configurations:
+        if config is baseline_config:
             rows, summary = baseline_rows, baseline_summary
             for row in rows:
                 row['soc_baseline_pct'] = row['soc_pct']
         else:
-            rows, summary = simulate(config, day, baseline_soc=baseline_soc)
+            rows, summary = simulate(scenario, config, baseline_soc=baseline_soc)
 
-        write_csv(os.path.join(out_dir, f'{name}.csv'), rows, CSV_COLUMNS)
+        write_csv(os.path.join(out_dir, f"{config['name']}.csv"), rows,
+                  CSV_COLUMNS)
 
         summaries.append({
-            'config': name,
-            'label': label,
-            'time_active': int(time_a),
-            'price_active': int(price_a),
-            'solar_cap_active': int(solar_a),
+            'config': config['name'],
+            'label': config['label'],
+            'time_active': int(bool(config['time_active'])),
+            'price_active': int(bool(config['price_active'])),
+            'solar_cap_active': int(bool(config['solar_cap_active'])),
             **summary,
         })
-        print(f"  {label:<26} end SoC {summary['end_soc_pct']:>5.1f} %   "
+        print(f"  {config['label']:<26} end SoC {summary['end_soc_pct']:>5.1f} %   "
               f"charged {summary['charged_kwh']:>5.2f} kWh   "
               f"curtailed {summary['curtailed_kwh']:>4.2f} kWh   "
               f"full at {summary['full_at']}")
@@ -321,7 +332,7 @@ def main():
     write_csv(os.path.join(out_dir, 'summary.csv'), summaries,
               list(summaries[0].keys()))
 
-    print(f"\nWrote {len(CONFIGURATIONS) + 1} CSV files to {out_dir}")
+    print(f"\nWrote {len(scenario.configurations) + 1} CSV files.")
 
 
 if __name__ == '__main__':

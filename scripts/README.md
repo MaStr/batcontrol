@@ -53,10 +53,29 @@ python scripts/plot_solar_limit_day.py
 ### generate_peak_shaving_csv.py
 
 Generates the datasets behind the interactive charts on
-`docs/features/peak-shaving-scenarios.md`. Simulates one example day for every
-combination of the three peak shaving rules (time / price / solar_cap, plus a
-no-peak-shaving baseline) and writes one CSV per configuration into
-`docs/assets/data/peak_shaving/`, plus a `summary.csv`.
+`docs/features/peak-shaving-scenarios.md`. Reads one example day plus the
+scenario parameters, simulates it for every combination of the three peak
+shaving rules (time / price / solar_cap, plus a no-peak-shaving baseline) and
+writes one CSV per configuration.
+
+**Input** (committed, edit these to change the scenario):
+
+| File | Content |
+|------|---------|
+| `scripts/data/peak_shaving_example_day.csv` | time series: `time`, `pv_w`, `consumption_w`, `price` |
+| `scripts/data/peak_shaving_example_day.yaml` | battery, rule parameters, list of configurations |
+
+**Output** (generated, gitignored): `docs/assets/data/peak_shaving/<name>.csv`
+plus `summary.csv`.
+
+**Usage:**
+```bash
+python scripts/generate_peak_shaving_csv.py [--day CSV] [--params YAML] [--out DIR]
+```
+
+The `Deploy Documentation` workflow runs this before `mkdocs build`, so the
+published site is always regenerated from the committed input. Run it once
+locally before `mkdocs serve`, otherwise the charts report missing data.
 
 The simulation drives the shipped implementation -- it builds a
 `CalculationInput` per slot and calls `NextLogic._apply_peak_shaving` and
@@ -65,16 +84,6 @@ The simulation drives the shipped implementation -- it builds a
 from the actual behaviour. No plotting dependencies: the charts are rendered
 in the browser by `docs/assets/js/peak-shaving-charts.js` (Chart.js, vendored
 under `docs/assets/js/vendor/`).
-
-**Usage:**
-```bash
-python scripts/generate_peak_shaving_csv.py [--out DIR]
-```
-
-The `Deploy Documentation` workflow runs this before `mkdocs build`, so the
-published site is always regenerated. The CSVs are also committed so a local
-`mkdocs serve` works without running the script first -- re-run it and commit
-the result after changing any peak shaving logic.
 
 **Scope:** the upstream discharge decision is stipulated
 (`allow_discharge=True`, `charge_from_grid=False`) so the charts isolate the

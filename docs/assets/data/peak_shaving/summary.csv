@@ -1,9 +1,0 @@
-config,label,time_active,price_active,solar_cap_active,end_soc_pct,charged_kwh,exported_kwh,curtailed_kwh,full_at
-baseline,No peak shaving,0,0,0,100.0,8.0,18.08,1.03,11:45
-time,Time based only,1,0,0,100.0,8.0,19.1,0.01,14:00
-price,Price based only,0,1,0,100.0,8.0,19.04,0.07,13:45
-solar,Solar cap only,0,0,1,100.0,8.0,18.91,0.2,13:30
-time_price,Time + Price,1,1,0,100.0,8.0,19.1,0.01,14:00
-time_solar,Time + Solar cap,1,0,1,100.0,8.0,19.11,0.0,15:15
-price_solar,Price + Solar cap,0,1,1,100.0,8.0,19.11,0.0,15:15
-all,All three rules,1,1,1,100.0,8.0,19.11,0.0,15:45

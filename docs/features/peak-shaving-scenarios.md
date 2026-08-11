@@ -154,14 +154,26 @@ The trade-off is visible in the last two columns: peak shaving does not charge
 *more* energy into the battery, it charges the *same* energy *later*, which
 keeps room free for the hours when energy would otherwise be lost.
 
-## Regenerating the data
+## Changing the example day
 
-The CSV files under `docs/assets/data/peak_shaving/` are generated:
+The charts are driven by two committed input files:
+
+| File | Content |
+|------|---------|
+| `scripts/data/peak_shaving_example_day.csv` | the time series: `time`, `pv_w`, `consumption_w`, `price` |
+| `scripts/data/peak_shaving_example_day.yaml` | battery, rule parameters and the list of configurations |
+
+Edit those to change the scenario, then regenerate:
 
 ```bash
 python scripts/generate_peak_shaving_csv.py
 ```
 
-The documentation build runs this automatically, so the published charts always
-match the current implementation. Run it manually after changing any peak
-shaving logic if you want to preview the result locally with `mkdocs serve`.
+The generated datasets under `docs/assets/data/peak_shaving/` are **build
+output and not committed** -- the documentation build produces them before
+`mkdocs build`, so the published charts always match the current
+implementation. Run the command once before `mkdocs serve` to preview the
+charts locally, otherwise they will report missing data.
+
+Adding a configuration to the YAML creates a new dataset automatically; embed
+it in a page with `<div class="ps-chart" data-scenario="NAME"></div>`.
