@@ -187,3 +187,8 @@ lib64
 lib
 
 site/
+
+# Peak shaving scenario datasets for the documentation.
+# Generated from scripts/data/peak_shaving_example_day.{csv,yaml} by
+# scripts/generate_peak_shaving_csv.py during the documentation build.
+docs/assets/data/peak_shaving/

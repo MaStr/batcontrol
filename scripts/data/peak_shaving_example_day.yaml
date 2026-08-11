@@ -1,0 +1,73 @@
+# Scenario parameters for the peak shaving documentation charts.
+#
+# Consumed by scripts/generate_peak_shaving_csv.py together with the time
+# series in peak_shaving_example_day.csv. Edit these two files to change the
+# example day shown on docs/features/peak-shaving-scenarios.md -- the script
+# and the charts adapt automatically.
+
+# Time resolution of the input CSV. Must divide 60.
+interval_minutes: 15
+
+battery:
+  # Usable capacity in Wh.
+  max_capacity_wh: 10000
+  # State of charge at the first slot of the input CSV, 0.0 - 1.0.
+  start_soc: 0.20
+  # Battery is considered "high SoC" above this fraction, which disables the
+  # time and price rules (mirrors always_allow_discharge_limit).
+  always_allow_discharge_limit: 0.90
+
+peak_shaving:
+  # Hour by which the battery should be full (allow_full_battery_after).
+  allow_full_battery_after: 14
+  # Slots at or below this price count as "cheap" for the price rule.
+  price_limit: 0.05
+  # Grid feed-in power limit in W for the solar_cap rule.
+  feed_in_limit_w: 4000
+  # Safety factor >= 1.0 on the forecast surplus.
+  feed_in_limit_headroom: 1.0
+
+# Rule combinations to simulate. Each becomes one <name>.csv in the output
+# directory and one row in summary.csv. The chart placeholders in the
+# documentation reference these names via data-scenario.
+configurations:
+  - name: baseline
+    label: No peak shaving
+    time_active: false
+    price_active: false
+    solar_cap_active: false
+  - name: time
+    label: Time based only
+    time_active: true
+    price_active: false
+    solar_cap_active: false
+  - name: price
+    label: Price based only
+    time_active: false
+    price_active: true
+    solar_cap_active: false
+  - name: solar
+    label: Solar cap only
+    time_active: false
+    price_active: false
+    solar_cap_active: true
+  - name: time_price
+    label: Time + Price
+    time_active: true
+    price_active: true
+    solar_cap_active: false
+  - name: time_solar
+    label: Time + Solar cap
+    time_active: true
+    price_active: false
+    solar_cap_active: true
+  - name: price_solar
+    label: Price + Solar cap
+    time_active: false
+    price_active: true
+    solar_cap_active: true
+  - name: all
+    label: All three rules
+    time_active: true
+    price_active: true
+    solar_cap_active: true
