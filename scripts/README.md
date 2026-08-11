@@ -50,6 +50,39 @@ uv pip install matplotlib  # not part of the project dependencies
 python scripts/plot_solar_limit_day.py
 ```
 
+### verify_pv_surplus_charge_limit.py
+
+Step-by-step desk check of the PV surplus -> charge limit conversion in the
+solar feed-in limit rule (`solar_cap`). The rule has to bridge two units: the
+forecast arrays hold **energy per slot (Wh)**, while both the configured
+feed-in limit and the resulting battery charge limit are **power values (W)**.
+
+The script prints the per-slot Wh arithmetic next to the equivalent power
+values so the conversion can be verified by hand. Every number is produced by
+the real `src/batcontrol/logic/solar_limit.py` implementation -- unlike
+`simulate_solar_limit_day.py`, this script does not carry its own copy of the
+algorithm. Cross-checks are enforced with `assert`, so the script fails loudly
+if the production code ever stops matching the expected arithmetic.
+
+**Usage:**
+```bash
+python scripts/verify_pv_surplus_charge_limit.py
+```
+
+**Reference scenario:** feed-in limit 4000 W, PV 5000 W, house load 400 W
+-> expected floor `(5000 - 400) - 4000 = 600 W`.
+
+**Scenarios:**
+- `B1` inside the clip slot -- floor equals the excess over the feed-in limit
+- `B2` mid-slot (12:07:30) -- every Wh value halves, the floor stays 600 W
+  because surplus and allowance both scale with the slot length
+- `B3` scarce free capacity -- cap collapses onto the floor
+- `B4` headroom 1.1 applied to the forecast surplus
+- `A` clip window still ahead -- reservation cap instead of a floor
+- resolution -- one physical PV curve sampled at 15 vs 60 minutes, showing how
+  coarse slots average away a sharp peak
+- merge -- how the floor interacts with the time/price peak shaving caps
+
 ### test_evcc.py
 
 Standalone test script for the evcc dynamic tariff module.
