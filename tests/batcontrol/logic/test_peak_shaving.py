@@ -170,21 +170,57 @@ class TestPeakShavingAlgorithm(unittest.TestCase):
         self.assertEqual(limit, 111)
 
     def test_15min_intervals(self):
-        """Test counter-linear ramp with 15-minute intervals."""
+        """Test counter-linear ramp with 15-minute intervals.
+
+        production/consumption are Wh ENERGY per slot (already scaled to
+        the 15-min slot length by the forecast providers), not average
+        power -- see forecastsolar/baseclass.py. They must not be
+        multiplied by interval_hours again when summed.
+        """
         logic_15 = NextLogic(timezone=datetime.timezone.utc,
                              interval_minutes=15)
         logic_15.set_calculation_parameters(self.params)
 
         # Target 14:00, current 13:00 -> 4 slots of 15 min
-        # surplus = 4000 W per slot, interval_hours = 0.25
-        # surplus Wh per slot = 4000 * 0.25 = 1000 Wh
-        # total surplus = 4 * 1000 = 4000 Wh
-        # free_capacity = 1000 Wh -> surplus > free
+        # surplus = 4000 Wh per slot (already energy, no *0.25 needed)
+        # total surplus = 4 * 4000 = 16000 Wh > free_capacity = 1000 Wh
         # counter-linear ramp (n=4, ih=0.25):
         #   wh_current = 2*1000/(4*5) = 100 Wh
         #   charge_rate = 100 / 0.25 = 400 W
         production = [4500] * 4
         consumption = [500] * 4
+        calc_input = self._make_input(production, consumption,
+                                      stored_energy=9000,
+                                      free_capacity=1000)
+        ts = datetime.datetime(2025, 6, 20, 13, 0, 0,
+                               tzinfo=datetime.timezone.utc)
+        limit = logic_15._calculate_peak_shaving_charge_limit(
+            calc_input, ts)
+        self.assertEqual(limit, 400)
+
+    def test_15min_intervals_surplus_unit_regression(self):
+        """Regression: 15-min surplus energy must not be scaled by
+        interval_hours a second time.
+
+        production/consumption values are Wh per 15-min slot already.
+        With the double-scaling bug, a 4-slot window summed to only
+        1/4 of the real surplus, so a genuinely capacity-exceeding
+        surplus (3200 Wh) was seen as only 800 Wh -- at or under the
+        1000 Wh free capacity -- and the function incorrectly skipped
+        the cap (-1) instead of applying the counter-linear ramp.
+        """
+        logic_15 = NextLogic(timezone=datetime.timezone.utc,
+                             interval_minutes=15)
+        logic_15.set_calculation_parameters(self.params)
+
+        # Target 14:00, current 13:00 -> 4 slots of 15 min.
+        # surplus = 800 Wh per slot (already energy) -> total = 3200 Wh.
+        # free_capacity = 1000 Wh -> surplus (3200) > free (1000):
+        # the cap MUST be applied.
+        # counter-linear ramp: wh_current = 2*1000/(4*5) = 100 Wh
+        #   charge_rate = 100 / 0.25 = 400 W
+        production = [800] * 4
+        consumption = [0] * 4
         calc_input = self._make_input(production, consumption,
                                       stored_energy=9000,
                                       free_capacity=1000)
@@ -801,6 +837,45 @@ class TestPeakShavingPriceBased(unittest.TestCase):
         # A limit > 0 must be produced (not -1 and not some invalid value)
         self.assertGreater(result, 0,
                            "Cheap slot inside production window must still trigger a limit")
+
+    def test_15min_currently_in_cheap_slot_surplus_unit_regression(self):
+        """Regression: at 15-min resolution, cheap-window surplus must not be
+        scaled by interval_hours a second time (production/consumption are
+        already Wh energy per slot).
+
+        cheap slots [0, 1], 600 Wh surplus each (real total 1200 Wh) >
+        free_capacity 1000 Wh -> a cap MUST be applied. With the
+        double-scaling bug the surplus was seen as only 300 Wh (<= free),
+        so the function incorrectly returned -1 (no cap).
+        """
+        logic_15 = NextLogic(timezone=datetime.timezone.utc, interval_minutes=15)
+        logic_15.set_calculation_parameters(self.params)
+        prices = [0, 0, 10, 10]
+        production = [600, 600, 500, 500]
+        calc_input = self._make_input(production, prices, free_capacity=1000)
+        result = logic_15._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        # charge_rate = free_capacity / len(cheap_slots) / interval_hours
+        #             = 1000 / 2 / 0.25 = 2000 W
+        self.assertEqual(result, 2000)
+
+    def test_15min_before_cheap_window_reserve_unit_regression(self):
+        """Regression: the pre-cheap-window reserve must use the real (not
+        interval_hours-scaled) surplus energy, otherwise it under-reserves
+        capacity and lets too much PV through before the cheap window.
+
+        cheap slots [2, 3], 600 Wh surplus each (real total 1200 Wh).
+        free_capacity = 1500 Wh -> additional_allowed = 1500 - 1200 = 300 Wh,
+        spread over 2 pre-window slots -> 150 Wh/slot -> 600 W.
+        With the double-scaling bug the reserve was seen as only 300 Wh,
+        giving additional_allowed = 1200 Wh -> 2400 W (4x too loose).
+        """
+        logic_15 = NextLogic(timezone=datetime.timezone.utc, interval_minutes=15)
+        logic_15.set_calculation_parameters(self.params)
+        prices = [10, 10, 0, 0]
+        production = [300, 300, 600, 600]
+        calc_input = self._make_input(production, prices, free_capacity=1500)
+        result = logic_15._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        self.assertEqual(result, 600)
 
 
 class TestPeakShavingMinChargeRate(unittest.TestCase):

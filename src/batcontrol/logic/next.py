@@ -469,6 +469,11 @@ class NextLogic(LogicInterface):
         prices = calc_input.prices
         interval_hours = self.interval_minutes / 60.0
 
+        # Note: production/consumption are already Wh energy per slot (see
+        # forecastsolar/baseclass.py), not average power -- surplus sums
+        # below must NOT be scaled by interval_hours again. interval_hours
+        # is only needed to convert a Wh/slot rate back to an average W.
+
         # Limit cheap-slot search to the production window.
         # The production window ends at the first slot with zero production;
         # beyond that there is no PV generation and no need to reserve capacity.
@@ -493,7 +498,7 @@ class NextLogic(LogicInterface):
                     surplus = (float(calc_input.production[i])
                                - float(calc_input.consumption[i]))
                     if surplus > 0:
-                        total_cheap_surplus_wh += surplus * interval_hours
+                        total_cheap_surplus_wh += surplus
 
             if total_cheap_surplus_wh <= calc_input.free_capacity:
                 return -1  # Battery can absorb everything, no limit needed
@@ -514,7 +519,7 @@ class NextLogic(LogicInterface):
             if i < len(calc_input.production) and i < len(calc_input.consumption):
                 surplus = float(calc_input.production[i]) - float(calc_input.consumption[i])
                 if surplus > 0:
-                    total_cheap_surplus_wh += surplus * interval_hours
+                    total_cheap_surplus_wh += surplus
 
         if total_cheap_surplus_wh <= 0:
             return -1  # No PV surplus expected during cheap slots
@@ -580,14 +585,17 @@ class NextLogic(LogicInterface):
         if slots_remaining <= 0:
             return -1
 
-        # Calculate PV surplus per slot (only count positive surplus)
+        # Calculate PV surplus per slot (only count positive surplus).
+        # production/consumption are already Wh energy per slot (see
+        # forecastsolar/baseclass.py), not average power, so no further
+        # interval_hours scaling is needed to sum them into an energy total.
         pv_surplus = (calc_input.production[:slots_remaining]
                       - calc_input.consumption[:slots_remaining])
         pv_surplus = np.clip(pv_surplus, 0, None)  # Only positive surplus counts
 
         # Sum expected PV surplus energy (Wh) over remaining slots
         interval_hours = self.interval_minutes / 60.0
-        expected_surplus_wh = float(np.sum(pv_surplus)) * interval_hours
+        expected_surplus_wh = float(np.sum(pv_surplus))
 
         free_capacity = calc_input.free_capacity
 
