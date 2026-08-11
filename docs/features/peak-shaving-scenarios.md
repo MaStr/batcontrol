@@ -97,6 +97,18 @@ charge rate that tracks the excess over 4000 W, peaking at 600 W at 13:00.
 
 <div class="ps-chart" data-scenario="solar"></div>
 
+!!! warning "This rule alone curtails more than the time rule here"
+    Look at the applied limit between 11:45 and 12:15: the floor asks for
+    54 / 243 / 396 W, but the limit sits at 500 W. The
+    [minimum charge rate](peak-shaving.md#interaction-with-the-minimum-charge-rate)
+    overrides the floor, the battery charges about 202 Wh more than intended
+    and is full at 13:30 -- right before the peak. The red curtailment band
+    after 13:30 is exactly that energy coming back.
+
+    Combined with the time rule the battery still has room when clipping
+    starts and the day ends at zero curtailment. Tracked in
+    [issue #409](https://github.com/MaStr/batcontrol/issues/409).
+
 ## Combinations
 
 When several rules are active the caps compete and the strictest wins, but the

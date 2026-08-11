@@ -151,7 +151,7 @@ The rule works in two phases:
 
 **Before clipping starts (reservation):** free battery capacity minus the predicted total clip energy is spread evenly. If the required reserve exceeds free capacity, PV charging is blocked entirely (cap 0). This prevents normal PV power from displacing clip power in the battery.
 
-**During clipping (floor + absorption):** the battery is required to accept at least the power above the feed-in limit. If free capacity is scarce, the cap equals the floor (absorb *only* clip power, grid feed-in at the limit). Otherwise, the battery can absorb additional surplus below the limit.
+**During clipping (floor + absorption):** the battery is required to accept at least the power above the feed-in limit. If free capacity is scarce, the cap equals the floor (absorb *only* clip power, grid feed-in at the limit) -- but see the [minimum charge rate interaction](#interaction-with-the-minimum-charge-rate) below, which partly defeats this at the edges of the clip window. Otherwise, the battery can absorb additional surplus below the limit.
 
 ![The solar_cap rule: reservation cap, floor, and SoC comparison](../assets/solar_limit_algorithm.png)
 
@@ -183,6 +183,7 @@ In words: if the solar floor (minimum charge rate needed to absorb clipped power
 
 - **Solar forecast sensitivity:** the rule relies on production forecasts, which may underestimate peak production on clear days. The `feed_in_limit_headroom` parameter mitigates this, but a live measurement of current production would be more accurate.
 - **Inverter max charge rate:** if your inverter's `max_pv_charge_rate` is below the predicted clip power, some curtailment is physically unavoidable. Batcontrol logs a startup warning when this condition is detected.
+- **Minimum charge rate eats the reserve:** at the start and end of the clip window the floor is small, and the 500 W minimum charge rate overrides it. See the section below.
 
 For a detailed evaluation of the algorithm including simulation results and sensitivity analysis, see [Solar Limit Evaluation](../development/solar-limit-evaluation.md).
 
@@ -191,6 +192,36 @@ For a detailed evaluation of the algorithm including simulation results and sens
 The calculated charge limit is applied via **Mode 8** (`LIMIT_BATTERY_CHARGE_RATE`). In this mode the inverter caps PV-to-battery charging at the given wattage while still allowing the battery to discharge normally.
 
 A minimum charge rate of **500 W** is enforced: any computed limit between 1 W and 499 W is raised to 500 W to avoid inefficient low-power charging. A limit of exactly **0 W** (block charging completely) is kept as-is and is not raised.
+
+### Interaction with the minimum charge rate
+
+The minimum charge rate is applied *after* the rules have been merged, so it can override a deliberately low limit. This matters most for the solar cap rule when free capacity is scarce and the cap has been set equal to the floor.
+
+At the edges of the clip window the excess over the feed-in limit is only a few dozen watts. The rule therefore asks for a correspondingly small charge rate, but the 500 W minimum raises it -- and the battery consumes capacity that was reserved for the peak.
+
+The example day on the [scenarios page](peak-shaving-scenarios.md) shows the effect for the "Solar cap only" configuration:
+
+| Slot | Floor asked for | Actually charged |
+|------|-----------------|------------------|
+| 11:45 | 54 W | 500 W |
+| 12:00 | 243 W | 500 W |
+| 12:15 | 396 W | 500 W |
+
+```
+clip energy in those three slots : 173 Wh   (what the rule intended)
+actually charged at 500 W        : 375 Wh
+excess                           : 202 Wh
+```
+
+Those 202 Wh are missing later: the battery reaches 100 % at 13:30, just before the production peak, and the remaining excess is curtailed. On that day the solar cap rule alone therefore loses about 0.2 kWh -- slightly more than the time based rule, which holds the battery back far longer.
+
+!!! tip "Practical consequence"
+    Do not run `solar_cap_active` on its own if your battery tends to be nearly
+    full when clipping starts. Combined with `time_active` the battery still
+    has room at the beginning of the clip window, the floor stays above 500 W
+    where it matters, and the example day reaches zero curtailment.
+
+This is a genuine trade-off rather than a clear defect: the 500 W minimum exists because charging a battery at 54 W is inefficient. It is tracked in [issue #409](https://github.com/MaStr/batcontrol/issues/409).
 
 The charge limit is published via MQTT:
 
