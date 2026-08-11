@@ -50,6 +50,37 @@ uv pip install matplotlib  # not part of the project dependencies
 python scripts/plot_solar_limit_day.py
 ```
 
+### generate_peak_shaving_csv.py
+
+Generates the datasets behind the interactive charts on
+`docs/features/peak-shaving-scenarios.md`. Simulates one example day for every
+combination of the three peak shaving rules (time / price / solar_cap, plus a
+no-peak-shaving baseline) and writes one CSV per configuration into
+`docs/assets/data/peak_shaving/`, plus a `summary.csv`.
+
+The simulation drives the shipped implementation -- it builds a
+`CalculationInput` per slot and calls `NextLogic._apply_peak_shaving` and
+`NextLogic._apply_solar_limit`, the same two post-processing steps
+`calculate_inverter_mode` runs -- so the published charts cannot drift away
+from the actual behaviour. No plotting dependencies: the charts are rendered
+in the browser by `docs/assets/js/peak-shaving-charts.js` (Chart.js, vendored
+under `docs/assets/js/vendor/`).
+
+**Usage:**
+```bash
+python scripts/generate_peak_shaving_csv.py [--out DIR]
+```
+
+The `Deploy Documentation` workflow runs this before `mkdocs build`, so the
+published site is always regenerated. The CSVs are also committed so a local
+`mkdocs serve` works without running the script first -- re-run it and commit
+the result after changing any peak shaving logic.
+
+**Scope:** the upstream discharge decision is stipulated
+(`allow_discharge=True`, `charge_from_grid=False`) so the charts isolate the
+peak shaving post-processing. A real run can skip the time and price rules
+entirely when the battery is withheld for expensive hours.
+
 ### verify_pv_surplus_charge_limit.py
 
 Step-by-step desk check of the PV surplus -> charge limit conversion in the
