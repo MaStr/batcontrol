@@ -335,12 +335,13 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
 
         try:
             return loop.run_until_complete(self._fetch_entity_state_async())
-        except (OSError, WebSocketException, RuntimeError):
+        except (OSError, WebSocketException, RuntimeError) as e:
             logger.error(
-                'HomeAssistant WebSocket request failed for entity %s', self.entity_id)
+                'HomeAssistant WebSocket request failed for entity %s: %s',
+                self.entity_id, e, exc_info=True)
             raise ProviderError(
-                f'HomeAssistant WebSocket request failed for entity {self.entity_id}'
-            ) from None
+                f'HomeAssistant WebSocket request failed for entity {self.entity_id}: {e}'
+            ) from e
 
     async def _fetch_entity_state_async(self) -> dict:
         """Async fetch of entity state from HomeAssistant
