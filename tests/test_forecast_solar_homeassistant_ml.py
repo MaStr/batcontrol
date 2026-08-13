@@ -6,11 +6,14 @@ Comprehensive test coverage for HomeAssistant Solar Forecast ML integration.
 import asyncio
 import datetime
 import json
+import socket
 from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytz
+from websockets.exceptions import ConnectionClosedError
 
+from src.batcontrol.forecastsolar.baseclass import ProviderError
 from src.batcontrol.forecastsolar.forecast_homeassistant_ml import ForecastSolarHomeAssistantML
 
 
@@ -402,6 +405,84 @@ class TestIntegration:
             # Should raise when trying to fetch
             with pytest.raises(RuntimeError):
                 provider.get_raw_data_from_provider(pvinstallation_name)
+
+
+# Tests for network failure handling (regression: previously these bypassed
+# ProviderError handling, so refresh_data() could not fall back to cache)
+
+class TestNetworkFailureHandling:
+    """Test that WebSocket/connection failures are wrapped as ProviderError
+    so the baseclass refresh_data() cache fallback keeps working."""
+
+    def _make_provider(self, pv_installations, timezone):
+        return ForecastSolarHomeAssistantML(
+            pvinstallations=pv_installations,
+            timezone=timezone,
+            base_url="http://homeassistant.local:8123",
+            api_token="test_token",
+            entity_id="sensor.solar_forecast_ml_evcc_solar_prognose",
+            sensor_unit="Wh"
+        )
+
+    def test_dns_failure_is_wrapped_as_provider_error(self, pv_installations, timezone):
+        """A DNS resolution failure must surface as ProviderError, not raw OSError."""
+        provider = self._make_provider(pv_installations, timezone)
+
+        with patch(
+            'src.batcontrol.forecastsolar.forecast_homeassistant_ml.connect',
+            new_callable=AsyncMock,
+            side_effect=socket.gaierror('Name or service not known'),
+        ):
+            with pytest.raises(ProviderError):
+                provider.get_raw_data_from_provider(pv_installations[0]['name'])
+
+    def test_websocket_error_is_wrapped_as_provider_error(self, pv_installations, timezone):
+        """A websockets-level failure must surface as ProviderError, not raw exception."""
+        provider = self._make_provider(pv_installations, timezone)
+
+        with patch(
+            'src.batcontrol.forecastsolar.forecast_homeassistant_ml.connect',
+            new_callable=AsyncMock,
+            side_effect=ConnectionClosedError(None, None),
+        ):
+            with pytest.raises(ProviderError):
+                provider.get_raw_data_from_provider(pv_installations[0]['name'])
+
+    def test_auth_failure_is_wrapped_as_provider_error(self, pv_installations, timezone):
+        """An authentication failure (RuntimeError) must surface as ProviderError."""
+        provider = self._make_provider(pv_installations, timezone)
+
+        mock_ws = AsyncMock()
+        mock_ws.recv = AsyncMock(side_effect=[
+            json.dumps({"type": "auth_required", "ha_version": "2026.3.0"}),
+            json.dumps({"type": "auth_invalid", "message": "Invalid access token"}),
+        ])
+        mock_ws.send = AsyncMock()
+        mock_ws.close = AsyncMock()
+
+        with patch(
+            'src.batcontrol.forecastsolar.forecast_homeassistant_ml.connect',
+            new_callable=AsyncMock,
+            return_value=mock_ws,
+        ):
+            with pytest.raises(ProviderError):
+                provider.get_raw_data_from_provider(pv_installations[0]['name'])
+
+    def test_refresh_keeps_cached_data_on_connection_failure(
+            self, pv_installations, timezone, ha_entity_state):
+        """A transient connection failure must leave the last good response cached."""
+        provider = self._make_provider(pv_installations, timezone)
+        pvinstallation_name = pv_installations[0]['name']
+        provider.store_raw_data(pvinstallation_name, ha_entity_state)
+
+        with patch(
+            'src.batcontrol.forecastsolar.forecast_homeassistant_ml.connect',
+            new_callable=AsyncMock,
+            side_effect=socket.gaierror('Name or service not known'),
+        ):
+            provider.refresh_data()
+
+        assert provider.get_raw_data(pvinstallation_name) == ha_entity_state
 
 
 # Tests for edge cases

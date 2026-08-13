@@ -16,7 +16,8 @@ import logging
 from typing import Dict, Optional
 
 from websockets.asyncio.client import connect
-from .baseclass import ForecastSolarBaseclass
+from websockets.exceptions import WebSocketException
+from .baseclass import ForecastSolarBaseclass, ProviderError
 
 logger = logging.getLogger(__name__)
 logger.info('Loading module')
@@ -324,7 +325,7 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
             Dict with entity state including attributes
 
         Raises:
-            RuntimeError: If WebSocket connection or API request fails
+            ProviderError: If WebSocket connection or API request fails
         """
         try:
             loop = asyncio.get_event_loop()
@@ -332,7 +333,14 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-        return loop.run_until_complete(self._fetch_entity_state_async())
+        try:
+            return loop.run_until_complete(self._fetch_entity_state_async())
+        except (OSError, WebSocketException, RuntimeError):
+            logger.error(
+                'HomeAssistant WebSocket request failed for entity %s', self.entity_id)
+            raise ProviderError(
+                f'HomeAssistant WebSocket request failed for entity {self.entity_id}'
+            ) from None
 
     async def _fetch_entity_state_async(self) -> dict:
         """Async fetch of entity state from HomeAssistant
