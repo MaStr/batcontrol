@@ -13,6 +13,12 @@ on:
       - '.github/workflows/_docs-build.yml'
   workflow_dispatch:
 
+permissions: {}
+
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: false
+
 jobs:
   build:
     uses: ./.github/workflows/_docs-build.yml

@@ -4,8 +4,11 @@ on:
   workflow_call:
     outputs:
       artifact-id:
-        description: "ID of the uploaded pages artifact"
+        description: "ID of the uploaded docs artifact"
         value: ${{ jobs.build.outputs.artifact-id }}
+
+permissions:
+  contents: read
 
 jobs:
   build:
