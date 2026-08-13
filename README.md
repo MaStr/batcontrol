@@ -7,7 +7,7 @@ Batcontrol controls your PV battery inverter based on dynamic electricity prices
 [![Pylint](https://github.com/MaStr/batcontrol/actions/workflows/pylint.yml/badge.svg?branch=main)](https://github.com/MaStr/batcontrol/actions/workflows/pylint.yml)
 [![Docker Image CI](https://github.com/MaStr/batcontrol/actions/workflows/docker-image.yml/badge.svg?branch=main)](https://github.com/MaStr/batcontrol/actions/workflows/docker-image.yml)
 
-[Documentation](https://mastr.github.io/batcontrol/) — [Home Assistant Add-on](https://github.com/MaStr/batcontrol_ha_addon)
+[Documentation](https://mastr.github.io/batcontrol/) — [Development Documentation](https://mastr.github.io/batcontrol-dev/) — [Home Assistant Add-on](https://github.com/MaStr/batcontrol_ha_addon)
 
 ## Supported Systems
 
