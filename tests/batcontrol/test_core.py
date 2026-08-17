@@ -1437,6 +1437,21 @@ class TestApiSetGridChargeLock:
         assert bc.last_mode == MODE_ALLOW_DISCHARGING
         assert bc.max_charging_from_grid_limit == 0.0
 
+    def test_unlock_clamps_restore_to_always_allow_discharge_limit(self, bc):
+        """If always_allow_discharge_limit was lowered below the remembered
+        value while locked, set_max_charging_from_grid_limit would otherwise
+        reject the restore and leave the limit stuck at 0.0 (issue found in
+        PR #416 review)."""
+        bc.mqtt_api = MagicMock()
+        bc.api_set_grid_charge_lock(True)
+        bc.set_always_allow_discharge_limit(0.5)
+
+        bc.api_set_grid_charge_lock(False)
+
+        assert bc.max_charging_from_grid_limit == 0.5
+        assert bc._grid_charge_locked is False
+        assert bc._pre_lock_max_charging_from_grid_limit is None
+
 
 class TestGridChargeLockTopicRegistration:
     """Wiring of the optional mqtt.grid_charge_lock_topic config option."""

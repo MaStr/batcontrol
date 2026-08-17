@@ -137,7 +137,7 @@ Batcontrol publishes data to the following topic structure (assuming base topic 
 - `house/batcontrol/discharge_blocked` - Whether discharge is blocked (`true`/`false`)
 - `house/batcontrol/api_override_active` - Whether a temporary external/API override is active (`true`/`false`)
 - `house/batcontrol/control_source` - Source that last selected the current control state (`api` or `optimizer`)
-- `house/batcontrol/grid_charge_locked` - Whether an external (HEMS/grid operator) request is currently blocking charging from the grid (`true`/`false`), see [Grid Charge Lock](#grid-charge-lock-external-hemsgrid-operator-signal) below
+- `house/batcontrol/grid_charge_locked` - Whether an external (HEMS/grid operator) request is currently blocking charging from the grid (`true`/`false`), see [Grid Charge Lock](#grid-charge-lock-external-hemsgrid-operator-signal)
 
 ### Battery Information
 - `house/batcontrol/SOC` - State of Charge in % (two decimal places, e.g., `69.00`)

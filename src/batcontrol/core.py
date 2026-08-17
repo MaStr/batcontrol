@@ -1222,8 +1222,14 @@ class Batcontrol:
             self.set_max_charging_from_grid_limit(0.0)
         else:
             if self._pre_lock_max_charging_from_grid_limit is not None:
-                self.set_max_charging_from_grid_limit(
-                    self._pre_lock_max_charging_from_grid_limit)
+                # Clamp to always_allow_discharge_limit: it may have been
+                # lowered while locked, which would otherwise make
+                # set_max_charging_from_grid_limit reject the restore and
+                # leave the limit stuck at 0.0.
+                restore_value = min(
+                    self._pre_lock_max_charging_from_grid_limit,
+                    self.get_always_allow_discharge_limit())
+                self.set_max_charging_from_grid_limit(restore_value)
                 self._pre_lock_max_charging_from_grid_limit = None
         if self.mqtt_api is not None:
             self.mqtt_api.publish_grid_charge_locked(locked)
