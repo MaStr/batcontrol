@@ -1,0 +1,29 @@
+/* Layout for the peak shaving scenario charts (see peak-shaving-charts.js). */
+
+.ps-chart {
+  position: relative;
+  width: 100%;
+  height: 420px;
+  margin: 1.2rem 0 1.8rem;
+}
+
+@media screen and (max-width: 60em) {
+  .ps-chart {
+    height: 340px;
+  }
+}
+
+.ps-summary {
+  overflow-x: auto;
+}
+
+.ps-summary table {
+  width: 100%;
+  font-size: 0.78rem;
+}
+
+.ps-error {
+  color: #e34948;
+  font-size: 0.8rem;
+  font-style: italic;
+}

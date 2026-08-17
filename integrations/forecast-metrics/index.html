@@ -1,0 +1,1834 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Optimize your electricity costs by re-charging your PV battery when electricity is cheap and there is not enough solar power available.">
+      
+      
+      
+        <link rel="canonical" href="https://mastr.github.io/batcontrol/integrations/forecast-metrics/">
+      
+      
+        <link rel="prev" href="../mqtt-api/">
+      
+      
+        <link rel="next" href="../mqtt-inverter/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Forecast Metrics - Batcontrol Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/css/peak-shaving-charts.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#forecast-metrics" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Batcontrol Documentation" class="md-header__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Batcontrol Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Forecast Metrics
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Batcontrol Documentation" class="md-nav__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    Batcontrol Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/how-batcontrol-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Batcontrol Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/batcontrol-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Main Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/inverter-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/dynamic-tariff-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Tariff Provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/solar-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/consumption-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Consumption Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/battery-control-expert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Battery Control Expert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving-scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving Scenarios
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/price-difference-calculation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Price Difference Calculation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mqtt-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forecast Metrics
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forecast Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-three-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Three Metrics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Three Metrics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#solar_surplus_wh-current-window-solar-overflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        solar_surplus_wh — Current-Window Solar Overflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pv_start_battery_wh-battery-level-at-next-charging-point" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pv_start_battery_wh — Battery Level at Next Charging Point
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forecast_min_battery_wh-forecast-minimum-battery-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forecast_min_battery_wh — Forecast Minimum Battery Level
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision Matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt-topics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT Topics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT Topics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#home-assistant-auto-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant Auto-Discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#use-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Cases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Use Cases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#heat-pump-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Heat Pump Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ev-charging-via-evcc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EV Charging via evcc
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#general-pattern-for-any-flexible-load" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        General Pattern for Any Flexible Load
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mqtt-inverter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../evcc-connection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    evcc Connection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/15-min-transform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15-Minute Interval Transformation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/solar-limit-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Feed-in Limit Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-three-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Three Metrics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Three Metrics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#solar_surplus_wh-current-window-solar-overflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        solar_surplus_wh — Current-Window Solar Overflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pv_start_battery_wh-battery-level-at-next-charging-point" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pv_start_battery_wh — Battery Level at Next Charging Point
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forecast_min_battery_wh-forecast-minimum-battery-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        forecast_min_battery_wh — Forecast Minimum Battery Level
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision Matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt-topics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT Topics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT Topics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#home-assistant-auto-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant Auto-Discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#use-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Cases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Use Cases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#heat-pump-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Heat Pump Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ev-charging-via-evcc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EV Charging via evcc
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#general-pattern-for-any-flexible-load" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        General Pattern for Any Flexible Load
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/MaStr/batcontrol/edit/main/docs/integrations/forecast-metrics.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="forecast-metrics">Forecast Metrics<a class="headerlink" href="#forecast-metrics" title="Permanent link">&para;</a></h1>
+<p><code>ForecastMetrics</code> is a stateless module that derives three battery indicators
+from the production/consumption forecast arrays and the current battery state.
+These indicators are published via MQTT and are intended to drive downstream
+automation decisions such as "should I run the heat pump now or save the battery
+for tomorrow's solar charge?"</p>
+<p>All three values are updated once per evaluation cycle (every 3 minutes by
+default). They are based on the same forecast window that the main optimizer
+uses, so their horizon is <code>min(max available price hours, max available solar
+hours)</code>.</p>
+<h2 id="the-three-metrics">The Three Metrics<a class="headerlink" href="#the-three-metrics" title="Permanent link">&para;</a></h2>
+<h3 id="solar_surplus_wh-current-window-solar-overflow"><code>solar_surplus_wh</code> — Current-Window Solar Overflow<a class="headerlink" href="#solar_surplus_wh-current-window-solar-overflow" title="Permanent link">&para;</a></h3>
+<p><strong>MQTT topic:</strong> <code>{base}/solar_surplus_wh</code></p>
+<p>Expected energy in Wh that the solar production in the <strong>current production
+window</strong> will generate above what the battery can absorb.</p>
+<ul>
+<li><strong>solar_active = true (slot 0 is producing):</strong> surplus is the net solar
+  production of the ongoing window minus the remaining free battery capacity.
+  <code>surplus &gt; 0</code> means that PV power will be exported to the grid even if the
+  battery is managed optimally.</li>
+<li><strong>solar_active = false (nighttime or break before next window):</strong> surplus
+  accounts for the overnight discharge first — the battery will self-discharge
+  from consumption before solar starts, which creates room. <code>surplus &gt; 0</code> means
+  even after that extra room is created the next solar window will still
+  overflow.</li>
+</ul>
+<p>A value of <code>0</code> means the battery can absorb everything the upcoming solar
+window produces. A value <code>&gt; 0</code> means some PV will inevitably be exported; it
+is safe to run flexible loads (heat pump, EV charging) from the grid right now
+because the solar surplus will offset them.</p>
+<p><strong>Use case:</strong> If <code>solar_surplus_wh &gt;= estimated_load_wh</code>, running a flexible
+load (heat pump, EV charging via evcc) has no net grid cost over the forecast
+horizon. See <a href="#use-cases">Use Cases</a> for concrete automation examples.</p>
+<hr />
+<h3 id="pv_start_battery_wh-battery-level-at-next-charging-point"><code>pv_start_battery_wh</code> — Battery Level at Next Charging Point<a class="headerlink" href="#pv_start_battery_wh-battery-level-at-next-charging-point" title="Permanent link">&para;</a></h3>
+<p><strong>MQTT topic:</strong> <code>{base}/pv_start_battery_wh</code></p>
+<p>Battery level in Wh (above MIN_SOC) at the moment when solar production first
+exceeds household consumption (<code>net_consumption &lt; 0</code>). This is the point where
+the battery transitions from discharging to charging.</p>
+<ul>
+<li>Simulated slot-by-slot from the current moment forward.</li>
+<li>If the battery hits <code>0</code> (MIN_SOC) before solar starts, the value is <code>0</code>.</li>
+<li>If the battery has no net-charging slot in the forecast at all, the value
+  is <code>0</code>.</li>
+<li>If slot 0 is already a net-charging slot (solar already exceeds
+  consumption), the value equals the current stored usable energy.</li>
+</ul>
+<p><strong>Use case:</strong> "How much charge will the battery have left when solar starts
+tomorrow?" A low value (e.g. &lt; 500 Wh) means flexible loads tonight should
+be reduced; a high value means overnight loads can run freely. See
+<a href="#use-cases">Use Cases</a> for heat pump and evcc automation examples.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code>pv_start_battery_wh</code> depends on <code>net_consumption &lt; 0</code>, not just on
+<code>production &gt; 0</code>. The battery does not switch to charging until solar output
+exceeds household consumption — on a partly-cloudy morning the cross-over can
+happen later than sunrise.</p>
+</div>
+<hr />
+<h3 id="forecast_min_battery_wh-forecast-minimum-battery-level"><code>forecast_min_battery_wh</code> — Forecast Minimum Battery Level<a class="headerlink" href="#forecast_min_battery_wh-forecast-minimum-battery-level" title="Permanent link">&para;</a></h3>
+<p><strong>MQTT topic:</strong> <code>{base}/forecast_min_battery_wh</code></p>
+<p>The lowest battery level in Wh (above MIN_SOC) reached at any point during the
+entire forecast horizon, based on slot-by-slot simulation with proper
+floor/ceiling clamping.</p>
+<ul>
+<li>A value of <code>0</code> means the battery is expected to hit MIN_SOC at some point in
+  the forecast — a signal that the system will be energy-constrained.</li>
+<li>The simulation respects both the floor (MIN_SOC = 0 usable Wh) and the
+  ceiling (MAX_SOC = stored_usable + free_capacity), so multi-day
+  charge/discharge cycles are tracked correctly.</li>
+<li>The horizon covers the full forecast window (same as the optimizer), not
+  just the next 24 hours.</li>
+</ul>
+<p><strong>Use case:</strong> "Will the battery run out at any point in the planning horizon?"
+<code>forecast_min_battery_wh == 0</code> means batcontrol may need to grid-charge later —
+block or reduce flexible loads. A value comfortably above zero means the battery
+has buffer and loads can run. See <a href="#use-cases">Use Cases</a>.</p>
+<hr />
+<h2 id="decision-matrix">Decision Matrix<a class="headerlink" href="#decision-matrix" title="Permanent link">&para;</a></h2>
+<p>The three metrics form a natural 2-D decision space for flexible load control:</p>
+<table>
+<thead>
+<tr>
+<th><code>solar_surplus_wh</code></th>
+<th><code>forecast_min_battery_wh</code></th>
+<th>Recommended action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&gt; 0</td>
+<td>&gt; 0</td>
+<td>Run flexible loads freely — PV will cover them and battery stays healthy</td>
+</tr>
+<tr>
+<td>&gt; 0</td>
+<td>= 0</td>
+<td>PV surplus exists but battery will be short later — run light loads only</td>
+</tr>
+<tr>
+<td>= 0</td>
+<td>&gt; 0</td>
+<td>No surplus but battery OK — use <code>pv_start_battery_wh</code> to judge night loads</td>
+</tr>
+<tr>
+<td>= 0</td>
+<td>= 0</td>
+<td>Constrained — block flexible loads, preserve battery</td>
+</tr>
+</tbody>
+</table>
+<p><code>pv_start_battery_wh</code> refines the third row: if it is high, the overnight
+discharge is gentle and a moderate flexible load (e.g. heat pump one cycle)
+is fine. If it is near zero, defer to the next solar window.</p>
+<hr />
+<h2 id="mqtt-topics">MQTT Topics<a class="headerlink" href="#mqtt-topics" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Unit</th>
+<th>Retained</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{base}/solar_surplus_wh</code></td>
+<td>Wh</td>
+<td>No</td>
+<td>PV overflow that cannot be stored in the battery</td>
+</tr>
+<tr>
+<td><code>{base}/solar_active</code></td>
+<td>bool</td>
+<td>No</td>
+<td><code>true</code> if solar is producing in slot 0</td>
+</tr>
+<tr>
+<td><code>{base}/pv_start_battery_wh</code></td>
+<td>Wh</td>
+<td>No</td>
+<td>Battery level at next net-charging crossover</td>
+</tr>
+<tr>
+<td><code>{base}/forecast_min_battery_wh</code></td>
+<td>Wh</td>
+<td>No</td>
+<td>Minimum battery level over entire forecast horizon</td>
+</tr>
+</tbody>
+</table>
+<p>All values are published after each evaluation cycle (together with the
+inverter control decision). See <a href="../mqtt-api/">MQTT API</a> for the full topic
+reference and configuration options.</p>
+<h3 id="home-assistant-auto-discovery">Home Assistant Auto-Discovery<a class="headerlink" href="#home-assistant-auto-discovery" title="Permanent link">&para;</a></h3>
+<p>The following HA entities are created automatically when
+<code>auto_discover_enable: true</code> is configured:</p>
+<ul>
+<li><strong>Solar Surplus</strong> — sensor (energy, Wh)</li>
+<li><strong>Solar Active</strong> — binary sensor (on/off diagnostic)</li>
+<li><strong>PV Start Battery</strong> — sensor (energy, Wh)</li>
+<li><strong>Forecast Min Battery</strong> — sensor (energy, Wh)</li>
+</ul>
+<hr />
+<h2 id="use-cases">Use Cases<a class="headerlink" href="#use-cases" title="Permanent link">&para;</a></h2>
+<h3 id="heat-pump-control">Heat Pump Control<a class="headerlink" href="#heat-pump-control" title="Permanent link">&para;</a></h3>
+<p>A heat pump is a flexible load: it can pre-heat a buffer tank or run an extra
+heating cycle when energy is cheap or free — but running it at the wrong time
+can deplete the battery before the next solar window.</p>
+<p>The three metrics together answer the key questions for heat pump automation:</p>
+<p><strong>"Can I run a heating cycle right now without net grid cost?"</strong></p>
+<p>Check <code>solar_surplus_wh &gt;= estimated_cycle_wh</code>. If yes, the PV will produce
+more than the battery can store anyway — running the heat pump consumes what
+would otherwise be exported. No additional grid draw over the forecast horizon.</p>
+<p><strong>"Is the battery safe enough for a cycle tonight?"</strong></p>
+<p>Check <code>pv_start_battery_wh</code>. A high value (e.g. &gt; 2000 Wh) means the battery
+will still have a comfortable charge when solar starts tomorrow; the heat pump
+can run. A low value (&lt; 500 Wh) means overnight consumption will nearly deplete
+the battery — defer to the next solar window.</p>
+<p><strong>"Should I block flexible loads entirely?"</strong></p>
+<p>Check <code>forecast_min_battery_wh == 0</code>. If the battery is expected to hit MIN_SOC
+at some point in the forecast, batcontrol may need to grid-charge later;
+flexible loads should wait.</p>
+<p>A simple Home Assistant automation combining all three:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Allow heat pump if PV will overflow OR battery is healthy and not forecast-constrained</span>
+<span class="nt">condition</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">or</span>
+<span class="w">    </span><span class="nt">conditions</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numeric_state</span>
+<span class="w">        </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor.batcontrol_solar_surplus_wh</span>
+<span class="w">        </span><span class="nt">above</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1500</span><span class="w">          </span><span class="c1"># surplus covers one heat pump cycle</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">and</span>
+<span class="w">        </span><span class="nt">conditions</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numeric_state</span>
+<span class="w">            </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor.batcontrol_pv_start_battery_wh</span>
+<span class="w">            </span><span class="nt">above</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span><span class="w">      </span><span class="c1"># enough battery charge at dawn</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numeric_state</span>
+<span class="w">            </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor.batcontrol_forecast_min_battery_wh</span>
+<span class="w">            </span><span class="nt">above</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w">         </span><span class="c1"># battery not forecast to run empty</span>
+</code></pre></div>
+<hr />
+<h3 id="ev-charging-via-evcc">EV Charging via evcc<a class="headerlink" href="#ev-charging-via-evcc" title="Permanent link">&para;</a></h3>
+<p><a href="https://evcc.io">evcc</a> supports a <code>min_soc</code>/<code>target_soc</code> model as well as
+charging from PV surplus. The batcontrol metrics integrate naturally with evcc's
+MQTT API to let you charge the car only when it does not compete with the
+battery.</p>
+<p><strong>Scenario: charge only from true PV overflow</strong></p>
+<p><code>solar_surplus_wh</code> tells you exactly how much energy the PV will produce above
+what the battery can absorb. Pass this value to evcc's <code>pv_action</code> or use it
+in an automation to set the evcc charging mode:</p>
+<ul>
+<li><code>solar_surplus_wh &gt; 0</code> → switch evcc to <strong>PV</strong> mode (charge from surplus)</li>
+<li><code>solar_surplus_wh == 0</code> and <code>forecast_min_battery_wh &gt; 0</code> → switch to <strong>Min+PV</strong>
+  (keep a minimum charge rate, fill up with PV where possible)</li>
+<li><code>forecast_min_battery_wh == 0</code> → switch to <strong>Off</strong> or <strong>Min</strong> only (battery
+  needs the energy)</li>
+</ul>
+<p><strong>Scenario: opportunistic overnight charge</strong></p>
+<p>Use <code>pv_start_battery_wh</code> to decide whether to allow evcc to draw from the
+battery overnight. If the battery is forecast to still be above a threshold at
+dawn, a slow overnight charge (e.g. 6 A / 1.4 kW) will not noticeably affect
+the next day's solar cycle.</p>
+<hr />
+<h3 id="general-pattern-for-any-flexible-load">General Pattern for Any Flexible Load<a class="headerlink" href="#general-pattern-for-any-flexible-load" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Question</th>
+<th>Metric to check</th>
+<th>Threshold example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Is PV overflowing right now?</td>
+<td><code>solar_surplus_wh</code></td>
+<td><code>&gt; estimated_load_wh</code></td>
+</tr>
+<tr>
+<td>Will battery survive the night?</td>
+<td><code>pv_start_battery_wh</code></td>
+<td><code>&gt; 500 Wh</code></td>
+</tr>
+<tr>
+<td>Is the battery forecast-constrained?</td>
+<td><code>forecast_min_battery_wh</code></td>
+<td><code>&gt; 0</code></td>
+</tr>
+</tbody>
+</table>
+<p>All three are dimensioned in Wh, so you can directly compare them against the
+energy consumption of the load you want to schedule.</p>
+<hr />
+<h2 id="implementation-notes">Implementation Notes<a class="headerlink" href="#implementation-notes" title="Permanent link">&para;</a></h2>
+<ul>
+<li>All values are computed in <code>src/batcontrol/forecast_metrics.py</code> by the
+  <code>ForecastMetrics</code> class.</li>
+<li>Slot 0 is time-adjusted: the elapsed fraction of the current interval is
+  subtracted so that a slot already 80% elapsed only contributes 20% of its
+  forecast energy.</li>
+<li><code>net_consumption = consumption - production</code>; negative = battery charging,
+  positive = battery discharging / grid draw.</li>
+<li><code>stored_usable_energy</code> is the energy above MIN_SOC. <code>free_capacity</code> is the
+  space between the current level and MAX_SOC.</li>
+<li>The slot-by-slot simulation clamps at both ends:
+  <code>battery = max(0, min(stored_usable + free_capacity, battery - net))</code>.
+  A simple net-sum over slots would overestimate available energy because it
+  ignores that the battery cannot go below 0 or above MAX_SOC.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../mqtt-api/" class="md-footer__link md-footer__link--prev" aria-label="Previous: MQTT API">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                MQTT API
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../mqtt-inverter/" class="md-footer__link md-footer__link--next" aria-label="Next: MQTT Inverter">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                MQTT Inverter
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../assets/js/vendor/chart.umd.js"></script>
+      
+        <script src="../../assets/js/peak-shaving-charts.js"></script>
+      
+    
+  </body>
+</html>

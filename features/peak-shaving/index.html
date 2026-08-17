@@ -1,0 +1,2276 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Optimize your electricity costs by re-charging your PV battery when electricity is cheap and there is not enough solar power available.">
+      
+      
+      
+        <link rel="canonical" href="https://mastr.github.io/batcontrol/features/peak-shaving/">
+      
+      
+        <link rel="prev" href="../battery-control-expert/">
+      
+      
+        <link rel="next" href="../peak-shaving-scenarios/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Peak Shaving - Batcontrol Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/css/peak-shaving-charts.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#peak-shaving" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Batcontrol Documentation" class="md-header__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Batcontrol Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Peak Shaving
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Batcontrol Documentation" class="md-nav__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    Batcontrol Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/how-batcontrol-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Batcontrol Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/batcontrol-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Main Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/inverter-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/dynamic-tariff-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Tariff Provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/solar-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/consumption-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Consumption Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../battery-control-expert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Battery Control Expert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-peak-shaving" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Peak Shaving?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameter-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameter Reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mqtt-runtime-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT Runtime Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-allow_full_battery_after-target-hour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The allow_full_battery_after Target Hour
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rule-switches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rule Switches
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Rule Switches">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#time_active-target-time-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        time_active -- Target-Time Rule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#price_active-price-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        price_active -- Price Rule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#combining-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Combining Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#solar-feed-in-limit-solarspitzengesetz" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solar Feed-in Limit (Solarspitzengesetz)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Solar Feed-in Limit (Solarspitzengesetz)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-german-60-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The German 60% Rule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-the-solar-cap-rule-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the Solar Cap Rule Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#priority-rule-floor-overrides-caps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority Rule: Floor Overrides Caps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#limitations-and-warnings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations and Warnings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#charge-limit-and-minimum-charge-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Charge Limit and Minimum Charge Rate
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Charge Limit and Minimum Charge Rate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#interaction-with-the-minimum-charge-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interaction with the minimum charge rate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-peak-shaving-is-skipped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Peak Shaving is Skipped
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evcc-interaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        evcc Interaction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#home-assistant-auto-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant Auto-Discovery
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#self-correction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Correction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick-Start Examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../peak-shaving-scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving Scenarios
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../price-difference-calculation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Price Difference Calculation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mqtt-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/forecast-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forecast Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mqtt-inverter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/evcc-connection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    evcc Connection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/15-min-transform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15-Minute Interval Transformation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/solar-limit-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Feed-in Limit Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-peak-shaving" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Peak Shaving?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameter-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameter Reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mqtt-runtime-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT Runtime Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-allow_full_battery_after-target-hour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The allow_full_battery_after Target Hour
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rule-switches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rule Switches
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Rule Switches">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#time_active-target-time-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        time_active -- Target-Time Rule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#price_active-price-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        price_active -- Price Rule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#combining-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Combining Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#solar-feed-in-limit-solarspitzengesetz" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Solar Feed-in Limit (Solarspitzengesetz)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Solar Feed-in Limit (Solarspitzengesetz)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-german-60-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The German 60% Rule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-the-solar-cap-rule-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the Solar Cap Rule Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#priority-rule-floor-overrides-caps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority Rule: Floor Overrides Caps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#limitations-and-warnings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations and Warnings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#charge-limit-and-minimum-charge-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Charge Limit and Minimum Charge Rate
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Charge Limit and Minimum Charge Rate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#interaction-with-the-minimum-charge-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interaction with the minimum charge rate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-peak-shaving-is-skipped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Peak Shaving is Skipped
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evcc-interaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        evcc Interaction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#home-assistant-auto-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Home Assistant Auto-Discovery
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#self-correction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Correction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick-Start Examples
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/MaStr/batcontrol/edit/main/docs/features/peak-shaving.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="peak-shaving">Peak Shaving<a class="headerlink" href="#peak-shaving" title="Permanent link">&para;</a></h1>
+<h2 id="why-peak-shaving">Why Peak Shaving?<a class="headerlink" href="#why-peak-shaving" title="Permanent link">&para;</a></h2>
+<p>Most PV systems produce peak power around midday. Without any intervention the battery charges as fast as possible and is full well before the afternoon. Once the battery is full, all surplus PV energy is fed into the grid -- often at the lowest grid prices of the day. For newer installations feed-in compensation may be very small or zero, so this exported energy is essentially wasted.</p>
+<p>Peak shaving solves this by <strong>limiting the PV-to-battery charge rate</strong> so the battery fills gradually over the course of the day. The goal is to reach full capacity only by a configurable target hour (e.g. 14:00). This way the battery absorbs as much solar energy as possible and grid feed-in during midday peaks is minimised.</p>
+<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<p>The algorithm is in the status "experimental", which is the reason why it is only available in the logic type <code>next</code>. After collecting enough experience with that feature, it will move into <code>default</code> eventually.</p>
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
+<p>Peak shaving was introduced with 0.8.0 and is only available with the <strong><code>next</code> logic type</strong>. Set this in the <code>battery_control</code> section of your configuration:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">battery_control</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">next</span><span class="w">   </span><span class="c1"># Required -- 'default' does not include peak shaving</span>
+</code></pre></div>
+<p>The <code>default</code> logic type does not support peak shaving at all. Enabling peak shaving without switching to <code>next</code> has no effect.</p>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<p>Add a <code>peak_shaving</code> block at the <strong>top level</strong> of your configuration file (not nested under <code>battery_control</code>):</p>
+<div class="highlight"><pre><span></span><code><span class="nt">peak_shaving</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="nt">time_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">               </span><span class="c1"># target-time rule enabled</span>
+<span class="w">  </span><span class="nt">price_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">              </span><span class="c1"># price rule enabled</span>
+<span class="w">  </span><span class="nt">solar_cap_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">         </span><span class="c1"># solar feed-in limit rule (German Solarspitzengesetz)</span>
+<span class="w">  </span><span class="nt">allow_full_battery_after</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">14</span><span class="w">    </span><span class="c1"># Hour (0-23) -- battery should be full by this hour</span>
+<span class="w">  </span><span class="nt">price_limit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.05</span><span class="w">               </span><span class="c1"># Euro/kWh -- slots at or below this price are "cheap"</span>
+<span class="w">  </span><span class="nt">feed_in_limit_w</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w">              </span><span class="c1"># Watt -- feed-in power limit (0 = off); formula: 0.6 * kWp * 1000</span>
+<span class="w">  </span><span class="nt">feed_in_limit_headroom</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span><span class="w">     </span><span class="c1"># Safety factor &gt;= 1.0 (recommended 1.1 if underestimated)</span>
+</code></pre></div>
+<h3 id="parameter-reference">Parameter Reference<a class="headerlink" href="#parameter-reference" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Master switch for peak shaving</td>
+</tr>
+<tr>
+<td><code>time_active</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Enable target-time rule (spread charging until <code>allow_full_battery_after</code>)</td>
+</tr>
+<tr>
+<td><code>price_active</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Enable price rule (reserve capacity for cheap slots)</td>
+</tr>
+<tr>
+<td><code>solar_cap_active</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Enable solar feed-in limit rule (absorb PV above <code>feed_in_limit_w</code>)</td>
+</tr>
+<tr>
+<td><code>allow_full_battery_after</code></td>
+<td>int</td>
+<td><code>14</code></td>
+<td>Target hour (0-23) for the time rule</td>
+</tr>
+<tr>
+<td><code>price_limit</code></td>
+<td>float</td>
+<td>unset (<code>None</code>)</td>
+<td>Price threshold in Euro/kWh. The price rule only acts when a value is configured (e.g. <code>0.05</code>). Set <code>-1</code> to disable the price component explicitly.</td>
+</tr>
+<tr>
+<td><code>feed_in_limit_w</code></td>
+<td>int</td>
+<td><code>0</code></td>
+<td>Absolute feed-in power limit in watts (solar rule). Formula: <code>0.6 * kWp * 1000</code>. Set to <code>0</code> to disable.</td>
+</tr>
+<tr>
+<td><code>feed_in_limit_headroom</code></td>
+<td>float</td>
+<td><code>1.0</code></td>
+<td>Safety factor (&gt;= 1.0) on the forecast surplus (solar rule). Recommended: <code>1.1</code> if clipping is observed.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Deprecated:</strong> The old <code>mode</code> parameter (<code>time</code> / <code>price</code> / <code>combined</code>) is still accepted for backward compatibility and mapped to the switches at startup; a deprecation warning is logged. New configurations should use the switch-based design above.</p>
+<h3 id="mqtt-runtime-control">MQTT Runtime Control<a class="headerlink" href="#mqtt-runtime-control" title="Permanent link">&para;</a></h3>
+<p>The following parameters can be changed at runtime via MQTT without restarting batcontrol:</p>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Accepts</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{base}/peak_shaving/enabled/set</code></td>
+<td><code>true</code> / <code>false</code></td>
+<td>Enable or disable peak shaving</td>
+</tr>
+<tr>
+<td><code>{base}/peak_shaving/allow_full_battery_after/set</code></td>
+<td>int 0-23</td>
+<td>Change the target hour for the time rule</td>
+</tr>
+<tr>
+<td><code>{base}/peak_shaving/price_limit/set</code></td>
+<td>float</td>
+<td>Change the price threshold for the price rule</td>
+</tr>
+<tr>
+<td><code>{base}/peak_shaving/mode/set</code></td>
+<td><code>time</code> / <code>price</code> / <code>combined</code></td>
+<td>Deprecated: kept for backward compatibility, mapped onto <code>time_active</code>/<code>price_active</code></td>
+</tr>
+</tbody>
+</table>
+<p>The rule switches themselves (<code>time_active</code>, <code>price_active</code>, <code>solar_cap_active</code>) and the solar parameters (<code>feed_in_limit_w</code>, <code>feed_in_limit_headroom</code>) have no MQTT setters and require restarting batcontrol to take effect.</p>
+<p>Runtime changes are temporary and are not written back to the configuration file.</p>
+<h2 id="the-allow_full_battery_after-target-hour">The <code>allow_full_battery_after</code> Target Hour<a class="headerlink" href="#the-allow_full_battery_after-target-hour" title="Permanent link">&para;</a></h2>
+<p>This parameter controls when the battery is <strong>allowed</strong> to be 100% full:</p>
+<ul>
+<li><strong>Before this hour:</strong> the PV charge rate may be limited (depending on mode).</li>
+<li><strong>At or after this hour:</strong> no limit is applied -- the battery charges as fast as possible.</li>
+</ul>
+<p>The target hour applies globally to <strong>all three modes</strong>. Set it to the hour by which your PV system typically produces enough to fill the battery. For many Central European systems <code>14</code> (2 PM) is a good starting point; adjust based on your panel orientation and local conditions.</p>
+<h2 id="rule-switches">Rule Switches<a class="headerlink" href="#rule-switches" title="Permanent link">&para;</a></h2>
+<p>Peak shaving has three independent rules that can be enabled or disabled via the <code>time_active</code>, <code>price_active</code>, and <code>solar_cap_active</code> switches:</p>
+<h3 id="time_active-target-time-rule"><code>time_active</code> -- Target-Time Rule<a class="headerlink" href="#time_active-target-time-rule" title="Permanent link">&para;</a></h3>
+<p>Distributes the remaining free battery capacity evenly over the slots between now and <code>allow_full_battery_after</code>, using a <strong>counter-linear ramp</strong>. The allowed charge rate starts low and increases as the target hour approaches, which mirrors the typical PV generation curve that rises towards midday.</p>
+<p><strong>Formula:</strong></p>
+<div class="highlight"><pre><span></span><code>slots_remaining  = n  (slots until allow_full_battery_after)
+pv_surplus       = sum of max(production - consumption, 0) per remaining slot
+
+If pv_surplus &gt; free_capacity:
+    wh_current_slot = 2 * free_capacity / (n * (n + 1))
+    charge_limit    = wh_current_slot / interval_hours
+</code></pre></div>
+<p><strong>Example</strong> (free capacity = 2000 Wh, 1 h intervals):</p>
+<table>
+<thead>
+<tr>
+<th>Hours to target</th>
+<th>Allowed charge rate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>8</td>
+<td>55 W</td>
+</tr>
+<tr>
+<td>4</td>
+<td>200 W</td>
+</tr>
+<tr>
+<td>2</td>
+<td>666 W</td>
+</tr>
+<tr>
+<td>1</td>
+<td>2000 W (full rate)</td>
+</tr>
+</tbody>
+</table>
+<p>If the expected PV surplus does not exceed the free capacity, no limit is applied -- the battery can absorb everything anyway.</p>
+<h3 id="price_active-price-rule"><code>price_active</code> -- Price Rule<a class="headerlink" href="#price_active-price-rule" title="Permanent link">&para;</a></h3>
+<p>Reserves free battery capacity for upcoming <strong>cheap-price</strong> slots where PV is still producing. A slot is "cheap" when its price is at or below <code>price_limit</code>. Requires a <code>price_limit</code> value (use <code>-1</code> to disable without changing the switch).</p>
+<p>Only slots within the <strong>production window</strong> are considered. The production window ends at the first forecast slot where PV production is zero. This prevents reserving capacity for a cheap slot at e.g. 03:00 that would never produce any solar energy.</p>
+<p><strong>Before the cheap window:</strong>
+1. Sum the expected PV surplus during cheap slots to get the target reserve.
+2. Calculate how much additional charging is allowed: <code>additional_allowed = free_capacity - target_reserve</code>.
+3. If <code>additional_allowed &lt;= 0</code>: block PV charging entirely (rate = 0).
+4. Otherwise: spread <code>additional_allowed</code> evenly over the slots before the cheap window.</p>
+<p><strong>Inside the cheap window:</strong>
+- If total PV surplus during cheap slots exceeds free capacity, spread <code>free_capacity</code> evenly over cheap slots so the battery fills gradually.
+- If surplus fits in free capacity, no limit is applied.</p>
+<h3 id="combining-rules">Combining Rules<a class="headerlink" href="#combining-rules" title="Permanent link">&para;</a></h3>
+<p>When multiple rules are active, the <strong>strictest (lowest non-negative) limit wins</strong>. For example, if the time rule suggests 500 W and the price rule suggests 300 W, the applied limit is 300 W. This conservative approach prioritizes the rules in combination rather than overriding each other.</p>
+<p><strong>Backward compatibility:</strong> the old <code>mode</code> parameter (<code>time</code> / <code>price</code> / <code>combined</code>) is still accepted and mapped to the switches at startup:
+- <code>mode: time</code> → <code>time_active: true</code>, <code>price_active: false</code>
+- <code>mode: price</code> → <code>time_active: false</code>, <code>price_active: true</code>
+- <code>mode: combined</code> → <code>time_active: true</code>, <code>price_active: true</code></p>
+<p>New configurations should use the switch-based design.</p>
+<h2 id="solar-feed-in-limit-solarspitzengesetz">Solar Feed-in Limit (Solarspitzengesetz)<a class="headerlink" href="#solar-feed-in-limit-solarspitzengesetz" title="Permanent link">&para;</a></h2>
+<h3 id="the-german-60-rule">The German 60% Rule<a class="headerlink" href="#the-german-60-rule" title="Permanent link">&para;</a></h3>
+<p>The German "Solarspitzengesetz" (in force since 2025-02-25) limits uncontrolled PV plants to feeding at most <strong>60% of their installed power</strong> into the grid. The inverter enforces this limit hard: production above it is <strong>curtailed and lost</strong>, unless self-consumed or charged into the battery.</p>
+<p>For a 10 kWp plant this means at most 6,000 W of feed-in. On a clear summer day peaking at ~8.9 kW, several hours sit above the limit; without countermeasures about 7.5 kWh of energy are lost just on clipping.</p>
+<p><img alt="Clipping problem: power above the feed-in limit is curtailed and lost" src="../../assets/solar_limit_clipping.png" /></p>
+<h3 id="how-the-solar-cap-rule-works">How the Solar Cap Rule Works<a class="headerlink" href="#how-the-solar-cap-rule-works" title="Permanent link">&para;</a></h3>
+<p>The <code>solar_cap_active</code> rule reserves battery capacity <em>before</em> the predicted clipping window so it can absorb the excess power during the peak. Inside the clipping window, it enforces a minimum charge rate (the "floor") equal to the predicted clip power, allowing the battery to absorb power that would otherwise be curtailed.</p>
+<p>The rule works in two phases:</p>
+<p><strong>Before clipping starts (reservation):</strong> free battery capacity minus the predicted total clip energy is spread evenly. If the required reserve exceeds free capacity, PV charging is blocked entirely (cap 0). This prevents normal PV power from displacing clip power in the battery.</p>
+<p><strong>During clipping (floor + absorption):</strong> the battery is required to accept at least the power above the feed-in limit. If free capacity is scarce, the cap equals the floor (absorb <em>only</em> clip power, grid feed-in at the limit) -- but see the <a href="#interaction-with-the-minimum-charge-rate">minimum charge rate interaction</a> below, which partly defeats this at the edges of the clip window. Otherwise, the battery can absorb additional surplus below the limit.</p>
+<p><img alt="The solar_cap rule: reservation cap, floor, and SoC comparison" src="../../assets/solar_limit_algorithm.png" /></p>
+<h3 id="configuration_1">Configuration<a class="headerlink" href="#configuration_1" title="Permanent link">&para;</a></h3>
+<p>Enable the rule via <code>solar_cap_active: true</code> and set the feed-in limit:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>solar_cap_active</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Enable the solar feed-in limit rule</td>
+</tr>
+<tr>
+<td><code>feed_in_limit_w</code></td>
+<td>int</td>
+<td><code>0</code></td>
+<td>Absolute grid feed-in power limit in watts. Formula: <code>0.6 * kWp * 1000</code> (e.g., 6000 W for a 10 kWp plant). Set to <code>0</code> to disable.</td>
+</tr>
+<tr>
+<td><code>feed_in_limit_headroom</code></td>
+<td>float</td>
+<td><code>1.0</code></td>
+<td>Safety factor &gt;= 1.0 applied to the forecast surplus before computing clip energy. Default <code>1.0</code> (neutral, no safety margin); <strong>recommended 1.1</strong> if your solar forecast systematically underestimates production on clear days and you observe curtailment losses.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Headroom trade-off:</strong> solar forecasts often underestimate midday peaks on clear days. The headroom reconstructs the likely real production curve so reservation and floor are sized correctly. Too low a value leaves clip energy on the table; too high a value wastes capacity on non-clipping days or displaces clip energy on capacity-scarce clipping days. Default <code>1.0</code> is lossless with a perfect forecast; <code>1.1</code> is the robust compromise and is recommended if you observe losses.</p>
+<h3 id="priority-rule-floor-overrides-caps">Priority Rule: Floor Overrides Caps<a class="headerlink" href="#priority-rule-floor-overrides-caps" title="Permanent link">&para;</a></h3>
+<p>When the solar rule is active alongside other peak-shaving rules, the final charge limit is computed as:</p>
+<div class="highlight"><pre><span></span><code>final_limit = max(solar_floor, min(all_caps))
+</code></pre></div>
+<p>In words: if the solar floor (minimum charge rate needed to absorb clipped power) is higher than the strictest cap from the time or price rules, the floor wins. This is because clipped energy is <strong>physically lost</strong> and outweighs economic optimization.</p>
+<p><strong>Consequence:</strong> the solar floor also applies <strong>after</strong> the <code>allow_full_battery_after</code> target hour and at high battery state-of-charge, so the battery may reach 100% later than the target hour on clipping days. A late-full battery weighs less than lost energy.</p>
+<h3 id="limitations-and-warnings">Limitations and Warnings<a class="headerlink" href="#limitations-and-warnings" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Solar forecast sensitivity:</strong> the rule relies on production forecasts, which may underestimate peak production on clear days. The <code>feed_in_limit_headroom</code> parameter mitigates this, but a live measurement of current production would be more accurate.</li>
+<li><strong>Inverter max charge rate:</strong> if your inverter's <code>max_pv_charge_rate</code> is below the predicted clip power, some curtailment is physically unavoidable. Batcontrol logs a startup warning when this condition is detected.</li>
+<li><strong>Minimum charge rate eats the reserve:</strong> at the start and end of the clip window the floor is small, and the 500 W minimum charge rate overrides it. See the section below.</li>
+</ul>
+<p>For a detailed evaluation of the algorithm including simulation results and sensitivity analysis, see <a href="../../development/solar-limit-evaluation/">Solar Limit Evaluation</a>.</p>
+<h2 id="charge-limit-and-minimum-charge-rate">Charge Limit and Minimum Charge Rate<a class="headerlink" href="#charge-limit-and-minimum-charge-rate" title="Permanent link">&para;</a></h2>
+<p>The calculated charge limit is applied via <strong>Mode 8</strong> (<code>LIMIT_BATTERY_CHARGE_RATE</code>). In this mode the inverter caps PV-to-battery charging at the given wattage while still allowing the battery to discharge normally.</p>
+<p>A minimum charge rate of <strong>500 W</strong> is enforced: any computed limit between 1 W and 499 W is raised to 500 W to avoid inefficient low-power charging. A limit of exactly <strong>0 W</strong> (block charging completely) is kept as-is and is not raised.</p>
+<h3 id="interaction-with-the-minimum-charge-rate">Interaction with the minimum charge rate<a class="headerlink" href="#interaction-with-the-minimum-charge-rate" title="Permanent link">&para;</a></h3>
+<p>The minimum charge rate is applied <em>after</em> the rules have been merged, so it can override a deliberately low limit. This matters most for the solar cap rule when free capacity is scarce and the cap has been set equal to the floor.</p>
+<p>At the edges of the clip window the excess over the feed-in limit is only a few dozen watts. The rule therefore asks for a correspondingly small charge rate, but the 500 W minimum raises it -- and the battery consumes capacity that was reserved for the peak.</p>
+<p>The example day on the <a href="../peak-shaving-scenarios/">scenarios page</a> shows the effect for the "Solar cap only" configuration:</p>
+<table>
+<thead>
+<tr>
+<th>Slot</th>
+<th>Floor asked for</th>
+<th>Actually charged</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>11:45</td>
+<td>54 W</td>
+<td>500 W</td>
+</tr>
+<tr>
+<td>12:00</td>
+<td>243 W</td>
+<td>500 W</td>
+</tr>
+<tr>
+<td>12:15</td>
+<td>396 W</td>
+<td>500 W</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code>clip energy in those three slots : 173 Wh   (what the rule intended)
+actually charged at 500 W        : 375 Wh
+excess                           : 202 Wh
+</code></pre></div>
+<p>Those 202 Wh are missing later: the battery reaches 100 % at 13:30, just before the production peak, and the remaining excess is curtailed. On that day the solar cap rule alone therefore loses about 0.2 kWh -- slightly more than the time based rule, which holds the battery back far longer.</p>
+<div class="admonition tip">
+<p class="admonition-title">Practical consequence</p>
+<p>Do not run <code>solar_cap_active</code> on its own if your battery tends to be nearly
+full when clipping starts. Combined with <code>time_active</code> the battery still
+has room at the beginning of the clip window, the floor stays above 500 W
+where it matters, and the example day reaches zero curtailment.</p>
+</div>
+<p>This is a genuine trade-off rather than a clear defect: the 500 W minimum exists because charging a battery at 54 W is inefficient. It is tracked in <a href="https://github.com/MaStr/batcontrol/issues/409">issue #409</a>.</p>
+<p>The charge limit is published via MQTT:</p>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Type</th>
+<th>Retained</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{base}/peak_shaving/charge_limit</code></td>
+<td>int</td>
+<td>No</td>
+<td>Current charge limit in W (-1 = inactive / no limit)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="when-peak-shaving-is-skipped">When Peak Shaving is Skipped<a class="headerlink" href="#when-peak-shaving-is-skipped" title="Permanent link">&para;</a></h2>
+<p>Peak shaving cap rules (time and price) are automatically bypassed in the following situations. However, <strong>the solar floor always applies during predicted clipping</strong> even after <code>allow_full_battery_after</code> and in the high-SOC region, because clipped energy is physically lost:</p>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Time/Price Caps</th>
+<th>Solar Floor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No PV production (nighttime)</td>
+<td>Bypassed</td>
+<td>Not applied</td>
+</tr>
+<tr>
+<td>Past <code>allow_full_battery_after</code> hour</td>
+<td>Bypassed</td>
+<td>Still applies (if clipping predicted)</td>
+</tr>
+<tr>
+<td>Battery in <code>always_allow_discharge</code> region (high SOC)</td>
+<td>Bypassed</td>
+<td>Still applies (if clipping predicted)</td>
+</tr>
+<tr>
+<td>Force-charge from grid active (Mode -1)</td>
+<td>Bypassed</td>
+<td>Not applied</td>
+</tr>
+<tr>
+<td>Discharge not allowed (battery preserved)</td>
+<td>Bypassed</td>
+<td>Not applied (no charge cap is active in this state, the inverter charges all surplus anyway)</td>
+</tr>
+<tr>
+<td>evcc is actively charging the EV</td>
+<td>Bypassed</td>
+<td>Not applied</td>
+</tr>
+<tr>
+<td>EV connected in PV mode (evcc)</td>
+<td>Bypassed</td>
+<td>Not applied</td>
+</tr>
+<tr>
+<td><code>price_limit</code> not configured</td>
+<td>Price rule inactive</td>
+<td>Not affected</td>
+</tr>
+</tbody>
+</table>
+<h2 id="evcc-interaction">evcc Interaction<a class="headerlink" href="#evcc-interaction" title="Permanent link">&para;</a></h2>
+<p>When an EV charger is managed by <a href="../../integrations/evcc-connection/">evcc</a>:</p>
+<ul>
+<li><strong>EV actively charging</strong> (<code>charging=true</code>): peak shaving is disabled because the EV is already consuming excess PV energy.</li>
+<li><strong>EV connected in PV mode</strong> (<code>connected=true</code> AND <code>mode=pv</code>): peak shaving is disabled because evcc will naturally absorb surplus PV once its threshold is reached.</li>
+<li><strong>EV disconnects or mode changes</strong>: peak shaving is automatically re-enabled.</li>
+</ul>
+<h2 id="home-assistant-auto-discovery">Home Assistant Auto-Discovery<a class="headerlink" href="#home-assistant-auto-discovery" title="Permanent link">&para;</a></h2>
+<p>When MQTT auto-discovery is enabled, the following Home Assistant entities are created automatically:</p>
+<table>
+<thead>
+<tr>
+<th>Entity</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Peak Shaving Enabled</td>
+<td>Switch</td>
+<td>Enable/disable peak shaving</td>
+</tr>
+<tr>
+<td>Peak Shaving Allow Full After</td>
+<td>Number (0-23)</td>
+<td>Set the target hour</td>
+</tr>
+<tr>
+<td>Peak Shaving Charge Limit</td>
+<td>Sensor (W)</td>
+<td>Current calculated charge limit</td>
+</tr>
+</tbody>
+</table>
+<h2 id="self-correction">Self-Correction<a class="headerlink" href="#self-correction" title="Permanent link">&para;</a></h2>
+<p>The charge limit is recalculated every evaluation cycle (typically every 3 minutes). If clouds reduce PV production significantly, the free capacity stays higher at the next cycle and the counter-linear ramp automatically produces a higher allowed rate. This means the system self-corrects without manual intervention, though there is no intra-cycle adjustment.</p>
+<h2 id="quick-start-examples">Quick-Start Examples<a class="headerlink" href="#quick-start-examples" title="Permanent link">&para;</a></h2>
+<p><strong>Simple time-based setup</strong> -- spread charging until 14:00, no price or solar awareness:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">battery_control</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">next</span>
+
+<span class="nt">peak_shaving</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">time_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">price_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="nt">solar_cap_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="nt">allow_full_battery_after</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">14</span>
+</code></pre></div>
+<p><strong>Price-aware combined setup</strong> -- reserve capacity for cheap slots below 5 ct/kWh:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">battery_control</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">next</span>
+
+<span class="nt">peak_shaving</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">time_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">price_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">solar_cap_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="nt">allow_full_battery_after</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">14</span>
+<span class="w">  </span><span class="nt">price_limit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.05</span>
+</code></pre></div>
+<p><strong>With solar feed-in limit</strong> -- add clipping absorption for a 10 kWp plant (6000 W limit):</p>
+<div class="highlight"><pre><span></span><code><span class="nt">battery_control</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">next</span>
+
+<span class="nt">peak_shaving</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">time_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">price_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">solar_cap_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">allow_full_battery_after</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">14</span>
+<span class="w">  </span><span class="nt">price_limit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.05</span>
+<span class="w">  </span><span class="nt">feed_in_limit_w</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6000</span>
+<span class="w">  </span><span class="nt">feed_in_limit_headroom</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.1</span>
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../battery-control-expert/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Battery Control Expert">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Battery Control Expert
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../peak-shaving-scenarios/" class="md-footer__link md-footer__link--next" aria-label="Next: Peak Shaving Scenarios">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Peak Shaving Scenarios
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../assets/js/vendor/chart.umd.js"></script>
+      
+        <script src="../../assets/js/peak-shaving-charts.js"></script>
+      
+    
+  </body>
+</html>

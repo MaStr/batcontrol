@@ -1,0 +1,2712 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Optimize your electricity costs by re-charging your PV battery when electricity is cheap and there is not enough solar power available.">
+      
+      
+      
+        <link rel="canonical" href="https://mastr.github.io/batcontrol/configuration/consumption-forecast/">
+      
+      
+        <link rel="prev" href="../solar-forecast/">
+      
+      
+        <link rel="next" href="../../features/battery-control-expert/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Consumption Forecast - Batcontrol Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/css/peak-shaving-charts.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#consumption-forecast" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Batcontrol Documentation" class="md-header__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Batcontrol Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Consumption Forecast
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Batcontrol Documentation" class="md-nav__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    Batcontrol Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/how-batcontrol-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Batcontrol Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../batcontrol-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Main Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inverter-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dynamic-tariff-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Tariff Provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../solar-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Consumption Forecast
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Consumption Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#available-forecast-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Available Forecast Providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-csv-based-forecast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. CSV-Based Forecast
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. CSV-Based Forecast">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration-since-050" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration (Since 0.5.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-before-050" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration (Before 0.5.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#csv-file-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CSV File Format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-csv-entry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example CSV Entry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-csv-scaling-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How CSV Scaling Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#default-load-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default Load Profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-homeassistant-api-based-forecast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. HomeAssistant API-Based Forecast
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. HomeAssistant API-Based Forecast">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#getting-a-homeassistant-access-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting a HomeAssistant Access Token
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sensor-unit-configuration-since-057" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sensor Unit Configuration (Since 0.5.7)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#entity-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Entity Requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-sensor-configuration-using-sunspec-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Sensor Configuration Using SunSpec Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-history-weights-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How History Weights Work
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiplier-for-forecast-adjustment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiplier for Forecast Adjustment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#caching-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caching Behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#websocket-communication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WebSocket Communication
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-your-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing Your Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing Your Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Script
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#csv-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CSV Method
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#homeassistant-api-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HomeAssistant API Method
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-csv-vs-homeassistant-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison: CSV vs. HomeAssistant API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommendations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Tips
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Tips">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#seasonal-adjustments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Seasonal Adjustments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiple-consumption-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple Consumption Points
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debugging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-configurations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Configurations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Example Configurations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-1-simple-setup-csv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 1: Simple Setup (CSV)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-2-homeassistant-with-equal-weights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 2: HomeAssistant with Equal Weights
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-3-homeassistant-with-explicit-unit-recommended-for-large-installations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 3: HomeAssistant with Explicit Unit (Recommended for Large Installations)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-4-short-term-dynamic-forecast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 4: Short-term Dynamic Forecast
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/battery-control-expert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Battery Control Expert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving-scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving Scenarios
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/price-difference-calculation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Price Difference Calculation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mqtt-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/forecast-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forecast Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mqtt-inverter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/evcc-connection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    evcc Connection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/15-min-transform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15-Minute Interval Transformation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/solar-limit-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Feed-in Limit Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#available-forecast-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Available Forecast Providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-csv-based-forecast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. CSV-Based Forecast
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. CSV-Based Forecast">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration-since-050" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration (Since 0.5.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-before-050" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration (Before 0.5.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#csv-file-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CSV File Format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-csv-entry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example CSV Entry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-csv-scaling-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How CSV Scaling Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#default-load-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default Load Profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-homeassistant-api-based-forecast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. HomeAssistant API-Based Forecast
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. HomeAssistant API-Based Forecast">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#getting-a-homeassistant-access-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting a HomeAssistant Access Token
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sensor-unit-configuration-since-057" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sensor Unit Configuration (Since 0.5.7)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#entity-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Entity Requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-sensor-configuration-using-sunspec-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Sensor Configuration Using SunSpec Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-history-weights-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How History Weights Work
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiplier-for-forecast-adjustment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiplier for Forecast Adjustment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#caching-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caching Behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#websocket-communication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WebSocket Communication
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-your-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing Your Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing Your Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Script
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#csv-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CSV Method
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#homeassistant-api-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HomeAssistant API Method
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-csv-vs-homeassistant-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison: CSV vs. HomeAssistant API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommendations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Tips
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Tips">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#seasonal-adjustments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Seasonal Adjustments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiple-consumption-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple Consumption Points
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debugging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-configurations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Configurations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Example Configurations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-1-simple-setup-csv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 1: Simple Setup (CSV)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-2-homeassistant-with-equal-weights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 2: HomeAssistant with Equal Weights
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-3-homeassistant-with-explicit-unit-recommended-for-large-installations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 3: HomeAssistant with Explicit Unit (Recommended for Large Installations)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-4-short-term-dynamic-forecast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 4: Short-term Dynamic Forecast
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/MaStr/batcontrol/edit/main/docs/configuration/consumption-forecast.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="consumption-forecast">Consumption Forecast<a class="headerlink" href="#consumption-forecast" title="Permanent link">&para;</a></h1>
+<p>Batcontrol uses consumption forecasting to predict your household's energy usage for optimal battery management. This helps the system make smart decisions about when to charge or discharge your battery based on expected consumption patterns.</p>
+<h2 id="available-forecast-providers">Available Forecast Providers<a class="headerlink" href="#available-forecast-providers" title="Permanent link">&para;</a></h2>
+<p>Batcontrol supports two methods for consumption forecasting:</p>
+<ol>
+<li><strong>CSV</strong> - Static load profile based on typical consumption patterns</li>
+<li><strong>HomeAssistant API</strong> - (Since 0.5.4) Dynamic forecast based on your actual historical consumption data</li>
+</ol>
+<hr />
+<h2 id="1-csv-based-forecast">1. CSV-Based Forecast<a class="headerlink" href="#1-csv-based-forecast" title="Permanent link">&para;</a></h2>
+<p>The CSV method uses a predefined load profile file with typical consumption patterns. This is the default and simplest option.</p>
+<h3 id="configuration-since-050">Configuration (Since 0.5.0)<a class="headerlink" href="#configuration-since-050" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">consumption_forecast</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">csv</span>
+<span class="w">  </span><span class="nt">csv</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">annual_consumption</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4500</span><span class="w"> </span><span class="c1"># Total consumption in kWh per year</span>
+<span class="w">    </span><span class="nt">load_profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">load_profile.csv</span><span class="w"> </span><span class="c1"># Name of the load profile file in config folder</span>
+</code></pre></div>
+<h3 id="configuration-before-050">Configuration (Before 0.5.0)<a class="headerlink" href="#configuration-before-050" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">consumption_forecast</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">annual_consumption</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4500</span><span class="w"> </span><span class="c1"># Total consumption in kWh per year</span>
+<span class="w">    </span><span class="nt">load_profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">load_profile.csv</span><span class="w"> </span><span class="c1"># Name of the load profile file in config folder</span>
+</code></pre></div>
+<h3 id="csv-file-format">CSV File Format<a class="headerlink" href="#csv-file-format" title="Permanent link">&para;</a></h3>
+<p>The CSV file must be placed in the <code>config/</code> folder and contain the following fields:</p>
+<div class="highlight"><pre><span></span><code>month,weekday,hour,energy
+</code></pre></div>
+<p><strong>Field Definitions:</strong>
+- <code>month</code>: 1-12 (January = 1, December = 12)
+- <code>weekday</code>: 0-6 (Monday = 0, Sunday = 6)
+- <code>hour</code>: 0-23 (midnight = 0, 11 PM = 23)
+- <code>energy</code>: Consumption in Wh (Watt-hours)</p>
+<h3 id="example-csv-entry">Example CSV Entry<a class="headerlink" href="#example-csv-entry" title="Permanent link">&para;</a></h3>
+<p><div class="highlight"><pre><span></span><code>1,0,8,350
+</code></pre></div>
+This means: In January, on Monday, at 8 AM, the consumption is 350 Wh.</p>
+<h3 id="how-csv-scaling-works">How CSV Scaling Works<a class="headerlink" href="#how-csv-scaling-works" title="Permanent link">&para;</a></h3>
+<p>When batcontrol loads the CSV profile, it:</p>
+<ol>
+<li>Calculates the total annual consumption from the load profile</li>
+<li>Compares it to your configured <code>annual_consumption</code></li>
+<li>Scales all hourly values proportionally to match your actual consumption</li>
+</ol>
+<p><strong>Example log output:</strong>
+<div class="highlight"><pre><span></span><code>INFO [FC Cons] The annual consumption of the applied load profile is 3225.29 kWh
+INFO [FC Cons] The hourly values from the load profile are scaled with a factor of 1.40 to match the annual consumption of 4500 kWh
+</code></pre></div></p>
+<h3 id="default-load-profile">Default Load Profile<a class="headerlink" href="#default-load-profile" title="Permanent link">&para;</a></h3>
+<p>If no load profile is specified, batcontrol uses <code>default_load_profile.csv</code> as a fallback.</p>
+<hr />
+<h2 id="2-homeassistant-api-based-forecast">2. HomeAssistant API-Based Forecast<a class="headerlink" href="#2-homeassistant-api-based-forecast" title="Permanent link">&para;</a></h2>
+<p>The HomeAssistant API method provides <strong>dynamic consumption forecasting</strong> based on your actual historical consumption data. This is the most accurate method as it learns from your real usage patterns.</p>
+<h3 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Connects to HomeAssistant</strong> via WebSocket API</li>
+<li><strong>Fetches historical data</strong> from configured time periods (e.g., last 7, 14, 21 days)</li>
+<li><strong>Calculates weighted averages</strong> for each hour of the week</li>
+<li><strong>Generates forecasts</strong> for up to 48 hours ahead</li>
+<li><strong>Caches results</strong> to minimize API calls</li>
+</ol>
+<h3 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h3>
+<ul>
+<li>HomeAssistant instance accessible from batcontrol</li>
+<li>Long-term statistics enabled for your consumption sensor</li>
+<li>HomeAssistant Long-Lived Access Token</li>
+</ul>
+<h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">consumption_forecast</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">homeassistant-api</span>
+<span class="w">  </span><span class="nt">homeassistant_api</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws://homeassistant.local:8123</span><span class="w">   </span><span class="c1"># Your HomeAssistant URL</span>
+<span class="w">    </span><span class="nt">apitoken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_LONG_LIVED_ACCESS_TOKEN</span><span class="w">     </span><span class="c1"># Long-Lived Access Token</span>
+<span class="w">    </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor.energy_consumption</span><span class="w">        </span><span class="c1"># Entity ID with consumption data</span>
+<span class="w">    </span><span class="nt">sensor_unit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span><span class="w">                           </span><span class="c1"># Options: 'auto', 'Wh', or 'kWh' (since 0.5.7)</span>
+<span class="w">    </span><span class="nt">history_days</span><span class="p">:</span><span class="w"> </span><span class="s">"-7;-14;-21"</span><span class="w">               </span><span class="c1"># Days to look back (negative values)</span>
+<span class="w">    </span><span class="nt">history_weights</span><span class="p">:</span><span class="w"> </span><span class="s">"1;1;1"</span><span class="w">                 </span><span class="c1"># Weight for each history period (1-10)</span>
+<span class="w">    </span><span class="nt">cache_ttl_hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">48.0</span><span class="w">                      </span><span class="c1"># Cache duration in hours</span>
+<span class="w">    </span><span class="nt">multiplier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span><span class="w">                             </span><span class="c1"># Forecast adjustment multiplier</span>
+</code></pre></div>
+<h3 id="configuration-parameters">Configuration Parameters<a class="headerlink" href="#configuration-parameters" title="Permanent link">&para;</a></h3>
+<h4 id="required-parameters">Required Parameters<a class="headerlink" href="#required-parameters" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base_url</code></td>
+<td>HomeAssistant URL (ws is correct)</td>
+<td><code>ws://homeassistant.local:8123</code></td>
+</tr>
+<tr>
+<td><code>apitoken</code></td>
+<td>Long-Lived Access Token from HomeAssistant</td>
+<td><code>eyJ0eXAiOiJKV1Qi...</code></td>
+</tr>
+<tr>
+<td><code>entity_id</code></td>
+<td>Entity ID tracking consumption (must have long-term statistics)</td>
+<td><code>sensor.energy_consumption</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="optional-parameters">Optional Parameters<a class="headerlink" href="#optional-parameters" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sensor_unit</code></td>
+<td><code>auto</code></td>
+<td><strong>Since 0.5.7</strong>: Sensor unit configuration. Options: <code>'auto'</code> (auto-detect), <code>'Wh'</code>, or <code>'kWh'</code>. Set to <code>'Wh'</code> or <code>'kWh'</code> to skip auto-detection (faster startup, recommended for large HA installations).</td>
+</tr>
+<tr>
+<td><code>history_days</code></td>
+<td><code>"-7;-14;-21"</code></td>
+<td>List of day offsets to fetch historical data. Negative values = days in the past.</td>
+</tr>
+<tr>
+<td><code>history_weights</code></td>
+<td><code>"1;1;1"</code></td>
+<td>Weight for each history period (1-10). Higher = more influence. Must match length of <code>history_days</code>.</td>
+</tr>
+<tr>
+<td><code>cache_ttl_hours</code></td>
+<td><code>48.0</code></td>
+<td>How long to cache computed statistics (in hours)</td>
+</tr>
+<tr>
+<td><code>multiplier</code></td>
+<td><code>1.0</code></td>
+<td>Global multiplier for all forecast values. Use <code>1.1</code> for +10%, <code>0.9</code> for -10%</td>
+</tr>
+</tbody>
+</table>
+<h3 id="getting-a-homeassistant-access-token">Getting a HomeAssistant Access Token<a class="headerlink" href="#getting-a-homeassistant-access-token" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Open HomeAssistant web interface</li>
+<li>Click on your profile (bottom left)</li>
+<li>Scroll down to <strong>"Long-Lived Access Tokens"</strong></li>
+<li>Click <strong>"Create Token"</strong></li>
+<li>Give it a name (e.g., "Batcontrol")</li>
+<li>Copy the token (you won't be able to see it again!)</li>
+</ol>
+<h3 id="sensor-unit-configuration-since-057">Sensor Unit Configuration (Since 0.5.7)<a class="headerlink" href="#sensor-unit-configuration-since-057" title="Permanent link">&para;</a></h3>
+<p>The <code>sensor_unit</code> parameter controls how batcontrol detects the unit of measurement for your consumption sensor.</p>
+<p><strong>Options:</strong>
+- <code>auto</code> (default) - Automatically detect unit by querying HomeAssistant
+- <code>Wh</code> - Sensor reports in Watt-hours (no conversion needed)
+- <code>kWh</code> - Sensor reports in Kilowatt-hours (values multiplied by 1000)</p>
+<p><strong>When to use explicit configuration (<code>Wh</code> or <code>kWh</code>):</strong>
+- <strong>Large HomeAssistant installations</strong> with many entities (faster startup, avoids "message too big" errors)
+- <strong>Performance optimization</strong> - skips the auto-detection query on every startup
+- <strong>Consistent behavior</strong> - eliminates the need to fetch all entity states</p>
+<p><strong>How to check your sensor's unit:</strong>
+1. Open HomeAssistant → Developer Tools → States
+2. Find your entity (e.g., <code>sensor.energy_consumption</code>)
+3. Check the <code>unit_of_measurement</code> attribute
+4. Set <code>sensor_unit</code> accordingly in your configuration</p>
+<p><strong>Example:</strong>
+<div class="highlight"><pre><span></span><code><span class="nt">consumption_forecast</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">homeassistant-api</span>
+<span class="w">  </span><span class="nt">homeassistant_api</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws://homeassistant.local:8123</span>
+<span class="w">    </span><span class="nt">apitoken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_TOKEN</span>
+<span class="w">    </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor.energy_consumption</span>
+<span class="w">    </span><span class="nt">sensor_unit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kWh</span><span class="w">  </span><span class="c1"># Explicit configuration - faster startup!</span>
+</code></pre></div></p>
+<p><strong>Note:</strong> If you're unsure, leave it as <code>auto</code> (default). Batcontrol will automatically detect the correct unit.</p>
+<h3 id="entity-requirements">Entity Requirements<a class="headerlink" href="#entity-requirements" title="Permanent link">&para;</a></h3>
+<p>The entity you specify must:
+- Be a <strong>sensor</strong> entity
+- Track <strong>cumulative energy consumption</strong> (in Wh)
+- Have <strong>long-term statistics enabled</strong>
+- Provide <strong>hourly statistics</strong> via the HomeAssistant recorder</p>
+<p><strong>Good entity examples:</strong>
+- <code>sensor.energy_consumption</code>
+- <code>sensor.house_energy_total</code>
+- <code>sensor.grid_import_total</code></p>
+<p><strong>Not suitable:</strong>
+- Instantaneous power sensors (W)
+- Entities without statistics
+- Non-energy entities</p>
+<h3 id="example-sensor-configuration-using-sunspec-integration">Example Sensor Configuration Using SunSpec Integration<a class="headerlink" href="#example-sensor-configuration-using-sunspec-integration" title="Permanent link">&para;</a></h3>
+<ul>
+<li>install SunSpec via HACS and configure with the IP from your inverter (see the SunSpec documentation if further informations are needed)</li>
+<li>Create a template helper as sensor: Settings -&gt; Devices &amp; Services -&gt; Helper -&gt; Create helper -&gt; Template -&gt; Sensor</li>
+<li>Name: e.g. <code>sensor.energy_consumption</code> or <code>sensor.house_energy_total</code></li>
+<li>State:</li>
+</ul>
+<p><div class="highlight"><pre><span></span><code><span class="p p-Indicator">{{</span>
+<span class="nv">states('sensor.smartmeter_ac_meter_total_watt_hours_imported') | float -</span>
+<span class="nv">states('sensor.smartmeter_ac_meter_total_watt_hours_exported') | float +</span><span class="w"> </span>
+<span class="nv">(states('sensor.inverter_mppt_module_0_lifetime_energy') | float +</span><span class="w"> </span>
+<span class="nv">states('sensor.inverter_mppt_module_1_lifetime_energy') | float +</span><span class="w"> </span>
+<span class="nv">states('sensor.inverter_mppt_module_3_lifetime_energy') | float -</span><span class="w"> </span>
+<span class="nv">states('sensor.inverter_mppt_module_2_lifetime_energy') | float)</span>
+<span class="p p-Indicator">}}</span>
+</code></pre></div>
+- Unit of measurement: <code>kWh</code>
+- Device class: <code>Energy</code>
+- State class: <code>Total</code></p>
+<h3 id="how-history-weights-work">How History Weights Work<a class="headerlink" href="#how-history-weights-work" title="Permanent link">&para;</a></h3>
+<p>The <code>history_weights</code> parameter allows you to give more importance to recent data vs. older data.</p>
+<p><strong>Example 1: Equal weighting</strong>
+<div class="highlight"><pre><span></span><code><span class="nt">history_days</span><span class="p">:</span><span class="w"> </span><span class="s">"-7;-14;-21"</span>
+<span class="nt">history_weights</span><span class="p">:</span><span class="w"> </span><span class="s">"1;1;1"</span>
+</code></pre></div>
+All three weeks have equal influence (33.3% each).</p>
+<p><strong>Example 2: Recent data preferred</strong>
+<div class="highlight"><pre><span></span><code><span class="nt">history_days</span><span class="p">:</span><span class="w"> </span><span class="s">"-7;-14;-21"</span>
+<span class="nt">history_weights</span><span class="p">:</span><span class="w"> </span><span class="s">"3;2;1"</span>
+</code></pre></div>
+- Last week: 50% influence (3/6)
+- Two weeks ago: 33% influence (2/6)
+- Three weeks ago: 17% influence (1/6)</p>
+<p><strong>Example 3: Short-term forecast</strong>
+<div class="highlight"><pre><span></span><code><span class="nt">history_days</span><span class="p">:</span><span class="w"> </span><span class="s">"-1;-2;-3"</span>
+<span class="nt">history_weights</span><span class="p">:</span><span class="w"> </span><span class="s">"3;2;1"</span>
+</code></pre></div>
+Uses only the last 3 days for very dynamic forecasting.</p>
+<h3 id="multiplier-for-forecast-adjustment">Multiplier for Forecast Adjustment<a class="headerlink" href="#multiplier-for-forecast-adjustment" title="Permanent link">&para;</a></h3>
+<p>The <code>multiplier</code> parameter allows you to globally adjust all forecast values:</p>
+<ul>
+<li><code>1.0</code> = No adjustment (default)</li>
+<li><code>1.1</code> = Increase forecast by 10%</li>
+<li><code>0.9</code> = Decrease forecast by 10%</li>
+<li><code>1.2</code> = Increase forecast by 20%</li>
+</ul>
+<p><strong>Use cases:</strong>
+- You know consumption will increase (e.g., guests coming, new appliances)
+- You want to be more conservative with battery discharge
+- Seasonal adjustments without changing historical data</p>
+<h3 id="caching-behavior">Caching Behavior<a class="headerlink" href="#caching-behavior" title="Permanent link">&para;</a></h3>
+<p>To minimize load on HomeAssistant:
+- Computed statistics are <strong>cached</strong> for <code>cache_ttl_hours</code>
+- Cache stores consumption values per weekday/hour combination
+- Cache is automatically refreshed when data is missing
+- Cache survives batcontrol restarts (in-memory cache)</p>
+<p><strong>Cache key format:</strong> <code>"weekday_hour"</code> (e.g., <code>"0_14"</code> = Monday 14:00)</p>
+<h3 id="websocket-communication">WebSocket Communication<a class="headerlink" href="#websocket-communication" title="Permanent link">&para;</a></h3>
+<p>The HomeAssistant forecaster uses the modern <strong>WebSocket API</strong> for efficient communication:</p>
+<ol>
+<li>Establishes WebSocket connection</li>
+<li>Authenticates with access token</li>
+<li>Fetches hourly statistics using <code>recorder/statistics_during_period</code></li>
+<li>Processes and caches results</li>
+<li>Reuses connection for multiple requests when possible</li>
+</ol>
+<p>This is more efficient than the REST API for frequent data fetches.</p>
+<hr />
+<h2 id="testing-your-configuration">Testing Your Configuration<a class="headerlink" href="#testing-your-configuration" title="Permanent link">&para;</a></h2>
+<h3 id="test-script">Test Script<a class="headerlink" href="#test-script" title="Permanent link">&para;</a></h3>
+<p>Batcontrol includes a test script to verify your HomeAssistant configuration:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>batcontrol/scripts
+python<span class="w"> </span>test_homeassistant_forecast.py
+</code></pre></div>
+<p>Edit the configuration section in the script:</p>
+<div class="highlight"><pre><span></span><code><span class="n">HOMEASSISTANT_URL</span> <span class="o">=</span> <span class="s2">"ws://homeassistant.local:8123"</span>
+<span class="n">HOMEASSISTANT_TOKEN</span> <span class="o">=</span> <span class="s2">"YOUR_LONG_LIVED_ACCESS_TOKEN"</span>
+<span class="n">ENTITY_ID</span> <span class="o">=</span> <span class="s2">"sensor.energy_consumption"</span>
+<span class="n">HISTORY_DAYS</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">7</span><span class="p">,</span> <span class="o">-</span><span class="mi">14</span><span class="p">,</span> <span class="o">-</span><span class="mi">21</span><span class="p">]</span>
+<span class="n">HISTORY_WEIGHTS</span> <span class="o">=</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+</code></pre></div>
+<p>The script will:
+- Connect to HomeAssistant
+- Fetch historical data
+- Generate a 24-hour forecast
+- Display results in a formatted table with statistics</p>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="csv-method">CSV Method<a class="headerlink" href="#csv-method" title="Permanent link">&para;</a></h3>
+<p><strong>Problem:</strong> "The annual consumption of the applied load profile is X kWh"</p>
+<p><strong>Solution:</strong> This is just informational. The profile will be automatically scaled to match your <code>annual_consumption</code> setting.</p>
+<p><strong>Problem:</strong> "No load profile specified, using default"</p>
+<p><strong>Solution:</strong> Specify a valid <code>load_profile</code> filename in your configuration.</p>
+<h3 id="homeassistant-api-method">HomeAssistant API Method<a class="headerlink" href="#homeassistant-api-method" title="Permanent link">&para;</a></h3>
+<p><strong>Problem:</strong> "Authentication failed"</p>
+<p><strong>Solution:</strong>
+- Verify your access token is correct
+- Check if the token has been revoked in HomeAssistant
+- Create a new Long-Lived Access Token</p>
+<p><strong>Problem:</strong> "ConnectionClosedError: sent 1009 (message too big)" or "websockets.exceptions.ConnectionClosedError: frame exceeds limit"</p>
+<p><strong>Solution (Since 0.5.7):</strong>
+This error occurs when your HomeAssistant instance has many entities (sensors, lights, automations, etc.) and the response exceeds the WebSocket size limit during auto-detection.</p>
+<p><strong>Quick Fix:</strong> Set the <code>sensor_unit</code> parameter explicitly to skip auto-detection:
+<div class="highlight"><pre><span></span><code><span class="nt">consumption_forecast</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">homeassistant-api</span>
+<span class="w">  </span><span class="nt">homeassistant_api</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws://homeassistant.local:8123</span>
+<span class="w">    </span><span class="nt">apitoken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR_TOKEN</span>
+<span class="w">    </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor.energy_consumption</span>
+<span class="w">    </span><span class="nt">sensor_unit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kWh</span><span class="w">  </span><span class="c1"># or 'Wh' depending on your sensor</span>
+</code></pre></div></p>
+<p><strong>How to determine your sensor unit:</strong>
+1. Open HomeAssistant → Developer Tools → States
+2. Find your entity (e.g., <code>sensor.energy_consumption</code>)
+3. Check the <code>unit_of_measurement</code> attribute
+4. Use <code>kWh</code> if it shows "kWh", or <code>Wh</code> if it shows "Wh"</p>
+<p><strong>Technical details:</strong> Batcontrol 0.5.7+ uses a 4MB WebSocket frame limit (up from 1MB) and allows you to skip the auto-detection query entirely by configuring the sensor unit explicitly.</p>
+<p><strong>Problem:</strong> "No statistics data returned for entity"</p>
+<p><strong>Solution:</strong>
+- Verify the entity exists in HomeAssistant
+- Check if long-term statistics are enabled for this entity
+- Wait for HomeAssistant to collect at least one hour of statistics
+- Check HomeAssistant logs for recorder issues</p>
+<p><strong>Problem:</strong> "Connection refused"</p>
+<p><strong>Solution:</strong>
+- Verify <code>base_url</code> is correct and accessible from batcontrol
+- Check if HomeAssistant is running
+- Verify network connectivity
+- Check firewall rules</p>
+<p><strong>Problem:</strong> "Length of history_days must match history_weights"</p>
+<p><strong>Solution:</strong> Ensure both lists have the same number of elements:
+<div class="highlight"><pre><span></span><code><span class="nt">history_days</span><span class="p">:</span><span class="w"> </span><span class="s">"-7;-14;-21"</span><span class="w">      </span><span class="c1"># 3 elements</span>
+<span class="nt">history_weights</span><span class="p">:</span><span class="w"> </span><span class="s">"3;2;1"</span><span class="w">         </span><span class="c1"># 3 elements</span>
+</code></pre></div></p>
+<p><strong>Problem:</strong> "History weights must be between 1 and 10"</p>
+<p><strong>Solution:</strong> Use only values from 1 to 10 in <code>history_weights</code>.</p>
+<p><strong>Problem:</strong> Empty or incomplete forecast</p>
+<p><strong>Solution:</strong>
+- Check if HomeAssistant has enough historical data (at least 7 days recommended)
+- Verify the entity is recording data continuously
+- Check cache TTL - try reducing it temporarily
+- Enable DEBUG logging to see detailed fetch information</p>
+<p><strong>Problem:</strong> Forecast values are too small or too large</p>
+<p><strong>Solution (Since 0.5.7):</strong> 
+Batcontrol automatically detects whether your sensor reports in Wh or kWh and applies the correct conversion. If values are incorrect:</p>
+<ol>
+<li><strong>Check auto-detection:</strong> Let batcontrol auto-detect (default <code>sensor_unit: auto</code>)</li>
+<li><strong>Verify sensor unit:</strong> Check your sensor's <code>unit_of_measurement</code> in HomeAssistant</li>
+<li><strong>Set explicitly:</strong> If auto-detection fails, set <code>sensor_unit</code> manually:
+   <div class="highlight"><pre><span></span><code><span class="nt">sensor_unit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kWh</span><span class="w">  </span><span class="c1"># if sensor reports in kWh</span>
+<span class="c1"># or</span>
+<span class="nt">sensor_unit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Wh</span><span class="w">   </span><span class="c1"># if sensor reports in Wh</span>
+</code></pre></div></li>
+</ol>
+<p><strong>Legacy workaround (before 0.5.7):</strong> If auto-detection is not available, use the <code>multiplier</code> parameter:
+<div class="highlight"><pre><span></span><code><span class="nt">multiplier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span><span class="w">  </span><span class="c1"># Convert kWh to Wh (if sensor reports in kWh)</span>
+</code></pre></div></p>
+<p><strong>Note:</strong> Batcontrol expects all consumption values in Wh (Watt-hours) internally.</p>
+<hr />
+<h2 id="comparison-csv-vs-homeassistant-api">Comparison: CSV vs. HomeAssistant API<a class="headerlink" href="#comparison-csv-vs-homeassistant-api" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>CSV</th>
+<th>HomeAssistant API</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Accuracy</strong></td>
+<td>Generic patterns</td>
+<td>Based on your actual usage</td>
+</tr>
+<tr>
+<td><strong>Setup Complexity</strong></td>
+<td>Simple</td>
+<td>Moderate (requires HA setup)</td>
+</tr>
+<tr>
+<td><strong>Maintenance</strong></td>
+<td>Manual updates needed</td>
+<td>Automatic learning</td>
+</tr>
+<tr>
+<td><strong>Dependencies</strong></td>
+<td>None</td>
+<td>HomeAssistant + Long-term stats</td>
+</tr>
+<tr>
+<td><strong>Flexibility</strong></td>
+<td>Low (static profile)</td>
+<td>High (adapts to changes)</td>
+</tr>
+<tr>
+<td><strong>Performance</strong></td>
+<td>Fast (local file)</td>
+<td>Cached (WebSocket API)</td>
+</tr>
+<tr>
+<td><strong>Best For</strong></td>
+<td>Testing, consistent usage</td>
+<td>Real-world scenarios</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="recommendations">Recommendations<a class="headerlink" href="#recommendations" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Start with CSV</strong> for initial testing and setup</li>
+<li><strong>Switch to HomeAssistant API</strong> once you have historical data for accurate forecasting</li>
+<li>Use <strong>recent history weighting</strong> (e.g., <code>[3, 2, 1]</code>) for more responsive forecasts</li>
+<li>Set <code>cache_ttl_hours</code> to <code>24-48</code> hours for good balance between accuracy and API load</li>
+<li>Use <strong>multiplier</strong> for temporary adjustments rather than changing configuration frequently</li>
+<li>Monitor logs to ensure forecasts are being generated correctly</li>
+</ul>
+<hr />
+<h2 id="advanced-tips">Advanced Tips<a class="headerlink" href="#advanced-tips" title="Permanent link">&para;</a></h2>
+<h3 id="seasonal-adjustments">Seasonal Adjustments<a class="headerlink" href="#seasonal-adjustments" title="Permanent link">&para;</a></h3>
+<p>For seasonal changes, consider:
+- Using shorter <code>history_days</code> periods (e.g., <code>-7, -14</code> instead of <code>-7, -14, -21</code>)
+- Adjusting the <code>multiplier</code> seasonally
+- Creating different CSV profiles for different seasons</p>
+<h3 id="multiple-consumption-points">Multiple Consumption Points<a class="headerlink" href="#multiple-consumption-points" title="Permanent link">&para;</a></h3>
+<p>If you have multiple consumption sensors, you can:
+- Create a template sensor in HomeAssistant that combines them
+- Use the combined sensor's entity_id in batcontrol configuration</p>
+<h3 id="debugging">Debugging<a class="headerlink" href="#debugging" title="Permanent link">&para;</a></h3>
+<p>Enable DEBUG logging to see detailed information:
+<div class="highlight"><pre><span></span><code><span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+</code></pre></div></p>
+<p>Look for:
+- WebSocket connection messages
+- Statistics fetch results
+- Cache hit/miss events
+- Weighted average calculations</p>
+<hr />
+<h2 id="example-configurations">Example Configurations<a class="headerlink" href="#example-configurations" title="Permanent link">&para;</a></h2>
+<h3 id="example-1-simple-setup-csv">Example 1: Simple Setup (CSV)<a class="headerlink" href="#example-1-simple-setup-csv" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">consumption_forecast</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">csv</span>
+<span class="w">  </span><span class="nt">csv</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">annual_consumption</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4500</span>
+<span class="w">    </span><span class="nt">load_profile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">load_profile.csv</span>
+</code></pre></div>
+<h3 id="example-2-homeassistant-with-equal-weights">Example 2: HomeAssistant with Equal Weights<a class="headerlink" href="#example-2-homeassistant-with-equal-weights" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">consumption_forecast</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">homeassistant-api</span>
+<span class="w">  </span><span class="nt">homeassistant_api</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws://192.168.1.100:8123</span>
+<span class="w">    </span><span class="nt">apitoken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...</span>
+<span class="w">    </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor.house_energy_total</span>
+<span class="w">    </span><span class="nt">sensor_unit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span><span class="w">  </span><span class="c1"># Auto-detect (default)</span>
+<span class="w">    </span><span class="nt">history_days</span><span class="p">:</span><span class="w"> </span><span class="s">"-7;-14;-21"</span>
+<span class="w">    </span><span class="nt">history_weights</span><span class="p">:</span><span class="w"> </span><span class="s">"1;1;1"</span>
+<span class="w">    </span><span class="nt">cache_ttl_hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">48.0</span>
+<span class="w">    </span><span class="nt">multiplier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+</code></pre></div>
+<h3 id="example-3-homeassistant-with-explicit-unit-recommended-for-large-installations">Example 3: HomeAssistant with Explicit Unit (Recommended for Large Installations)<a class="headerlink" href="#example-3-homeassistant-with-explicit-unit-recommended-for-large-installations" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">consumption_forecast</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">homeassistant-api</span>
+<span class="w">  </span><span class="nt">homeassistant_api</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws://homeassistant.local:8123</span>
+<span class="w">    </span><span class="nt">apitoken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your_token_here</span>
+<span class="w">    </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor.energy_consumption</span>
+<span class="w">    </span><span class="nt">sensor_unit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kWh</span><span class="w">  </span><span class="c1"># Explicit unit - faster startup, no auto-detection needed</span>
+<span class="w">    </span><span class="nt">history_days</span><span class="p">:</span><span class="w"> </span><span class="s">"-7;-14;-21"</span>
+<span class="w">    </span><span class="nt">history_weights</span><span class="p">:</span><span class="w"> </span><span class="s">"3;2;1"</span><span class="w">  </span><span class="c1"># Recent week has most influence</span>
+<span class="w">    </span><span class="nt">cache_ttl_hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">24.0</span>
+<span class="w">    </span><span class="nt">multiplier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.1</span><span class="w">  </span><span class="c1"># Increase forecast by 10%</span>
+</code></pre></div>
+<h3 id="example-4-short-term-dynamic-forecast">Example 4: Short-term Dynamic Forecast<a class="headerlink" href="#example-4-short-term-dynamic-forecast" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">consumption_forecast</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">homeassistant-api</span>
+<span class="w">  </span><span class="nt">homeassistant_api</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws://homeassistant.local:8123</span>
+<span class="w">    </span><span class="nt">apitoken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your_token_here</span>
+<span class="w">    </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor.energy_consumption</span>
+<span class="w">    </span><span class="nt">sensor_unit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Wh</span><span class="w">  </span><span class="c1"># Explicit unit for optimal performance</span>
+<span class="w">    </span><span class="nt">history_days</span><span class="p">:</span><span class="w"> </span><span class="s">"-1;-2;-3"</span><span class="w">  </span><span class="c1"># Only last 3 days</span>
+<span class="w">    </span><span class="nt">history_weights</span><span class="p">:</span><span class="w"> </span><span class="s">"5;3;2"</span><span class="w">   </span><span class="c1"># Yesterday has most weight</span>
+<span class="w">    </span><span class="nt">cache_ttl_hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12.0</span><span class="w">        </span><span class="c1"># Shorter cache</span>
+<span class="w">    </span><span class="nt">multiplier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span>
+</code></pre></div>
+<hr />
+<h2 id="related-documentation">Related Documentation<a class="headerlink" href="#related-documentation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../batcontrol-configuration/">Batcontrol Configuration</a></li>
+<li><a href="../../getting-started/how-batcontrol-works/">How Batcontrol Works</a></li>
+<li><a href="../../integrations/mqtt-api/">MQTT API</a></li>
+<li><a href="../solar-forecast/">Solar Forecast</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../solar-forecast/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Solar Forecast">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Solar Forecast
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../features/battery-control-expert/" class="md-footer__link md-footer__link--next" aria-label="Next: Battery Control Expert">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Battery Control Expert
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../assets/js/vendor/chart.umd.js"></script>
+      
+        <script src="../../assets/js/peak-shaving-charts.js"></script>
+      
+    
+  </body>
+</html>

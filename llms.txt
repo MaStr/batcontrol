@@ -1,0 +1,46 @@
+# Batcontrol Documentation
+
+> Optimize your electricity costs by re-charging your PV battery when electricity is cheap and there is not enough solar power available.
+
+Batcontrol controls a PV battery inverter based on dynamic electricity prices,
+solar production forecasts, and consumption patterns. It charges from the grid
+when prices are low and preserves stored energy when prices are high. It supports
+Fronius Gen24 inverters (HTTP API and Modbus TCP) and any inverter via MQTT bridge.
+Tariff providers include Tibber, aWATTar, evcc, EnergyForecast.de, and static zone
+tariffs. Solar forecast sources include Forecast.Solar, Solar-Prognose.de, evcc,
+and Home Assistant Solar Forecast ML. Peak shaving distributes PV battery charging
+across the day using forecasts, and works with both dynamic and static tariffs.
+
+
+## Getting Started
+
+- [Installation](https://mastr.github.io/batcontrol/getting-started/installation/index.md): Installation guide with pre-flight checklist, Docker setup, and next steps
+- [How Batcontrol Works](https://mastr.github.io/batcontrol/getting-started/how-batcontrol-works/index.md): Architecture, control loop, forecasting system, and decision logic
+
+## Configuration
+
+- [Main Configuration](https://mastr.github.io/batcontrol/configuration/batcontrol-configuration/index.md): Main configuration file reference
+- [Inverter](https://mastr.github.io/batcontrol/configuration/inverter-configuration/index.md): Fronius Gen24, Fronius Modbus, and MQTT inverter configuration
+- [Dynamic Tariff Provider](https://mastr.github.io/batcontrol/configuration/dynamic-tariff-provider/index.md): Tibber, aWATTar, evcc, EnergyForecast, and static tariff zones
+- [Solar Forecast](https://mastr.github.io/batcontrol/configuration/solar-forecast/index.md): Forecast.Solar, Solar-Prognose.de, evcc, and Home Assistant ML
+- [Consumption Forecast](https://mastr.github.io/batcontrol/configuration/consumption-forecast/index.md): CSV load profile and Home Assistant API forecast
+
+## Features
+
+- [Peak Shaving](https://mastr.github.io/batcontrol/features/peak-shaving/index.md): Dynamic PV charge rate limiting to maximize solar absorption
+- [Peak Shaving Scenarios](https://mastr.github.io/batcontrol/features/peak-shaving-scenarios/index.md): Worked example day for every peak shaving rule combination
+- [Battery Control Expert](https://mastr.github.io/batcontrol/features/battery-control-expert/index.md): Advanced tuning parameters
+- [Price Difference Calculation](https://mastr.github.io/batcontrol/features/price-difference-calculation/index.md): How price thresholds are calculated
+
+## Integrations
+
+- [MQTT API](https://mastr.github.io/batcontrol/integrations/mqtt-api/index.md): MQTT state publishing, runtime overrides, and Home Assistant auto-discovery
+- [MQTT Inverter](https://mastr.github.io/batcontrol/integrations/mqtt-inverter/index.md): Integrating any battery system via MQTT bridge
+- [evcc Connection](https://mastr.github.io/batcontrol/integrations/evcc-connection/index.md): Coordinating with EV charging via evcc
+- [Forecast Metrics](https://mastr.github.io/batcontrol/integrations/forecast-metrics/index.md): Forecast data exposed via MQTT
+
+## Optional
+
+- [15-Minute Interval Transformation](https://mastr.github.io/batcontrol/development/15-min-transform/index.md): Internal 15-minute interval resolution
+- [Solar Feed-in Limit Evaluation](https://mastr.github.io/batcontrol/development/solar-limit-evaluation/index.md): Solar feed-in limit (Solarspitzengesetz) evaluation
+

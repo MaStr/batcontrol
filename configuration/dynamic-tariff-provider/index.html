@@ -1,0 +1,1885 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Optimize your electricity costs by re-charging your PV battery when electricity is cheap and there is not enough solar power available.">
+      
+      
+      
+        <link rel="canonical" href="https://mastr.github.io/batcontrol/configuration/dynamic-tariff-provider/">
+      
+      
+        <link rel="prev" href="../inverter-configuration/">
+      
+      
+        <link rel="next" href="../solar-forecast/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Dynamic Tariff Provider - Batcontrol Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/css/peak-shaving-charts.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tibber" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Batcontrol Documentation" class="md-header__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Batcontrol Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Dynamic Tariff Provider
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Batcontrol Documentation" class="md-nav__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    Batcontrol Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/how-batcontrol-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Batcontrol Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../batcontrol-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Main Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inverter-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Tariff Provider
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Tariff Provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tibber" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tibber
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#awattar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        awattar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-zone-tariff-providers-eg-octopus-two-tariff-since-070" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Zone Tariff Providers (e.g. Octopus, Two-Tariff) (since 0.7.0)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tariff_zones-static-multi-zone-tariff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tariff_zones — Static &amp; multi-zone tariff
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="tariff_zones — Static &amp; multi-zone tariff">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#static-price-mode-single-zone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Static price mode (single zone)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#two-zones-peak-off-peak" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two zones (peak / off-peak)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#three-zones-peak-shoulder-off-peak" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Three zones (peak / shoulder / off-peak)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hour-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hour syntax
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#charging-behaviour-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Charging behaviour tips
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evcc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        evcc
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#energyforecastde" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        energyforecast.de
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#energyforecastde-total-price-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        energyforecast.de -- total price mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dynamic-network-fees-para-14a-enwg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dynamic network fees (para. 14a EnWG)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../solar-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../consumption-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Consumption Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/battery-control-expert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Battery Control Expert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving-scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving Scenarios
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/price-difference-calculation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Price Difference Calculation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mqtt-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/forecast-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forecast Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mqtt-inverter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/evcc-connection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    evcc Connection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/15-min-transform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15-Minute Interval Transformation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/solar-limit-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Feed-in Limit Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tibber" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tibber
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#awattar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        awattar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-zone-tariff-providers-eg-octopus-two-tariff-since-070" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Zone Tariff Providers (e.g. Octopus, Two-Tariff) (since 0.7.0)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tariff_zones-static-multi-zone-tariff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tariff_zones — Static &amp; multi-zone tariff
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="tariff_zones — Static &amp; multi-zone tariff">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#static-price-mode-single-zone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Static price mode (single zone)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#two-zones-peak-off-peak" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two zones (peak / off-peak)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#three-zones-peak-shoulder-off-peak" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Three zones (peak / shoulder / off-peak)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hour-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hour syntax
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#charging-behaviour-tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Charging behaviour tips
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evcc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        evcc
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#energyforecastde" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        energyforecast.de
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#energyforecastde-total-price-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        energyforecast.de -- total price mode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dynamic-network-fees-para-14a-enwg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dynamic network fees (para. 14a EnWG)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/MaStr/batcontrol/edit/main/docs/configuration/dynamic-tariff-provider.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+  <h1>Dynamic Tariff Provider</h1>
+
+<p>Currently following data providers are available:</p>
+<ul>
+<li>tibber</li>
+<li>awattar</li>
+<li>Two-Tariff Providers (e.g. Octopus)</li>
+<li>evcc</li>
+<li>energyforecast.de</li>
+<li>energyforecast.de (total price mode)</li>
+</ul>
+<p>You can chose one and need to adjust the configuration.</p>
+<h2 id="tibber">tibber<a class="headerlink" href="#tibber" title="Permanent link">&para;</a></h2>
+<p>You need to get an API Key from https://developer.tibber.com/ , which looks like <code>Zz-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx</code>. After obtaining this key, use the following configuration:</p>
+<div class="highlight"><pre><span></span><code>utility:
+  type: tibber 
+  apikey: YOUR-PASSWORD
+</code></pre></div>
+<h2 id="awattar">awattar<a class="headerlink" href="#awattar" title="Permanent link">&para;</a></h2>
+<p>batcontrol provides two different awattar types:</p>
+<ul>
+<li><code>awattar_de</code> for German aWATTar</li>
+<li><code>awattar_at</code> for Austrian aWATTar</li>
+</ul>
+<p>Please choose the corresponding version. For aWATTar you can use this configuration:</p>
+<div class="highlight"><pre><span></span><code>utility:
+  type: awattar_de
+  vat: 0.19     # 19% VAT
+  fees: 0.015   # Depends on you Netzendgeld
+  markup: 0.03  # Depends on you aWATTar contract
+</code></pre></div>
+<p>The calculation is <code>( marketprice/1000*(1+markup) + fees ) * (1+vat)</code></p>
+<h2 id="multi-zone-tariff-providers-eg-octopus-two-tariff-since-070">Multi-Zone Tariff Providers (e.g. Octopus, Two-Tariff) (since 0.7.0)<a class="headerlink" href="#multi-zone-tariff-providers-eg-octopus-two-tariff-since-070" title="Permanent link">&para;</a></h2>
+<p>If your energy provider offers distinct tariff zones (e.g. day/night rates, peak/off-peak), you can configure batcontrol to optimize battery usage accordingly. The <code>tariff_zones</code> provider supports up to <strong>3 different price zones</strong>.</p>
+<h2 id="tariff_zones-static-multi-zone-tariff"><code>tariff_zones</code> — Static &amp; multi-zone tariff<a class="headerlink" href="#tariff_zones-static-multi-zone-tariff" title="Permanent link">&para;</a></h2>
+<p>The <code>tariff_zones</code> provider uses a locally configured, fixed price schedule
+instead of an external API. It supports <strong>1, 2, or 3 zones</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Zones configured</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1 zone</strong> (static price)</td>
+<td>One flat price for every hour of the day</td>
+</tr>
+<tr>
+<td><strong>2 zones</strong></td>
+<td>Classic peak / off-peak split</td>
+</tr>
+<tr>
+<td><strong>3 zones</strong></td>
+<td>Peak / shoulder / off-peak</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Since v0.8.0:</strong> <code>tariff_zone_2</code> / <code>zone_2_hours</code> are <strong>optional</strong>. In
+earlier versions zone 2 was mandatory. Configurations written for the old
+2-zone-only behaviour keep working unchanged.</p>
+</blockquote>
+<p>This makes it suitable for:</p>
+<ul>
+<li>Users <strong>without a dynamic tariff</strong> who still want peak-shaving (see issue
+  <a href="https://github.com/MaStr/batcontrol/issues/318">#318</a>).</li>
+<li>Users with a fixed day / night tariff.</li>
+<li>Users with a fixed three-period (HT/NT/shoulder) tariff.</li>
+</ul>
+<h3 id="static-price-mode-single-zone">Static price mode (single zone)<a class="headerlink" href="#static-price-mode-single-zone" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p>Available since <strong>v0.8.0</strong>.</p>
+</blockquote>
+<p>Set only <code>tariff_zone_1</code>. <code>zone_1_hours</code> is optional and defaults to all 24
+hours.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">utility</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tariff_zones</span>
+<span class="w">  </span><span class="nt">tariff_zone_1</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.30</span><span class="w">   </span><span class="c1"># EUR/kWh incl. VAT/fees, applied to every hour</span>
+</code></pre></div>
+<h3 id="two-zones-peak-off-peak">Two zones (peak / off-peak)<a class="headerlink" href="#two-zones-peak-off-peak" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">utility</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tariff_zones</span>
+<span class="w">  </span><span class="nt">tariff_zone_1</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.2733</span><span class="w">   </span><span class="c1"># peak price</span>
+<span class="w">  </span><span class="nt">zone_1_hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7-22</span>
+<span class="w">  </span><span class="nt">tariff_zone_2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1734</span><span class="w">   </span><span class="c1"># off-peak price</span>
+<span class="w">  </span><span class="nt">zone_2_hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0-6,23</span>
+</code></pre></div>
+<h3 id="three-zones-peak-shoulder-off-peak">Three zones (peak / shoulder / off-peak)<a class="headerlink" href="#three-zones-peak-shoulder-off-peak" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">utility</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tariff_zones</span>
+<span class="w">  </span><span class="nt">tariff_zone_1</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.30</span>
+<span class="w">  </span><span class="nt">zone_1_hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">9-16</span>
+<span class="w">  </span><span class="nt">tariff_zone_2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.15</span>
+<span class="w">  </span><span class="nt">zone_2_hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0-6,23</span>
+<span class="w">  </span><span class="nt">tariff_zone_3</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.22</span>
+<span class="w">  </span><span class="nt">zone_3_hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7-8,17-22</span>
+</code></pre></div>
+<h3 id="configuration-reference">Configuration reference<a class="headerlink" href="#configuration-reference" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>type</code></td>
+<td>yes</td>
+<td>Must be <code>tariff_zones</code></td>
+</tr>
+<tr>
+<td><code>tariff_zone_1</code></td>
+<td><strong>yes</strong></td>
+<td>Price for zone 1 in EUR/kWh (incl. VAT &amp; fees)</td>
+</tr>
+<tr>
+<td><code>zone_1_hours</code></td>
+<td>optional in single-zone mode; required otherwise</td>
+<td>Hours assigned to zone 1</td>
+</tr>
+<tr>
+<td><code>tariff_zone_2</code></td>
+<td>optional since v0.8.0 (paired with <code>zone_2_hours</code>)</td>
+<td>Price for zone 2</td>
+</tr>
+<tr>
+<td><code>zone_2_hours</code></td>
+<td>optional since v0.8.0 (paired with <code>tariff_zone_2</code>)</td>
+<td>Hours assigned to zone 2</td>
+</tr>
+<tr>
+<td><code>tariff_zone_3</code></td>
+<td>optional (paired with <code>zone_3_hours</code>)</td>
+<td>Price for zone 3</td>
+</tr>
+<tr>
+<td><code>zone_3_hours</code></td>
+<td>optional (paired with <code>tariff_zone_3</code>)</td>
+<td>Hours assigned to zone 3</td>
+</tr>
+</tbody>
+</table>
+<h4 id="hour-syntax">Hour syntax<a class="headerlink" href="#hour-syntax" title="Permanent link">&para;</a></h4>
+<p><code>zone_*_hours</code> accepts flexible formats (may be mixed):</p>
+<ul>
+<li>Single integer: <code>5</code></li>
+<li>Comma-separated list: <code>0,1,2,3</code></li>
+<li>Inclusive range: <code>0-5</code>  →  <code>[0, 1, 2, 3, 4, 5]</code></li>
+<li>Mixed: <code>0-5,6,7</code></li>
+<li>YAML list with any of the above: <code>[7, 8, '17-22']</code></li>
+</ul>
+<h4 id="validation-rules">Validation rules<a class="headerlink" href="#validation-rules" title="Permanent link">&para;</a></h4>
+<ul>
+<li><code>tariff_zone_1</code> is always required. All prices must be positive.</li>
+<li>If <code>tariff_zone_2</code> is set, <code>zone_2_hours</code> <strong>must</strong> also be set (and vice
+  versa). Same rule applies to zone 3.</li>
+<li><strong>Every hour 0–23 must be assigned to exactly one zone</strong> — no gaps, no
+  overlaps. If you configure <code>zone_1_hours</code> explicitly in single-zone mode,
+  it must cover the full day (it is <strong>not</strong> auto-extended); omit it to get
+  the default <code>0-23</code>.</li>
+<li><code>zone_1_hours</code> may only be omitted when zones 2 and 3 are also omitted
+  (single-zone / static mode, v0.8.0+).</li>
+</ul>
+<h3 id="charging-behaviour-tips">Charging behaviour tips<a class="headerlink" href="#charging-behaviour-tips" title="Permanent link">&para;</a></h3>
+<p>The charge rate is not evenly distributed across low-price hours by default.</p>
+<ul>
+<li>For <strong>more even charging</strong> across low-price hours, enable
+  <code>soften_price_difference_on_charging</code> and set <code>max_grid_charge_rate</code> to a
+  modest value (e.g. battery capacity / low-price hours).</li>
+<li>For a <strong>late charging start</strong> (optimise efficiency, keep the battery at
+  high SOC for less time), disable <code>soften_price_difference_on_charging</code>.</li>
+</ul>
+<p>In pure single-zone (static) mode, prices never differ between hours, so
+price-based scheduling has no effect — use it together with peak-shaving
+(see <a href="https://github.com/MaStr/batcontrol/issues/271">#271</a>) or fixed
+charging-window settings.</p>
+<h2 id="evcc">evcc<a class="headerlink" href="#evcc" title="Permanent link">&para;</a></h2>
+<p>If you are running evcc, it can be used to fetch the price information from this endpoint.
+The configuration for this is</p>
+<p><div class="highlight"><pre><span></span><code>utility:
+  type: evcc
+  url: http://evcc.local:7070/api/tariff/grid
+</code></pre></div>
+You may need to adjust hostname + port for your setup. If evcc is running under HomeAssistant, you should use either <code>http://homeassistant:7070/api/tariff/grid</code> or <code>http://&lt;homeassistant-ip&gt;:7070/api/tariff/grid</code></p>
+<h2 id="energyforecastde">energyforecast.de<a class="headerlink" href="#energyforecastde" title="Permanent link">&para;</a></h2>
+<p><a href="https://www.energyforecast.de">energyforecast.de</a> provides a multi-day price forecast using
+API v2. The API delivers quarter-hourly data for a plan-dependent horizon (typically several
+days ahead). Day-ahead prices are populated at around 14:00 CET, which provides good coverage
+for next-day planning.</p>
+<p>batcontrol fetches the raw market price (<code>price_ct_kwh</code>) from the API and calculates the
+final price locally by applying your configured VAT, fees, and markup — the same approach used
+for aWATTar. This gives you full control over the price components.</p>
+<p>To use energyforecast.de, create a login at <a href="https://www.energyforecast.de">energyforecast.de</a>
+to obtain an API key.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">utility</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">energyforecast</span>
+<span class="w">  </span><span class="nt">apikey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xxxxxxxxx</span>
+<span class="w">  </span><span class="nt">vat</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.19</span><span class="w">     </span><span class="c1"># 19% VAT</span>
+<span class="w">  </span><span class="nt">fees</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.15</span><span class="w">    </span><span class="c1"># Your network fees (Netzentgelt), EUR/kWh excl. VAT</span>
+<span class="w">  </span><span class="nt">markup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.00</span><span class="w">  </span><span class="c1"># Optional markup, e.g. supplier margin</span>
+<span class="w">  </span><span class="c1"># market_zone: DE  # optional: DE/LU (default, both map to DE-LU market zone), AT, FR, NL, BE, PL, DK1, DK2</span>
+</code></pre></div>
+<p>The price calculation is: <code>( price_ct_kwh/100 * (1+markup) + fees ) * (1+vat)</code></p>
+<blockquote>
+<p><strong>Note:</strong> <code>energyforecast_96</code> is deprecated. API v2 automatically delivers a
+multi-day forecast based on your plan -- use <code>energyforecast</code> instead.</p>
+</blockquote>
+<h2 id="energyforecastde-total-price-mode">energyforecast.de -- total price mode<a class="headerlink" href="#energyforecastde-total-price-mode" title="Permanent link">&para;</a></h2>
+<p>If you prefer to let the energyforecast.de API calculate the full price -- including
+dynamic network fees, VAT, and markup -- use <code>energyforecast_total_price</code>. In this mode
+batcontrol reads the API's <code>total_ct_kwh</code> field directly without any local calculation.</p>
+<p>This is useful if:</p>
+<ul>
+<li>You want the API to handle dynamic network fees automatically (including para. 14a EnWG),
+  without configuring them separately in batcontrol.</li>
+<li>You trust the API's price model and want a simpler local configuration.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="nt">utility</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">energyforecast_total_price</span>
+<span class="w">  </span><span class="nt">apikey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xxxxxxxxx</span>
+<span class="w">  </span><span class="c1"># market_zone: DE  # optional: DE/LU (default, both map to DE-LU market zone), AT, FR, NL, BE, PL, DK1, DK2</span>
+</code></pre></div>
+<p><strong>Important:</strong> Do not set <code>vat</code>, <code>fees</code>, or <code>markup</code> -- they are ignored for this provider
+type. Do not enable <code>dynamic_network_fees</code> either; the API already includes network fees in
+<code>total_ct_kwh</code>.</p>
+<h2 id="dynamic-network-fees-para-14a-enwg">Dynamic network fees (para. 14a EnWG)<a class="headerlink" href="#dynamic-network-fees-para-14a-enwg" title="Permanent link">&para;</a></h2>
+<p>batcontrol can add time-of-use network fees (NT/ST/HT zones according to para. 14a EnWG)
+on top of the energy prices. This only applies to providers that calculate fees locally:
+<strong>awattar</strong> and <strong>energyforecast</strong>. All-inclusive providers (tibber, evcc, tariff_zones,
+and <strong>energyforecast_total_price</strong>) already deliver final prices and do not need this.</p>
+<p>The fee data (NET prices, excluding VAT) is fetched from <a href="https://dyn-net.batcontrol.software/">dyn-net.batcontrol.software</a> and added to the raw energy price before VAT is applied. Data is cached for 12 hours, as tariffs change at most quarterly.</p>
+<p>Configure it as a top-level block (next to <code>utility</code>):</p>
+<div class="highlight"><pre><span></span><code><span class="nt">dynamic_network_fees</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">         </span><span class="c1"># Set to true to activate dynamic network fees</span>
+<span class="w">  </span><span class="nt">country</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">de</span><span class="w">           </span><span class="c1"># Country code: de, at, ch</span>
+<span class="w">  </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">syna</span><span class="w">        </span><span class="c1"># Network operator ID (e.g. syna, westnetz, ggv, ewr-netz)</span>
+<span class="w">  </span><span class="c1"># url: https://dyn-net.batcontrol.software/api/  # Optional: override for self-hosted instance</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td>yes</td>
+<td>Master switch, defaults to <code>false</code></td>
+</tr>
+<tr>
+<td><code>country</code></td>
+<td>yes</td>
+<td>Country code (<code>de</code>, <code>at</code>, <code>ch</code>)</td>
+</tr>
+<tr>
+<td><code>operator</code></td>
+<td>yes</td>
+<td>Your network operator ID — see <a href="https://dyn-net.batcontrol.software/">dyn-net.batcontrol.software</a> for available IDs</td>
+</tr>
+<tr>
+<td><code>url</code></td>
+<td>no</td>
+<td>Override the API endpoint, e.g. for a self-hosted instance</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../inverter-configuration/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Inverter">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Inverter
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../solar-forecast/" class="md-footer__link md-footer__link--next" aria-label="Next: Solar Forecast">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Solar Forecast
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../assets/js/vendor/chart.umd.js"></script>
+      
+        <script src="../../assets/js/peak-shaving-charts.js"></script>
+      
+    
+  </body>
+</html>

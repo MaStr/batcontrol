@@ -1,0 +1,2336 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Optimize your electricity costs by re-charging your PV battery when electricity is cheap and there is not enough solar power available.">
+      
+      
+      
+        <link rel="canonical" href="https://mastr.github.io/batcontrol/integrations/evcc-connection/">
+      
+      
+        <link rel="prev" href="../mqtt-inverter/">
+      
+      
+        <link rel="next" href="../../development/15-min-transform/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>evcc Connection - Batcontrol Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/css/peak-shaving-charts.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#evcc-integration" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Batcontrol Documentation" class="md-header__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Batcontrol Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              evcc Connection
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Batcontrol Documentation" class="md-nav__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    Batcontrol Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/how-batcontrol-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Batcontrol Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/batcontrol-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Main Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/inverter-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/dynamic-tariff-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Tariff Provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/solar-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/consumption-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Consumption Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/battery-control-expert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Battery Control Expert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving-scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving Scenarios
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/price-difference-calculation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Price Difference Calculation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mqtt-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../forecast-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forecast Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mqtt-inverter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    evcc Connection
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    evcc Connection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basic-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Basic Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#basic-parameters-explained" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Parameters Explained
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tlsssl-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TLS/SSL Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#battery-management-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Battery Management Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#battery-halt-topic-advanced" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Battery Halt Topic (Advanced)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Battery Halt Topic (Advanced)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-scenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Scenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt-topics-monitored" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT Topics Monitored
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT Topics Monitored">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#status-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status Monitoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#charging-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Charging Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#loadpoint-mode-and-connection-state-derived-automatically" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loadpoint Mode and Connection State (derived automatically)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#buffer-soc-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Buffer SOC (Optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#behavior-during-ev-charging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Behavior During EV Charging
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Behavior During EV Charging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-charging-starts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Charging Starts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-charging-stops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Charging Stops
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-evcc-goes-offline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When evcc Goes Offline
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-configurations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Configurations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Example Configurations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#single-loadpoint-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single Loadpoint Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiple-loadpoints-with-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple Loadpoints with Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#advanced-setup-with-buffer-soc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Setup with Buffer SOC
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitoring-only-no-battery-blocking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring Only (No Battery Blocking)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debug-logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debug Logging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#log-messages-to-watch-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Log Messages to Watch For
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-home-assistant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with Home Assistant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Considerations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/15-min-transform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15-Minute Interval Transformation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/solar-limit-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Feed-in Limit Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basic-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Basic Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#basic-parameters-explained" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Parameters Explained
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tlsssl-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TLS/SSL Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#battery-management-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Battery Management Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#battery-halt-topic-advanced" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Battery Halt Topic (Advanced)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Battery Halt Topic (Advanced)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-scenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Scenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt-topics-monitored" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT Topics Monitored
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT Topics Monitored">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#status-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status Monitoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#charging-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Charging Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#loadpoint-mode-and-connection-state-derived-automatically" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Loadpoint Mode and Connection State (derived automatically)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#buffer-soc-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Buffer SOC (Optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#behavior-during-ev-charging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Behavior During EV Charging
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Behavior During EV Charging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-charging-starts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Charging Starts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-charging-stops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Charging Stops
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-evcc-goes-offline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When evcc Goes Offline
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-configurations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Configurations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Example Configurations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#single-loadpoint-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single Loadpoint Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiple-loadpoints-with-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple Loadpoints with Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#advanced-setup-with-buffer-soc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Setup with Buffer SOC
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitoring-only-no-battery-blocking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring Only (No Battery Blocking)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debug-logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debug Logging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#log-messages-to-watch-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Log Messages to Watch For
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-home-assistant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with Home Assistant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Considerations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/MaStr/batcontrol/edit/main/docs/integrations/evcc-connection.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="evcc-integration">evcc Integration<a class="headerlink" href="#evcc-integration" title="Permanent link">&para;</a></h1>
+<p>Batcontrol can integrate with <a href="https://evcc.io/">evcc (Electric Vehicle Charging Controller)</a> to intelligently manage battery usage during electric vehicle charging. This integration helps prevent unnecessary battery discharge while your EV is charging, optimizing your overall energy management.</p>
+<h2 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
+<p>When evcc is charging your electric vehicle, batcontrol can automatically:</p>
+<ol>
+<li><strong>Block battery discharge</strong> to prevent the home battery from being used while the EV charges</li>
+<li><strong>Temporarily adjust discharge limits</strong> based on evcc's buffer SOC settings</li>
+<li><strong>Monitor multiple charging loadpoints</strong> for comprehensive EV charging detection</li>
+<li><strong>Restore original settings</strong> when charging stops</li>
+</ol>
+<h2 id="basic-configuration">Basic Configuration<a class="headerlink" href="#basic-configuration" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="nt">evcc</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">broker</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">localhost</span>
+<span class="w">  </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1883</span>
+<span class="w">  </span><span class="nt">status_topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/status</span>
+<span class="w">  </span><span class="nt">loadpoint_topic</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/loadpoints/1/charging</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/loadpoints/2/charging</span>
+<span class="w">  </span><span class="nt">block_battery_while_charging</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<h3 id="required-parameters">Required Parameters<a class="headerlink" href="#required-parameters" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td>boolean</td>
+<td>Enable or disable evcc integration</td>
+</tr>
+<tr>
+<td><code>broker</code></td>
+<td>string</td>
+<td>MQTT broker hostname or IP address (same as evcc uses)</td>
+</tr>
+<tr>
+<td><code>port</code></td>
+<td>integer</td>
+<td>MQTT broker port (typically 1883 or 8883 for TLS)</td>
+</tr>
+<tr>
+<td><code>status_topic</code></td>
+<td>string</td>
+<td>MQTT topic for evcc online/offline status</td>
+</tr>
+<tr>
+<td><code>loadpoint_topic</code></td>
+<td>list/string</td>
+<td>MQTT topic(s) for loadpoint charging status</td>
+</tr>
+</tbody>
+</table>
+<h3 id="basic-parameters-explained">Basic Parameters Explained<a class="headerlink" href="#basic-parameters-explained" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>status_topic</code></strong>: Usually <code>evcc/status</code> - monitors if evcc is online/offline</li>
+<li><strong><code>loadpoint_topic</code></strong>: Can be a single string or list of topics like:</li>
+<li><code>evcc/loadpoints/1/charging</code> (for loadpoint 1)</li>
+<li><code>evcc/loadpoints/2/charging</code> (for loadpoint 2)</li>
+<li>Add more loadpoints as needed for your setup</li>
+</ul>
+<h2 id="advanced-configuration">Advanced Configuration<a class="headerlink" href="#advanced-configuration" title="Permanent link">&para;</a></h2>
+<h3 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">evcc</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mqtt_user</span>
+<span class="w">  </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mqtt_password</span>
+</code></pre></div>
+<h3 id="tlsssl-support">TLS/SSL Support<a class="headerlink" href="#tlsssl-support" title="Permanent link">&para;</a></h3>
+<p>Batcontrol supports TLS-encrypted MQTT connections to the evcc broker. Configure TLS with flat keys at the same level as other evcc connection parameters:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">evcc</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">broker</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mqtt.home.local</span>
+<span class="w">  </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8883</span>
+<span class="w">  </span><span class="nt">tls</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">cafile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/etc/ssl/certs/ca-certificates.crt</span><span class="w">   </span><span class="c1"># path to CA certificate (required when tls: true)</span>
+<span class="w">  </span><span class="nt">certfile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/etc/ssl/certs/client.crt</span><span class="w">           </span><span class="c1"># path to client certificate (optional, for mutual TLS)</span>
+<span class="w">  </span><span class="nt">keyfile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/etc/ssl/certs/client.key</span><span class="w">            </span><span class="c1"># path to client private key (optional, for mutual TLS)</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tls</code></td>
+<td>boolean</td>
+<td>Enable TLS encryption (default: <code>false</code>). Use port 8883 for TLS-secured brokers</td>
+</tr>
+<tr>
+<td><code>cafile</code></td>
+<td>string</td>
+<td>Path to the CA certificate file. <strong>Required</strong> when <code>tls: true</code></td>
+</tr>
+<tr>
+<td><code>certfile</code></td>
+<td>string</td>
+<td>Path to the client certificate file. Optional; required for mutual TLS</td>
+</tr>
+<tr>
+<td><code>keyfile</code></td>
+<td>string</td>
+<td>Path to the client private key file. Optional; required for mutual TLS (must be set together with <code>certfile</code>)</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note</strong>: <code>certfile</code> and <code>keyfile</code> must both be set or both be absent — partial mutual TLS configuration raises an error at startup.</p>
+</blockquote>
+<h3 id="battery-management-options">Battery Management Options<a class="headerlink" href="#battery-management-options" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">evcc</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">block_battery_while_charging</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">battery_halt_topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/site/bufferSoc</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>block_battery_while_charging</code></td>
+<td>boolean</td>
+<td><code>true</code></td>
+<td>If <code>true</code>: Block battery discharge while EV is charging. If <code>false</code>: Battery discharge follows normal batcontrol algorithm regardless of EV charging status</td>
+</tr>
+<tr>
+<td><code>battery_halt_topic</code></td>
+<td>string</td>
+<td><em>unset (disabled)</em></td>
+<td>Topic for dynamic discharge limit control, e.g. <code>evcc/site/bufferSoc</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="battery-halt-topic-advanced">Battery Halt Topic (Advanced)<a class="headerlink" href="#battery-halt-topic-advanced" title="Permanent link">&para;</a></h2>
+<p>The <code>battery_halt_topic</code> enables dynamic battery discharge limit management based on evcc's buffer SOC setting.</p>
+<h3 id="how-it-works_1">How It Works<a class="headerlink" href="#how-it-works_1" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Normal Operation</strong>: Batcontrol uses your configured <code>always_allow_discharge_limit</code></li>
+<li><strong>EV Charging Starts</strong>:</li>
+<li>Batcontrol saves current discharge limit</li>
+<li>Sets new limit based on evcc's <code>bufferSoc</code> value</li>
+<li><strong>EV Charging Stops</strong>:</li>
+<li>Restores original discharge limit</li>
+<li>Returns to normal battery management</li>
+</ol>
+<h3 id="example-scenario">Example Scenario<a class="headerlink" href="#example-scenario" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Your normal <code>always_allow_discharge_limit</code>: <code>0.20</code> (20%)</li>
+<li>evcc <code>bufferSoc</code> setting: <code>50</code> (50%)</li>
+<li><strong>Result</strong>: While EV charges, battery discharge is blocked above 50% SOC instead of 20%</li>
+</ul>
+<h2 id="mqtt-topics-monitored">MQTT Topics Monitored<a class="headerlink" href="#mqtt-topics-monitored" title="Permanent link">&para;</a></h2>
+<p>Batcontrol subscribes to the following evcc MQTT topics:</p>
+<h3 id="status-monitoring">Status Monitoring<a class="headerlink" href="#status-monitoring" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>evcc/status</code> - evcc online/offline status (<code>online</code>/<code>offline</code>)</li>
+</ul>
+<h3 id="charging-detection">Charging Detection<a class="headerlink" href="#charging-detection" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>evcc/loadpoints/1/charging</code> - Loadpoint 1 charging status (<code>true</code>/<code>false</code>)</li>
+<li><code>evcc/loadpoints/2/charging</code> - Loadpoint 2 charging status (<code>true</code>/<code>false</code>)</li>
+<li>Additional loadpoints as configured</li>
+</ul>
+<h3 id="loadpoint-mode-and-connection-state-derived-automatically">Loadpoint Mode and Connection State (derived automatically)<a class="headerlink" href="#loadpoint-mode-and-connection-state-derived-automatically" title="Permanent link">&para;</a></h3>
+<p>For every configured <code>.../charging</code> topic, batcontrol additionally subscribes to the sibling topics:</p>
+<ul>
+<li><code>evcc/loadpoints/1/mode</code> - Loadpoint charging mode (<code>pv</code>, <code>now</code>, <code>minpv</code>, <code>off</code>)</li>
+<li><code>evcc/loadpoints/1/connected</code> - Whether an EV is connected (<code>true</code>/<code>false</code>)</li>
+</ul>
+<p>These are used by <a href="../../features/peak-shaving/">peak shaving</a>: peak shaving is automatically disabled while evcc is actively charging or while an EV is connected in PV mode, and re-enabled when the EV disconnects or the mode changes.</p>
+<h3 id="buffer-soc-optional">Buffer SOC (Optional)<a class="headerlink" href="#buffer-soc-optional" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>evcc/site/bufferSoc</code> - Dynamic discharge threshold (integer 0-100)</li>
+</ul>
+<h2 id="behavior-during-ev-charging">Behavior During EV Charging<a class="headerlink" href="#behavior-during-ev-charging" title="Permanent link">&para;</a></h2>
+<h3 id="when-charging-starts">When Charging Starts<a class="headerlink" href="#when-charging-starts" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Battery Blocking</strong>: If <code>block_battery_while_charging: true</code>, battery discharge is blocked. If <code>false</code>, battery discharge continues according to normal batcontrol algorithm</li>
+<li><strong>Limit Adjustment</strong>: If <code>battery_halt_topic</code> configured, discharge limit is temporarily set to buffer SOC</li>
+<li><strong>Logging</strong>: Batcontrol logs: <code>"evcc is charging, set block"</code> (only if blocking enabled)</li>
+</ol>
+<h3 id="when-charging-stops">When Charging Stops<a class="headerlink" href="#when-charging-stops" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Battery Unblocking</strong>: Battery discharge blocking is removed</li>
+<li><strong>Limit Restoration</strong>: Original discharge limit is restored</li>
+<li><strong>Logging</strong>: Batcontrol logs: <code>"evcc is not charging, remove block"</code></li>
+</ol>
+<h3 id="when-evcc-goes-offline">When evcc Goes Offline<a class="headerlink" href="#when-evcc-goes-offline" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Safety Mechanism</strong>: If evcc goes offline while charging, blocks are automatically removed</li>
+<li><strong>Limit Restoration</strong>: Original settings are restored</li>
+<li><strong>Logging</strong>: Batcontrol logs: <code>"evcc went offline"</code> and <code>"evcc was charging, remove block"</code></li>
+</ol>
+<h2 id="example-configurations">Example Configurations<a class="headerlink" href="#example-configurations" title="Permanent link">&para;</a></h2>
+<h3 id="single-loadpoint-setup">Single Loadpoint Setup<a class="headerlink" href="#single-loadpoint-setup" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">evcc</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">broker</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">192.168.1.100</span>
+<span class="w">  </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1883</span>
+<span class="w">  </span><span class="nt">status_topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/status</span>
+<span class="w">  </span><span class="nt">loadpoint_topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/loadpoints/1/charging</span>
+<span class="w">  </span><span class="nt">block_battery_while_charging</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<h3 id="multiple-loadpoints-with-authentication">Multiple Loadpoints with Authentication<a class="headerlink" href="#multiple-loadpoints-with-authentication" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">evcc</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">broker</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc.local</span>
+<span class="w">  </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1883</span>
+<span class="w">  </span><span class="nt">status_topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/status</span>
+<span class="w">  </span><span class="nt">loadpoint_topic</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/loadpoints/1/charging</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/loadpoints/2/charging</span>
+<span class="w">  </span><span class="nt">block_battery_while_charging</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">batcontrol</span>
+<span class="w">  </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">secure_password</span>
+</code></pre></div>
+<h3 id="advanced-setup-with-buffer-soc">Advanced Setup with Buffer SOC<a class="headerlink" href="#advanced-setup-with-buffer-soc" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">evcc</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">broker</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mqtt.home.local</span>
+<span class="w">  </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1883</span>
+<span class="w">  </span><span class="nt">status_topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/status</span>
+<span class="w">  </span><span class="nt">loadpoint_topic</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/loadpoints/1/charging</span>
+<span class="w">  </span><span class="nt">block_battery_while_charging</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">battery_halt_topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/site/bufferSoc</span>
+<span class="w">  </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mqtt_user</span>
+<span class="w">  </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mqtt_pass</span>
+</code></pre></div>
+<h3 id="monitoring-only-no-battery-blocking">Monitoring Only (No Battery Blocking)<a class="headerlink" href="#monitoring-only-no-battery-blocking" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">evcc</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">broker</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">localhost</span>
+<span class="w">  </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1883</span>
+<span class="w">  </span><span class="nt">status_topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/status</span>
+<span class="w">  </span><span class="nt">loadpoint_topic</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">evcc/loadpoints/1/charging</span>
+<span class="w">  </span><span class="nt">block_battery_while_charging</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">  </span><span class="c1"># Battery discharge follows normal batcontrol algorithm</span>
+</code></pre></div>
+<p><strong>Use Case</strong>: This configuration allows you to monitor EV charging status without affecting battery discharge behavior. The battery will charge/discharge according to batcontrol's normal price-based algorithm, regardless of whether the EV is charging.</p>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="common-issues">Common Issues<a class="headerlink" href="#common-issues" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Connection Failed</strong></li>
+<li>Verify evcc MQTT broker settings match batcontrol configuration</li>
+<li>Check network connectivity between batcontrol and MQTT broker</li>
+<li>
+<p>Ensure MQTT credentials are correct</p>
+</li>
+<li>
+<p><strong>Charging Not Detected</strong></p>
+</li>
+<li>Verify loadpoint topic names match your evcc configuration</li>
+<li>Check evcc MQTT API is enabled and publishing messages</li>
+<li>
+<p>Use MQTT client to monitor topics: <code>mosquitto_sub -h localhost -t evcc/+/+</code></p>
+</li>
+<li>
+<p><strong>Buffer SOC Not Working</strong></p>
+</li>
+<li>Ensure <code>battery_halt_topic</code> matches evcc's bufferSoc topic</li>
+<li>Verify evcc is publishing bufferSoc values</li>
+<li>Check logs for: <code>"Enabling battery threshold management"</code></li>
+</ol>
+<h3 id="debug-logging">Debug Logging<a class="headerlink" href="#debug-logging" title="Permanent link">&para;</a></h3>
+<p>Enable detailed logging for troubleshooting:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">evcc</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="c1"># ... other config ...</span>
+<span class="w">  </span><span class="nt">logger</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">  </span><span class="c1"># Enable MQTT debug logging</span>
+</code></pre></div>
+<h3 id="log-messages-to-watch-for">Log Messages to Watch For<a class="headerlink" href="#log-messages-to-watch-for" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>"evcc is online"</code> - evcc status detection working</li>
+<li><code>"Loadpoint evcc/loadpoints/1/charging is charging"</code> - charging detection</li>
+<li><code>"evcc is charging, set block"</code> - battery blocking activated</li>
+<li><code>"Enabling battery threshold management"</code> - buffer SOC feature active</li>
+<li><code>"New battery_halt value: 50"</code> - buffer SOC updated</li>
+</ul>
+<h2 id="integration-with-home-assistant">Integration with Home Assistant<a class="headerlink" href="#integration-with-home-assistant" title="Permanent link">&para;</a></h2>
+<p>When using both batcontrol and evcc with Home Assistant:</p>
+<ol>
+<li>Use the same MQTT broker for all three systems</li>
+<li>Configure evcc auto-discovery: <code>homeassistant</code> topic</li>
+<li>Configure batcontrol MQTT auto-discovery for the same topic</li>
+<li>Both systems will create entities in Home Assistant automatically</li>
+</ol>
+<h2 id="security-considerations">Security Considerations<a class="headerlink" href="#security-considerations" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Use authentication for production MQTT brokers</li>
+<li>Use TLS encryption (<code>tls: true</code> with a valid <code>cafile</code>) when the MQTT broker is not on a fully trusted local network</li>
+<li>Ensure MQTT user has appropriate topic permissions</li>
+<li>Keep MQTT credentials secure and unique</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../mqtt-inverter/" class="md-footer__link md-footer__link--prev" aria-label="Previous: MQTT Inverter">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                MQTT Inverter
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../development/15-min-transform/" class="md-footer__link md-footer__link--next" aria-label="Next: 15-Minute Interval Transformation">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                15-Minute Interval Transformation
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../assets/js/vendor/chart.umd.js"></script>
+      
+        <script src="../../assets/js/peak-shaving-charts.js"></script>
+      
+    
+  </body>
+</html>

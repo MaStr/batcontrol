@@ -1,0 +1,2080 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Optimize your electricity costs by re-charging your PV battery when electricity is cheap and there is not enough solar power available.">
+      
+      
+      
+        <link rel="canonical" href="https://mastr.github.io/batcontrol/development/solar-limit-evaluation/">
+      
+      
+        <link rel="prev" href="../15-min-transform/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Solar Feed-in Limit Evaluation - Batcontrol Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/css/peak-shaving-charts.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#evaluation-solar-feed-in-limit-solarspitzengesetz-in-peak-shaving" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Batcontrol Documentation" class="md-header__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Batcontrol Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Solar Feed-in Limit Evaluation
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Batcontrol Documentation" class="md-nav__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    Batcontrol Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/how-batcontrol-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Batcontrol Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/batcontrol-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Main Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/inverter-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/dynamic-tariff-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Tariff Provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/solar-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/consumption-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Consumption Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/battery-control-expert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Battery Control Expert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving-scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving Scenarios
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/price-difference-calculation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Price Difference Calculation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mqtt-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/forecast-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forecast Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mqtt-inverter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/evcc-connection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    evcc Connection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../15-min-transform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15-Minute Interval Transformation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Feed-in Limit Evaluation
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Feed-in Limit Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#background-the-60-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background: the 60% rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#terminology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terminology
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-finding-todays-peak-shaving-can-cause-curtailment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key finding: today's peak shaving can cause curtailment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposed-algorithm-the-solar_cap-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed algorithm: the "solar_cap" rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-design-one-switch-per-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration design: one switch per rule
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration design: one switch per rule">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#relation-to-production_offset_percent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relation to production_offset_percent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#priorities-between-the-rule-flavors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priorities between the rule flavors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#simulation-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Simulation results
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Simulation results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-reference-day" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — reference day
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-east-west-profile-56-kw-peak-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — east-west profile (5.6 kW peak &lt; limit)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-small-battery-5-kwh-scarcity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — small battery (5 kWh, scarcity)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-forecast-error-forecast-85-of-actual" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — forecast error (forecast = 85% of actual)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4b-severe-forecast-error-actual-125-of-forecast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4b — severe forecast error (actual = 125% of forecast)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-midday-consumption-spike-24-kw-12-14h" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — midday consumption spike (2.4 kW, 12-14h)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-6-15-minute-resolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 6 — 15-minute resolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assessment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assessment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-roadmap-follow-up-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration roadmap (follow-up step)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#background-the-60-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Background: the 60% rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#terminology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terminology
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-finding-todays-peak-shaving-can-cause-curtailment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key finding: today's peak shaving can cause curtailment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposed-algorithm-the-solar_cap-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed algorithm: the "solar_cap" rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-design-one-switch-per-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration design: one switch per rule
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration design: one switch per rule">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#relation-to-production_offset_percent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relation to production_offset_percent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#priorities-between-the-rule-flavors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priorities between the rule flavors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#simulation-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Simulation results
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Simulation results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-reference-day" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — reference day
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-east-west-profile-56-kw-peak-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — east-west profile (5.6 kW peak &lt; limit)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-small-battery-5-kwh-scarcity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — small battery (5 kWh, scarcity)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-forecast-error-forecast-85-of-actual" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — forecast error (forecast = 85% of actual)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4b-severe-forecast-error-actual-125-of-forecast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4b — severe forecast error (actual = 125% of forecast)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-midday-consumption-spike-24-kw-12-14h" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — midday consumption spike (2.4 kW, 12-14h)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-6-15-minute-resolution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 6 — 15-minute resolution
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assessment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assessment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-roadmap-follow-up-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration roadmap (follow-up step)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/MaStr/batcontrol/edit/main/docs/development/solar-limit-evaluation.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="evaluation-solar-feed-in-limit-solarspitzengesetz-in-peak-shaving">Evaluation: Solar feed-in limit (Solarspitzengesetz) in peak shaving<a class="headerlink" href="#evaluation-solar-feed-in-limit-solarspitzengesetz-in-peak-shaving" title="Permanent link">&para;</a></h1>
+<p>Status: <strong>implemented</strong> — the rule described here ships as <code>src/batcontrol/logic/solar_limit.py</code>
+plus <code>_apply_solar_limit()</code> in <code>src/batcontrol/logic/next.py</code>. This page documents the
+evaluation that preceded the implementation; its numbers are reproduced by the test suite.
+Simulation script: <a href="https://github.com/MaStr/batcontrol/blob/main/scripts/simulate_solar_limit_day.py"><code>scripts/simulate_solar_limit_day.py</code></a>,
+figures generated by <code>scripts/plot_solar_limit_day.py</code>.</p>
+<h2 id="background-the-60-rule">Background: the 60% rule<a class="headerlink" href="#background-the-60-rule" title="Permanent link">&para;</a></h2>
+<p>The German "Solarspitzengesetz" (in force since 2025-02-25) limits uncontrolled PV
+plants (no iMSys + control box) to feeding at most <strong>60% of their installed power</strong>
+into the grid at the grid connection point (Sec. 9 (2) no. 3 EEG). The inverter
+enforces the limit hard: production above it is <strong>curtailed and lost</strong>, unless it is
+self-consumed or charged into the battery.</p>
+<p>For a 10 kWp plant this means at most 6,000 W of feed-in. On a clear summer day
+peaking at ~8.9 kW, several hours sit above the limit; without countermeasures about
+<strong>7.5 kWh are lost</strong> on such a day (see the reference scenario below).</p>
+<p><img alt="The clipping problem: power above the feed-in limit is lost" src="../../assets/solar_limit_clipping.png" /></p>
+<p>Important: this is a <strong>power limit, not an energy limit</strong>. The losses concentrate on
+the midday peak — exactly the window in which a naively charged battery has long
+been full.</p>
+<h2 id="terminology">Terminology<a class="headerlink" href="#terminology" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>clip</strong></td>
+<td>The part of the PV surplus above the feed-in limit — the energy the inverter curtails (loses) unless the battery absorbs it. Red area in the figures.</td>
+</tr>
+<tr>
+<td><strong>cap</strong></td>
+<td>An upper limit on the PV-to-battery charge rate (<code>limit_battery_charge_rate</code> in W). Today's peak-shaving rules emit caps to <em>delay</em> charging. <code>-1</code> = no cap, <code>0</code> = block charging.</td>
+</tr>
+<tr>
+<td><strong>floor</strong></td>
+<td>A lower bound on the allowed charge rate during clip slots: the battery must be <em>permitted</em> to charge at least the power above the feed-in limit. With a greedy-charging inverter a floor never forces charging — it only raises the applied cap, and the inverter charges <code>min(actual surplus, cap)</code>.</td>
+</tr>
+<tr>
+<td><strong>reservation</strong></td>
+<td>Free battery capacity held back before the clip window so it is still available when clipping starts. Implemented as a cap (case A below).</td>
+</tr>
+<tr>
+<td><strong>headroom</strong></td>
+<td>A safety factor &gt;= 1.0 multiplied onto the <em>forecast surplus</em> before computing the clip. Solar forecasts systematically underestimate peaks; headroom reconstructs the higher real curve so reservation and floor are sized correctly.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="key-finding-todays-peak-shaving-can-cause-curtailment">Key finding: today's peak shaving can cause curtailment<a class="headerlink" href="#key-finding-todays-peak-shaving-can-cause-curtailment" title="Permanent link">&para;</a></h2>
+<p>The existing peak-shaving rules (<code>time</code>/<code>price</code>) emit a <strong>cap</strong> on the PV charge
+rate. When the PV surplus exceeds the feed-in limit, that cap blocks exactly the
+energy that should go into the battery — the difference is curtailed. In the
+reference scenario, plain time-based shaving curtails 1.8 kWh that the new rule
+recovers completely.</p>
+<p>Conversely, time-based shaving already helps partially (76% recovery vs. 0%
+baseline) because it shifts capacity into the afternoon — but uncoordinated and
+without any guarantee.</p>
+<h2 id="proposed-algorithm-the-solar_cap-rule">Proposed algorithm: the "solar_cap" rule<a class="headerlink" href="#proposed-algorithm-the-solar_cap-rule" title="Permanent link">&para;</a></h2>
+<p>The rule works on the existing forecast arrays (Wh per interval, index 0 = now) and
+distinguishes two cases. Per slot <code>k</code> (up to the end of the production window):</p>
+<div class="highlight"><pre><span></span><code>surplus_wh[k]    = max(0, production[k] - consumption[k])
+surplus_hr_wh[k] = surplus_wh[k] * headroom          # headroom acts on the surplus
+feed_allow_wh[k] = feed_in_limit_w * slot_h[k]
+clip_wh[k]       = max(0, surplus_hr_wh[k] - feed_allow_wh[k])
+</code></pre></div>
+<p>The "everything fits, no cap needed" check in case B compares the <strong>raw</strong> (not
+headroom-adjusted) total surplus against the free capacity — it is a physical
+check, not a safety margin.</p>
+<p><strong>Case A — before the clip window: reservation cap.</strong>
+Free capacity minus the predicted clip energy is spread evenly over the slots until
+the window starts. If the required reserve exceeds the free capacity, PV charging is
+blocked entirely (cap 0). This prevents exportable energy from displacing clip
+energy in the battery 1:1.</p>
+<p><strong>Case B — inside the clip window: floor + capacity-preserving cap.</strong></p>
+<div class="highlight"><pre><span></span><code>floor_w = clip_wh[0] / slot_h[0]
+cap_w   = -1                                if total surplus &lt;= free capacity
+        = floor_w + extra_wh / remaining_h  otherwise (extra = free cap. - remaining clip)
+</code></pre></div>
+<p>Under scarcity (<code>extra = 0</code>) the cap equals the floor: the battery absorbs <strong>only</strong>
+clip energy; everything below the limit is fed into the grid. No prioritization
+inside the window is needed — every absorbed clip Wh has equal value; the only
+harmful move is filling capacity with exportable energy.</p>
+<p><img alt="The solar_cap rule on the reference day: reservation cap, floor, SoC comparison" src="../../assets/solar_limit_algorithm.png" /></p>
+<h2 id="configuration-design-one-switch-per-rule">Configuration design: one switch per rule<a class="headerlink" href="#configuration-design-one-switch-per-rule" title="Permanent link">&para;</a></h2>
+<p>With three rule flavors (target time, price, solar) the previous <code>mode</code> string
+(<code>time</code>/<code>price</code>/<code>combined</code>) becomes confusing. Agreed design: <strong>one explicit switch
+per rule</strong>; <code>mode</code> is deprecated and mapped onto the switches at load time
+(<code>time</code> -&gt; <code>time_active</code>, <code>price</code> -&gt; <code>price_active</code>, <code>combined</code> -&gt; both):</p>
+<div class="highlight"><pre><span></span><code><span class="nt">peak_shaving</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                 </span><span class="c1"># master switch (as today, incl. evcc override)</span>
+<span class="w">  </span><span class="nt">time_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">              </span><span class="c1"># target-time rule (counter-linear ramp)</span>
+<span class="w">  </span><span class="nt">price_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">            </span><span class="c1"># price rule (reserve for cheap windows)</span>
+<span class="w">  </span><span class="nt">solar_cap_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">        </span><span class="c1"># NEW: clip absorption (feed-in limit)</span>
+<span class="w">  </span><span class="nt">allow_full_battery_after</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">14</span><span class="w">   </span><span class="c1"># parameter of the target-time rule</span>
+<span class="w">  </span><span class="nt">price_limit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.05</span><span class="w">              </span><span class="c1"># parameter of the price rule</span>
+<span class="w">  </span><span class="nt">feed_in_limit_w</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w">             </span><span class="c1"># parameter of the solar rule: feed-in limit in W.</span>
+<span class="w">                                 </span><span class="c1"># 0 = neutral (rule has no effect even if</span>
+<span class="w">                                 </span><span class="c1"># solar_cap_active is true). Formula: 0.6 * kWp * 1000</span>
+<span class="w">  </span><span class="nt">feed_in_limit_headroom</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span><span class="w">    </span><span class="c1"># safety factor &gt;= 1.0 on the forecast surplus</span>
+<span class="w">                                 </span><span class="c1"># (see terminology and scenario 4b)</span>
+</code></pre></div>
+<p><code>feed_in_limit_w</code> is deliberately an <strong>absolute watt value</strong>: the installed power
+(kWp) exists in the config only for fcsolar <code>pvinstallations</code> (not at all for
+Solcast), and the limit applies at the grid connection point of the whole plant.
+<code>0</code> is the neutral value — in addition to the switch, so an unconfigured limit can
+never be misread as "0 W of feed-in allowed".</p>
+<h3 id="relation-to-production_offset_percent">Relation to production_offset_percent<a class="headerlink" href="#relation-to-production_offset_percent" title="Permanent link">&para;</a></h3>
+<p><code>battery_control_expert.production_offset_percent</code> also scales the production
+forecast, so the overlap was evaluated. Measured inside the solar rule the two
+knobs are indeed equivalent — same effect, same trade-off:</p>
+<table>
+<thead>
+<tr>
+<th>Setting (rule view)</th>
+<th style="text-align: right;">Recovery at +25% error</th>
+<th style="text-align: right;">Recovery with correct forecast</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>production_offset_percent: 1.25</code></td>
+<td style="text-align: right;">100.0%</td>
+<td style="text-align: right;">58.7%</td>
+</tr>
+<tr>
+<td><code>feed_in_limit_headroom: 1.25</code></td>
+<td style="text-align: right;">94.7%</td>
+<td style="text-align: right;">62.7%</td>
+</tr>
+</tbody>
+</table>
+<p>They differ in <strong>scope</strong>, which is why the rule gets its own key:</p>
+<ul>
+<li><code>production_offset_percent</code> is applied globally in <code>core.py</code> before the forecast
+  enters the logic. A value &gt; 1 distorts every downstream decision: less grid
+  recharge is planned, discharge decisions become more generous, time/price caps
+  engage too early. Its documented purpose is the opposite direction (winter mode
+  <code>0.7</code>, snow, degradation).</li>
+<li><code>feed_in_limit_headroom</code> affects only the solar rule's reservation and floor.
+  The clipping-relevant forecast error is a <em>shape</em> error (underestimated midday
+  peak on clear days), not a whole-day energy error.</li>
+</ul>
+<p><strong>Do not use <code>production_offset_percent</code> (&gt; 1) to tune clip absorption.</strong> The two
+compose cleanly instead: the solar rule consumes the already offset-adjusted
+production array, so a winter user at <code>0.7</code> automatically gets a conservative
+(smaller) clip prediction — harmless, since nothing clips in winter.</p>
+<h3 id="priorities-between-the-rule-flavors">Priorities between the rule flavors<a class="headerlink" href="#priorities-between-the-rule-flavors" title="Permanent link">&para;</a></h3>
+<p>Documented, fixed order of precedence (no configuration needed):</p>
+<ol>
+<li><strong><code>enabled</code> (master)</strong> off -&gt; no rule acts (incl. the evcc runtime override).</li>
+<li><strong>Force-charge from grid (MODE -1)</strong> overrides all peak shaving (as today).</li>
+<li><strong>All active cap rules</strong> (target-time ramp, price reserve, solar reservation)
+   each emit a limit; the <strong>strictest wins</strong> (<code>min</code>, like today's <code>combined</code>).</li>
+<li><strong>The solar floor overrides every cap</strong>: <code>final = max(floor, min(caps))</code>.
+   Rationale: caps optimize economics (shift charging), the floor prevents
+   <strong>physical loss</strong> (curtailment). A cap below the floor would destroy energy.
+   The floor therefore also applies <strong>after</strong> <code>allow_full_battery_after</code> and at
+   high SoC (<code>always_allow_discharge</code> region) — the clip window physically lasts
+   longer than the target hour. Consequence: the solar reservation may let the
+   battery reach 100% only after the target hour; lost energy weighs more than a
+   late-full battery.</li>
+<li><strong>Static inverter clamps</strong> last (<code>max_pv_charge_rate</code> as upper bound, 500 W
+   minimum via <code>enforce_min_pv_charge_rate</code>). Caution: a configured
+   <code>max_pv_charge_rate</code> below the floor makes curtailment physically unavoidable
+   -&gt; startup warning planned.</li>
+</ol>
+<p>Sentinel semantics stay unchanged: <code>-1</code> = no limit, <code>0</code> = block charging. <code>-1</code>
+automatically satisfies every floor because the inverter then charges surplus
+greedily anyway — <strong>no new inverter mode</strong> is needed; the floor is the guarantee
+<code>applied cap &gt;= floor</code>.</p>
+<h2 id="simulation-results">Simulation results<a class="headerlink" href="#simulation-results" title="Permanent link">&para;</a></h2>
+<p>All numbers from <code>scripts/simulate_solar_limit_day.py</code> (reference: 10 kWp south,
+clear summer day, 8.9 kW peak, 6,000 W limit, 10 kWh battery, 400 W base load,
+starting SoC 15%, hourly resolution). "Recovery" = share of the energy curtailed
+without a battery that is saved.</p>
+<h3 id="scenario-1-reference-day">Scenario 1 — reference day<a class="headerlink" href="#scenario-1-reference-day" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Trace</th>
+<th style="text-align: right;">Feed-in</th>
+<th style="text-align: right;">Curtailed</th>
+<th style="text-align: right;">Recovery</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline (all rules off)</td>
+<td style="text-align: right;">40.50 kWh</td>
+<td style="text-align: right;">7.50 kWh</td>
+<td style="text-align: right;">0%</td>
+</tr>
+<tr>
+<td>Only <code>time_active</code> (today)</td>
+<td style="text-align: right;">46.20 kWh</td>
+<td style="text-align: right;">1.80 kWh</td>
+<td style="text-align: right;">76.0%</td>
+</tr>
+<tr>
+<td>Only <code>solar_cap_active</code></td>
+<td style="text-align: right;">48.00 kWh</td>
+<td style="text-align: right;">0.00 kWh</td>
+<td style="text-align: right;"><strong>100%</strong></td>
+</tr>
+<tr>
+<td><code>time_active + solar_cap_active</code></td>
+<td style="text-align: right;">48.00 kWh</td>
+<td style="text-align: right;">0.00 kWh</td>
+<td style="text-align: right;"><strong>100%</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The end-of-day SoC is identical in all traces (83.3%) — the rule gives nothing
+away, it only changes <strong>what</strong> the battery is filled with. Visible in the slot
+detail: before the window the reservation cap limits charging to 625 W; from 11:00
+the floor lifts the charge rate to exactly the clip power (1,200 -&gt; 2,500 -&gt; 2,400
+-&gt; 1,400 W) while feed-in stays pinned at 6,000 W. In the combined trace the floor
+overrides the time-ramp cap exactly when that cap would cause curtailment.</p>
+<h3 id="scenario-2-east-west-profile-56-kw-peak-limit">Scenario 2 — east-west profile (5.6 kW peak &lt; limit)<a class="headerlink" href="#scenario-2-east-west-profile-56-kw-peak-limit" title="Permanent link">&para;</a></h3>
+<p>No clipping expected; the rule stays completely inert — trace bit-identical to the
+baseline (regression check passed, no false positives).</p>
+<h3 id="scenario-3-small-battery-5-kwh-scarcity">Scenario 3 — small battery (5 kWh, scarcity)<a class="headerlink" href="#scenario-3-small-battery-5-kwh-scarcity" title="Permanent link">&para;</a></h3>
+<p>Free capacity at window start 5.00 kWh, clip potential 7.50 kWh:</p>
+<table>
+<thead>
+<tr>
+<th>Trace</th>
+<th style="text-align: right;">Curtailed</th>
+<th style="text-align: right;">Recovery</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline</td>
+<td style="text-align: right;">7.50 kWh</td>
+<td style="text-align: right;">0%</td>
+</tr>
+<tr>
+<td>Only <code>solar_cap_active</code></td>
+<td style="text-align: right;">2.50 kWh</td>
+<td style="text-align: right;">66.7%</td>
+</tr>
+</tbody>
+</table>
+<p>Recovered: <strong>5.00 kWh = exactly the free capacity at window start</strong> — the
+theoretical maximum. The reservation blocks all morning PV charging (cap 0, feed-in
+continues below the limit), inside the window <code>cap == floor</code> holds.</p>
+<h3 id="scenario-4-forecast-error-forecast-85-of-actual">Scenario 4 — forecast error (forecast = 85% of actual)<a class="headerlink" href="#scenario-4-forecast-error-forecast-85-of-actual" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Trace</th>
+<th style="text-align: right;">Curtailed</th>
+<th style="text-align: right;">Recovery</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline</td>
+<td style="text-align: right;">7.50 kWh</td>
+<td style="text-align: right;">0%</td>
+</tr>
+<tr>
+<td>solar, headroom 1.0</td>
+<td style="text-align: right;">4.96 kWh</td>
+<td style="text-align: right;">33.8%</td>
+</tr>
+<tr>
+<td>solar, headroom 1.2</td>
+<td style="text-align: right;">4.46 kWh</td>
+<td style="text-align: right;">40.6%</td>
+</tr>
+<tr>
+<td>solar, headroom 1.5</td>
+<td style="text-align: right;">4.23 kWh</td>
+<td style="text-align: right;">43.5%</td>
+</tr>
+<tr>
+<td>solar, perfect forecast</td>
+<td style="text-align: right;">0.00 kWh</td>
+<td style="text-align: right;">100%</td>
+</tr>
+</tbody>
+</table>
+<p>Findings: (a) the algorithm is clearly forecast-sensitive — a 15% underestimation
+of production underestimates the clip disproportionately (the clip is the "tip" of
+the curve). (b) Headroom applied to the clip energy improves the reservation only
+moderately (+7 points at 1.2), because inside the window the <strong>floor</strong> is also
+computed from the too-low forecast. The mitigation plan derived from this is
+developed and quantified in scenario 4b.</p>
+<h3 id="scenario-4b-severe-forecast-error-actual-125-of-forecast">Scenario 4b — severe forecast error (actual = 125% of forecast)<a class="headerlink" href="#scenario-4b-severe-forecast-error-actual-125-of-forecast" title="Permanent link">&para;</a></h3>
+<p>The forecast sees only <strong>1.36 kWh</strong> of clip potential instead of the real 7.50 kWh
+and does not recognize entire clip slots (11:00, 14:00) as such at all — a
+multiplier on the predicted clip energy structurally cannot repair that. Since
+batcontrol has <strong>no live measurement of the current production</strong>, only
+forecast-based mitigations are available; two were implemented and compared:</p>
+<ul>
+<li><strong>Headroom on the surplus</strong> (<code>headroom_on='surplus'</code>): the factor is applied to
+  the forecast surplus before the clip computation. This reconstructs an
+  underestimated production curve and also finds clip slots the raw forecast
+  misses — it repairs the <strong>reservation</strong> before the window.</li>
+<li><strong>Headroom floor</strong> (<code>floor_source='headroom'</code>): the floor inside the window is
+  computed from the headroom-corrected instead of the raw clip. With greedy
+  charging inverters the floor is only a <strong>permission</strong> anyway (the applied cap is
+  raised, the inverter charges <code>min(actual surplus, cap)</code>) — charging that does
+  not physically exist is never forced. It repairs the <strong>absorption</strong> inside the
+  window.</li>
+</ul>
+<p><img alt="What headroom does: reconstructing an underestimated forecast" src="../../assets/solar_limit_headroom.png" /></p>
+<p>Results under both conditions (actual = 125% of forecast vs. forecast correct):</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th style="text-align: right;">Recovery at +25% error</th>
+<th style="text-align: right;">Recovery with correct forecast</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>headroom 1.25 on clip (raw floor)</td>
+<td style="text-align: right;">38.7%</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>headroom 1.25 on surplus (raw floor)</td>
+<td style="text-align: right;">31.8%</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>surplus 1.1 + headroom floor</td>
+<td style="text-align: right;">44.9%</td>
+<td style="text-align: right;">94.5% (loss 0.41 kWh)</td>
+</tr>
+<tr>
+<td>surplus 1.25 + headroom floor</td>
+<td style="text-align: right;"><strong>94.7%</strong></td>
+<td style="text-align: right;">62.7% (loss 2.80 kWh)</td>
+</tr>
+<tr>
+<td>neutral (headroom 1.0)</td>
+<td style="text-align: right;">31.8-38.7%</td>
+<td style="text-align: right;"><strong>100%</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Key insights:</p>
+<ol>
+<li>Both measures are effective <strong>only together</strong>: without the headroom floor the
+   perfect reservation is worthless (the forecast-based cap blocks charging while
+   real clipping happens — which is why "surplus alone" is even slightly worse
+   than "clip alone"); without the surplus headroom the battery is already
+   pre-filled when the window starts.</li>
+<li><strong>Without a live measurement the headroom is a genuine trade-off</strong>: its value
+   must roughly match the typical forecast error. Too high a value (1.25 with a
+   correct forecast) charges exportable energy inside the window and displaces
+   clip energy 1:1 on capacity-scarce days (2.8 kWh loss). Too low a value leaves
+   clip energy on the table.</li>
+<li><strong>1.1 is the robust compromise</strong>: it costs only 0.41 kWh with a correct
+   forecast and already improves the error case noticeably.</li>
+</ol>
+<p><strong>Forecast-error plan (settled for the integration, forecast-only):</strong></p>
+<ol>
+<li><strong><code>feed_in_limit_headroom</code> acts on the forecast surplus</strong> and the <strong>floor is
+   computed from the headroom-corrected clip</strong> (one shared knob, no second config
+   key). Default <code>1.0</code> (neutral, lossless with a correct forecast); documented
+   recommendation <code>1.1</code>, up to <code>1.25</code> for known-pessimistic forecast sources.</li>
+<li>Document the side effects: headroom &gt; 1 can trigger an unnecessary reservation
+   on days just below the limit (battery full later, no energy loss) and can
+   displace a small part of the clip on capacity-scarce clipping days with a
+   correct forecast (quantified above).</li>
+<li>The 15-minute resolution (<code>time_resolution_minutes: 15</code>) additionally reduces
+   the systematic part of the error (scenario 6).</li>
+<li><strong>Future option</strong> (requires a new data path): a live measurement of the
+   current production/feed-in would make the floor forecast-independent and
+   dissolve the trade-off — batcontrol does not capture these values today.</li>
+</ol>
+<h3 id="scenario-5-midday-consumption-spike-24-kw-12-14h">Scenario 5 — midday consumption spike (2.4 kW, 12-14h)<a class="headerlink" href="#scenario-5-midday-consumption-spike-24-kw-12-14h" title="Permanent link">&para;</a></h3>
+<p>Self-consumption lowers the clip potential to 3.50 kWh; the combination
+<code>time + solar_cap</code> recovers 100% (baseline 0%, time-only 60%).</p>
+<h3 id="scenario-6-15-minute-resolution">Scenario 6 — 15-minute resolution<a class="headerlink" href="#scenario-6-15-minute-resolution" title="Permanent link">&para;</a></h3>
+<p>Consistency check on the interpolated reference day: 99.1% recovery (residual loss
+of 0.07 kWh from interpolation edges at slot boundaries). The 15-minute resolution
+additionally reduces the systematic "hourly average understates instantaneous
+clipping" error.</p>
+<h2 id="assessment">Assessment<a class="headerlink" href="#assessment" title="Permanent link">&para;</a></h2>
+<p>The algorithm meets the requirements:</p>
+<ol>
+<li><strong>It saves the "40%"</strong>: 100% recovery with a correct forecast, exactly the
+   physical maximum with a scarce battery.</li>
+<li><strong>It fixes a defect</strong>: without the floor, the existing peak shaving itself
+   causes losses on clipping days (1.8 kWh on the reference day).</li>
+<li><strong>It is minimally invasive</strong>: no new inverter mode, no new data source, same
+   sentinel semantics, additive as a post-processing step.</li>
+<li><strong>It is neutral when it has nothing to do</strong> (east-west scenario) and fully
+   disengageable via <code>feed_in_limit_w: 0</code> or <code>solar_cap_active: false</code>.</li>
+</ol>
+<p>Known limits: forecast sensitivity (scenarios 4/4b) — without a live measurement
+of the current production (currently not part of batcontrol) the headroom remains
+a trade-off whose value must match the typical forecast error (recommendation
+1.1); hourly average vs. instantaneous power (a slot averaging just below the
+limit can still clip briefly — partially covered by headroom).</p>
+<h2 id="integration-roadmap-follow-up-step">Integration roadmap (follow-up step)<a class="headerlink" href="#integration-roadmap-follow-up-step" title="Permanent link">&para;</a></h2>
+<ol>
+<li><code>logic/logic_interface.py</code>: extend <code>PeakShavingConfig</code> with <code>time_active</code>,
+   <code>price_active</code>, <code>solar_cap_active</code>, <code>feed_in_limit_w</code> (default 0 = neutral) and
+   <code>feed_in_limit_headroom</code> (default 1.0); deprecate <code>mode</code> and map it onto the
+   switches in <code>from_config()</code> (log a warning); validation analogous to
+   <code>price_limit</code>.</li>
+<li>New <code>logic/solar_limit.py</code>: take <code>compute_solar_limit()</code> and <code>merge_limits()</code>
+   from the simulation script unchanged (pure functions, pattern:
+   <code>grid_charge_target.py</code>).</li>
+<li><code>logic/next.py</code>: own post-processing step <code>_apply_solar_limit()</code> <strong>after</strong>
+   <code>_apply_peak_shaving()</code> with its own (smaller) skip list: also runs at high SoC
+   and after <code>allow_full_battery_after</code>; still skips on force-charge and on
+   <code>allow_discharge == False</code> (there the inverter charges surplus unrestricted
+   anyway). Merge according to the priority rule above;
+   <code>enforce_min_pv_charge_rate</code> once on the final merged value. Extract the helper
+   <code>_remaining_interval_hours()</code> (partial slot 0, cf. the grid-recharge block).
+   <code>feed_in_limit_headroom</code> acts on the forecast surplus and the floor uses the
+   headroom-corrected clip (<code>headroom_on='surplus'</code>, <code>floor_source='headroom'</code> in
+   the simulation script; trade-off see scenario 4b).</li>
+<li><code>core.py</code>: startup warning when <code>feed_in_limit_w &gt; 0</code> and
+   <code>max_pv_charge_rate &gt; 0</code>.</li>
+<li>Tests: <code>tests/batcontrol/logic/test_solar_limit.py</code> (pure functions) +
+   integration cases in <code>test_peak_shaving.py</code> (floor overrides cap incl. cap 0,
+   reservation, scarcity <code>cap == floor</code>, neutral value = bit-identical behavior,
+   sentinels, partial slot 0, 15-min, mode deprecation mapping).</li>
+<li><code>config/batcontrol_config_dummy.yaml</code> + <code>docs/features/peak-shaving.md</code> +
+   HA add-on mirroring (<code>MaStr/batcontrol_ha_addon</code>).</li>
+<li>Open for the integration: live measurement as floor source for slot 0 (see
+   scenario 4b); active discharging before the window (deferred, passive
+   reservation only); MQTT topic <code>predicted_clip_wh</code> (read-only, optional).</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../15-min-transform/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 15-Minute Interval Transformation">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                15-Minute Interval Transformation
+              </div>
+            </div>
+          </a>
+        
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../assets/js/vendor/chart.umd.js"></script>
+      
+        <script src="../../assets/js/peak-shaving-charts.js"></script>
+      
+    
+  </body>
+</html>
