@@ -32,6 +32,8 @@ The following topics are published:
 - /solar_active: bool indicating whether solar is currently producing (slot 0 > 0)
 - /pv_start_battery_wh: battery level in Wh (above MIN_SOC) at the next net-charging point (when PV first exceeds consumption)
 - /forecast_min_battery_wh: minimum battery level in Wh (above MIN_SOC) over the entire forecast horizon (0 = shortage expected)
+- /grid_charge_locked: bool indicating whether an external (e.g. HEMS/grid operator,
+  section 14a EnWG) request is currently blocking charging from the grid
 
 The following statistical arrays are published as JSON arrays:
 - /FCST/production: forecasted production, Wh per interval (plus power_w: average W)
@@ -52,6 +54,11 @@ Implemented Input-API:
 - /min_price_difference/set: set minimum price difference in EUR
 - /production_offset/set: set production offset percentage (0.0-2.0)
 
+Additionally, an arbitrary external topic (not namespaced below the base topic) can be
+registered via register_external_topic_callback(), e.g. to receive a grid-charge-lock
+signal from a HEMS or grid operator (section 14a EnWG). See core.py for the
+grid_charge_lock_topic config option.
+
 The module uses the paho-mqtt library for MQTT communication and numpy for handling arrays.
 """
 import time
@@ -70,6 +77,7 @@ TOPIC_CHARGE_RATE = 'charge_rate'
 TOPIC_LIMIT_BATTERY_CHARGE_RATE = 'limit_battery_charge_rate'
 TOPIC_API_OVERRIDE_ACTIVE = 'api_override_active'
 TOPIC_CONTROL_SOURCE = 'control_source'
+TOPIC_GRID_CHARGE_LOCKED = 'grid_charge_locked'
 TOPIC_SET_SUFFIX = '/set'
 
 
@@ -221,6 +229,21 @@ class MqttApi:
             'function': callback, 'convert': convert}
         self.client.subscribe(topic_string)
         self.client.message_callback_add(topic_string, self._handle_message)
+
+    def register_external_topic_callback(
+            self,
+            topic: str,
+            callback: callable,
+            convert: callable) -> None:
+        """ Register a callback for an absolute external topic, used as-is
+            (not namespaced below base_topic and without a /set suffix).
+            Useful for listening to topics published by external systems
+            (e.g. a HEMS or grid operator signal).
+        """
+        logger.debug('Registering callback for external topic %s', topic)
+        self.callbacks[topic] = {'function': callback, 'convert': convert}
+        self.client.subscribe(topic)
+        self.client.message_callback_add(topic, self._handle_message)
 
     def publish_mode(self, mode: int) -> None:
         """ Publish the mode (charge, lock, discharge) to MQTT
@@ -532,6 +555,16 @@ class MqttApi:
                 self.base_topic +
                 '/discharge_blocked',
                 str(discharge_blocked).lower())
+
+    def publish_grid_charge_locked(self, locked: bool) -> None:
+        """ Publish whether an external request is blocking charging from the grid
+            /grid_charge_locked
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self._topic(TOPIC_GRID_CHARGE_LOCKED),
+                str(locked).lower(),
+                retain=True)
 
     def publish_production_offset(self, production_offset: float) -> None:
         """ Publish the production offset percentage to MQTT
@@ -878,6 +911,16 @@ class MqttApi:
             None,
             self._topic(TOPIC_CONTROL_SOURCE),
             entity_category="diagnostic")
+
+        self.publish_mqtt_discovery_message(
+            "Grid Charge Locked",
+            "batcontrol_grid_charge_locked",
+            "binary_sensor",
+            None,
+            None,
+            self._topic(TOPIC_GRID_CHARGE_LOCKED),
+            entity_category="diagnostic",
+            value_template="{% if value == 'true' %}ON{% else %}OFF{% endif %}")
 
         # sensors
         self.publish_mqtt_discovery_message(

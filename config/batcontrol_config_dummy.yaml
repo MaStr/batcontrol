@@ -193,6 +193,14 @@ mqtt:
   keyfile: /etc/ssl/certs/client.key           # path to client private key (optional, for mutual TLS)
   auto_discover_enable: true # enables mqtt auto discover => https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
   auto_discover_topic: homeassistant # base topic path for auto discover config messages - default 'homeassistant' -> https://www.home-assistant.io/integrations/mqtt/#discovery-options
+  # Optional: external grid-charge lock signal (e.g. from a HEMS or grid operator
+  # controllable-consumption-device request, section 14a EnWG).
+  # This is a full/absolute topic, NOT nested below 'topic' above, since it is
+  # published by an external system. Mirrors evcc's "External Limit":
+  # https://docs.evcc.io/en/user-defined-devices/#external-limit
+  # Payload 1/true: block charging from the grid immediately.
+  # Payload 0/false (default): restore the previous max_charging_from_grid_limit.
+  # grid_charge_lock_topic: hems/batcontrol/grid_charge_lock
 
 #--------------------------
 #  Forecast Solar

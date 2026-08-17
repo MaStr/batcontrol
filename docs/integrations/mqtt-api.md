@@ -65,6 +65,38 @@ mqtt:
 | `certfile` | string | — | Path to the client certificate (optional, for mutual TLS) |
 | `keyfile` | string | — | Path to the client private key (optional, for mutual TLS) |
 
+### Grid Charge Lock (external HEMS/grid operator signal)
+
+Some grid operators (in Germany: section 14a EnWG) or home energy management
+systems (HEMS) can request that controllable consumption devices stop drawing
+power from the grid. Batcontrol can listen to a single external MQTT topic for
+this signal. It mirrors evcc's
+[External Limit](https://docs.evcc.io/en/user-defined-devices/#external-limit)
+convention.
+
+```yaml
+mqtt:
+  enabled: true
+  grid_charge_lock_topic: hems/batcontrol/grid_charge_lock
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `grid_charge_lock_topic` | string | — | Optional. Full/absolute topic (not nested below `topic`) published by an external system. |
+
+Payload semantics (case-insensitive):
+
+- `1` or `true` - Immediately block charging from the grid. The current
+  `max_charging_from_grid_limit` is remembered and forced to `0`; an active
+  forced grid charge (`mode` `-1`) is cancelled right away.
+- `0` or `false` (default) - Restore the previously remembered
+  `max_charging_from_grid_limit`.
+
+The current lock state is published (retained) to `house/batcontrol/grid_charge_locked`.
+
+This only blocks *charging from the grid*; PV charging and battery discharging
+are not affected.
+
 ## Home Assistant Auto-Discovery
 
 Batcontrol supports Home Assistant's MQTT auto-discovery feature, which automatically creates entities in Home Assistant without manual configuration.
@@ -105,6 +137,7 @@ Batcontrol publishes data to the following topic structure (assuming base topic 
 - `house/batcontrol/discharge_blocked` - Whether discharge is blocked (`true`/`false`)
 - `house/batcontrol/api_override_active` - Whether a temporary external/API override is active (`true`/`false`)
 - `house/batcontrol/control_source` - Source that last selected the current control state (`api` or `optimizer`)
+- `house/batcontrol/grid_charge_locked` - Whether an external (HEMS/grid operator) request is currently blocking charging from the grid (`true`/`false`), see [Grid Charge Lock](#grid-charge-lock-external-hemsgrid-operator-signal) below
 
 ### Battery Information
 - `house/batcontrol/SOC` - State of Charge in % (two decimal places, e.g., `69.00`)

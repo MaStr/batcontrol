@@ -9,7 +9,9 @@ from batcontrol.core import (
     CONTROL_SOURCE_API,
     CONTROL_SOURCE_OPTIMIZER,
     MODE_ALLOW_DISCHARGING,
+    MODE_FORCE_CHARGING,
     MODE_LIMIT_BATTERY_CHARGE_RATE,
+    _parse_bool_flag,
 )
 from batcontrol.inverter import (
     InverterCommunicationError,
@@ -1327,6 +1329,187 @@ class TestMarketPriceRefresh:
         bc.shutdown()
 
         assert sched_module.get_jobs() == []
+
+
+class TestParseBoolFlag:
+    """_parse_bool_flag() parses MQTT payloads for the grid-charge lock (issue #216)."""
+
+    @pytest.mark.parametrize("payload,expected", [
+        ("1", True), ("true", True), ("True", True), ("TRUE", True),
+        (" 1 ", True), (" true ", True),
+        ("0", False), ("false", False), ("False", False), ("FALSE", False),
+        (" 0 ", False), (" false ", False),
+    ])
+    def test_valid_payloads(self, payload, expected):
+        assert _parse_bool_flag(payload) is expected
+
+    @pytest.mark.parametrize("payload", ["", "maybe", "2", "yes", "on"])
+    def test_invalid_payload_raises(self, payload):
+        with pytest.raises(ValueError):
+            _parse_bool_flag(payload)
+
+
+class TestApiSetGridChargeLock:
+    """External grid-charge lock signal (e.g. HEMS/grid operator, section 14a EnWG)."""
+
+    BASE_CONFIG = {
+        'timezone': 'Europe/Berlin',
+        'time_resolution_minutes': 60,
+        'inverter': {
+            'type': 'dummy',
+            'max_grid_charge_rate': 5000,
+            'max_pv_charge_rate': 3000,
+            'min_pv_charge_rate': 0,
+        },
+        'utility': {'type': 'tibber', 'apikey': 'test_token'},
+        'pvinstallations': [],
+        'consumption_forecast': {'type': 'simple', 'value': 500},
+        'battery_control': {
+            'max_charging_from_grid_limit': 0.8,
+            'min_price_difference': 0.05,
+        },
+        'mqtt': {'enabled': False},
+    }
+
+    @pytest.fixture
+    def bc(self, mocker):
+        mock_inverter = mocker.MagicMock()
+        mock_inverter.max_pv_charge_rate = 3000
+        mock_inverter.max_grid_charge_rate = 5000
+        mock_inverter.get_max_capacity.return_value = 10000
+        mocker.patch('batcontrol.core.tariff_factory.create_tarif_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.inverter_factory.create_inverter',
+                     autospec=True, return_value=mock_inverter)
+        mocker.patch('batcontrol.core.solar_factory.create_solar_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.consumption_factory.create_consumption',
+                     autospec=True, return_value=mocker.MagicMock())
+        instance = Batcontrol(dict(self.BASE_CONFIG))
+        yield instance
+        instance.shutdown()
+
+    def test_lock_zeroes_grid_charge_limit_and_remembers_previous(self, bc):
+        bc.mqtt_api = MagicMock()
+
+        bc.api_set_grid_charge_lock(True)
+
+        assert bc.max_charging_from_grid_limit == 0.0
+        assert bc._grid_charge_locked is True
+        assert bc._pre_lock_max_charging_from_grid_limit == 0.8
+        bc.mqtt_api.publish_grid_charge_locked.assert_called_once_with(True)
+
+    def test_unlock_restores_previous_grid_charge_limit(self, bc):
+        bc.mqtt_api = MagicMock()
+        bc.api_set_grid_charge_lock(True)
+
+        bc.api_set_grid_charge_lock(False)
+
+        assert bc.max_charging_from_grid_limit == 0.8
+        assert bc._grid_charge_locked is False
+        assert bc._pre_lock_max_charging_from_grid_limit is None
+        bc.mqtt_api.publish_grid_charge_locked.assert_called_with(False)
+
+    def test_unlock_without_prior_lock_is_a_noop(self, bc):
+        bc.mqtt_api = MagicMock()
+
+        bc.api_set_grid_charge_lock(False)
+
+        assert bc.max_charging_from_grid_limit == 0.8
+        bc.mqtt_api.publish_grid_charge_locked.assert_not_called()
+
+    def test_repeated_lock_is_idempotent(self, bc):
+        bc.mqtt_api = MagicMock()
+        bc.api_set_grid_charge_lock(True)
+
+        bc.api_set_grid_charge_lock(True)
+
+        bc.mqtt_api.publish_grid_charge_locked.assert_called_once_with(True)
+        assert bc._pre_lock_max_charging_from_grid_limit == 0.8
+
+    def test_lock_cancels_active_force_charge(self, bc):
+        bc.mqtt_api = MagicMock()
+        bc.force_charge(1000, control_source=CONTROL_SOURCE_API)
+        assert bc.last_mode == MODE_FORCE_CHARGING
+
+        bc.api_set_grid_charge_lock(True)
+
+        assert bc.last_mode == MODE_ALLOW_DISCHARGING
+        assert bc.max_charging_from_grid_limit == 0.0
+
+
+class TestGridChargeLockTopicRegistration:
+    """Wiring of the optional mqtt.grid_charge_lock_topic config option."""
+
+    BASE_CONFIG = {
+        'timezone': 'Europe/Berlin',
+        'time_resolution_minutes': 60,
+        'inverter': {
+            'type': 'dummy',
+            'max_grid_charge_rate': 5000,
+            'max_pv_charge_rate': 3000,
+            'min_pv_charge_rate': 0,
+        },
+        'utility': {'type': 'tibber', 'apikey': 'test_token'},
+        'pvinstallations': [],
+        'consumption_forecast': {'type': 'simple', 'value': 500},
+        'battery_control': {
+            'max_charging_from_grid_limit': 0.8,
+            'min_price_difference': 0.05,
+        },
+    }
+
+    def _patch_core(self, mocker):
+        mock_inverter = mocker.MagicMock()
+        mock_inverter.max_pv_charge_rate = 3000
+        mock_inverter.get_max_capacity.return_value = 10000
+        mocker.patch('batcontrol.core.tariff_factory.create_tarif_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.inverter_factory.create_inverter',
+                     autospec=True, return_value=mock_inverter)
+        mocker.patch('batcontrol.core.solar_factory.create_solar_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.consumption_factory.create_consumption',
+                     autospec=True, return_value=mocker.MagicMock())
+
+    def test_registers_external_topic_when_configured(self, mocker):
+        self._patch_core(mocker)
+        mock_mqtt_api = mocker.MagicMock()
+        mocker.patch('batcontrol.core.MqttApi', return_value=mock_mqtt_api)
+        config = dict(self.BASE_CONFIG)
+        config['mqtt'] = {
+            'enabled': True,
+            'broker': 'localhost',
+            'port': 1883,
+            'topic': 'house/batcontrol',
+            'grid_charge_lock_topic': 'hems/batcontrol/grid_charge_lock',
+        }
+
+        bc = Batcontrol(config)
+
+        mock_mqtt_api.register_external_topic_callback.assert_called_once_with(
+            'hems/batcontrol/grid_charge_lock',
+            bc.api_set_grid_charge_lock,
+            _parse_bool_flag,
+        )
+        bc.shutdown()
+
+    def test_no_registration_when_topic_not_configured(self, mocker):
+        self._patch_core(mocker)
+        mock_mqtt_api = mocker.MagicMock()
+        mocker.patch('batcontrol.core.MqttApi', return_value=mock_mqtt_api)
+        config = dict(self.BASE_CONFIG)
+        config['mqtt'] = {
+            'enabled': True,
+            'broker': 'localhost',
+            'port': 1883,
+            'topic': 'house/batcontrol',
+        }
+
+        bc = Batcontrol(config)
+
+        mock_mqtt_api.register_external_topic_callback.assert_not_called()
+        bc.shutdown()
 
 
 if __name__ == '__main__':

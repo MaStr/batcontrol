@@ -106,6 +106,16 @@ def _parse_optional_ratio(value, config_key: str) -> Optional[float]:
     return ratio
 
 
+def _parse_bool_flag(value) -> bool:
+    """Parse an MQTT payload for a boolean flag: 1/0 or true/false (case-insensitive)."""
+    normalized = str(value).strip().lower()
+    if normalized in ('1', 'true'):
+        return True
+    if normalized in ('0', 'false'):
+        return False
+    raise ValueError(f"Invalid boolean flag payload: {value!r}")
+
+
 class Batcontrol:
     """ Main class for Batcontrol, handles the logic and control of the battery system """
     general_logic = None  # type: CommonLogic
@@ -133,6 +143,10 @@ class Batcontrol:
 
         self.discharge_blocked = False
         self.discharge_limit = 0
+
+        # External (e.g. HEMS/grid operator, section 14a EnWG) grid-charge lock
+        self._grid_charge_locked = False
+        self._pre_lock_max_charging_from_grid_limit = None
 
         self.fetched_stored_energy = False
         self.fetched_reserved_energy = False
@@ -391,6 +405,14 @@ class Batcontrol:
                     self.api_set_peak_shaving_mode,
                     str
                 )
+                grid_charge_lock_topic = config.get(
+                    'mqtt').get('grid_charge_lock_topic')
+                if grid_charge_lock_topic:
+                    self.mqtt_api.register_external_topic_callback(
+                        grid_charge_lock_topic,
+                        self.api_set_grid_charge_lock,
+                        _parse_bool_flag
+                    )
                 # Inverter Callbacks
                 self.inverter.activate_mqtt(self.mqtt_api)
 
@@ -1058,6 +1080,7 @@ class Batcontrol:
             self.mqtt_api.publish_last_evaluation_time(self.last_run_time)
             #
             self.mqtt_api.publish_discharge_blocked(self.discharge_blocked)
+            self.mqtt_api.publish_grid_charge_locked(self._grid_charge_locked)
             # Peak shaving
             self.mqtt_api.publish_peak_shaving_enabled(
                 self.peak_shaving_config.enabled)
@@ -1175,6 +1198,35 @@ class Batcontrol:
         logger.info(
             'API: Setting max charging from grid limit to %.2f', limit)
         self.set_max_charging_from_grid_limit(limit)
+
+    @_tolerate_inverter_outage
+    def api_set_grid_charge_lock(self, locked: bool) -> None:
+        """ Block/unblock charging from the grid on request of an external
+            system (e.g. HEMS or grid operator signal, section 14a EnWG).
+
+            locked=True: remember the current max_charging_from_grid_limit and
+            force it to 0, so batcontrol will not charge the battery from the
+            grid. An active forced grid charge (mode -1) is cancelled
+            immediately.
+            locked=False (default): restore the previously remembered limit.
+        """
+        if locked == self._grid_charge_locked:
+            return
+        logger.info('API: External grid charge lock set to %s', locked)
+        self._grid_charge_locked = locked
+        if locked:
+            self._pre_lock_max_charging_from_grid_limit = (
+                self.max_charging_from_grid_limit)
+            if self.last_mode == MODE_FORCE_CHARGING:
+                self.allow_discharging(CONTROL_SOURCE_API)
+            self.set_max_charging_from_grid_limit(0.0)
+        else:
+            if self._pre_lock_max_charging_from_grid_limit is not None:
+                self.set_max_charging_from_grid_limit(
+                    self._pre_lock_max_charging_from_grid_limit)
+                self._pre_lock_max_charging_from_grid_limit = None
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_grid_charge_locked(locked)
 
     def api_set_min_price_difference(self, min_price_difference: float):
         """ Set min price difference for battery control via external API request.
