@@ -69,6 +69,9 @@ def _make_publish_stub():
     api.publish_effective_min_grid_charge_soc = (
         MqttApi.publish_effective_min_grid_charge_soc.__get__(api, MqttApi)
     )
+    api.publish_grid_charge_locked = (
+        MqttApi.publish_grid_charge_locked.__get__(api, MqttApi)
+    )
     return api
 
 
@@ -158,6 +161,50 @@ class TestReconnectSubscriptions:
         ]
 
 
+class TestRegisterExternalTopicCallback:
+    """register_external_topic_callback subscribes to the raw topic as-is,
+    without namespacing it below base_topic or appending a /set suffix."""
+
+    def test_subscribes_to_raw_topic_and_registers_callback(self):
+        from unittest.mock import Mock
+
+        mock_config = {
+            'broker': 'localhost',
+            'port': 1883,
+            'topic': 'test/batcontrol',
+            'auto_discover_enable': False,
+            'tls': False,
+        }
+
+        with patch('batcontrol.mqtt_api.mqtt.Client') as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+
+            mqtt_api = MqttApi(mock_config)
+
+            callback_fn = Mock()
+            mqtt_api.register_external_topic_callback(
+                'hems/batcontrol/grid_charge_lock', callback_fn, str)
+
+            mock_client.subscribe.assert_called_with(
+                'hems/batcontrol/grid_charge_lock')
+            assert 'hems/batcontrol/grid_charge_lock' in mqtt_api.callbacks
+            # Not namespaced below base_topic, unlike register_set_callback
+            assert 'test/batcontrol/hems/batcontrol/grid_charge_lock' \
+                not in mqtt_api.callbacks
+
+    def test_dispatches_received_message_to_callback(self):
+        api = _make_handler_stub()
+        received = []
+        api.callbacks['hems/batcontrol/grid_charge_lock'] = {
+            'function': received.append,
+            'convert': str,
+        }
+        msg = _make_message('hems/batcontrol/grid_charge_lock', b'1')
+        api._handle_message(None, None, msg)
+        assert received == ['1']
+
+
 class TestPublishedState:
     """Published state payloads should preserve precision and parse cleanly."""
 
@@ -197,6 +244,17 @@ class TestPublishedState:
             call('batcontrol/effective_min_grid_charge_soc_percent', '79'),
             call('batcontrol/effective_min_grid_charge_soc', '0.79'),
         ]
+
+    def test_publish_grid_charge_locked_uses_lowercase_boolean(self):
+        api = _make_publish_stub()
+
+        api.publish_grid_charge_locked(True)
+
+        api.client.publish.assert_called_once_with(
+            'batcontrol/grid_charge_locked',
+            'true',
+            retain=True,
+        )
 
 
 def _make_forecast_publish_stub(interval_minutes: int):
@@ -380,6 +438,23 @@ class TestDiscoveryMessages:
             and call.args[4] == '%'
             and call.args[5] == 'batcontrol/min_grid_charge_soc_percent'
             and call.kwargs['entity_category'] == 'diagnostic'
+            for call in api.publish_mqtt_discovery_message.call_args_list
+        )
+
+    def test_discovery_includes_grid_charge_locked_binary_sensor(self):
+        api = _make_discovery_stub()
+
+        api.send_mqtt_discovery_messages()
+
+        assert any(
+            call.args[:3] == (
+                'Grid Charge Locked',
+                'batcontrol_grid_charge_locked',
+                'binary_sensor',
+            )
+            and call.args[5] == 'batcontrol/grid_charge_locked'
+            and call.kwargs['entity_category'] == 'diagnostic'
+            and "value == 'true'" in call.kwargs['value_template']
             for call in api.publish_mqtt_discovery_message.call_args_list
         )
 
