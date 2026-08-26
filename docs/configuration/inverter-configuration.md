@@ -141,6 +141,36 @@ With backup-mode safety enabled, restrictive battery-control writes are only sen
 - Do not run multiple tools that write Fronius battery-control Modbus registers at the same time.
 - If you previously changed battery-control registers with another tool, stop that tool and restart the inverter before running batcontrol.
 
+## deye_sun
+This enables the Deye SUN-*K-SG04LP3/SG05LP3 (3-phase hybrid) inverter backend via Modbus TCP on port 8899, talking directly to the inverter's own WiFi/LAN logger stick. No cloud/SOLARMAN account and no separate RS485-to-TCP gateway are required.
+
+```yaml
+inverter:
+  type: deye_sun
+  address: 192.168.0.XX       # Local IP/host of your inverter's logger stick
+  port: 8899                  # Optional, default: 8899
+  unit_id: 1                  # Optional, default: 1
+  capacity: 10000             # Required: battery capacity in Wh
+  max_grid_charge_rate: 5000  # Required: maximum grid charge rate in W
+  nominal_battery_voltage: 48 # Optional, default: 48. Verify against your own battery -
+                               #   used to convert Watt charge rates into the inverter's
+                               #   Amp-based charge-current registers.
+  min_soc: 5                  # Optional, default: 5
+  max_soc: 100                # Optional, default: 100
+```
+
+### How batcontrol controls the battery
+Unlike Fronius's SunSpec percent-of-rated-power model, Deye's control registers are Amp- and time-of-use(TOU)-slot based:
+
+- **Force charge** enables grid charging and caps the battery charge current (registers 108/128) at the requested rate, and configures all 6 TOU slots to charge from grid up to `max_soc`.
+- **Avoid discharge** reads the current SoC and configures all 6 TOU slots to hold that SoC as their target with grid charging enabled - the mechanism confirmed working by the evcc project (evcc-io/evcc#12333).
+- **Allow discharge** disables grid charging and clears the TOU override, restoring the inverter's own automatic/self-consumption behavior.
+- **Limit battery charge** caps the overall battery charge current (register 108) while disabling grid charging, so only PV can charge up to that cap and discharge stays unrestricted; a limit of 0 blocks charging entirely.
+
+### Notes
+- **Register addresses are not yet independently verified against Deye's official protocol document or real hardware in this project.** They follow the community-maintained register map from the actively developed `Developer089/deye-modbus-ha` Home Assistant integration. Before relying on this backend for unattended production control: read-only probe your inverter (e.g. with `mbpoll`) to confirm SoC/telemetry addresses match, then dry-run each mode manually while watching the inverter's own display/app, before trusting `--one-shot` or continuous operation.
+- Do not run multiple tools that write Deye battery-control Modbus registers at the same time.
+- `nominal_battery_voltage` matters: an incorrect value skews the Watt-to-Amp conversion for charge-rate limits, so double-check it against your battery's nameplate voltage.
 
 ## dummy
 This option is for testing purposes only

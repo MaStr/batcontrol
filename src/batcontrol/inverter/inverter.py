@@ -3,6 +3,8 @@
 import logging
 from contextlib import suppress
 from .baseclass import DEFAULT_MAX_SOC, DEFAULT_MIN_SOC
+from .deye import DeyeInverter
+from .deye import DeyeModbusTcpTransport
 from .fronius_modbus import FroniusModbusGridStatusReader
 from .fronius_modbus import FroniusModbusInverter
 from .fronius_modbus import FroniusModbusTcpTransport
@@ -100,6 +102,29 @@ class Inverter:
                     if close is not None:
                         with suppress(Exception):
                             close()
+                raise
+        elif config['type'].lower() == 'deye_sun':
+            transport = None
+            try:
+                transport = DeyeModbusTcpTransport(
+                    config['address'],
+                    port=config.get('port', 8899),
+                    unit_id=config.get('unit_id', 1),
+                )
+                inverter = DeyeInverter(
+                    transport,
+                    capacity=config['capacity'],
+                    nominal_battery_voltage=config.get(
+                        'nominal_battery_voltage', 48
+                    ),
+                    min_soc=config.get('min_soc', DEFAULT_MIN_SOC),
+                    max_soc=config.get('max_soc', DEFAULT_MAX_SOC),
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                close = getattr(transport, 'close', None)
+                if close is not None:
+                    with suppress(Exception):
+                        close()
                 raise
         else:
             raise RuntimeError(f'[Inverter] Unknown inverter type {config["type"]}')
