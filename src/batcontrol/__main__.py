@@ -1,6 +1,9 @@
+"""Command-line entry point for batcontrol."""
+
 import argparse
 import datetime
 import logging
+from pathlib import Path
 import signal
 import sys
 import threading
@@ -8,14 +11,19 @@ import time
 
 from .banner import log_startup_banner
 from .core import Batcontrol
-from .setup import setup_logging, load_config
 from .inverter import InverterOutageError
+from .setup import setup_logging, load_config
 
 
 CONFIGFILE = "config/batcontrol_config.yaml"
 EVALUATIONS_EVERY_MINUTES = 3  # Every x minutes on the clock
 LOGFILE_ENABLED_DEFAULT = True
 LOGFILE = "logs/batcontrol.log"
+
+
+def get_forecast_cache_directory(config_file):
+    """Return the restart-cache directory associated with a config file."""
+    return Path(config_file).resolve().parent / "forecast_cache"
 
 
 def parse_arguments():
@@ -93,7 +101,10 @@ def main() -> int:
             "batcontrol.forecastconsumption.forecast_homeassistant.communication"
         ).setLevel(logging.INFO)
 
-    bc = Batcontrol(config)
+    bc = Batcontrol(
+        config,
+        forecast_cache_directory=get_forecast_cache_directory(args.config),
+    )
 
     # SIGHUP (kill -HUP <pid>) requests a refresh of all providers. The
     # handler only logs and sets a flag; the refresh happens at the start of
