@@ -1,17 +1,26 @@
-from .core import Batcontrol
-from .setup import setup_logging, load_config
-from .inverter import InverterOutageError
+"""Command-line entry point for batcontrol."""
+
 import argparse
-import time
 import datetime
-import sys
 import logging
+from pathlib import Path
+import sys
+import time
+
+from .core import Batcontrol
+from .inverter import InverterOutageError
+from .setup import setup_logging, load_config
 
 
 CONFIGFILE = "config/batcontrol_config.yaml"
 EVALUATIONS_EVERY_MINUTES = 3  # Every x minutes on the clock
 LOGFILE_ENABLED_DEFAULT = True
 LOGFILE = "logs/batcontrol.log"
+
+
+def get_forecast_cache_directory(config_file):
+    """Return the restart-cache directory associated with a config file."""
+    return Path(config_file).resolve().parent / "forecast_cache"
 
 
 def parse_arguments():
@@ -78,7 +87,10 @@ def main() -> int:
         logging.getLogger("batcontrol.forecastconsumption.forecast_homeassistant.details").setLevel(logging.INFO)
         logging.getLogger("batcontrol.forecastconsumption.forecast_homeassistant.communication").setLevel(logging.INFO)
 
-    bc = Batcontrol(config)
+    bc = Batcontrol(
+        config,
+        forecast_cache_directory=get_forecast_cache_directory(args.config),
+    )
 
     try:
         while True:

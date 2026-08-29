@@ -63,6 +63,68 @@ def test_refresh_keeps_cached_data_on_request_error(instance, mocker, caplog):
     assert 'secret-key' not in caplog.text
 
 
+def test_restart_uses_persisted_response_after_request_error(
+        instance, tmp_path, mocker, caplog):
+    """A fresh raw response survives restart and a provider network failure."""
+    first = FCSolar(
+        instance.pvinstallations,
+        instance.timezone,
+        min_time_between_api_calls=900,
+        persistent_cache_directory=tmp_path,
+    )
+    cached_response = {'result': 'last-known-good'}
+    first.store_raw_data('roof', cached_response)
+
+    restarted = FCSolar(
+        instance.pvinstallations,
+        instance.timezone,
+        min_time_between_api_calls=900,
+        persistent_cache_directory=tmp_path,
+    )
+    mocker.patch(
+        'batcontrol.forecastsolar.fcsolar.requests.get',
+        side_effect=requests.exceptions.ConnectionError(
+            'request failed for https://api.forecast.solar/secret-key/estimate'),
+    )
+
+    restarted.refresh_data()
+
+    assert restarted.get_raw_data('roof') == cached_response
+    cache_files = list(tmp_path.glob('*.json'))
+    assert len(cache_files) == 1
+    assert 'roof' not in cache_files[0].name
+    assert 'secret-key' not in caplog.text
+
+
+def test_persistent_cache_keeps_one_file_per_installation(instance, tmp_path):
+    """Independent arrays retain independent raw provider responses."""
+    installations = [
+        instance.pvinstallations[0],
+        dict(instance.pvinstallations[0], name='garage', azimuth=-40),
+    ]
+    first = FCSolar(
+        installations,
+        instance.timezone,
+        min_time_between_api_calls=900,
+        persistent_cache_directory=tmp_path,
+    )
+    first.store_raw_data('roof', {'result': 'roof-forecast'})
+    first.store_raw_data('garage', {'result': 'garage-forecast'})
+
+    restarted = FCSolar(
+        installations,
+        instance.timezone,
+        min_time_between_api_calls=900,
+        persistent_cache_directory=tmp_path,
+    )
+
+    assert restarted.get_all_raw_data() == {
+        'roof': {'result': 'roof-forecast'},
+        'garage': {'result': 'garage-forecast'},
+    }
+    assert len(list(tmp_path.glob('*.json'))) == 2
+
+
 class MutableClock:
     """Controllable monotonic clock for replaying the cache boundary."""
 
@@ -121,6 +183,46 @@ def forecast_from_cached_response(instance, mocker, fixed_now):
     forecast = instance.get_forecast_from_raw_data()
     mocker.stop(mocked_datetime)
     return forecast
+
+
+def test_august_22_restart_reloads_forecast_before_provider_failure(
+        instance, tmp_path, mocker, caplog):
+    """Replay the 05:21 restart that previously erased the fresh forecast."""
+    cached_response = {
+        'message': {'info': {'time': '2026-08-22T04:51:04+02:00'}},
+        'result': {
+            '2026-08-22T06:00:00+02:00': 420,
+            '2026-08-22T07:00:00+02:00': 860,
+            '2026-08-22T08:00:00+02:00': 1330,
+        },
+    }
+    first = FCSolar(
+        instance.pvinstallations,
+        instance.timezone,
+        min_time_between_api_calls=900,
+        persistent_cache_directory=tmp_path,
+    )
+    first.store_raw_data('roof', cached_response)
+
+    restarted = FCSolar(
+        instance.pvinstallations,
+        instance.timezone,
+        min_time_between_api_calls=900,
+        persistent_cache_directory=tmp_path,
+    )
+    mocker.patch(
+        'batcontrol.forecastsolar.fcsolar.requests.get',
+        side_effect=requests.exceptions.ConnectionError(
+            'request failed for https://api.forecast.solar/secret-key/estimate'),
+    )
+    restarted.refresh_data()
+    fixed_now = instance.timezone.localize(
+        datetime.datetime(2026, 8, 22, 5, 22))
+
+    production = forecast_from_cached_response(restarted, mocker, fixed_now)
+
+    assert production == {0: 420, 1: 860, 2: 1330}
+    assert 'secret-key' not in caplog.text
 
 
 def test_july_24_network_failure_keeps_unexpired_forecast_available(

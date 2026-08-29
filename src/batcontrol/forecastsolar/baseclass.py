@@ -1,16 +1,27 @@
 """ Parent Class for implementing different solar forecast providers"""
 from abc import ABCMeta
 import datetime
+import hashlib
 import threading
 import time
 import random
 import logging
+from pathlib import Path
 from .forecastsolar_interface import ForecastSolarInterface
 from ..fetcher.relaxed_caching import RelaxedCaching, CacheMissError
 from ..scheduler import schedule_once
 from ..interval_utils import upsample_forecast, downsample_to_hourly
 
 logger = logging.getLogger(__name__)
+
+def _persistence_paths(pvinstallations: list, directory) -> dict:
+    """Map installation names to safe persistent cache paths."""
+    root = Path(directory)
+    return {
+        unit['name']: root /
+        f"{hashlib.sha256(unit['name'].encode('utf-8')).hexdigest()}.json"
+        for unit in pvinstallations
+    }
 
 
 class ProviderError(Exception):
@@ -42,7 +53,8 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
     """
 
     def __init__(self, pvinstallations, timezone, min_time_between_API_calls,
-                 delay_evaluation_by_seconds, target_resolution=60, native_resolution=60) -> None:
+                 delay_evaluation_by_seconds, target_resolution=60, native_resolution=60,
+                 persistent_cache_directory=None) -> None:
         self.pvinstallations = pvinstallations
         self.next_update_ts = 0
         self.min_time_between_updates = min_time_between_API_calls
@@ -64,11 +76,21 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
         )
 
         try:
-            for unit in pvinstallations:
-                name = unit['name']
-                self.cache_list[name] = RelaxedCaching()
+            installation_names = [unit['name'] for unit in pvinstallations]
         except KeyError as e:
             raise ValueError("Each PV installation must have a 'name' key") from e
+
+        persistence_paths = {}
+        if persistent_cache_directory is not None:
+            persistence_paths = _persistence_paths(
+                pvinstallations,
+                persistent_cache_directory,
+            )
+
+        for name in installation_names:
+            self.cache_list[name] = RelaxedCaching(
+                persistence_path=persistence_paths.get(name)
+            )
 
     def get_raw_data(self, pvinstallation_name) -> dict:
         """ Get raw data from cache or provider """

@@ -24,7 +24,8 @@ class FCSolar(ForecastSolarBaseclass):
     """
 
     def __init__(self, pvinstallations, timezone,
-                 min_time_between_api_calls, api_delay=0, target_resolution=60):
+                 min_time_between_api_calls, api_delay=0, target_resolution=60,
+                 persistent_cache_directory=None):
         """ Initialize the FCSolar class 
 
         Args:
@@ -33,11 +34,17 @@ class FCSolar(ForecastSolarBaseclass):
             min_time_between_api_calls: Minimum seconds between API calls
             api_delay: Delay for API evaluation
             target_resolution: Target resolution in minutes (15 or 60)
+            persistent_cache_directory: Optional restart-cache directory
         """
-        super().__init__(pvinstallations, timezone,
-                         min_time_between_api_calls, api_delay,
-                         target_resolution=target_resolution,
-                         native_resolution=60)  # FCSolar provides hourly data
+        super().__init__(
+            pvinstallations,
+            timezone,
+            min_time_between_api_calls,
+            api_delay,
+            target_resolution=target_resolution,
+            native_resolution=60,
+            persistent_cache_directory=persistent_cache_directory,
+        )  # FCSolar provides hourly data
 
     def get_forecast_from_raw_data(self) -> dict:
         """ Get hourly forecast from previously fetched raw data """

@@ -25,7 +25,9 @@ pvinstallations:
 ```
 The **name** must be a unique value.
 
-If a solar forecast provider is not available, batcontrol is running on cached values. It stops working if less then 12 hours of forecast are available. That should be enough to overcome outages.
+If a solar forecast provider is unavailable, batcontrol continues with cached values. Cache entries are usable while their age is strictly less than 12 hours. At 12 hours they expire and the existing no-data behavior applies.
+
+For Forecast.Solar, the latest successful raw response for each installation is also saved to the `forecast_cache` directory beside the selected batcontrol configuration file. This restart cache retains the original fetch timestamp, so restarting batcontrol does not renew its age. Files are atomically replaced, limited to the current response, and written with owner-only (`0600`) permissions. Missing, stale, malformed, or unwritable files do not prevent batcontrol from using its in-memory cache or its normal no-data fallback.
 
 
 ## Forecast.Solar (Default)

@@ -15,7 +15,8 @@ class ForecastSolar:
                               min_time_between_api_calls,
                               api_delay=0,
                               requested_provider='fcsolarapi',
-                              target_resolution: int = 60) -> ForecastSolarInterface:
+                              target_resolution: int = 60,
+                              persistent_cache_directory=None) -> ForecastSolarInterface:
         """ Select and configure a solar forecast provider based on the given configuration
 
         Args:
@@ -26,6 +27,7 @@ class ForecastSolar:
             requested_provider: Provider name ('fcsolarapi', 'evcc-solar',
                                 'homeassistant-solar-forecast-ml', 'solcast')
             target_resolution: Target resolution in minutes (15 or 60)
+            persistent_cache_directory: Optional directory for restart-safe raw data
 
         Raises:
             RuntimeError: If provider is unknown
@@ -33,8 +35,14 @@ class ForecastSolar:
         """
         provider = None
         if requested_provider.lower() == 'fcsolarapi':
-            provider = FCSolar(config, timezone, min_time_between_api_calls,
-                               api_delay, target_resolution)
+            provider = FCSolar(
+                config,
+                timezone,
+                min_time_between_api_calls,
+                api_delay,
+                target_resolution,
+                persistent_cache_directory=persistent_cache_directory,
+            )
         elif requested_provider.lower() == 'evcc-solar':
             provider = EvccSolar(config, timezone, min_time_between_api_calls,
                                  api_delay, target_resolution)

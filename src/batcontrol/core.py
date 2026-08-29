@@ -120,7 +120,7 @@ class Batcontrol:
     """ Main class for Batcontrol, handles the logic and control of the battery system """
     general_logic = None  # type: CommonLogic
 
-    def __init__(self, configdict: dict):
+    def __init__(self, configdict: dict, forecast_cache_directory=None):
         # For API
         self.api_overwrite = False
         # -1 = charge from grid , 0 = avoid discharge , 8 = limit battery charge, 10 = discharge allowed
@@ -252,7 +252,8 @@ class Batcontrol:
             DELAY_EVALUATION_BY_SECONDS,
             requested_provider=config.get(
                 'solar_forecast_provider', 'fcsolarapi'),
-            target_resolution=self.time_resolution
+            target_resolution=self.time_resolution,
+            persistent_cache_directory=forecast_cache_directory,
         )
 
         self.fc_consumption = consumption_factory.create_consumption(
