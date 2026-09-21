@@ -18,6 +18,7 @@ from batcontrol.inverter import (
     InverterOutageError,
 )
 from batcontrol.logic.logic import Logic as LogicFactory
+from batcontrol.logic.common import CommonLogic
 
 
 class TestModeLimitBatteryChargeRate:
@@ -1329,6 +1330,94 @@ class TestMarketPriceRefresh:
         bc.shutdown()
 
         assert sched_module.get_jobs() == []
+
+
+class TestChargeRateMultiplierWiring:
+    """battery_control_expert.charge_rate_multiplier must reach CommonLogic (issue #424)."""
+
+    BASE_CONFIG = {
+        'timezone': 'Europe/Berlin',
+        'time_resolution_minutes': 60,
+        'inverter': {
+            'type': 'dummy',
+            'max_grid_charge_rate': 5000,
+            'max_pv_charge_rate': 3000,
+            'min_pv_charge_rate': 0,
+        },
+        'utility': {'type': 'tibber', 'apikey': 'test_token'},
+        'pvinstallations': [],
+        'consumption_forecast': {'type': 'simple', 'value': 500},
+        'battery_control': {
+            'max_charging_from_grid_limit': 0.8,
+            'min_price_difference': 0.05,
+        },
+        'mqtt': {'enabled': False},
+    }
+
+    def _patch_core(self, mocker):
+        mock_inverter = mocker.MagicMock()
+        mock_inverter.max_pv_charge_rate = 3000
+        mock_inverter.get_max_capacity.return_value = 10000
+        mocker.patch('batcontrol.core.tariff_factory.create_tarif_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.inverter_factory.create_inverter',
+                     autospec=True, return_value=mock_inverter)
+        mocker.patch('batcontrol.core.solar_factory.create_solar_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.consumption_factory.create_consumption',
+                     autospec=True, return_value=mocker.MagicMock())
+
+    def setup_method(self):
+        # CommonLogic is a singleton; reset it so each test observes the
+        # multiplier from its own Batcontrol(config) call.
+        CommonLogic._instance = None
+
+    def teardown_method(self):
+        CommonLogic._instance = None
+
+    def test_default_charge_rate_multiplier(self, mocker):
+        """Without expert config, the CommonLogic default of 1.1 is used."""
+        self._patch_core(mocker)
+        bc = Batcontrol(dict(self.BASE_CONFIG))
+        assert bc.general_logic.charge_rate_multiplier == 1.1
+        assert bc.general_logic.calculate_charge_rate(1000) == 1100
+        bc.shutdown()
+
+    def test_charge_rate_multiplier_from_expert_config(self, mocker):
+        """battery_control_expert.charge_rate_multiplier reaches CommonLogic
+        and is applied by calculate_charge_rate()."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control_expert'] = {'charge_rate_multiplier': 1.25}
+        bc = Batcontrol(config)
+        assert bc.general_logic.charge_rate_multiplier == 1.25
+        assert bc.general_logic.calculate_charge_rate(1000) == 1250
+        bc.shutdown()
+
+    def test_legacy_battery_control_location_is_mapped_with_warning(self, mocker, caplog):
+        """The undocumented battery_control.charge_rate_multiplier still
+        applies (for migration) but logs a deprecation warning."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control'] = dict(
+            self.BASE_CONFIG['battery_control'], charge_rate_multiplier=1.3)
+        with caplog.at_level(logging.WARNING):
+            bc = Batcontrol(config)
+        assert bc.general_logic.charge_rate_multiplier == 1.3
+        assert any('battery_control.charge_rate_multiplier is deprecated' in msg
+                   for msg in caplog.messages)
+        bc.shutdown()
+
+    def test_expert_config_takes_priority_over_legacy_location(self, mocker):
+        """If both locations are set, battery_control_expert wins."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control'] = dict(
+            self.BASE_CONFIG['battery_control'], charge_rate_multiplier=1.3)
+        config['battery_control_expert'] = {'charge_rate_multiplier': 1.25}
+        bc = Batcontrol(config)
+        assert bc.general_logic.charge_rate_multiplier == 1.25
+        bc.shutdown()
 
 
 class TestParseBoolFlag:

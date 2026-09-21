@@ -326,9 +326,25 @@ class Batcontrol:
             self._validate_market_price_refresh_time(raw_refresh_time)
             self.market_price_refresh_time = raw_refresh_time
 
+        legacy_charge_rate_multiplier = self.batconfig.get(
+            'charge_rate_multiplier', None)
+        if legacy_charge_rate_multiplier is not None:
+            logger.warning(
+                'battery_control.charge_rate_multiplier is deprecated and '
+                'will be removed in a future release; use '
+                'battery_control_expert.charge_rate_multiplier instead. '
+                'Using the deprecated value as a fallback for now, unless '
+                'battery_control_expert.charge_rate_multiplier is also set '
+                '(which takes priority).'
+            )
+        charge_rate_multiplier = (self.config.get('battery_control_expert', {}) or {}).get(
+            'charge_rate_multiplier',
+            legacy_charge_rate_multiplier
+            if legacy_charge_rate_multiplier is not None else 1.1
+        )
+
         self.general_logic = CommonLogic.get_instance(
-            charge_rate_multiplier=self.batconfig.get(
-                'charge_rate_multiplier', 1.1),
+            charge_rate_multiplier=charge_rate_multiplier,
             always_allow_discharge_limit=self.batconfig.get(
                 'always_allow_discharge_limit', 0.9),
             max_capacity=self.inverter.get_max_capacity(),
