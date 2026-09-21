@@ -14,6 +14,7 @@ import datetime
 import time
 import os
 import logging
+import math
 import platform
 import functools
 
@@ -104,6 +105,29 @@ def _parse_optional_ratio(value, config_key: str) -> Optional[float]:
             f"{config_key} must be between 0 and 1 or None, got {value!r}"
         )
     return ratio
+
+
+def _parse_positive_number(value, config_key: str) -> float:
+    """Parse a positive numeric config value. ``value`` must not be None;
+    callers only invoke this once they know the key was actually set,
+    so an explicit null is treated as invalid rather than silently
+    falling back to a default."""
+    if isinstance(value, bool):
+        raise ValueError(
+            f"{config_key} must be a positive number, "
+            f"got {type(value).__name__}"
+        )
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{config_key} must be a positive number, got {value!r}"
+        ) from exc
+    if not math.isfinite(number) or number <= 0:
+        raise ValueError(
+            f"{config_key} must be a positive number, got {value!r}"
+        )
+    return number
 
 
 def _parse_bool_flag(value) -> bool:
@@ -304,13 +328,21 @@ class Batcontrol:
                 self.max_charging_from_grid_limit
             )
 
+        battery_control_expert = self.config.get(
+            'battery_control_expert', None)
+        if (battery_control_expert is not None
+                and not isinstance(battery_control_expert, dict)):
+            raise ValueError(
+                'battery_control_expert must be a mapping of key: value '
+                f'settings, got {type(battery_control_expert).__name__}'
+            )
+        battery_control_expert = battery_control_expert or {}
+
         self.round_price_digits = 4
         self.production_offset_percent = 1.0  # Default: no offset
         self.market_price_refresh_time = "12:30"
 
-        if self.config.get('battery_control_expert', None) is not None:
-            battery_control_expert = self.config.get(
-                'battery_control_expert', {})
+        if battery_control_expert:
             self.round_price_digits = battery_control_expert.get(
                 'round_price_digits',
                 self.round_price_digits)
@@ -326,9 +358,41 @@ class Batcontrol:
             self._validate_market_price_refresh_time(raw_refresh_time)
             self.market_price_refresh_time = raw_refresh_time
 
+        # Only parse/validate whichever location will actually be used, so
+        # an invalid deprecated battery_control value never blocks startup
+        # when battery_control_expert (which takes priority) is valid.
+        legacy_present = 'charge_rate_multiplier' in self.batconfig
+        expert_present = 'charge_rate_multiplier' in battery_control_expert
+        if legacy_present:
+            if expert_present:
+                deprecation_note = (
+                    'It is ignored because '
+                    'battery_control_expert.charge_rate_multiplier is '
+                    'also set.'
+                )
+            else:
+                deprecation_note = 'Using it as a fallback for now.'
+            logger.warning(
+                'battery_control.charge_rate_multiplier is deprecated and '
+                'will be removed in a future release; use '
+                'battery_control_expert.charge_rate_multiplier instead. %s',
+                deprecation_note
+            )
+        if expert_present:
+            charge_rate_multiplier = _parse_positive_number(
+                battery_control_expert['charge_rate_multiplier'],
+                'battery_control_expert.charge_rate_multiplier'
+            )
+        elif legacy_present:
+            charge_rate_multiplier = _parse_positive_number(
+                self.batconfig['charge_rate_multiplier'],
+                'battery_control.charge_rate_multiplier'
+            )
+        else:
+            charge_rate_multiplier = 1.1
+
         self.general_logic = CommonLogic.get_instance(
-            charge_rate_multiplier=self.batconfig.get(
-                'charge_rate_multiplier', 1.1),
+            charge_rate_multiplier=charge_rate_multiplier,
             always_allow_discharge_limit=self.batconfig.get(
                 'always_allow_discharge_limit', 0.9),
             max_capacity=self.inverter.get_max_capacity(),

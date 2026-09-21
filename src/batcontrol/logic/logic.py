@@ -37,7 +37,6 @@ class Logic:
                 'soften_price_difference_on_charging',
                 'soften_price_difference_on_charging_factor',
                 'round_price_digits',
-                'charge_rate_multiplier',
             ]
             for attribute in attribute_list:
                 if attribute in battery_control_expert:
