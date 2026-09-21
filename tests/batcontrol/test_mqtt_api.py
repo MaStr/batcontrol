@@ -6,6 +6,10 @@ import numpy as np
 import pytest
 
 from batcontrol.core import Batcontrol
+from batcontrol.decision_journal import StatusChangeEvent
+from batcontrol.logic.decision_trace import (
+    Decision, DecisionRecord, DecisionTrace, Outcome, Reason,
+)
 from batcontrol.logic import PeakShavingConfig
 from batcontrol.mqtt_api import MqttApi
 
@@ -62,6 +66,9 @@ def _make_publish_stub():
     )
     api.publish_control_source = (
         MqttApi.publish_control_source.__get__(api, MqttApi)
+    )
+    api.publish_status_change = (
+        MqttApi.publish_status_change.__get__(api, MqttApi)
     )
     api.publish_min_grid_charge_soc = (
         MqttApi.publish_min_grid_charge_soc.__get__(api, MqttApi)
@@ -490,6 +497,91 @@ class TestPublishControlSource:
             'api',
             retain=True,
         )
+
+
+class TestPublishStatusChange:
+    """The Decision sensor: text state plus JSON attributes, both retained."""
+
+    @staticmethod
+    def _event(kind='mode', mode=-1, value=1250, previous_value=None):
+        trace = DecisionTrace()
+        trace.add(DecisionRecord(
+            Decision.GRID_RECHARGE, Outcome.CHARGE,
+            Reason.GRID_RECHARGE_REQUIRED,
+            {'charge_rate': np.int64(value)}, decisive=True))
+        trace.add(DecisionRecord(
+            Decision.MODE, 'force_charge', Reason.GRID_RECHARGE_REQUIRED,
+            {'mode': mode, 'charge_rate': value}))
+        return StatusChangeEvent(kind, 0, mode, 'optimizer', trace,
+                                 value, previous_value)
+
+    def test_publishes_text_and_attributes_retained(self):
+        api = _make_publish_stub()
+
+        api.publish_status_change(self._event())
+
+        assert api.client.publish.call_count == 2
+        text_call, attributes_call = api.client.publish.call_args_list
+        assert text_call == call(
+            'batcontrol/decision',
+            'Charge from Grid 1250 W - Grid recharge required',
+            retain=True)
+        assert attributes_call.args[0] == 'batcontrol/decision/attributes'
+        assert attributes_call.kwargs == {'retain': True}
+
+    def test_attributes_are_json_with_trace_and_event_data(self):
+        api = _make_publish_stub()
+
+        api.publish_status_change(
+            self._event(kind='value', value=1250, previous_value=1000))
+
+        attributes = json.loads(api.client.publish.call_args_list[1].args[1])
+        assert attributes['kind'] == 'value'
+        assert attributes['mode'] == -1
+        assert attributes['previous_mode'] == 0
+        assert attributes['value'] == 1250
+        assert attributes['previous_value'] == 1000
+        assert attributes['control_source'] == 'optimizer'
+        assert attributes['decided_by']['decision'] == 'grid_recharge'
+        assert [r['decision'] for r in attributes['records']] == [
+            'grid_recharge', 'mode']
+
+    def test_nothing_is_published_while_disconnected(self):
+        api = _make_publish_stub()
+        api.client.is_connected.return_value = False
+
+        api.publish_status_change(self._event())
+
+        api.client.publish.assert_not_called()
+
+    def test_discovery_offers_decision_sensor_with_attributes(self):
+        api = _make_discovery_stub()
+
+        api.send_mqtt_discovery_messages()
+
+        calls = [c for c in api.publish_mqtt_discovery_message.call_args_list
+                 if c.args[1] == 'batcontrol_decision']
+        assert len(calls) == 1
+        assert calls[0].args[2] == 'sensor'
+        assert calls[0].args[5] == 'batcontrol/decision'
+        assert calls[0].kwargs['json_attributes_topic'] == \
+            'batcontrol/decision/attributes'
+
+    def test_discovery_message_contains_json_attributes_topic(self):
+        api = MagicMock(spec=MqttApi)
+        api.client = MagicMock()
+        api.client.is_connected.return_value = True
+        api.auto_discover_topic = 'homeassistant'
+        publish = MqttApi.publish_mqtt_discovery_message.__get__(api, MqttApi)
+
+        publish('Decision', 'batcontrol_decision', 'sensor', None, None,
+                'batcontrol/decision',
+                json_attributes_topic='batcontrol/decision/attributes')
+
+        payload = json.loads(api.client.publish.call_args.args[1])
+        assert payload['json_attributes_topic'] == \
+            'batcontrol/decision/attributes'
+        assert payload['state_topic'] == 'batcontrol/decision'
 
 
 class TestPeakShavingEnabledApi:
