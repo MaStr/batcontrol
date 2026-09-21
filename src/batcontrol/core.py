@@ -17,8 +17,10 @@ import logging
 import platform
 import functools
 import contextlib
+import threading
 
 import dataclasses
+from typing import Optional
 
 import pytz
 import numpy as np
@@ -141,11 +143,12 @@ class Batcontrol:
 
         self.last_logic_instance = None
 
-        # Decision history and mode change endpoint (see decision_journal.py).
-        # _pending_trace carries the steps of the decision that is currently
-        # being applied to __set_mode.
+        # Decision history and status change endpoint (see decision_journal.py).
+        # The pending trace carries the steps of the decision that is currently
+        # being applied to __set_mode. It is kept per thread, because the
+        # scheduler and the API/evcc threads change the mode independently.
         self.decision_journal = DecisionJournal()
-        self._pending_trace = None
+        self._pending = threading.local()
 
         self.config = configdict
         config = configdict
@@ -887,6 +890,15 @@ class Batcontrol:
         self.last_control_source = control_source
         if self.mqtt_api is not None:
             self.mqtt_api.publish_control_source(control_source)
+
+    @property
+    def _pending_trace(self) -> Optional[DecisionTrace]:
+        """ Trace staged by the current thread for its next mode change """
+        return getattr(self._pending, 'trace', None)
+
+    @_pending_trace.setter
+    def _pending_trace(self, trace: Optional[DecisionTrace]) -> None:
+        self._pending.trace = trace
 
     def __new_trace(self) -> DecisionTrace:
         """ Start the decision trace of a new control decision """

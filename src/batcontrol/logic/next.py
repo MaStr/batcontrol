@@ -502,8 +502,9 @@ class NextLogic(LogicInterface):
             ))
             return settings
 
+        previous_limit_w = settings.limit_battery_charge_rate
         final_w = solar_limit.merge_limits(
-            floor_w, [settings.limit_battery_charge_rate, cap_w])
+            floor_w, [previous_limit_w, cap_w])
 
         if final_w > 0:
             final_w = self.common.enforce_min_pv_charge_rate(final_w)
@@ -527,9 +528,13 @@ class NextLogic(LogicInterface):
                 'floor_w': floor_w,
                 'cap_w': cap_w if cap_w >= 0 else None,
                 'final_limit_w': final_w if final_w >= 0 else None,
+                'previous_limit_w': (previous_limit_w
+                                     if previous_limit_w >= 0 else None),
                 'feed_in_limit_w': peak_shaving.feed_in_limit_w,
             },
-            decisive=final_w >= 0,
+            # Only decisive if this rule changed the limit. The merge can
+            # also end up at the limit an earlier rule (peak shaving) set.
+            decisive=final_w >= 0 and final_w != previous_limit_w,
         ))
 
         return settings

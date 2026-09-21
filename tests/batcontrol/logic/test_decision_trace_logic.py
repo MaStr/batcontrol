@@ -330,3 +330,28 @@ class TestPeakShavingSteps:
 
         assert _steps(logic) == [
             (Decision.SOLAR_LIMIT, Outcome.NOT_NEEDED, Reason.NO_CLIP_PREDICTED)]
+
+    @pytest.mark.parametrize('previous_limit, expected_decisive', [
+        (500, False),    # merge ends up at the limit peak shaving set
+        (-1, True),      # solar cap is the only limit
+        (5000, True),    # solar cap tightens the earlier limit
+    ])
+    def test_solar_limit_is_decisive_only_if_it_changed_the_limit(
+            self, monkeypatch, previous_limit, expected_decisive):
+        logic = self._logic(solar_cap_active=True, feed_in_limit_w=5000)
+        logic.decision_trace = DecisionTrace()
+        monkeypatch.setattr('batcontrol.logic.next.solar_limit.compute_solar_limit',
+                            lambda *args, **kwargs: (0, 3000))
+        settings = self._settings(limit_battery_charge_rate=previous_limit)
+
+        logic._apply_solar_limit(  # pylint: disable=protected-access
+            settings, self._pv_input(), MORNING)
+
+        record = logic.get_decision_trace().records[-1]
+        assert record.decision == Decision.SOLAR_LIMIT
+        assert record.outcome == Outcome.LIMIT_SET
+        assert record.decisive is expected_decisive
+        assert record.inputs['previous_limit_w'] == (
+            previous_limit if previous_limit >= 0 else None)
+        assert record.inputs['final_limit_w'] == \
+            settings.limit_battery_charge_rate
