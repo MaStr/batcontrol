@@ -74,6 +74,7 @@ class Reason:
     EVCC_CHARGING = 'EVCC_CHARGING'
     EVCC_EV_EXPECTS_PV_SURPLUS = 'EVCC_EV_EXPECTS_PV_SURPLUS'
     EXTERNAL_DISCHARGE_BLOCK = 'EXTERNAL_DISCHARGE_BLOCK'
+    EXTERNAL_DISCHARGE_UNBLOCK = 'EXTERNAL_DISCHARGE_UNBLOCK'
     GRID_CHARGE_LOCK = 'GRID_CHARGE_LOCK'
     FORECAST_ERROR_FALLBACK = 'FORECAST_ERROR_FALLBACK'
     CALCULATION_FAILED = 'CALCULATION_FAILED'
@@ -90,8 +91,6 @@ _MODE_LABELS = {
 }
 # Words of reason codes that keep their upper case in the status text
 _ACRONYMS = ('PV', 'EV', 'EVCC', 'API')
-# Home Assistant limits the state of an entity to 255 characters
-_MAX_STATUS_TEXT_LENGTH = 255
 
 _PREFIXES = {
     Decision.PEAK_SHAVING: '[PeakShaving]',
@@ -114,7 +113,6 @@ _ENERGY = '%0.1f Wh'
 _POWER = '%d W'
 _INPUT_FORMATS = {
     'current_price': _PRICE,
-    'future_price': _PRICE,
     'min_dynamic_price_difference': _PRICE,
     'always_allow_discharge_limit': '%.2f',
     'stored_energy': _ENERGY,
@@ -207,6 +205,12 @@ class DecisionTrace:
                     '%s', record.summary())
         return record
 
+    def step(self, decision: str, outcome: str, reason: str, *,
+             decisive: bool = False, **inputs) -> DecisionRecord:
+        """Append a step given by its parts, without logging."""
+        return self.add(DecisionRecord(decision, outcome, reason, inputs,
+                                       decisive))
+
     def extend(self, other: 'DecisionTrace') -> None:
         """Append all steps of another trace."""
         self.records.extend(other.records)
@@ -218,15 +222,6 @@ class DecisionTrace:
                 return record
         return None
 
-    def summary(self) -> str:
-        """Short text: which step decided and which steps were evaluated."""
-        decisive = self.decisive_record()
-        steps = ', '.join(f'{r.decision}={r.outcome}' for r in self.records)
-        if decisive is None:
-            return f'No decisive step. Steps: {steps}'
-        return (f'Decided by {decisive.decision} ({decisive.reason}). '
-                f'Steps: {steps}')
-
     def status_text(self) -> str:
         """The resulting mode with its value and the reason as one string,
         e.g. ``Charge from Grid 1250 W - Grid recharge required``.
@@ -236,12 +231,10 @@ class DecisionTrace:
         if mode is None:
             return ''
         text = _MODE_LABELS.get(mode.outcome, mode.outcome)
-        value = mode.inputs.get('charge_rate',
-                                mode.inputs.get('limit_battery_charge_rate'))
+        value = mode.inputs.get('value')
         if value is not None:
             text += f' {int(value)} W'
-        text += ' - ' + self._reason_text(mode.reason)
-        return text[:_MAX_STATUS_TEXT_LENGTH]
+        return text + ' - ' + self._reason_text(mode.reason)
 
     @staticmethod
     def _reason_text(reason: str) -> str:

@@ -112,9 +112,10 @@ class TestCoreDecisionJournal:
         assert mode.inputs['mode'] == MODE_ALLOW_DISCHARGING
         assert mode.inputs['control_source'] == CONTROL_SOURCE_OPTIMIZER
         assert mode.inputs['decided_by'] == Decision.DISCHARGE
+        assert mode.inputs['value'] is None
         assert trace.decisive_record().decision == Decision.DISCHARGE
         assert trace.timestamp is not None
-        assert bc._pending_trace is None  # pylint: disable=protected-access
+        assert bc._pending.trace is None  # pylint: disable=protected-access
 
     def test_grid_charge_decision_reaches_the_journal(self, setup):
         bc, inverter, tariff, consumption = setup
@@ -131,9 +132,9 @@ class TestCoreDecisionJournal:
         ]
         mode = self._mode_record(event.trace)
         assert mode.reason == Reason.GRID_RECHARGE_REQUIRED
-        assert mode.inputs['charge_rate'] > 0
+        assert mode.inputs['value'] > 0
         inverter.set_mode_force_charge.assert_called_once_with(
-            mode.inputs['charge_rate'])
+            mode.inputs['value'])
 
     def test_listener_is_called_on_mode_change_only(self, setup):
         bc, inverter, tariff, consumption = setup
@@ -165,7 +166,7 @@ class TestCoreDecisionJournal:
             ('value', 1250, 1000),
         ]
         mode = self._mode_record(events[-1].trace)
-        assert mode.inputs['charge_rate'] == 1250
+        assert mode.inputs['value'] == 1250
 
     def test_api_charge_rate_change_is_an_event(self, setup):
         bc, _inverter, _tariff, _consumption = setup
@@ -220,11 +221,50 @@ class TestCoreDecisionJournal:
             bc.shutdown()
             CommonLogic._instance = None  # pylint: disable=protected-access
 
-        events = [c.args[0]
-                  for c in mqtt_api.publish_status_change.call_args_list]
+        calls = [c.args[0]
+                 for c in mqtt_api.publish_status_change.call_args_list]
+        # the last event is published again in every cycle (see
+        # test_last_status_change_is_republished), so drop the repeats
+        events = [e for i, e in enumerate(calls)
+                  if i == 0 or e is not calls[i - 1]]
         assert [(e.kind, e.mode) for e in events] == [
             ('mode', MODE_ALLOW_DISCHARGING), ('mode', MODE_FORCE_CHARGING)]
         assert events[-1].trace.status_text().startswith('Charge from Grid ')
+
+    def test_last_status_change_is_republished(self, mock_config, mocker):
+        """An event lost while the broker was unreachable must not leave the
+        Decision sensor stale until the next status change."""
+        mqtt_api = mocker.MagicMock()
+        mocker.patch('batcontrol.core.MqttApi', return_value=mqtt_api)
+        mock_config['mqtt'] = {'enabled': True, 'broker': 'localhost',
+                               'port': 1883, 'topic': 'house/batcontrol'}
+        bc, _inverter, _tariff, _consumption = self._build(mock_config, mocker)
+        try:
+            bc.run()
+            mqtt_api.publish_status_change.reset_mock()
+
+            bc.refresh_static_values()
+        finally:
+            bc.shutdown()
+            CommonLogic._instance = None  # pylint: disable=protected-access
+
+        mqtt_api.publish_status_change.assert_called_once_with(
+            bc.decision_journal.last_status_change())
+
+    def test_nothing_is_republished_before_the_first_status_change(
+            self, mock_config, mocker):
+        mqtt_api = mocker.MagicMock()
+        mocker.patch('batcontrol.core.MqttApi', return_value=mqtt_api)
+        mock_config['mqtt'] = {'enabled': True, 'broker': 'localhost',
+                               'port': 1883, 'topic': 'house/batcontrol'}
+        bc, _inverter, _tariff, _consumption = self._build(mock_config, mocker)
+        try:
+            bc.refresh_static_values()
+        finally:
+            bc.shutdown()
+            CommonLogic._instance = None  # pylint: disable=protected-access
+
+        mqtt_api.publish_status_change.assert_not_called()
 
     def test_no_status_listener_without_mqtt(self, setup):
         bc, _inverter, _tariff, _consumption = setup
@@ -316,7 +356,7 @@ class TestCoreDecisionJournal:
         assert [r.decision for r in trace.records] == [
             Decision.OVERRIDE, Decision.MODE]
         assert self._mode_record(trace).reason == Reason.API_REQUEST
-        assert bc._pending_trace is None  # pylint: disable=protected-access
+        assert bc._pending.trace is None  # pylint: disable=protected-access
 
     def test_concurrent_mode_changes_keep_their_own_trace(self, setup):
         """The scheduler is inside a slow inverter call while an API thread
@@ -379,6 +419,19 @@ class TestCoreDecisionJournal:
         assert decisive.inputs == {
             'requested_mode': MODE_LIMIT_BATTERY_CHARGE_RATE}
 
+    @pytest.mark.parametrize('blocked, reason', [
+        (True, Reason.EXTERNAL_DISCHARGE_BLOCK),
+        (False, Reason.EXTERNAL_DISCHARGE_UNBLOCK),
+    ])
+    def test_discharge_block_and_unblock_are_told_apart(
+            self, setup, blocked, reason):
+        bc, _inverter, _tariff, _consumption = setup
+        bc.discharge_blocked = not blocked
+
+        bc.set_discharge_blocked(blocked)
+
+        assert self._mode_record(bc.decision_journal.latest()).reason == reason
+
     def test_forecast_error_fallback_is_traced(self, setup):
         bc, _inverter, _tariff, _consumption = setup
         bc.time_at_forecast_error = 1  # long ago
@@ -404,7 +457,7 @@ class TestCoreDecisionJournal:
         inverter.set_mode_allow_discharge.assert_called_once_with()
         mode = self._mode_record(bc.decision_journal.latest())
         assert mode.reason == Reason.CALCULATION_FAILED
-        assert bc._pending_trace is None  # pylint: disable=protected-access
+        assert bc._pending.trace is None  # pylint: disable=protected-access
 
     @pytest.mark.parametrize('charging, expects_pv, reason', [
         (True, False, Reason.EVCC_CHARGING),

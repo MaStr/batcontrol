@@ -39,13 +39,13 @@ explains why something did **not** happen.
 | `solar_limit` | `limit_set` | `CLIP_ABSORPTION_LIMIT` | only if it changed the limit set by an earlier rule |
 | `solar_limit` | `not_needed` | `NO_LIMIT_NEEDED`, `NO_CLIP_PREDICTED` | no |
 | `solar_limit` | `skipped` | `NO_PV_PRODUCTION`, `FORCE_CHARGE_ACTIVE`, `DISCHARGE_NOT_ALLOWED` | no |
-| `override` | `applied` | `EXTERNAL_DISCHARGE_BLOCK`, `GRID_CHARGE_LOCK`, `FORECAST_ERROR_FALLBACK`, `CALCULATION_FAILED`, `API_REQUEST` (input `requested_mode` shows the mode the API asked for, which can differ if it fell back) | yes |
+| `override` | `applied` | `EXTERNAL_DISCHARGE_BLOCK`, `EXTERNAL_DISCHARGE_UNBLOCK`, `GRID_CHARGE_LOCK`, `FORECAST_ERROR_FALLBACK`, `CALCULATION_FAILED`, `API_REQUEST` (input `requested_mode` shows the mode the API asked for, which can differ if it fell back) | yes |
 | `mode` | `allow_discharging`, `limit_battery_charge_rate`, `avoid_discharging`, `force_charge` | reason of the decisive step | - |
 
 The last record of every trace is the `mode` record. Its inputs contain the
 numeric `mode`, the `control_source` (`optimizer` or `api`), `decided_by` (the
-decisive decision) and, where relevant, `charge_rate` or
-`limit_battery_charge_rate`.
+decisive decision) and the `value` belonging to the mode in W (charge rate of
+force charge, PV limit of the limit mode, `null` for the other modes).
 
 Reason codes are part of the interface: consumers may match on them, so they are
 not renamed lightly.
@@ -97,7 +97,7 @@ counts. The factor is `DEFAULT_VALUE_CHANGE_FACTOR` (0.25) and can be set via
 def on_status_change(event):        # event: StatusChangeEvent
     print(event.kind, event.previous_mode, '->', event.mode, event.control_source)
     print(event.previous_value, '->', event.value)   # previous_value: kind 'value' only
-    print(event.trace.summary())
+    print(event.trace.status_text())
     payload = event.to_dict()       # JSON friendly, e.g. for a chat bot
 
 batcontrol.decision_journal.add_listener(on_status_change)
@@ -121,8 +121,10 @@ If MQTT is enabled, `MqttApi.publish_status_change` is registered as listener.
 It publishes the mode with its value and reason as text on `<base>/decision`
 (e.g. `Charge from Grid 1250 W - Grid recharge required`) and the trace as JSON
 on `<base>/decision/attributes`. Both are retained. Home Assistant discovers
-them as the **Decision** sensor, with the JSON as attributes. The sensor
-therefore changes on status changes only, not on every evaluation.
+them as the **Decision** sensor, with the JSON as attributes. The content
+changes on status changes only, not on every evaluation. The last status change
+is published again in every evaluation, like the mode, so an event that
+happened while the broker was unreachable reaches the sensor afterwards.
 
 ## Adding a decision step
 

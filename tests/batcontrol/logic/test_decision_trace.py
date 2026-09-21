@@ -117,7 +117,6 @@ class TestDecisionTrace:
         trace.add(_record())
 
         assert trace.decisive_record() is None
-        assert trace.summary().startswith('No decisive step.')
 
     def test_add_logs_decisive_at_info_and_others_at_debug(self, caplog):
         logger = logging.getLogger('test.decision_trace')
@@ -135,6 +134,24 @@ class TestDecisionTrace:
             DecisionTrace().add(_record(decisive=True))
 
         assert caplog.records == []
+
+    def test_step_appends_a_record_built_from_its_parts(self):
+        trace = DecisionTrace()
+
+        record = trace.step(Decision.OVERRIDE, Outcome.APPLIED,
+                            Reason.API_REQUEST, decisive=True,
+                            requested_mode=8)
+
+        assert trace.records == [record]
+        assert record == DecisionRecord(
+            Decision.OVERRIDE, Outcome.APPLIED, Reason.API_REQUEST,
+            {'requested_mode': 8}, True)
+
+    def test_step_is_not_decisive_by_default(self):
+        trace = DecisionTrace()
+
+        assert not trace.step(Decision.PEAK_SHAVING, Outcome.SKIPPED,
+                              Reason.NO_PV_PRODUCTION).decisive
 
     def test_extend_appends_records_in_order(self):
         first, second = _record(), _record(outcome=Outcome.NO_CHARGE)
@@ -177,7 +194,7 @@ class TestStatusText:
 
     def test_force_charge_with_rate(self):
         trace = self._trace('force_charge', Reason.GRID_RECHARGE_REQUIRED,
-                            charge_rate=1250)
+                            value=1250)
 
         assert trace.status_text() == \
             'Charge from Grid 1250 W - Grid recharge required'
@@ -185,7 +202,7 @@ class TestStatusText:
     def test_limit_mode_with_pv_limit(self):
         trace = self._trace('limit_battery_charge_rate',
                             Reason.PV_CHARGE_LIMITED,
-                            limit_battery_charge_rate=300)
+                            value=300)
 
         assert trace.status_text() == \
             'Limit Battery Charge 300 W - PV charge limited'
@@ -193,7 +210,7 @@ class TestStatusText:
     def test_zero_limit_is_shown(self):
         trace = self._trace('limit_battery_charge_rate',
                             Reason.PV_CHARGE_LIMITED,
-                            limit_battery_charge_rate=0)
+                            value=0)
 
         assert 'Limit Battery Charge 0 W' in trace.status_text()
 
@@ -223,10 +240,18 @@ class TestStatusText:
 
         assert trace.status_text() == ''
 
-    def test_is_ascii_and_fits_into_a_ha_state(self):
-        trace = self._trace('force_charge', 'X' * 400, charge_rate=1)
+    def test_is_ascii(self):
+        trace = self._trace('force_charge', Reason.GRID_RECHARGE_REQUIRED,
+                            value=1)
 
-        text = trace.status_text()
+        assert trace.status_text().isascii()
 
-        assert text.isascii()
-        assert len(text) <= 255
+    def test_all_reason_codes_render_within_the_ha_state_limit(self):
+        """Home Assistant limits the state to 255 characters."""
+        reasons = [value for name, value in vars(Reason).items()
+                   if name.isupper()]
+
+        for reason in reasons:
+            trace = self._trace('limit_battery_charge_rate', reason,
+                                value=123456)
+            assert len(trace.status_text()) <= 255
