@@ -138,7 +138,6 @@ def test_factory_falls_back_to_default_when_cache_ttl_is_null():
     assert isinstance(inverter, MqttInverter)
     assert inverter.cache_ttl == 120
     assert inverter.soc_value.ttl == 120
-    assert inverter.soc_value.ttl == 120
 
 
 def test_factory_rejects_unknown_type():
