@@ -1404,7 +1404,9 @@ class TestChargeRateMultiplierWiring:
         assert bc.general_logic.charge_rate_multiplier == 1.25
         bc.shutdown()
 
-    @pytest.mark.parametrize("invalid_value", [None, "fast", "", True, 0, -1.1])
+    @pytest.mark.parametrize("invalid_value", [
+        None, "fast", "", True, 0, -1.1, float("nan"), float("inf"), float("-inf"),
+    ])
     def test_invalid_expert_charge_rate_multiplier_raises(self, mocker, invalid_value):
         """A non-positive or non-numeric expert value must raise ValueError
         at init instead of failing later inside calculate_charge_rate()."""

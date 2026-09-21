@@ -14,6 +14,7 @@ import datetime
 import time
 import os
 import logging
+import math
 import platform
 import functools
 
@@ -122,7 +123,7 @@ def _parse_positive_number(value, config_key: str) -> float:
         raise ValueError(
             f"{config_key} must be a positive number, got {value!r}"
         ) from exc
-    if number <= 0:
+    if not math.isfinite(number) or number <= 0:
         raise ValueError(
             f"{config_key} must be a positive number, got {value!r}"
         )
