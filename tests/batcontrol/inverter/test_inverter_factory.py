@@ -91,6 +91,39 @@ def test_factory_applies_mqtt_defaults():
     assert inverter.max_soc == 100
 
 
+def test_factory_forwards_mqtt_cache_ttl():
+    """Factory should forward a configured cache_ttl to MqttInverter (regression for #425)."""
+    config = {
+        "type": "mqtt",
+        "capacity": 10000,
+        "max_grid_charge_rate": 5000,
+        "cache_ttl": 30,
+        "enable_resilient_wrapper": False,
+    }
+
+    inverter = Inverter.create_inverter(config)
+
+    assert isinstance(inverter, MqttInverter)
+    assert inverter.cache_ttl == 30
+    assert inverter.soc_value.ttl == 30
+
+
+def test_factory_defaults_mqtt_cache_ttl():
+    """Factory should default cache_ttl to 120 seconds when not configured."""
+    config = {
+        "type": "mqtt",
+        "capacity": 10000,
+        "max_grid_charge_rate": 5000,
+        "enable_resilient_wrapper": False,
+    }
+
+    inverter = Inverter.create_inverter(config)
+
+    assert isinstance(inverter, MqttInverter)
+    assert inverter.cache_ttl == 120
+    assert inverter.soc_value.ttl == 120
+
+
 def test_factory_rejects_unknown_type():
     """Factory should reject unknown inverter types."""
     config = {
