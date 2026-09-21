@@ -61,7 +61,10 @@ class Inverter:
                 'min_soc': config.get('min_soc', DEFAULT_MIN_SOC),
                 'max_soc': config.get('max_soc', DEFAULT_MAX_SOC),
                 'max_grid_charge_rate': config['max_grid_charge_rate'],
-                **({'cache_ttl': config['cache_ttl']} if 'cache_ttl' in config else {})
+                **(
+                    {'cache_ttl': config['cache_ttl']}
+                    if config.get('cache_ttl') is not None else {}
+                )
             }
             inverter=MqttInverter(iv_config)
         elif config['type'].lower() == 'fronius-modbus':
