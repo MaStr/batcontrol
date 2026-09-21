@@ -106,6 +106,29 @@ def _parse_optional_ratio(value, config_key: str) -> Optional[float]:
     return ratio
 
 
+def _parse_positive_number(value, config_key: str) -> float:
+    """Parse a positive numeric config value. ``value`` must not be None;
+    callers only invoke this once they know the key was actually set,
+    so an explicit null is treated as invalid rather than silently
+    falling back to a default."""
+    if isinstance(value, bool):
+        raise ValueError(
+            f"{config_key} must be a positive number, "
+            f"got {type(value).__name__}"
+        )
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{config_key} must be a positive number, got {value!r}"
+        ) from exc
+    if number <= 0:
+        raise ValueError(
+            f"{config_key} must be a positive number, got {value!r}"
+        )
+    return number
+
+
 def _parse_bool_flag(value) -> bool:
     """Parse an MQTT payload for a boolean flag: 1/0 or true/false (case-insensitive)."""
     normalized = str(value).strip().lower()
@@ -326,9 +349,14 @@ class Batcontrol:
             self._validate_market_price_refresh_time(raw_refresh_time)
             self.market_price_refresh_time = raw_refresh_time
 
-        legacy_charge_rate_multiplier = self.batconfig.get(
-            'charge_rate_multiplier', None)
-        if legacy_charge_rate_multiplier is not None:
+        battery_control_expert_config = self.config.get(
+            'battery_control_expert', {}) or {}
+        legacy_charge_rate_multiplier = None
+        if 'charge_rate_multiplier' in self.batconfig:
+            legacy_charge_rate_multiplier = _parse_positive_number(
+                self.batconfig['charge_rate_multiplier'],
+                'battery_control.charge_rate_multiplier'
+            )
             logger.warning(
                 'battery_control.charge_rate_multiplier is deprecated and '
                 'will be removed in a future release; use '
@@ -337,11 +365,15 @@ class Batcontrol:
                 'battery_control_expert.charge_rate_multiplier is also set '
                 '(which takes priority).'
             )
-        charge_rate_multiplier = (self.config.get('battery_control_expert', {}) or {}).get(
-            'charge_rate_multiplier',
-            legacy_charge_rate_multiplier
-            if legacy_charge_rate_multiplier is not None else 1.1
-        )
+        if 'charge_rate_multiplier' in battery_control_expert_config:
+            charge_rate_multiplier = _parse_positive_number(
+                battery_control_expert_config['charge_rate_multiplier'],
+                'battery_control_expert.charge_rate_multiplier'
+            )
+        elif legacy_charge_rate_multiplier is not None:
+            charge_rate_multiplier = legacy_charge_rate_multiplier
+        else:
+            charge_rate_multiplier = 1.1
 
         self.general_logic = CommonLogic.get_instance(
             charge_rate_multiplier=charge_rate_multiplier,

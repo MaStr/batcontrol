@@ -1335,24 +1335,9 @@ class TestMarketPriceRefresh:
 class TestChargeRateMultiplierWiring:
     """battery_control_expert.charge_rate_multiplier must reach CommonLogic (issue #424)."""
 
-    BASE_CONFIG = {
-        'timezone': 'Europe/Berlin',
-        'time_resolution_minutes': 60,
-        'inverter': {
-            'type': 'dummy',
-            'max_grid_charge_rate': 5000,
-            'max_pv_charge_rate': 3000,
-            'min_pv_charge_rate': 0,
-        },
-        'utility': {'type': 'tibber', 'apikey': 'test_token'},
-        'pvinstallations': [],
-        'consumption_forecast': {'type': 'simple', 'value': 500},
-        'battery_control': {
-            'max_charging_from_grid_limit': 0.8,
-            'min_price_difference': 0.05,
-        },
-        'mqtt': {'enabled': False},
-    }
+    # Shared with TestMarketPriceRefresh, which exercises the same
+    # battery_control_expert-driven Batcontrol.__init__() wiring.
+    BASE_CONFIG = TestMarketPriceRefresh.BASE_CONFIG
 
     def _patch_core(self, mocker):
         mock_inverter = mocker.MagicMock()
@@ -1417,6 +1402,40 @@ class TestChargeRateMultiplierWiring:
         config['battery_control_expert'] = {'charge_rate_multiplier': 1.25}
         bc = Batcontrol(config)
         assert bc.general_logic.charge_rate_multiplier == 1.25
+        bc.shutdown()
+
+    @pytest.mark.parametrize("invalid_value", [None, "fast", "", True, 0, -1.1])
+    def test_invalid_expert_charge_rate_multiplier_raises(self, mocker, invalid_value):
+        """A non-positive or non-numeric expert value must raise ValueError
+        at init instead of failing later inside calculate_charge_rate()."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control_expert'] = {
+            'charge_rate_multiplier': invalid_value}
+        with pytest.raises(ValueError, match="charge_rate_multiplier"):
+            Batcontrol(config)
+
+    @pytest.mark.parametrize("invalid_value", ["fast", True, 0, -1.1])
+    def test_invalid_legacy_charge_rate_multiplier_raises(self, mocker, invalid_value):
+        """Same validation applies to the deprecated battery_control location."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control'] = dict(
+            self.BASE_CONFIG['battery_control'],
+            charge_rate_multiplier=invalid_value)
+        with pytest.raises(ValueError, match="charge_rate_multiplier"):
+            Batcontrol(config)
+
+    @pytest.mark.parametrize("valid_value", [1, 1.5, "1.2"])
+    def test_valid_charge_rate_multiplier_accepted(self, mocker, valid_value):
+        """Ints and numeric strings are coerced to float, matching the
+        other battery_control_expert numeric parsers."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control_expert'] = {
+            'charge_rate_multiplier': valid_value}
+        bc = Batcontrol(config)
+        assert bc.general_logic.charge_rate_multiplier == float(valid_value)
         bc.shutdown()
 
 
