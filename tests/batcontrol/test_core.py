@@ -11,7 +11,6 @@ from batcontrol.core import (
     MODE_ALLOW_DISCHARGING,
     MODE_FORCE_CHARGING,
     MODE_LIMIT_BATTERY_CHARGE_RATE,
-    _parse_bool_flag,
 )
 from batcontrol.inverter import (
     InverterCommunicationError,
@@ -19,6 +18,7 @@ from batcontrol.inverter import (
 )
 from batcontrol.logic.logic import Logic as LogicFactory
 from batcontrol.logic.common import CommonLogic
+from batcontrol.value_utils import parse_bool_flag
 
 
 class TestModeLimitBatteryChargeRate:
@@ -1471,24 +1471,6 @@ class TestChargeRateMultiplierWiring:
             Batcontrol(config)
 
 
-class TestParseBoolFlag:
-    """_parse_bool_flag() parses MQTT payloads for the grid-charge lock (issue #216)."""
-
-    @pytest.mark.parametrize("payload,expected", [
-        ("1", True), ("true", True), ("True", True), ("TRUE", True),
-        (" 1 ", True), (" true ", True),
-        ("0", False), ("false", False), ("False", False), ("FALSE", False),
-        (" 0 ", False), (" false ", False),
-    ])
-    def test_valid_payloads(self, payload, expected):
-        assert _parse_bool_flag(payload) is expected
-
-    @pytest.mark.parametrize("payload", ["", "maybe", "2", "yes", "on"])
-    def test_invalid_payload_raises(self, payload):
-        with pytest.raises(ValueError):
-            _parse_bool_flag(payload)
-
-
 class TestApiSetGridChargeLock:
     """External grid-charge lock signal (e.g. HEMS/grid operator, section 14a EnWG)."""
 
@@ -1645,7 +1627,7 @@ class TestGridChargeLockTopicRegistration:
         mock_mqtt_api.register_external_topic_callback.assert_called_once_with(
             'hems/batcontrol/grid_charge_lock',
             bc.api_set_grid_charge_lock,
-            _parse_bool_flag,
+            parse_bool_flag,
         )
         bc.shutdown()
 
