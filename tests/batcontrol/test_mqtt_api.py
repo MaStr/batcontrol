@@ -1,4 +1,5 @@
 """Tests for MqttApi._handle_message, focusing on bytes payload decoding."""
+import dataclasses
 import json
 from unittest.mock import MagicMock, call, patch
 
@@ -521,7 +522,7 @@ class TestPublishStatusChange:
         api.publish_status_change(self._event())
 
         assert api.client.publish.call_count == 2
-        text_call, attributes_call = api.client.publish.call_args_list
+        attributes_call, text_call = api.client.publish.call_args_list
         assert text_call == call(
             'batcontrol/decision',
             'Charge from Grid 1250 W - Grid recharge required',
@@ -535,7 +536,7 @@ class TestPublishStatusChange:
         api.publish_status_change(
             self._event(kind='value', value=1250, previous_value=1000))
 
-        attributes = json.loads(api.client.publish.call_args_list[1].args[1])
+        attributes = json.loads(api.client.publish.call_args_list[0].args[1])
         assert attributes['kind'] == 'value'
         assert attributes['mode'] == -1
         assert attributes['previous_mode'] == 0
@@ -545,6 +546,26 @@ class TestPublishStatusChange:
         assert attributes['decided_by']['decision'] == 'grid_recharge'
         assert [r['decision'] for r in attributes['records']] == [
             'grid_recharge', 'mode']
+
+    def test_numpy_value_is_published(self):
+        api = _make_publish_stub()
+
+        api.publish_status_change(self._event(value=np.int64(900)))
+
+        attributes = json.loads(api.client.publish.call_args_list[0].args[1])
+        assert attributes['value'] == 900
+
+    def test_unserializable_attributes_publish_nothing(self, caplog):
+        """A broken payload must neither raise into the control loop nor
+        leave the text topic ahead of the attributes."""
+        api = _make_publish_stub()
+        event = dataclasses.replace(self._event(), value=float('nan'))
+
+        with caplog.at_level('ERROR'):
+            api.publish_status_change(event)
+
+        api.client.publish.assert_not_called()
+        assert 'not JSON serializable' in caplog.text
 
     def test_nothing_is_published_while_disconnected(self):
         api = _make_publish_stub()

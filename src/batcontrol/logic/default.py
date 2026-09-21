@@ -7,7 +7,13 @@ from .logic_interface import LogicInterface
 from .logic_interface import CalculationParameters, CalculationInput
 from .logic_interface import CalculationOutput, InverterControlSettings
 from .common import CommonLogic
-from .decision_trace import Decision, DecisionRecord, DecisionTrace, Outcome, Reason
+from .decision_records import (
+    discharge_always_allowed,
+    discharge_evaluated,
+    grid_recharge_charge,
+    grid_recharge_idle,
+)
+from .decision_trace import DecisionTrace
 from .grid_charge_target import (
     apply_grid_charge_target_to_recharge,
     apply_grid_charge_target_to_reserve,
@@ -198,26 +204,12 @@ class DefaultLogic(LogicInterface):
 
                 charge_rate = self.common.calculate_charge_rate(charge_rate)
 
-                self.decision_trace.add(DecisionRecord(
-                    decision=Decision.GRID_RECHARGE,
-                    outcome=Outcome.CHARGE,
-                    reason=Reason.GRID_RECHARGE_REQUIRED,
-                    inputs={
-                        'current_price': prices[0],
-                        'min_dynamic_price_difference':
-                            self.calculation_output.min_dynamic_price_difference,
-                        'stored_energy': calc_input.stored_energy,
-                        'stored_usable_energy': calc_input.stored_usable_energy,
-                        'reserved_energy': self.calculation_output.reserved_energy,
-                        'requested_recharge_energy':
-                            self.calculation_output.required_recharge_energy,
-                        'recharge_energy': required_recharge_energy,
-                        'available_grid_charge_capacity': allowed_charging_energy,
-                        'remaining_time': remaining_time,
-                        'charge_rate': charge_rate,
-                    },
-                    decisive=True,
-                ), logger)
+                self.decision_trace.add(grid_recharge_charge(
+                    calc_input, self.calculation_output,
+                    recharge_energy=required_recharge_energy,
+                    allowed_charging_energy=allowed_charging_energy,
+                    remaining_time=remaining_time,
+                    charge_rate=charge_rate), logger)
 
                 #self.force_charge(charge_rate)
                 inverter_control_settings.charge_from_grid = True
@@ -225,19 +217,11 @@ class DefaultLogic(LogicInterface):
             else:
                 # keep current charge level. recharge if solar surplus available
                 inverter_control_settings.allow_discharge = False
-                self.decision_trace.add(DecisionRecord(
-                    decision=Decision.GRID_RECHARGE,
-                    outcome=Outcome.NO_CHARGE,
-                    reason=(Reason.NO_RECHARGE_REQUIRED if is_charging_possible
-                            else Reason.GRID_CHARGE_LIMIT_REACHED),
-                    inputs={
-                        'current_price': prices[0],
-                        'stored_energy': calc_input.stored_energy,
-                        'charge_limit_capacity': charge_limit_capacity,
-                        'required_recharge_energy': required_recharge_energy,
-                    },
-                    decisive=True,
-                ), logger)
+                self.decision_trace.add(grid_recharge_idle(
+                    calc_input, is_charging_possible=is_charging_possible,
+                    charge_limit_capacity=charge_limit_capacity,
+                    required_recharge_energy=required_recharge_energy),
+                    logger)
         #
         return inverter_control_settings
 
@@ -257,17 +241,9 @@ class DefaultLogic(LogicInterface):
             calc_timestamp = datetime.datetime.now().astimezone(self.timezone)
 
         if self.common.is_discharge_always_allowed_capacity(calc_input.stored_energy):
-            self.decision_trace.add(DecisionRecord(
-                decision=Decision.DISCHARGE,
-                outcome=Outcome.ALLOWED,
-                reason=Reason.ALWAYS_ALLOW_DISCHARGE_LIMIT,
-                inputs={
-                    'stored_energy': calc_input.stored_energy,
-                    'always_allow_discharge_limit':
-                        self.common.get_always_allow_discharge_limit(),
-                },
-                decisive=True,
-            ), logger)
+            self.decision_trace.add(discharge_always_allowed(
+                calc_input, self.common.get_always_allow_discharge_limit()),
+                logger)
             return True
 
         current_price = prices[0]
@@ -398,24 +374,11 @@ class DefaultLogic(LogicInterface):
 
 
         discharge_allowed = calc_input.stored_usable_energy > reserved_storage
-        self.decision_trace.add(DecisionRecord(
-            decision=Decision.DISCHARGE,
-            outcome=Outcome.ALLOWED if discharge_allowed else Outcome.FORBIDDEN,
-            reason=(Reason.USABLE_ENERGY_EXCEEDS_RESERVE if discharge_allowed
-                    else Reason.RESERVE_REQUIRED),
-            inputs={
-                'current_price': current_price,
-                'min_dynamic_price_difference': min_dynamic_price_difference,
-                'stored_usable_energy': calc_input.stored_usable_energy,
-                'reserved_energy': reserved_storage,
-                'evaluation_slots': max_slots,
-                'higher_price_slots': len(higher_price_slots),
-                'cheaper_price_slot': cheaper_price_slot,
-            },
-            # allowed: nothing more to evaluate. forbidden: the grid recharge
-            # step decides what happens next.
-            decisive=discharge_allowed,
-        ), logger)
+        self.decision_trace.add(discharge_evaluated(
+            discharge_allowed, calc_input, self.calculation_output,
+            evaluation_slots=max_slots,
+            higher_price_slots=len(higher_price_slots),
+            cheaper_price_slot=cheaper_price_slot), logger)
 
         return discharge_allowed
 

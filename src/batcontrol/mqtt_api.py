@@ -663,23 +663,23 @@ class MqttApi:
         """
         if not self.client.is_connected():
             return
-        attributes = event.trace.to_dict()
-        attributes.update(
-            kind=event.kind,
-            mode=event.mode,
-            previous_mode=event.previous_mode,
-            value=event.value,
-            previous_value=event.previous_value,
-            control_source=event.control_source,
+        # Build the payload first: if it cannot be serialized, neither topic
+        # is touched and text and attributes stay consistent.
+        try:
+            attributes = json.dumps(event.to_dict(), allow_nan=False)
+        except (TypeError, ValueError):
+            logger.exception(
+                'Decision attributes are not JSON serializable, '
+                'Decision sensor not updated')
+            return
+        self.client.publish(
+            self._topic(TOPIC_DECISION_ATTRIBUTES),
+            attributes,
+            retain=True
         )
         self.client.publish(
             self._topic(TOPIC_DECISION),
             event.trace.status_text(),
-            retain=True
-        )
-        self.client.publish(
-            self._topic(TOPIC_DECISION_ATTRIBUTES),
-            json.dumps(attributes),
             retain=True
         )
 

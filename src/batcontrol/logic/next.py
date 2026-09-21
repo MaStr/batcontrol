@@ -20,6 +20,12 @@ from .logic_interface import LogicInterface
 from .logic_interface import CalculationParameters, CalculationInput
 from .logic_interface import CalculationOutput, InverterControlSettings
 from .common import CommonLogic
+from .decision_records import (
+    discharge_always_allowed,
+    discharge_evaluated,
+    grid_recharge_charge,
+    grid_recharge_idle,
+)
 from .decision_trace import Decision, DecisionRecord, DecisionTrace, Outcome, Reason
 from .grid_charge_target import (
     apply_grid_charge_target_to_recharge,
@@ -192,45 +198,23 @@ class NextLogic(LogicInterface):
                 charge_rate = required_recharge_energy / remaining_time
                 charge_rate = self.common.calculate_charge_rate(charge_rate)
 
-                self.decision_trace.add(DecisionRecord(
-                    decision=Decision.GRID_RECHARGE,
-                    outcome=Outcome.CHARGE,
-                    reason=Reason.GRID_RECHARGE_REQUIRED,
-                    inputs={
-                        'current_price': prices[0],
-                        'min_dynamic_price_difference':
-                            self.calculation_output.min_dynamic_price_difference,
-                        'stored_energy': calc_input.stored_energy,
-                        'stored_usable_energy': calc_input.stored_usable_energy,
-                        'reserved_energy': self.calculation_output.reserved_energy,
-                        'requested_recharge_energy':
-                            self.calculation_output.required_recharge_energy,
-                        'recharge_energy': required_recharge_energy,
-                        'available_grid_charge_capacity': allowed_charging_energy,
-                        'remaining_time': remaining_time,
-                        'charge_rate': charge_rate,
-                    },
-                    decisive=True,
-                ), logger)
+                self.decision_trace.add(grid_recharge_charge(
+                    calc_input, self.calculation_output,
+                    recharge_energy=required_recharge_energy,
+                    allowed_charging_energy=allowed_charging_energy,
+                    remaining_time=remaining_time,
+                    charge_rate=charge_rate), logger)
 
                 inverter_control_settings.charge_from_grid = True
                 inverter_control_settings.charge_rate = charge_rate
             else:
                 # keep current charge level. recharge if solar surplus available
                 inverter_control_settings.allow_discharge = False
-                self.decision_trace.add(DecisionRecord(
-                    decision=Decision.GRID_RECHARGE,
-                    outcome=Outcome.NO_CHARGE,
-                    reason=(Reason.NO_RECHARGE_REQUIRED if is_charging_possible
-                            else Reason.GRID_CHARGE_LIMIT_REACHED),
-                    inputs={
-                        'current_price': prices[0],
-                        'stored_energy': calc_input.stored_energy,
-                        'charge_limit_capacity': charge_limit_capacity,
-                        'required_recharge_energy': required_recharge_energy,
-                    },
-                    decisive=True,
-                ), logger)
+                self.decision_trace.add(grid_recharge_idle(
+                    calc_input, is_charging_possible=is_charging_possible,
+                    charge_limit_capacity=charge_limit_capacity,
+                    required_recharge_energy=required_recharge_energy),
+                    logger)
 
         # ----- Peak Shaving Post-Processing ----- #
         if self.calculation_parameters.peak_shaving.enabled:
@@ -271,16 +255,22 @@ class NextLogic(LogicInterface):
     #  Peak Shaving                                                       #
     # ------------------------------------------------------------------ #
 
-    def _trace_skip(self, decision: str, reason: str, **inputs) -> None:
-        """Record that a post-processing rule did not run. The existing
-        log statements of the rules stay as they are, so nothing is logged
+    def _trace(self, decision: str, outcome: str, reason: str,
+               decisive: bool = False, **inputs) -> None:
+        """Record a step of a post-processing rule. The existing log
+        statements of the rules stay as they are, so nothing is logged
         here."""
         self.decision_trace.add(DecisionRecord(
             decision=decision,
-            outcome=Outcome.SKIPPED,
+            outcome=outcome,
             reason=reason,
             inputs=inputs,
+            decisive=decisive,
         ))
+
+    def _trace_skip(self, decision: str, reason: str, **inputs) -> None:
+        """Record that a post-processing rule did not run."""
+        self._trace(decision, Outcome.SKIPPED, reason, **inputs)
 
     def _apply_peak_shaving(self, settings: InverterControlSettings,
                             calc_input: CalculationInput,
@@ -377,12 +367,9 @@ class NextLogic(LogicInterface):
         candidates = [v for v in (price_limit_w, time_limit_w) if v >= 0]
         if not candidates:
             logger.debug('[PeakShaving] Evaluated: no limit needed')
-            self.decision_trace.add(DecisionRecord(
-                decision=Decision.PEAK_SHAVING,
-                outcome=Outcome.NOT_NEEDED,
-                reason=Reason.NO_LIMIT_NEEDED,
-                inputs={'time_active': time_active, 'price_active': price_active},
-            ))
+            self._trace(Decision.PEAK_SHAVING, Outcome.NOT_NEEDED,
+                        Reason.NO_LIMIT_NEEDED,
+                        time_active=time_active, price_active=price_active)
             return settings
 
         charge_limit = min(candidates)
@@ -412,22 +399,15 @@ class NextLogic(LogicInterface):
                     price_limit_w if price_limit_w >= 0 else 'off',
                     time_limit_w if time_limit_w >= 0 else 'off',
                     self.calculation_parameters.peak_shaving.allow_full_battery_after)
-        # The line above stays the log output of this rule, so the record
-        # is not logged a second time.
-        self.decision_trace.add(DecisionRecord(
-            decision=Decision.PEAK_SHAVING,
-            outcome=Outcome.LIMIT_SET,
-            reason=Reason.PV_CHARGE_LIMITED,
-            inputs={
-                'active_components': active_components,
-                'final_limit_w': settings.limit_battery_charge_rate,
-                'price_limit_w': price_limit_w if price_limit_w >= 0 else None,
-                'time_limit_w': time_limit_w if time_limit_w >= 0 else None,
-                'allow_full_battery_after':
-                    self.calculation_parameters.peak_shaving.allow_full_battery_after,
-            },
+        self._trace(
+            Decision.PEAK_SHAVING, Outcome.LIMIT_SET, Reason.PV_CHARGE_LIMITED,
             decisive=True,
-        ))
+            active_components=active_components,
+            final_limit_w=settings.limit_battery_charge_rate,
+            price_limit_w=price_limit_w if price_limit_w >= 0 else None,
+            time_limit_w=time_limit_w if time_limit_w >= 0 else None,
+            allow_full_battery_after=(
+                self.calculation_parameters.peak_shaving.allow_full_battery_after))
 
         return settings
 
@@ -494,12 +474,9 @@ class NextLogic(LogicInterface):
         if floor_w == 0 and cap_w < 0:
             logger.debug('[SolarLimit] Evaluated: no clip predicted, '
                          'no limit needed')
-            self.decision_trace.add(DecisionRecord(
-                decision=Decision.SOLAR_LIMIT,
-                outcome=Outcome.NOT_NEEDED,
-                reason=Reason.NO_CLIP_PREDICTED,
-                inputs={'feed_in_limit_w': peak_shaving.feed_in_limit_w},
-            ))
+            self._trace(Decision.SOLAR_LIMIT, Outcome.NOT_NEEDED,
+                        Reason.NO_CLIP_PREDICTED,
+                        feed_in_limit_w=peak_shaving.feed_in_limit_w)
             return settings
 
         previous_limit_w = settings.limit_battery_charge_rate
@@ -517,25 +494,19 @@ class NextLogic(LogicInterface):
                     cap_w if cap_w >= 0 else 'off',
                     final_w if final_w >= 0 else 'off',
                     peak_shaving.feed_in_limit_w)
-        # The line above stays the log output of this rule, so the record
-        # is not logged a second time.
-        self.decision_trace.add(DecisionRecord(
-            decision=Decision.SOLAR_LIMIT,
-            outcome=Outcome.LIMIT_SET if final_w >= 0 else Outcome.NOT_NEEDED,
-            reason=(Reason.CLIP_ABSORPTION_LIMIT if final_w >= 0
-                    else Reason.NO_LIMIT_NEEDED),
-            inputs={
-                'floor_w': floor_w,
-                'cap_w': cap_w if cap_w >= 0 else None,
-                'final_limit_w': final_w if final_w >= 0 else None,
-                'previous_limit_w': (previous_limit_w
-                                     if previous_limit_w >= 0 else None),
-                'feed_in_limit_w': peak_shaving.feed_in_limit_w,
-            },
+        limit_set = final_w >= 0
+        self._trace(
+            Decision.SOLAR_LIMIT,
+            Outcome.LIMIT_SET if limit_set else Outcome.NOT_NEEDED,
+            Reason.CLIP_ABSORPTION_LIMIT if limit_set else Reason.NO_LIMIT_NEEDED,
             # Only decisive if this rule changed the limit. The merge can
             # also end up at the limit an earlier rule (peak shaving) set.
-            decisive=final_w >= 0 and final_w != previous_limit_w,
-        ))
+            decisive=limit_set and final_w != previous_limit_w,
+            floor_w=floor_w,
+            cap_w=cap_w if cap_w >= 0 else None,
+            final_limit_w=final_w if limit_set else None,
+            previous_limit_w=previous_limit_w if previous_limit_w >= 0 else None,
+            feed_in_limit_w=peak_shaving.feed_in_limit_w)
 
         return settings
 
@@ -732,17 +703,9 @@ class NextLogic(LogicInterface):
             calc_timestamp = datetime.datetime.now().astimezone(self.timezone)
 
         if self.common.is_discharge_always_allowed_capacity(calc_input.stored_energy):
-            self.decision_trace.add(DecisionRecord(
-                decision=Decision.DISCHARGE,
-                outcome=Outcome.ALLOWED,
-                reason=Reason.ALWAYS_ALLOW_DISCHARGE_LIMIT,
-                inputs={
-                    'stored_energy': calc_input.stored_energy,
-                    'always_allow_discharge_limit':
-                        self.common.get_always_allow_discharge_limit(),
-                },
-                decisive=True,
-            ), logger)
+            self.decision_trace.add(discharge_always_allowed(
+                calc_input, self.common.get_always_allow_discharge_limit()),
+                logger)
             return True
 
         current_price = prices[0]
@@ -869,24 +832,11 @@ class NextLogic(LogicInterface):
                          "'high price' slots in evaluation window.")
 
         discharge_allowed = calc_input.stored_usable_energy > reserved_storage
-        self.decision_trace.add(DecisionRecord(
-            decision=Decision.DISCHARGE,
-            outcome=Outcome.ALLOWED if discharge_allowed else Outcome.FORBIDDEN,
-            reason=(Reason.USABLE_ENERGY_EXCEEDS_RESERVE if discharge_allowed
-                    else Reason.RESERVE_REQUIRED),
-            inputs={
-                'current_price': current_price,
-                'min_dynamic_price_difference': min_dynamic_price_difference,
-                'stored_usable_energy': calc_input.stored_usable_energy,
-                'reserved_energy': reserved_storage,
-                'evaluation_slots': max_slots,
-                'higher_price_slots': len(higher_price_slots),
-                'cheaper_price_slot': cheaper_price_slot,
-            },
-            # allowed: nothing more to evaluate. forbidden: the grid recharge
-            # step decides what happens next.
-            decisive=discharge_allowed,
-        ), logger)
+        self.decision_trace.add(discharge_evaluated(
+            discharge_allowed, calc_input, self.calculation_output,
+            evaluation_slots=max_slots,
+            higher_price_slots=len(higher_price_slots),
+            cheaper_price_slot=cheaper_price_slot), logger)
 
         return discharge_allowed
 

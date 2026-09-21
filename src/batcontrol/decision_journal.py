@@ -18,7 +18,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any, Callable, Deque, Dict, List, Optional
 
-from .logic.decision_trace import DecisionTrace
+from .logic.decision_trace import DecisionTrace, plain_value
 
 logger = logging.getLogger(__name__)
 
@@ -48,15 +48,16 @@ class StatusChangeEvent:  # pylint: disable=too-many-instance-attributes
     previous_value: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """JSON friendly representation."""
+        """JSON friendly representation: the trace (``timestamp``,
+        ``decided_by``, ``records``) plus the event data."""
         return {
+            **self.trace.to_dict(),
             'kind': self.kind,
             'previous_mode': self.previous_mode,
             'mode': self.mode,
             'control_source': self.control_source,
-            'value': self.value,
-            'previous_value': self.previous_value,
-            'trace': self.trace.to_dict(),
+            'value': plain_value(self.value),
+            'previous_value': plain_value(self.previous_value),
         }
 
 
@@ -75,10 +76,9 @@ class DecisionJournal:
         self._lock = threading.Lock()
         self._traces: Deque[DecisionTrace] = deque(maxlen=max_traces)
         self._listeners: List[StatusChangeListener] = []
-        self._current_mode: Optional[int] = None
-        # value at the last event; later values are compared against it, so
-        # a slow drift in small steps is detected as well
-        self._reference_value: Optional[float] = None
+        # Mode and value of the last event are the reference for the next
+        # commit. Values are compared against the last event, not the last
+        # cycle, so a slow drift in small steps is detected as well.
         self._last_change: Optional[StatusChangeEvent] = None
 
     def add_listener(self, listener: StatusChangeListener) -> None:
@@ -100,10 +100,10 @@ class DecisionJournal:
             if listener in self._listeners:
                 self._listeners.remove(listener)
 
-    def _value_changed(self, value: Optional[float]) -> bool:
-        """True if value differs from the last event's value by the
-        configured factor. Going from or to 0 always counts."""
-        reference = self._reference_value
+    def _value_changed(self, value: Optional[float],
+                       reference: Optional[float]) -> bool:
+        """True if value differs from the reference (the value of the last
+        event) by the configured factor. Going from or to 0 always counts."""
         if value is None or reference is None:
             return False
         if reference == 0:
@@ -121,24 +121,22 @@ class DecisionJournal:
         """
         with self._lock:
             self._traces.append(trace)
-            if mode != self._current_mode:
+            last = self._last_change
+            if last is None or mode != last.mode:
                 kind = KIND_MODE
-            elif self._value_changed(value):
+            elif self._value_changed(value, last.value):
                 kind = KIND_VALUE
             else:
                 return None
             event = StatusChangeEvent(
                 kind=kind,
-                previous_mode=self._current_mode,
+                previous_mode=last.mode if last is not None else None,
                 mode=mode,
                 control_source=control_source,
                 trace=trace,
                 value=value,
-                previous_value=(self._reference_value
-                                if kind == KIND_VALUE else None),
+                previous_value=last.value if kind == KIND_VALUE else None,
             )
-            self._current_mode = mode
-            self._reference_value = value
             self._last_change = event
             listeners = list(self._listeners)
 
