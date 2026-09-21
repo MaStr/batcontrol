@@ -11,6 +11,7 @@ from batcontrol.core import (
     MODE_ALLOW_DISCHARGING,
     MODE_AVOID_DISCHARGING,
     MODE_FORCE_CHARGING,
+    MODE_LIMIT_BATTERY_CHARGE_RATE,
 )
 from batcontrol.inverter import InverterCommunicationError
 from batcontrol.logic import PeakShavingConfig
@@ -363,6 +364,20 @@ class TestCoreDecisionJournal:
         assert events[0].mode == MODE_ALLOW_DISCHARGING
         assert self._mode_record(events[0].trace).reason == \
             Reason.GRID_CHARGE_LOCK
+
+    def test_api_mode_request_without_limit_records_requested_mode(self, setup):
+        """Mode 8 without a configured limit ends up in allow discharging;
+        the trace still shows what was requested."""
+        bc, _inverter, _tariff, _consumption = setup
+
+        bc.api_set_mode(MODE_LIMIT_BATTERY_CHARGE_RATE)
+
+        event = bc.decision_journal.last_status_change()
+        assert event.mode == MODE_ALLOW_DISCHARGING
+        decisive = event.trace.decisive_record()
+        assert decisive.reason == Reason.API_REQUEST
+        assert decisive.inputs == {
+            'requested_mode': MODE_LIMIT_BATTERY_CHARGE_RATE}
 
     def test_forecast_error_fallback_is_traced(self, setup):
         bc, _inverter, _tariff, _consumption = setup

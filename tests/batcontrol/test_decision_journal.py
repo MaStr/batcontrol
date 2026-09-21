@@ -2,6 +2,7 @@
 import json
 import logging
 
+import numpy as np
 import pytest
 
 from batcontrol.decision_journal import (
@@ -124,7 +125,8 @@ class TestStatusChangeListeners:
 
         assert data['previous_mode'] is None
         assert data['mode'] == -1
-        assert data['trace']['decided_by']['reason'] == 'GRID_RECHARGE_REQUIRED'
+        assert data['decided_by']['reason'] == 'GRID_RECHARGE_REQUIRED'
+        assert [r['decision'] for r in data['records']] == ['grid_recharge']
 
 
 class TestJournalHistory:
@@ -164,91 +166,53 @@ class TestValueChangeEvents:
     by 25 % or more is a status change as well."""
 
     @staticmethod
-    def _journal_with_events():
-        journal = DecisionJournal()
+    def _journal_with_events(**kwargs):
+        journal = DecisionJournal(**kwargs)
         events = []
         journal.add_listener(events.append)
         return journal, events
 
-    def test_small_value_change_is_no_event(self):
+    @pytest.mark.parametrize('commits, kinds', [
+        # (mode, value) per cycle -> kinds of the resulting events
+        pytest.param([(-1, 500), (-1, 600), (-1, 400)], ['mode'],
+                     id='small changes are no event'),
+        pytest.param([(-1, 1000), (-1, 1250)], ['mode', 'value'],
+                     id='increase by 25 percent'),
+        pytest.param([(8, 1000), (8, 760)], ['mode'],
+                     id='decrease by 24 percent'),
+        pytest.param([(8, 1000), (8, 750)], ['mode', 'value'],
+                     id='decrease by 25 percent'),
+        pytest.param([(-1, 500), (-1, 550), (-1, 600), (-1, 650)],
+                     ['mode', 'value'],
+                     id='small steps add up (reference is the last event)'),
+        pytest.param([(-1, 500), (-1, 700), (-1, 800)], ['mode', 'value'],
+                     id='reference moves to the value of the last event'),
+        pytest.param([(8, 0), (8, 0), (8, 100), (8, 0)],
+                     ['mode', 'value', 'value'],
+                     id='change from and to zero'),
+        pytest.param([(0, None), (10, None)] * 3, ['mode'] * 6,
+                     id='modes without value only produce mode events'),
+        pytest.param([(-1, 500), (0, None), (-1, 520), (-1, 600)],
+                     ['mode'] * 3,
+                     id='mode change resets the reference'),
+    ])
+    def test_event_kinds(self, commits, kinds):
         journal, events = self._journal_with_events()
 
-        journal.commit(_trace(), -1, 'optimizer', 500)
-        journal.commit(_trace(), -1, 'optimizer', 600)
-        journal.commit(_trace(), -1, 'optimizer', 400)
+        for mode, value in commits:
+            journal.commit(_trace(), mode, 'optimizer', value)
 
-        assert [e.kind for e in events] == [KIND_MODE]
+        assert [e.kind for e in events] == kinds
 
-    def test_value_change_by_25_percent_is_an_event(self):
-        journal, events = self._journal_with_events()
-
-        journal.commit(_trace(), -1, 'optimizer', 1000)
-        journal.commit(_trace(), -1, 'optimizer', 1250)
-
-        assert [e.kind for e in events] == [KIND_MODE, KIND_VALUE]
-        change = events[-1]
-        assert (change.previous_mode, change.mode) == (-1, -1)
-        assert (change.previous_value, change.value) == (1000, 1250)
-
-    def test_decrease_by_25_percent_is_an_event(self):
-        journal, events = self._journal_with_events()
-
-        journal.commit(_trace(), 8, 'optimizer', 1000)
-        journal.commit(_trace(), 8, 'optimizer', 760)
-        journal.commit(_trace(), 8, 'optimizer', 750)
-
-        assert [e.kind for e in events] == [KIND_MODE, KIND_VALUE]
-        assert events[-1].value == 750
-
-    def test_reference_is_the_last_event_not_the_last_cycle(self):
-        """Small steps add up: 10 % per cycle must not go unnoticed."""
+    def test_value_event_carries_previous_value(self):
         journal, events = self._journal_with_events()
 
         for value in (500, 550, 600, 650):
             journal.commit(_trace(), -1, 'optimizer', value)
 
-        assert [e.kind for e in events] == [KIND_MODE, KIND_VALUE]
-        assert (events[-1].previous_value, events[-1].value) == (500, 650)
-
-    def test_reference_moves_to_the_value_of_the_last_event(self):
-        journal, events = self._journal_with_events()
-
-        journal.commit(_trace(), -1, 'optimizer', 500)
-        journal.commit(_trace(), -1, 'optimizer', 700)   # event, new reference
-        journal.commit(_trace(), -1, 'optimizer', 800)   # +14 % of 700
-
-        assert [e.kind for e in events] == [KIND_MODE, KIND_VALUE]
-
-    def test_change_from_and_to_zero_is_an_event(self):
-        journal, events = self._journal_with_events()
-
-        journal.commit(_trace(), 8, 'optimizer', 0)      # charging blocked
-        journal.commit(_trace(), 8, 'optimizer', 0)
-        journal.commit(_trace(), 8, 'optimizer', 100)
-        journal.commit(_trace(), 8, 'optimizer', 0)
-
-        assert [e.kind for e in events] == [KIND_MODE, KIND_VALUE, KIND_VALUE]
-        assert [e.value for e in events] == [0, 100, 0]
-
-    def test_modes_without_value_never_produce_value_events(self):
-        journal, events = self._journal_with_events()
-
-        for _ in range(3):
-            journal.commit(_trace(), 0, 'optimizer')
-            journal.commit(_trace(), 10, 'optimizer')
-
-        assert all(e.kind == KIND_MODE for e in events)
-        assert len(events) == 6
-
-    def test_mode_change_resets_the_reference(self):
-        journal, events = self._journal_with_events()
-
-        journal.commit(_trace(), -1, 'optimizer', 500)
-        journal.commit(_trace(), 0, 'optimizer')
-        journal.commit(_trace(), -1, 'optimizer', 520)   # mode event
-        journal.commit(_trace(), -1, 'optimizer', 600)   # +15 % of 520
-
-        assert [e.kind for e in events] == [KIND_MODE] * 3
+        change = events[-1]
+        assert (change.previous_mode, change.mode) == (-1, -1)
+        assert (change.previous_value, change.value) == (500, 650)
 
     def test_mode_event_has_no_previous_value(self):
         journal, events = self._journal_with_events()
@@ -260,7 +224,7 @@ class TestValueChangeEvents:
         assert events[-1].previous_value is None
         assert events[-1].value == 300
 
-    def test_value_change_is_still_stored_in_the_history(self):
+    def test_cycles_without_event_are_stored_in_the_history(self):
         journal, _events = self._journal_with_events()
         traces = [_trace() for _ in range(3)]
 
@@ -271,9 +235,7 @@ class TestValueChangeEvents:
         assert journal.last_status_change().trace is traces[0]
 
     def test_custom_factor(self):
-        journal = DecisionJournal(value_change_factor=0.5)
-        events = []
-        journal.add_listener(events.append)
+        journal, events = self._journal_with_events(value_change_factor=0.5)
 
         journal.commit(_trace(), -1, 'optimizer', 1000)
         journal.commit(_trace(), -1, 'optimizer', 1400)
@@ -297,3 +259,13 @@ class TestValueChangeEvents:
         assert data['value'] == 2000
         assert data['previous_value'] == 1000
         assert data['mode'] == -1
+        assert data['control_source'] == 'optimizer'
+
+    def test_to_dict_converts_numpy_values(self):
+        journal, events = self._journal_with_events()
+        journal.commit(_trace(), -1, 'optimizer', np.int64(1000))
+
+        data = events[0].to_dict()
+
+        assert type(data['value']) is int  # pylint: disable=unidiomatic-typecheck
+        assert json.dumps(data)

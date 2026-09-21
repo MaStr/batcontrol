@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from batcontrol.logic.decision_trace import (
-    Decision, DecisionRecord, DecisionTrace, Outcome, Reason,
+    Decision, DecisionRecord, DecisionTrace, Outcome, Reason, plain_value,
 )
 
 
@@ -69,6 +69,26 @@ class TestDecisionRecord:
             'decisive': False,
             'inputs': {'stored_energy': 2000.0, 'slots': 3},
         }
+
+
+class TestPlainValue:
+    """numpy scalars must not reach json.dumps."""
+
+    @pytest.mark.parametrize('value, expected', [
+        (np.int64(3), 3),
+        (np.float32(0.5), 0.5),
+        (np.bool_(True), True),
+        (np.float64(2.5), 2.5),
+        (7, 7),
+        ('text', 'text'),
+        (None, None),
+    ])
+    def test_converts_numpy_scalars(self, value, expected):
+        result = plain_value(value)
+
+        assert result == expected
+        assert not isinstance(result, np.generic)
+        assert json.dumps(result)
 
 
 class TestDecisionTrace:

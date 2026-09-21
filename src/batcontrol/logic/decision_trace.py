@@ -19,6 +19,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+import numpy as np
+
 
 class Decision:
     """Identifiers of the decision steps a control cycle can go through."""
@@ -40,6 +42,11 @@ class Outcome:
     NOT_NEEDED = 'not_needed'
     SKIPPED = 'skipped'
     APPLIED = 'applied'
+    # outcomes of the mode record, one per inverter mode
+    ALLOW_DISCHARGING = 'allow_discharging'
+    LIMIT_BATTERY_CHARGE_RATE = 'limit_battery_charge_rate'
+    AVOID_DISCHARGING = 'avoid_discharging'
+    FORCE_CHARGE = 'force_charge'
 
 
 class Reason:
@@ -76,10 +83,10 @@ class Reason:
 
 # Labels of the mode outcomes, same wording as the Home Assistant mode select
 _MODE_LABELS = {
-    'allow_discharging': 'Discharge Allowed',
-    'limit_battery_charge_rate': 'Limit Battery Charge',
-    'avoid_discharging': 'Avoid Discharge',
-    'force_charge': 'Charge from Grid',
+    Outcome.ALLOW_DISCHARGING: 'Discharge Allowed',
+    Outcome.LIMIT_BATTERY_CHARGE_RATE: 'Limit Battery Charge',
+    Outcome.AVOID_DISCHARGING: 'Avoid Discharge',
+    Outcome.FORCE_CHARGE: 'Charge from Grid',
 }
 # Words of reason codes that keep their upper case in the status text
 _ACRONYMS = ('PV', 'EV', 'EVCC', 'API')
@@ -131,14 +138,9 @@ _INPUT_FORMATS = {
 }
 
 
-def _plain(value: Any) -> Any:
+def plain_value(value: Any) -> Any:
     """Convert numpy scalars to plain python values (JSON friendly)."""
-    if hasattr(value, 'item') and not isinstance(value, (list, tuple, dict)):
-        try:
-            return value.item()
-        except (AttributeError, ValueError):
-            return value
-    return value
+    return value.item() if isinstance(value, np.generic) else value
 
 
 def _format_input(key: str, value: Any) -> str:
@@ -185,7 +187,7 @@ class DecisionRecord:
             'outcome': self.outcome,
             'reason': self.reason,
             'decisive': self.decisive,
-            'inputs': {key: _plain(value) for key, value in self.inputs.items()},
+            'inputs': {key: plain_value(value) for key, value in self.inputs.items()},
         }
 
 

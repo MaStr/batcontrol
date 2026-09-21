@@ -36,10 +36,10 @@ explains why something did **not** happen.
 | `peak_shaving` | `limit_set` | `PV_CHARGE_LIMITED` | yes |
 | `peak_shaving` | `not_needed` | `NO_LIMIT_NEEDED` | no |
 | `peak_shaving` | `skipped` | `PRICE_LIMIT_MISSING`, `NO_PV_PRODUCTION`, `PAST_FULL_BATTERY_HOUR`, `ALWAYS_ALLOW_DISCHARGE_REGION`, `FORCE_CHARGE_ACTIVE`, `DISCHARGE_NOT_ALLOWED`, `EVCC_CHARGING`, `EVCC_EV_EXPECTS_PV_SURPLUS` | no |
-| `solar_limit` | `limit_set` | `CLIP_ABSORPTION_LIMIT` | yes |
+| `solar_limit` | `limit_set` | `CLIP_ABSORPTION_LIMIT` | only if it changed the limit set by an earlier rule |
 | `solar_limit` | `not_needed` | `NO_LIMIT_NEEDED`, `NO_CLIP_PREDICTED` | no |
 | `solar_limit` | `skipped` | `NO_PV_PRODUCTION`, `FORCE_CHARGE_ACTIVE`, `DISCHARGE_NOT_ALLOWED` | no |
-| `override` | `applied` | `EXTERNAL_DISCHARGE_BLOCK`, `GRID_CHARGE_LOCK`, `FORECAST_ERROR_FALLBACK`, `CALCULATION_FAILED`, `API_REQUEST` | yes |
+| `override` | `applied` | `EXTERNAL_DISCHARGE_BLOCK`, `GRID_CHARGE_LOCK`, `FORECAST_ERROR_FALLBACK`, `CALCULATION_FAILED`, `API_REQUEST` (input `requested_mode` shows the mode the API asked for, which can differ if it fell back) | yes |
 | `mode` | `allow_discharging`, `limit_battery_charge_rate`, `avoid_discharging`, `force_charge` | reason of the decisive step | - |
 
 The last record of every trace is the `mode` record. Its inputs contain the
