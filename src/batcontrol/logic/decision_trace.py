@@ -126,6 +126,7 @@ _INPUT_FORMATS = {
     'floor_w': _POWER,
     'cap_w': _POWER,
     'final_limit_w': _POWER,
+    'previous_limit_w': _POWER,
     'feed_in_limit_w': _POWER,
 }
 

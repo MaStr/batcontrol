@@ -1,5 +1,7 @@
 """Decision journal integration of Batcontrol: every mode change ends up in the
 journal with the trace of steps that led to it, and listeners are notified."""
+import threading
+
 import pytest
 
 from batcontrol.core import (
@@ -10,6 +12,7 @@ from batcontrol.core import (
     MODE_AVOID_DISCHARGING,
     MODE_FORCE_CHARGING,
 )
+from batcontrol.inverter import InverterCommunicationError
 from batcontrol.logic import PeakShavingConfig
 from batcontrol.logic.common import CommonLogic
 from batcontrol.logic.decision_trace import Decision, Outcome, Reason
@@ -297,16 +300,69 @@ class TestCoreDecisionJournal:
         assert mode.inputs['decided_by'] == Decision.OVERRIDE
 
     def test_api_request_does_not_reuse_a_stale_trace(self, setup):
-        """A trace staged for the optimizer must never leak into a later
-        API request."""
-        bc, _inverter, _tariff, _consumption = setup
+        """The optimizer stages a trace, the inverter call fails before the
+        mode is set. A later API request must not pick that trace up."""
+        bc, inverter, _tariff, _consumption = setup
+        inverter.set_mode_allow_discharge.side_effect = \
+            InverterCommunicationError('unreachable')
         bc.run()
+        assert bc.decision_journal.latest() is None
+        inverter.set_mode_allow_discharge.side_effect = None
 
         bc.api_set_mode(MODE_FORCE_CHARGING)
 
         trace = bc.decision_journal.latest()
         assert [r.decision for r in trace.records] == [
             Decision.OVERRIDE, Decision.MODE]
+        assert self._mode_record(trace).reason == Reason.API_REQUEST
+        assert bc._pending_trace is None  # pylint: disable=protected-access
+
+    def test_concurrent_mode_changes_keep_their_own_trace(self, setup):
+        """The scheduler is inside a slow inverter call while an API thread
+        changes the mode: each change must report its own reason."""
+        bc, inverter, _tariff, _consumption = setup
+        entered = threading.Event()
+        release = threading.Event()
+
+        def slow_inverter_call():
+            entered.set()
+            assert release.wait(timeout=5)
+
+        inverter.set_mode_allow_discharge.side_effect = slow_inverter_call
+        events = []
+        bc.decision_journal.add_listener(events.append)
+        scheduler = threading.Thread(target=bc.run)
+        scheduler.start()
+        try:
+            assert entered.wait(timeout=5)
+            bc.api_set_mode(MODE_AVOID_DISCHARGING)
+        finally:
+            release.set()
+            scheduler.join(timeout=5)
+
+        assert not scheduler.is_alive()
+        by_mode = {e.mode: e for e in events}
+        assert set(by_mode) == {MODE_AVOID_DISCHARGING, MODE_ALLOW_DISCHARGING}
+        api_mode = self._mode_record(by_mode[MODE_AVOID_DISCHARGING].trace)
+        assert api_mode.reason == Reason.API_REQUEST
+        assert by_mode[MODE_AVOID_DISCHARGING].control_source == CONTROL_SOURCE_API
+        optimizer_mode = self._mode_record(by_mode[MODE_ALLOW_DISCHARGING].trace)
+        assert optimizer_mode.reason == Reason.USABLE_ENERGY_EXCEEDS_RESERVE
+        assert by_mode[MODE_ALLOW_DISCHARGING].control_source == \
+            CONTROL_SOURCE_OPTIMIZER
+
+    def test_grid_charge_lock_is_traced(self, setup):
+        bc, _inverter, _tariff, _consumption = setup
+        bc.force_charge(1000)
+        events = []
+        bc.decision_journal.add_listener(events.append)
+
+        bc.api_set_grid_charge_lock(True)
+
+        assert len(events) == 1
+        assert events[0].mode == MODE_ALLOW_DISCHARGING
+        assert self._mode_record(events[0].trace).reason == \
+            Reason.GRID_CHARGE_LOCK
 
     def test_forecast_error_fallback_is_traced(self, setup):
         bc, _inverter, _tariff, _consumption = setup
