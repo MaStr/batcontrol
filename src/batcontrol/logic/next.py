@@ -26,7 +26,7 @@ from .decision_records import (
     grid_recharge_charge,
     grid_recharge_idle,
 )
-from .decision_trace import Decision, DecisionRecord, DecisionTrace, Outcome, Reason
+from .decision_trace import Decision, DecisionTrace, Outcome, Reason
 from .grid_charge_target import (
     apply_grid_charge_target_to_recharge,
     apply_grid_charge_target_to_reserve,
@@ -255,22 +255,10 @@ class NextLogic(LogicInterface):
     #  Peak Shaving                                                       #
     # ------------------------------------------------------------------ #
 
-    def _trace(self, decision: str, outcome: str, reason: str,
-               decisive: bool = False, **inputs) -> None:
-        """Record a step of a post-processing rule. The existing log
-        statements of the rules stay as they are, so nothing is logged
-        here."""
-        self.decision_trace.add(DecisionRecord(
-            decision=decision,
-            outcome=outcome,
-            reason=reason,
-            inputs=inputs,
-            decisive=decisive,
-        ))
-
     def _trace_skip(self, decision: str, reason: str, **inputs) -> None:
-        """Record that a post-processing rule did not run."""
-        self._trace(decision, Outcome.SKIPPED, reason, **inputs)
+        """Record that a post-processing rule did not run. The rules keep
+        their own log statements, so the trace steps are not logged."""
+        self.decision_trace.step(decision, Outcome.SKIPPED, reason, **inputs)
 
     def _apply_peak_shaving(self, settings: InverterControlSettings,
                             calc_input: CalculationInput,
@@ -367,9 +355,10 @@ class NextLogic(LogicInterface):
         candidates = [v for v in (price_limit_w, time_limit_w) if v >= 0]
         if not candidates:
             logger.debug('[PeakShaving] Evaluated: no limit needed')
-            self._trace(Decision.PEAK_SHAVING, Outcome.NOT_NEEDED,
-                        Reason.NO_LIMIT_NEEDED,
-                        time_active=time_active, price_active=price_active)
+            self.decision_trace.step(
+                Decision.PEAK_SHAVING, Outcome.NOT_NEEDED,
+                Reason.NO_LIMIT_NEEDED,
+                time_active=time_active, price_active=price_active)
             return settings
 
         charge_limit = min(candidates)
@@ -399,7 +388,7 @@ class NextLogic(LogicInterface):
                     price_limit_w if price_limit_w >= 0 else 'off',
                     time_limit_w if time_limit_w >= 0 else 'off',
                     self.calculation_parameters.peak_shaving.allow_full_battery_after)
-        self._trace(
+        self.decision_trace.step(
             Decision.PEAK_SHAVING, Outcome.LIMIT_SET, Reason.PV_CHARGE_LIMITED,
             decisive=True,
             active_components=active_components,
@@ -474,9 +463,10 @@ class NextLogic(LogicInterface):
         if floor_w == 0 and cap_w < 0:
             logger.debug('[SolarLimit] Evaluated: no clip predicted, '
                          'no limit needed')
-            self._trace(Decision.SOLAR_LIMIT, Outcome.NOT_NEEDED,
-                        Reason.NO_CLIP_PREDICTED,
-                        feed_in_limit_w=peak_shaving.feed_in_limit_w)
+            self.decision_trace.step(
+                Decision.SOLAR_LIMIT, Outcome.NOT_NEEDED,
+                Reason.NO_CLIP_PREDICTED,
+                feed_in_limit_w=peak_shaving.feed_in_limit_w)
             return settings
 
         previous_limit_w = settings.limit_battery_charge_rate
@@ -495,7 +485,7 @@ class NextLogic(LogicInterface):
                     final_w if final_w >= 0 else 'off',
                     peak_shaving.feed_in_limit_w)
         limit_set = final_w >= 0
-        self._trace(
+        self.decision_trace.step(
             Decision.SOLAR_LIMIT,
             Outcome.LIMIT_SET if limit_set else Outcome.NOT_NEEDED,
             Reason.CLIP_ABSORPTION_LIMIT if limit_set else Reason.NO_LIMIT_NEEDED,

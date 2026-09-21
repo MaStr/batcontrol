@@ -512,7 +512,7 @@ class TestPublishStatusChange:
             {'charge_rate': np.int64(value)}, decisive=True))
         trace.add(DecisionRecord(
             Decision.MODE, 'force_charge', Reason.GRID_RECHARGE_REQUIRED,
-            {'mode': mode, 'charge_rate': value}))
+            {'mode': mode, 'value': value}))
         return StatusChangeEvent(kind, 0, mode, 'optimizer', trace,
                                  value, previous_value)
 

@@ -70,9 +70,12 @@ import time
 import json
 import logging
 import importlib.metadata
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import paho.mqtt.client as mqtt
 import numpy as np
+
+if TYPE_CHECKING:
+    from .decision_journal import StatusChangeEvent
 
 logger = logging.getLogger(__name__)
 logger.info('Loading module')
@@ -652,14 +655,12 @@ class MqttApi:
                 retain=True
             )
 
-    def publish_status_change(self, event) -> None:
+    def publish_status_change(self, event: 'StatusChangeEvent') -> None:
         """ Publish a status change of the decision journal: the mode with
             its value and reason as text, and the decision trace behind it
             as JSON attributes. Registered as journal listener in core.py.
             /decision
             /decision/attributes
-
-            event: decision_journal.StatusChangeEvent
         """
         if not self.client.is_connected():
             return
