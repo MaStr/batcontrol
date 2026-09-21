@@ -328,13 +328,21 @@ class Batcontrol:
                 self.max_charging_from_grid_limit
             )
 
+        battery_control_expert = self.config.get(
+            'battery_control_expert', None)
+        if (battery_control_expert is not None
+                and not isinstance(battery_control_expert, dict)):
+            raise ValueError(
+                'battery_control_expert must be a mapping of key: value '
+                f'settings, got {type(battery_control_expert).__name__}'
+            )
+        battery_control_expert = battery_control_expert or {}
+
         self.round_price_digits = 4
         self.production_offset_percent = 1.0  # Default: no offset
         self.market_price_refresh_time = "12:30"
 
-        if self.config.get('battery_control_expert', None) is not None:
-            battery_control_expert = self.config.get(
-                'battery_control_expert', {})
+        if battery_control_expert:
             self.round_price_digits = battery_control_expert.get(
                 'round_price_digits',
                 self.round_price_digits)
@@ -350,29 +358,36 @@ class Batcontrol:
             self._validate_market_price_refresh_time(raw_refresh_time)
             self.market_price_refresh_time = raw_refresh_time
 
-        battery_control_expert_config = self.config.get(
-            'battery_control_expert', {}) or {}
-        legacy_charge_rate_multiplier = None
-        if 'charge_rate_multiplier' in self.batconfig:
-            legacy_charge_rate_multiplier = _parse_positive_number(
-                self.batconfig['charge_rate_multiplier'],
-                'battery_control.charge_rate_multiplier'
-            )
+        # Only parse/validate whichever location will actually be used, so
+        # an invalid deprecated battery_control value never blocks startup
+        # when battery_control_expert (which takes priority) is valid.
+        legacy_present = 'charge_rate_multiplier' in self.batconfig
+        expert_present = 'charge_rate_multiplier' in battery_control_expert
+        if legacy_present:
+            if expert_present:
+                deprecation_note = (
+                    'It is ignored because '
+                    'battery_control_expert.charge_rate_multiplier is '
+                    'also set.'
+                )
+            else:
+                deprecation_note = 'Using it as a fallback for now.'
             logger.warning(
                 'battery_control.charge_rate_multiplier is deprecated and '
                 'will be removed in a future release; use '
-                'battery_control_expert.charge_rate_multiplier instead. '
-                'Using the deprecated value as a fallback for now, unless '
-                'battery_control_expert.charge_rate_multiplier is also set '
-                '(which takes priority).'
+                'battery_control_expert.charge_rate_multiplier instead. %s',
+                deprecation_note
             )
-        if 'charge_rate_multiplier' in battery_control_expert_config:
+        if expert_present:
             charge_rate_multiplier = _parse_positive_number(
-                battery_control_expert_config['charge_rate_multiplier'],
+                battery_control_expert['charge_rate_multiplier'],
                 'battery_control_expert.charge_rate_multiplier'
             )
-        elif legacy_charge_rate_multiplier is not None:
-            charge_rate_multiplier = legacy_charge_rate_multiplier
+        elif legacy_present:
+            charge_rate_multiplier = _parse_positive_number(
+                self.batconfig['charge_rate_multiplier'],
+                'battery_control.charge_rate_multiplier'
+            )
         else:
             charge_rate_multiplier = 1.1
 

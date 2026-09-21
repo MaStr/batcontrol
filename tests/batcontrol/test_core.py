@@ -1404,8 +1404,27 @@ class TestChargeRateMultiplierWiring:
         assert bc.general_logic.charge_rate_multiplier == 1.25
         bc.shutdown()
 
+    def test_invalid_legacy_value_ignored_when_expert_config_takes_priority(
+            self, mocker, caplog):
+        """An invalid deprecated battery_control value must not block
+        startup when battery_control_expert (which wins) is valid; it
+        should only be reported as ignored, not parsed/validated."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control'] = dict(
+            self.BASE_CONFIG['battery_control'], charge_rate_multiplier="not-a-number")
+        config['battery_control_expert'] = {'charge_rate_multiplier': 1.25}
+        with caplog.at_level(logging.WARNING):
+            bc = Batcontrol(config)
+        assert bc.general_logic.charge_rate_multiplier == 1.25
+        assert any('battery_control.charge_rate_multiplier is deprecated' in msg
+                   and 'ignored' in msg
+                   for msg in caplog.messages)
+        bc.shutdown()
+
     @pytest.mark.parametrize("invalid_value", [
-        None, "fast", "", True, 0, -1.1, float("nan"), float("inf"), float("-inf"),
+        None, "fast", "", True, 0, -1.1,
+        float("nan"), float("inf"), float("-inf"),
     ])
     def test_invalid_expert_charge_rate_multiplier_raises(self, mocker, invalid_value):
         """A non-positive or non-numeric expert value must raise ValueError
@@ -1439,6 +1458,17 @@ class TestChargeRateMultiplierWiring:
         bc = Batcontrol(config)
         assert bc.general_logic.charge_rate_multiplier == float(valid_value)
         bc.shutdown()
+
+    @pytest.mark.parametrize("invalid_value", ["not-a-mapping", ["list"], 1])
+    def test_non_dict_battery_control_expert_raises(self, mocker, invalid_value):
+        """battery_control_expert must be a mapping; a non-dict value must
+        raise a clear ValueError instead of an AttributeError deep inside
+        the config parsing."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control_expert'] = invalid_value
+        with pytest.raises(ValueError, match="battery_control_expert"):
+            Batcontrol(config)
 
 
 class TestParseBoolFlag:
