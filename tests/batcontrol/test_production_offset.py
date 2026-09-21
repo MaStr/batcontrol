@@ -8,6 +8,7 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch
 
 from batcontrol.core import Batcontrol
+from batcontrol.logic.decision_trace import DecisionTrace
 from batcontrol.logic.logic_interface import InverterControlSettings, CalculationOutput
 
 
@@ -159,6 +160,7 @@ class TestProductionOffset:
             min_dynamic_price_difference=0.05,
         )
         mock_logic.get_calculation_output = mocker.Mock(return_value=calc_output)
+        mock_logic.get_decision_trace = mocker.Mock(return_value=DecisionTrace())
         mock_logic.calculate = mocker.Mock(return_value=True)
         mock_logic.set_calculation_parameters = mocker.Mock()
 

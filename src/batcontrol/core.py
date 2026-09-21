@@ -16,6 +16,7 @@ import os
 import logging
 import platform
 import functools
+import contextlib
 
 import dataclasses
 
@@ -31,6 +32,10 @@ from .logic import CalculationInput, CalculationParameters
 from .logic import CommonLogic
 from .logic import PeakShavingConfig
 from .logic.grid_charge_target import GridChargeTargetConfig
+from .logic.decision_trace import (
+    Decision, DecisionRecord, DecisionTrace, Outcome, Reason,
+)
+from .decision_journal import DecisionJournal
 
 from .dynamictariff import DynamicTariff as tariff_factory
 from .inverter import Inverter as inverter_factory
@@ -58,6 +63,13 @@ MODE_ALLOW_DISCHARGING = 10
 MODE_LIMIT_BATTERY_CHARGE_RATE = 8  # Limit PV charge, allow discharge
 MODE_AVOID_DISCHARGING = 0
 MODE_FORCE_CHARGING = -1
+
+MODE_NAMES = {
+    MODE_ALLOW_DISCHARGING: 'allow_discharging',
+    MODE_LIMIT_BATTERY_CHARGE_RATE: 'limit_battery_charge_rate',
+    MODE_AVOID_DISCHARGING: 'avoid_discharging',
+    MODE_FORCE_CHARGING: 'force_charge',
+}
 
 CONTROL_SOURCE_API = 'api'
 CONTROL_SOURCE_OPTIMIZER = 'optimizer'
@@ -128,6 +140,12 @@ class Batcontrol:
         self.last_run_time = 0
 
         self.last_logic_instance = None
+
+        # Decision history and mode change endpoint (see decision_journal.py).
+        # _pending_trace carries the steps of the decision that is currently
+        # being applied to __set_mode.
+        self.decision_journal = DecisionJournal()
+        self._pending_trace = None
 
         self.config = configdict
         config = configdict
@@ -355,6 +373,10 @@ class Batcontrol:
                     interval_minutes=self.time_resolution
                 )
                 self.mqtt_api.wait_ready()
+                # The "Decision" sensor follows the status changes of the
+                # decision journal
+                self.decision_journal.add_listener(
+                    self.mqtt_api.publish_status_change)
                 # Register for callbacks
                 self.mqtt_api.register_set_callback(
                     'mode',
@@ -546,7 +568,16 @@ class Batcontrol:
                 "An API Error occurred %0.fs ago. "
                 "Setting inverter to default mode (Allow Discharging)",
                 time_passed)
-            self.allow_discharging()
+            trace = self.__new_trace()
+            trace.add(DecisionRecord(
+                decision=Decision.OVERRIDE,
+                outcome=Outcome.APPLIED,
+                reason=Reason.FORECAST_ERROR_FALLBACK,
+                inputs={'seconds_since_error': int(time_passed)},
+                decisive=True,
+            ))
+            with self.__decision_scope(trace):
+                self.allow_discharging()
 
     def run(self):
         """One control cycle. Aborts cleanly on a transient inverter outage.
@@ -723,6 +754,7 @@ class Batcontrol:
         # runs peak shaving unnecessarily. Initialized unconditionally to avoid
         # an UnboundLocalError if peak shaving is disabled in config.
         evcc_disable_peak_shaving = False
+        decision_trace = self.__new_trace()
         if peak_shaving_config_enabled:
             if self.evcc_api is not None:
                 evcc_disable_peak_shaving = (
@@ -732,8 +764,15 @@ class Batcontrol:
                 if evcc_disable_peak_shaving:
                     if self.evcc_api.evcc_is_charging:
                         logger.debug('[PeakShaving] Disabled: evcc is actively charging')
+                        evcc_reason = Reason.EVCC_CHARGING
                     else:
                         logger.debug('[PeakShaving] Disabled: EV connected in PV mode')
+                        evcc_reason = Reason.EVCC_EV_EXPECTS_PV_SURPLUS
+                    decision_trace.add(DecisionRecord(
+                        decision=Decision.PEAK_SHAVING,
+                        outcome=Outcome.SKIPPED,
+                        reason=evcc_reason,
+                    ))
                 elif self._evcc_peak_shaving_disabled:
                     logger.debug('[PeakShaving] Re-enabled: evcc no longer blocking '
                                 '(EV disconnected or mode changed away from pv)')
@@ -766,9 +805,17 @@ class Batcontrol:
         logger.debug('Calculating inverter mode...')
         if not this_logic_run.calculate(calc_input):
             logger.error('Calculation failed. Falling back to discharge')
-            self.allow_discharging()
+            decision_trace.add(DecisionRecord(
+                decision=Decision.OVERRIDE,
+                outcome=Outcome.APPLIED,
+                reason=Reason.CALCULATION_FAILED,
+                decisive=True,
+            ))
+            with self.__decision_scope(decision_trace):
+                self.allow_discharging()
             return
 
+        decision_trace.extend(this_logic_run.get_decision_trace())
         calc_output = this_logic_run.get_calculation_output()
         inverter_settings = this_logic_run.get_inverter_control_settings()
 
@@ -801,6 +848,13 @@ class Batcontrol:
             # We are blocked by a request outside control loop (evcc)
             # but only if the always_allow_discharge_limit is not reached.
             logger.debug('Discharge blocked due to external lock')
+            if inverter_settings.allow_discharge:
+                decision_trace.add(DecisionRecord(
+                    decision=Decision.OVERRIDE,
+                    outcome=Outcome.APPLIED,
+                    reason=Reason.EXTERNAL_DISCHARGE_BLOCK,
+                    decisive=True,
+                ))
             inverter_settings.allow_discharge = False
 
         # Publish peak shaving charge limit (after evcc guard may have cleared it)
@@ -808,15 +862,17 @@ class Batcontrol:
             self.mqtt_api.publish_peak_shaving_charge_limit(
                 inverter_settings.limit_battery_charge_rate)
 
-        if inverter_settings.allow_discharge:
-            if inverter_settings.limit_battery_charge_rate >= 0:
-                self.limit_battery_charge_rate(inverter_settings.limit_battery_charge_rate)
+        with self.__decision_scope(decision_trace):
+            if inverter_settings.allow_discharge:
+                if inverter_settings.limit_battery_charge_rate >= 0:
+                    self.limit_battery_charge_rate(
+                        inverter_settings.limit_battery_charge_rate)
+                else:
+                    self.allow_discharging()
+            elif inverter_settings.charge_from_grid:
+                self.force_charge(inverter_settings.charge_rate)
             else:
-                self.allow_discharging()
-        elif inverter_settings.charge_from_grid:
-            self.force_charge(inverter_settings.charge_rate)
-        else:
-            self.avoid_discharging()
+                self.avoid_discharging()
 
     def __set_charge_rate(self, charge_rate: int):
         """ Set charge rate and publish to mqtt """
@@ -832,8 +888,60 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_control_source(control_source)
 
-    def __set_mode(self, mode, control_source: str = CONTROL_SOURCE_OPTIMIZER):
-        """ Set mode and publish to mqtt """
+    def __new_trace(self) -> DecisionTrace:
+        """ Start the decision trace of a new control decision """
+        return DecisionTrace(
+            timestamp=datetime.datetime.now().astimezone(self.timezone))
+
+    @contextlib.contextmanager
+    def __decision_scope(self, trace: DecisionTrace):
+        """ Hand the trace to the mode change happening inside the block.
+            Mode changes outside of such a block (API requests) get a trace
+            of their own, see __commit_decision. """
+        self._pending_trace = trace
+        try:
+            yield
+        finally:
+            self._pending_trace = None
+
+    def __commit_decision(self, mode, control_source: str, details: dict):
+        """ Complete the trace with the final mode and hand it to the journal,
+            which notifies the status change listeners. """
+        trace = self._pending_trace
+        self._pending_trace = None
+        if trace is None:
+            trace = self.__new_trace()
+            trace.add(DecisionRecord(
+                decision=Decision.OVERRIDE,
+                outcome=Outcome.APPLIED,
+                reason=(Reason.API_REQUEST if control_source == CONTROL_SOURCE_API
+                        else Reason.UNSPECIFIED),
+                decisive=True,
+            ))
+        decided_by = trace.decisive_record()
+        trace.add(DecisionRecord(
+            decision=Decision.MODE,
+            outcome=MODE_NAMES.get(mode, str(mode)),
+            reason=decided_by.reason if decided_by else Reason.UNSPECIFIED,
+            inputs={
+                'mode': mode,
+                'control_source': control_source,
+                'decided_by': decided_by.decision if decided_by else None,
+                **details,
+            },
+        ))
+        # value belonging to the mode, used by the journal to detect
+        # significant changes within the same mode
+        if mode == MODE_FORCE_CHARGING:
+            value = details.get('charge_rate')
+        else:
+            value = details.get('limit_battery_charge_rate')
+        self.decision_journal.commit(trace, mode, control_source, value)
+
+    def __set_mode(self, mode, control_source: str = CONTROL_SOURCE_OPTIMIZER,
+                   **details):
+        """ Set mode and publish to mqtt.
+            details are added to the mode record of the decision trace. """
         self.last_mode = mode
         if self.mqtt_api is not None:
             self.mqtt_api.publish_mode(mode)
@@ -841,6 +949,7 @@ class Batcontrol:
         # leaving force charge mode, reset charge rate
         if self.last_charge_rate > 0 and mode != MODE_FORCE_CHARGING:
             self.__set_charge_rate(0)
+        self.__commit_decision(mode, control_source, details)
 
     def allow_discharging(self, control_source: str = CONTROL_SOURCE_OPTIMIZER):
         """ Allow unlimited discharging of the battery """
@@ -863,7 +972,8 @@ class Batcontrol:
         logger.info(
             'Mode: grid charging. Charge rate : %d W', charge_rate)
         self.inverter.set_mode_force_charge(charge_rate)
-        self.__set_mode(MODE_FORCE_CHARGING, control_source)
+        self.__set_mode(MODE_FORCE_CHARGING, control_source,
+                        charge_rate=charge_rate)
         self.__set_charge_rate(charge_rate)
 
     def limit_battery_charge_rate(
@@ -896,7 +1006,8 @@ class Batcontrol:
 
         logger.info('Mode: Limit Battery Charge Rate to %d W, discharge allowed', effective_limit)
         self.inverter.set_mode_limit_battery_charge(effective_limit)
-        self.__set_mode(MODE_LIMIT_BATTERY_CHARGE_RATE, control_source)
+        self.__set_mode(MODE_LIMIT_BATTERY_CHARGE_RATE, control_source,
+                        limit_battery_charge_rate=effective_limit)
 
         # Publish limit via MQTT
         if self.mqtt_api is not None:
@@ -1053,7 +1164,15 @@ class Batcontrol:
         if not self.general_logic.is_discharge_always_allowed_soc(
             self.get_SOC()
         ):
-            self.avoid_discharging()
+            trace = self.__new_trace()
+            trace.add(DecisionRecord(
+                decision=Decision.OVERRIDE,
+                outcome=Outcome.APPLIED,
+                reason=Reason.EXTERNAL_DISCHARGE_BLOCK,
+                decisive=True,
+            ))
+            with self.__decision_scope(trace):
+                self.avoid_discharging()
 
     def refresh_static_values(self) -> None:
         """ Refresh static and some dynamic values for API.
@@ -1229,7 +1348,15 @@ class Batcontrol:
             self._pre_lock_max_charging_from_grid_limit = (
                 self.max_charging_from_grid_limit)
             if self.last_mode == MODE_FORCE_CHARGING:
-                self.allow_discharging(CONTROL_SOURCE_API)
+                trace = self.__new_trace()
+                trace.add(DecisionRecord(
+                    decision=Decision.OVERRIDE,
+                    outcome=Outcome.APPLIED,
+                    reason=Reason.GRID_CHARGE_LOCK,
+                    decisive=True,
+                ))
+                with self.__decision_scope(trace):
+                    self.allow_discharging(CONTROL_SOURCE_API)
             self.set_max_charging_from_grid_limit(0.0)
         else:
             if self._pre_lock_max_charging_from_grid_limit is not None:

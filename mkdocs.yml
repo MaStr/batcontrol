@@ -81,6 +81,7 @@ plugins:
         Optional:
           - development/15-min-transform.md: Internal 15-minute interval resolution
           - development/solar-limit-evaluation.md: Solar feed-in limit (Solarspitzengesetz) evaluation
+          - development/decision-trace.md: Decision trace and journal (why did batcontrol do this)
 
 nav:
   - Home: index.md
@@ -106,6 +107,7 @@ nav:
   - Development:
       - 15-Minute Interval Transformation: development/15-min-transform.md
       - Solar Feed-in Limit Evaluation: development/solar-limit-evaluation.md
+      - Decision Trace and Journal: development/decision-trace.md
 
 extra_javascript:
   - assets/js/vendor/chart.umd.js
