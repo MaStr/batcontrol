@@ -77,7 +77,7 @@ class EvccApi():
         self.evcc_is_charging = False
 
         self.evcc_loadpoint_status = {}
-        self.evcc_loadpoint_mode = {}       # topic_root -> mode string ("pv", "now", "minpv", "off")
+        self.evcc_loadpoint_mode = {}       # topic_root -> mode string ("pv", "minpv", "smart", "now", "off")
         self.evcc_loadpoint_connected = {}  # topic_root -> bool
         self.list_topics_mode = []          # derived mode topics
         self.list_topics_connected = []     # derived connected topics
@@ -387,12 +387,14 @@ class EvccApi():
             logger.info('Loadpoint %s connected: %s', root, connected)
             self.evcc_loadpoint_connected[root] = connected
 
+    PV_SURPLUS_MODES = {'pv', 'minpv', 'smart'}
+
     @property
     def evcc_ev_expects_pv_surplus(self) -> bool:
-        """True if any loadpoint has an EV connected in PV mode."""
+        """True if any loadpoint has an EV connected in a PV-surplus mode."""
         for root in self.evcc_loadpoint_connected:
             if self.evcc_loadpoint_connected.get(root, False) and \
-               self.evcc_loadpoint_mode.get(root) == 'pv':
+               self.evcc_loadpoint_mode.get(root) in self.PV_SURPLUS_MODES:
                 return True
         return False
 

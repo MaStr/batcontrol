@@ -137,6 +137,20 @@ class TestEvccModeConnected(unittest.TestCase):
         api.evcc_loadpoint_mode['evcc/loadpoints/1'] = 'pv'
         self.assertTrue(api.evcc_ev_expects_pv_surplus)
 
+    def test_expects_pv_surplus_connected_minpv_mode(self):
+        """connected=true + mode=minpv -> True."""
+        api = self._create_evcc_api()
+        api.evcc_loadpoint_connected['evcc/loadpoints/1'] = True
+        api.evcc_loadpoint_mode['evcc/loadpoints/1'] = 'minpv'
+        self.assertTrue(api.evcc_ev_expects_pv_surplus)
+
+    def test_expects_pv_surplus_connected_smart_mode(self):
+        """connected=true + mode=smart -> True."""
+        api = self._create_evcc_api()
+        api.evcc_loadpoint_connected['evcc/loadpoints/1'] = True
+        api.evcc_loadpoint_mode['evcc/loadpoints/1'] = 'smart'
+        self.assertTrue(api.evcc_ev_expects_pv_surplus)
+
     def test_expects_pv_surplus_connected_now_mode(self):
         """connected=true + mode=now -> False."""
         api = self._create_evcc_api()

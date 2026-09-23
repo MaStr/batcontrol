@@ -124,10 +124,10 @@ Batcontrol subscribes to the following evcc MQTT topics:
 ### Loadpoint Mode and Connection State (derived automatically)
 For every configured `.../charging` topic, batcontrol additionally subscribes to the sibling topics:
 
-- `evcc/loadpoints/1/mode` - Loadpoint charging mode (`pv`, `now`, `minpv`, `off`)
+- `evcc/loadpoints/1/mode` - Loadpoint charging mode (`pv`, `minpv`, `smart`, `now`, `off`)
 - `evcc/loadpoints/1/connected` - Whether an EV is connected (`true`/`false`)
 
-These are used by [peak shaving](../features/peak-shaving.md): peak shaving is automatically disabled while evcc is actively charging or while an EV is connected in PV mode, and re-enabled when the EV disconnects or the mode changes.
+These are used by [peak shaving](../features/peak-shaving.md): peak shaving is automatically disabled while evcc is actively charging or while an EV is connected in a PV-surplus mode (`pv`, `minpv`, or `smart`), and re-enabled when the EV disconnects or the mode changes.
 
 ### Buffer SOC (Optional)
 - `evcc/site/bufferSoc` - Dynamic discharge threshold (integer 0-100)
