@@ -241,7 +241,7 @@ Peak shaving cap rules (time and price) are automatically bypassed in the follow
 | Force-charge from grid active (Mode -1) | Bypassed | Not applied |
 | Discharge not allowed (battery preserved) | Bypassed | Not applied (no charge cap is active in this state, the inverter charges all surplus anyway) |
 | evcc is actively charging the EV | Bypassed | Not applied |
-| EV connected in PV mode (evcc) | Bypassed | Not applied |
+| EV connected in PV-surplus mode (evcc: `pv`, `minpv`, `smart`) | Bypassed | Not applied |
 | `price_limit` not configured | Price rule inactive | Not affected |
 
 ## evcc Interaction
@@ -249,7 +249,7 @@ Peak shaving cap rules (time and price) are automatically bypassed in the follow
 When an EV charger is managed by [evcc](../integrations/evcc-connection.md):
 
 - **EV actively charging** (`charging=true`): peak shaving is disabled because the EV is already consuming excess PV energy.
-- **EV connected in PV mode** (`connected=true` AND `mode=pv`): peak shaving is disabled because evcc will naturally absorb surplus PV once its threshold is reached.
+- **EV connected in PV-surplus mode** (`connected=true` AND `mode` is one of `pv`, `minpv`, `smart`): peak shaving is disabled because evcc will naturally absorb surplus PV once its threshold is reached.
 - **EV disconnects or mode changes**: peak shaving is automatically re-enabled.
 
 ## Home Assistant Auto-Discovery
