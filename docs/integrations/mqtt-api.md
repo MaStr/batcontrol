@@ -137,6 +137,8 @@ Batcontrol publishes data to the following topic structure (assuming base topic 
 - `house/batcontrol/discharge_blocked` - Whether discharge is blocked (`true`/`false`)
 - `house/batcontrol/api_override_active` - Whether a temporary external/API override is active (`true`/`false`)
 - `house/batcontrol/control_source` - Source that last selected the current control state (`api` or `optimizer`)
+- `house/batcontrol/decision` - Current mode with its value and the reason as text, e.g. `Charge from Grid 1250 W - Grid recharge required` or `Discharge Allowed - Usable energy exceeds reserve` (retained). The content changes on a status change only (a new mode, or a change of the charge rate / PV limit of the current mode by 25 % or more) and is republished every evaluation like the mode, see [Decision Trace](../development/decision-trace.md#journal-and-status-change-listeners). Shown as the **Decision** sensor in Home Assistant
+- `house/batcontrol/decision/attributes` - JSON with the decision trace of that status change (retained): `kind` (`mode` or `value`), `mode`, `previous_mode`, `value`, `previous_value`, `control_source`, `decided_by` and the evaluated `records`, see [Decision Trace](../development/decision-trace.md). Used as attributes of the **Decision** sensor
 - `house/batcontrol/grid_charge_locked` - Whether an external (HEMS/grid operator) request is currently blocking charging from the grid (`true`/`false`), see [Grid Charge Lock](#grid-charge-lock-external-hemsgrid-operator-signal)
 
 ### Battery Information

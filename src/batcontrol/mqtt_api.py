@@ -28,6 +28,11 @@ The following topics are published:
 - /production_offset: production offset percentage (1.0 = 100%, 0.8 = 80%, etc.)
 - /api_override_active: bool indicating whether a temporary external/API override is active
 - /control_source: source that last selected the current control state (api or optimizer)
+- /decision: current mode with its value and the reason as text, e.g.
+  "Charge from Grid 1250 W - Grid recharge required" (retained). Updated on a status
+  change of the decision journal: new mode, or the value of the mode changed by 25 %
+- /decision/attributes: JSON with the decision trace of that status change (retained),
+  used as attributes of the Home Assistant "Decision" sensor
 - /solar_surplus_wh: expected solar surplus energy in Wh (>0 means usable surplus available)
 - /solar_active: bool indicating whether solar is currently producing (slot 0 > 0)
 - /pv_start_battery_wh: battery level in Wh (above MIN_SOC) at the next net-charging point (when PV first exceeds consumption)
@@ -65,9 +70,12 @@ import time
 import json
 import logging
 import importlib.metadata
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import paho.mqtt.client as mqtt
 import numpy as np
+
+if TYPE_CHECKING:
+    from .decision_journal import StatusChangeEvent
 
 logger = logging.getLogger(__name__)
 logger.info('Loading module')
@@ -77,6 +85,8 @@ TOPIC_CHARGE_RATE = 'charge_rate'
 TOPIC_LIMIT_BATTERY_CHARGE_RATE = 'limit_battery_charge_rate'
 TOPIC_API_OVERRIDE_ACTIVE = 'api_override_active'
 TOPIC_CONTROL_SOURCE = 'control_source'
+TOPIC_DECISION = 'decision'
+TOPIC_DECISION_ATTRIBUTES = 'decision/attributes'
 TOPIC_GRID_CHARGE_LOCKED = 'grid_charge_locked'
 TOPIC_SET_SUFFIX = '/set'
 
@@ -645,6 +655,35 @@ class MqttApi:
                 retain=True
             )
 
+    def publish_status_change(self, event: 'StatusChangeEvent') -> None:
+        """ Publish a status change of the decision journal: the mode with
+            its value and reason as text, and the decision trace behind it
+            as JSON attributes. Registered as journal listener in core.py.
+            /decision
+            /decision/attributes
+        """
+        if not self.client.is_connected():
+            return
+        # Build the payload first: if it cannot be serialized, neither topic
+        # is touched and text and attributes stay consistent.
+        try:
+            attributes = json.dumps(event.to_dict(), allow_nan=False)
+        except (TypeError, ValueError):
+            logger.exception(
+                'Decision attributes are not JSON serializable, '
+                'Decision sensor not updated')
+            return
+        self.client.publish(
+            self._topic(TOPIC_DECISION_ATTRIBUTES),
+            attributes,
+            retain=True
+        )
+        self.client.publish(
+            self._topic(TOPIC_DECISION),
+            event.trace.status_text(),
+            retain=True
+        )
+
     def publish_peak_shaving_enabled(self, enabled: bool) -> None:
         """ Publish peak shaving enabled status to MQTT
             /peak_shaving/enabled
@@ -913,6 +952,15 @@ class MqttApi:
             entity_category="diagnostic")
 
         self.publish_mqtt_discovery_message(
+            "Decision",
+            "batcontrol_decision",
+            "sensor",
+            None,
+            None,
+            self._topic(TOPIC_DECISION),
+            json_attributes_topic=self._topic(TOPIC_DECISION_ATTRIBUTES))
+
+        self.publish_mqtt_discovery_message(
             "Grid Charge Locked",
             "batcontrol_grid_charge_locked",
             "binary_sensor",
@@ -1134,7 +1182,8 @@ class MqttApi:
             initial_value=None,
             options: str = None,
             value_template: str = None,
-            command_template: str = None) -> None:
+            command_template: str = None,
+            json_attributes_topic: str = None) -> None:
         """ Publish Home Assistant MQTT Auto Discovery message"""
         if self.client.is_connected():
             payload = {}
@@ -1147,6 +1196,8 @@ class MqttApi:
                 payload["command_topic"] = command_topic
             if command_template:
                 payload["command_template"] = command_template
+            if json_attributes_topic:
+                payload["json_attributes_topic"] = json_attributes_topic
             if device_class:
                 payload["device_class"] = device_class
             if unit_of_measurement:
