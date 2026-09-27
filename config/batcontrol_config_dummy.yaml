@@ -31,6 +31,10 @@ battery_control_expert:
   soften_price_difference_on_charging: False # enable earlier charging based on a more relaxed calculation
                                              # future_price <= current_price-min_price_difference/soften_price_difference_on_charging_factor
   soften_price_difference_on_charging_factor: 5
+  spread_grid_charge_over_charge_window: True # only with soften_price_difference_on_charging:
+                                              # spread grid charging over all following slots
+                                              # with a price <= current price (charging window)
+                                              # instead of the current slot only
   round_price_digits: 4 # round price to n digits after the comma
   production_offset_percent: 1.0 # Adjust production forecast by a percentage (1.0 = 100%, 0.8 = 80%, etc.)
                                  # Useful for winter mode when solar panels are covered with snow
