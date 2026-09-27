@@ -73,6 +73,7 @@ def extend_to_grid_charge_window(remaining_time: float, prices, window_end: int,
     )
     return charge_time
 
+
 # Singleton pattern to ensure only one instance of CommonLogic exists
 class CommonLogic:
     """ General logic for battery control that is not specific to control strategies. """
