@@ -34,10 +34,9 @@ hours aligned to the current hour. The baseclass will handle conversion to
 Note:
 The charge rate is not evenly distributed across the low price hours.
 If you prefer a more even distribution during the low price hours, you can adjust the
-soften_price_difference_on_charging to enabled
-and
-max_grid_charge_rate to a low value, e.g. capacity of the battery divided
-by the hours of low price periods.
+soften_price_difference_on_charging to enabled.
+With spread_grid_charge_over_charge_window (enabled by default) the charge rate
+is then spread over the remaining slots of the low price period.
 
 If you prefer a late charging start (=optimize efficiency, have battery only short
 time at high SOC), you can adjust the

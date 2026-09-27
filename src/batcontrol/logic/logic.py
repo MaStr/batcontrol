@@ -36,6 +36,7 @@ class Logic:
             attribute_list = [
                 'soften_price_difference_on_charging',
                 'soften_price_difference_on_charging_factor',
+                'spread_grid_charge_over_charge_window',
                 'round_price_digits',
             ]
             for attribute in attribute_list:

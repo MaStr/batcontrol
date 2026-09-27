@@ -19,7 +19,7 @@ from typing import Optional
 from .logic_interface import LogicInterface
 from .logic_interface import CalculationParameters, CalculationInput
 from .logic_interface import CalculationOutput, InverterControlSettings
-from .common import CommonLogic
+from .common import CommonLogic, count_charge_window_slots
 from .decision_logging import GridRechargeDecision, log_grid_recharge_decision
 from .grid_charge_target import (
     apply_grid_charge_target_to_recharge,
@@ -53,6 +53,12 @@ class NextLogic(LogicInterface):
         self.round_price_digits = 4  # Default rounding for prices
         self.soften_price_difference_on_charging = False
         self.soften_price_difference_on_charging_factor = 5.0  # Default factor
+        # Spread grid charging over all following slots that are not more
+        # expensive than the current slot (only effective with soften enabled)
+        self.spread_grid_charge_over_charge_window = True
+        # End of the recharge evaluation window (exclusive), set by
+        # _get_required_recharge_energy
+        self.recharge_window_end = 1
         self.timezone = timezone
         self.interval_minutes = interval_minutes
         self.common = CommonLogic.get_instance()
@@ -181,7 +187,8 @@ class NextLogic(LogicInterface):
 
             # charge if battery capacity available and more stored energy is required
             if is_charging_possible and required_recharge_energy > 0:
-                remaining_time = self._remaining_interval_hours(calc_timestamp)
+                remaining_time = self._extend_to_charge_window(
+                    self._remaining_interval_hours(calc_timestamp), prices)
 
                 charge_rate = required_recharge_energy / remaining_time
                 charge_rate = self.common.calculate_charge_rate(charge_rate)
@@ -239,6 +246,34 @@ class NextLogic(LogicInterface):
 
         remaining_time = remaining_minutes / 60
         return max(remaining_time, MIN_REMAINING_TIME_HOURS)
+
+    def _extend_to_charge_window(self, remaining_time: float, prices) -> float:
+        """Extend the charging time over the following slots of the charging window.
+
+        Following slots, which are not more expensive than the current slot
+        and are part of the recharge evaluation window, are added to the
+        available charging time. This spreads the grid charge over the whole
+        cheap block instead of the current slot only.
+
+        Returns:
+            float: Charging time in hours
+        """
+        if not self.spread_grid_charge_over_charge_window:
+            return remaining_time
+
+        window_slots = count_charge_window_slots(prices, self.recharge_window_end)
+        if window_slots == 0:
+            return remaining_time
+
+        charge_time = remaining_time + window_slots * self.interval_minutes / 60
+        logger.debug(
+            "[Rule] Charge window covers %d following slots with price <= %0.3f, "
+            "charging time %0.2f h",
+            window_slots,
+            prices[0],
+            charge_time
+        )
+        return charge_time
 
     # ------------------------------------------------------------------ #
     #  Peak Shaving                                                       #
@@ -831,6 +866,8 @@ class NextLogic(LogicInterface):
             if found_lower_price:
                 max_slot = slot
                 break
+
+        self.recharge_window_end = max_slot
 
         logger.debug(
             "[Rule] Evaluation window for recharge energy until slot %d with price %0.3f",

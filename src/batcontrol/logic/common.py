@@ -16,6 +16,31 @@ MIN_CHARGE_RATE = 500
 
 logger = logging.getLogger(__name__)
 
+
+def count_charge_window_slots(prices, window_end: int) -> int:
+    """ Count the slots following the current slot that belong to the same
+    grid charging window.
+
+    A following slot belongs to the charging window as long as its price does
+    not exceed the current price (prices[0]). The window stops at the first
+    more expensive slot or at window_end (exclusive), which is the end of the
+    recharge evaluation window.
+
+    Args:
+        prices: Prices per slot (dict or array), slot 0 is the current slot.
+        window_end (int): First slot that is not part of the evaluation window,
+            must not exceed the number of available prices.
+    Returns:
+        int: Number of following slots (excluding the current slot).
+    """
+    current_price = prices[0]
+    slots = 0
+    for slot in range(1, window_end):
+        if prices[slot] > current_price:
+            break
+        slots += 1
+    return slots
+
 # Singleton pattern to ensure only one instance of CommonLogic exists
 class CommonLogic:
     """ General logic for battery control that is not specific to control strategies. """
