@@ -17,7 +17,7 @@ MIN_CHARGE_RATE = 500
 logger = logging.getLogger(__name__)
 
 
-def count_charge_window_slots(prices, window_end: int) -> int:
+def count_grid_charge_window_slots(prices, window_end: int) -> int:
     """ Count the slots following the current slot that belong to the same
     grid charging window.
 
@@ -40,6 +40,38 @@ def count_charge_window_slots(prices, window_end: int) -> int:
             break
         slots += 1
     return slots
+
+
+def extend_to_grid_charge_window(remaining_time: float, prices, window_end: int,
+                                 interval_minutes: int) -> float:
+    """ Extend the grid charging time over the following slots of the charging window.
+
+    Following slots, which are not more expensive than the current slot and are
+    part of the recharge evaluation window, are added to the available charging
+    time. This spreads the grid charge over the whole cheap block instead of the
+    current slot only.
+
+    Args:
+        remaining_time (float): Remaining time of the current slot in hours.
+        prices: Prices per slot (dict or array), slot 0 is the current slot.
+        window_end (int): First slot that is not part of the evaluation window.
+        interval_minutes (int): Length of one slot in minutes.
+    Returns:
+        float: Charging time in hours.
+    """
+    window_slots = count_grid_charge_window_slots(prices, window_end)
+    if window_slots == 0:
+        return remaining_time
+
+    charge_time = remaining_time + window_slots * interval_minutes / 60
+    logger.debug(
+        "[Rule] Charge window covers %d following slots with price <= %0.3f, "
+        "charging time %0.2f h",
+        window_slots,
+        prices[0],
+        charge_time
+    )
+    return charge_time
 
 # Singleton pattern to ensure only one instance of CommonLogic exists
 class CommonLogic:
