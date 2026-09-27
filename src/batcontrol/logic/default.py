@@ -6,7 +6,7 @@ from typing import Optional
 from .logic_interface import LogicInterface
 from .logic_interface import CalculationParameters, CalculationInput
 from .logic_interface import CalculationOutput, InverterControlSettings
-from .common import CommonLogic, count_charge_window_slots
+from .common import CommonLogic, extend_to_grid_charge_window
 from .decision_logging import GridRechargeDecision, log_grid_recharge_decision
 from .grid_charge_target import (
     apply_grid_charge_target_to_recharge,
@@ -194,7 +194,10 @@ class DefaultLogic(LogicInterface):
                 # Note: interval_minutes is validated in core.py (must be 15 or 60)
                 remaining_time = max(remaining_time, MIN_REMAINING_TIME_HOURS)
 
-                remaining_time = self.__extend_to_charge_window(remaining_time, prices)
+                if self.spread_grid_charge_over_charge_window:
+                    remaining_time = extend_to_grid_charge_window(
+                        remaining_time, prices, self.recharge_window_end,
+                        self.interval_minutes)
 
                 # Calculate required charge rate: energy needed / time available
                 charge_rate = required_recharge_energy / remaining_time
@@ -525,33 +528,6 @@ class DefaultLogic(LogicInterface):
 
         self.calculation_output.required_recharge_energy = recharge_energy
         return recharge_energy
-
-    def __extend_to_charge_window(self, remaining_time: float, prices) -> float:
-        """ Extend the charging time over the following slots of the charging window.
-
-            Following slots, which are not more expensive than the current slot
-            and are part of the recharge evaluation window, are added to the
-            available charging time. This spreads the grid charge over the
-            whole cheap block instead of the current slot only.
-
-            return: float (charging time in hours)
-        """
-        if not self.spread_grid_charge_over_charge_window:
-            return remaining_time
-
-        window_slots = count_charge_window_slots(prices, self.recharge_window_end)
-        if window_slots == 0:
-            return remaining_time
-
-        charge_time = remaining_time + window_slots * self.interval_minutes / 60
-        logger.debug(
-            "[Rule] Charge window covers %d following slots with price <= %0.3f, "
-            "charging time %0.2f h",
-            window_slots,
-            prices[0],
-            charge_time
-        )
-        return charge_time
 
     def __calculate_min_dynamic_price_difference(self, price: float) -> float:
         """ Calculate the dynamic limit for the current price """

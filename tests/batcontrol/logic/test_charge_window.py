@@ -9,7 +9,7 @@ import datetime
 
 import pytest
 
-from batcontrol.logic.common import count_charge_window_slots
+from batcontrol.logic.common import count_grid_charge_window_slots
 from batcontrol.logic.default import DefaultLogic
 from batcontrol.logic.logic import Logic
 from batcontrol.logic.next import NextLogic
@@ -61,20 +61,20 @@ TS_1215 = datetime.datetime(2026, 9, 26, 12, 15, 0, tzinfo=datetime.timezone.utc
 
 class TestCountChargeWindowSlots:
     def test_equal_prices_are_counted(self):
-        assert count_charge_window_slots([0.1, 0.1, 0.1, 0.5], 4) == 2
+        assert count_grid_charge_window_slots([0.1, 0.1, 0.1, 0.5], 4) == 2
 
     def test_cheaper_prices_are_counted(self):
-        assert count_charge_window_slots([0.1, 0.099, 0.1, 0.5], 4) == 2
+        assert count_grid_charge_window_slots([0.1, 0.099, 0.1, 0.5], 4) == 2
 
     def test_stops_at_first_more_expensive_slot(self):
-        assert count_charge_window_slots([0.1, 0.1, 0.1001, 0.1, 0.5], 5) == 1
+        assert count_grid_charge_window_slots([0.1, 0.1, 0.1001, 0.1, 0.5], 5) == 1
 
     def test_limited_by_window_end(self):
-        assert count_charge_window_slots([0.1, 0.1, 0.1, 0.1, 0.5], 2) == 1
+        assert count_grid_charge_window_slots([0.1, 0.1, 0.1, 0.1, 0.5], 2) == 1
 
     def test_no_following_slot(self):
-        assert count_charge_window_slots([0.1, 0.5], 2) == 0
-        assert count_charge_window_slots({0: 0.1}, 1) == 0
+        assert count_grid_charge_window_slots([0.1, 0.5], 2) == 0
+        assert count_grid_charge_window_slots({0: 0.1}, 1) == 0
 
 
 @pytest.mark.parametrize('logic_cls', LOGIC_CLASSES)
