@@ -82,7 +82,8 @@ class RelaxedCaching:
                     self.entry_key
                 )
                 raise CacheMissError(
-                    f'Cache entry for key {self.entry_key} not found (expired or evicted by TTLCache)'
+                    f'Cache entry for key {self.entry_key} '
+                    f'not found (expired or evicted by TTLCache)'
                 )
 
             return self.cache_store[self.entry_key]

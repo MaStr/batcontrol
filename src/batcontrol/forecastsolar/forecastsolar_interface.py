@@ -5,7 +5,8 @@ from abc import ABC, abstractmethod
 class ForecastSolarInterface(ABC):
     """ Interface for SolarAPI classes """
     @abstractmethod
-    def __init__(self, pvinstallations, timezone, min_time_between_api_calls, delay_evaluation_by_seconds) -> None:
+    def __init__(self, pvinstallations, timezone, min_time_between_api_calls,
+                 delay_evaluation_by_seconds) -> None:
         """ Initialize the SolarAPI class """
 
     @abstractmethod

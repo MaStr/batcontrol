@@ -11,10 +11,11 @@ avoiding excessive feed-in during midday PV peak hours.
 Usage:
     Select via ``type: next`` in the battery_control config section.
 """
-import logging
 import datetime
-import numpy as np
+import logging
 from typing import Optional
+
+import numpy as np
 
 from .logic_interface import LogicInterface
 from .logic_interface import CalculationParameters, CalculationInput
@@ -718,9 +719,8 @@ class NextLogic(LogicInterface):
                     production[slot] -= required_energy
                     required_energy = 0
                     break
-                else:
-                    required_energy -= production[slot]
-                    production[slot] = 0
+                required_energy -= production[slot]
+                production[slot] = 0
             # add_remaining required_energy to reserved_storage
             reserved_storage += required_energy
 

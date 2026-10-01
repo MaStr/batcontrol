@@ -1,7 +1,8 @@
-import logging
 import datetime
-import numpy as np
+import logging
 from typing import Optional
+
+import numpy as np
 
 from .logic_interface import LogicInterface
 from .logic_interface import CalculationParameters, CalculationInput
@@ -62,7 +63,8 @@ class DefaultLogic(LogicInterface):
         """ Set the timezone for the logic calculations """
         self.timezone = timezone
 
-    def calculate(self, input_data: CalculationInput, calc_timestamp: Optional[datetime.datetime] = None) -> bool:
+    def calculate(self, input_data: CalculationInput,
+                  calc_timestamp: Optional[datetime.datetime] = None) -> bool:
         """ Calculate the inverter control settings based on the input data """
 
         logger.debug("Calculating inverter control settings...")
@@ -94,7 +96,8 @@ class DefaultLogic(LogicInterface):
         return self.inverter_control_settings
 
     def calculate_inverter_mode(self, calc_input: CalculationInput,
-                                calc_timestamp: Optional[datetime.datetime] = None) -> InverterControlSettings:
+                                calc_timestamp: Optional[datetime.datetime] = None
+                                ) -> InverterControlSettings:
         """ Main control logic for battery control """
         # default settings
         inverter_control_settings = InverterControlSettings(

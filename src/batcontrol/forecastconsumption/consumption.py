@@ -93,7 +93,8 @@ def _create_homeassistant_forecast(
 
     logger.info(
         "Creating HomeAssistant consumption forecast: "
-        "entity_id=%s, history_days=%s, weights=%s, multiplier=%0.2f, sensor_unit=%s, target_resolution=%d min",
+        "entity_id=%s, history_days=%s, weights=%s, "
+        "multiplier=%0.2f, sensor_unit=%s, target_resolution=%d min",
         entity_id,
         history_days,
         history_weights,

@@ -19,14 +19,16 @@ TOPIC STRUCTURE AND RETENTION REQUIREMENTS
 ===========================================
 
 All topics follow the pattern: <batcontrol_base_topic>/inverters/$num/<subtopic>
-Here, <batcontrol_base_topic> is the MQTT base topic (from configuration), and <b>$num</b> is a placeholder for the inverter number (e.g., 0, 1, 2), not the literal string "$num".
-For example, if base_topic is "batcontrol" and inverter number is 0, the topic would be: batcontrol/inverters/0/status/capacity
+Here, <batcontrol_base_topic> is the MQTT base topic (from configuration), and <b>$num</b> is a
+placeholder for the inverter number (e.g., 0, 1, 2), not the literal string "$num".
+For example, if base_topic is "batcontrol" and inverter number is 0, the topic would be:
+batcontrol/inverters/0/status/capacity
 
 Status Topics (Inverter -> batcontrol):
 ---------------------------------------
 These topics MUST be published as RETAINED by the external inverter/bridge
 system:
-- <batcontrol_base_topic>/inverters/$num/status/capacity             - Battery capacity in Wh (float)
+- <batcontrol_base_topic>/inverters/$num/status/capacity   - Battery capacity in Wh (float)
 
 Optional status topics (also RETAINED):
 - <batcontrol_base_topic>/inverters/$num/status/min_soc              - Minimum SoC limit in %
@@ -231,8 +233,10 @@ class MqttInverter(InverterBaseclass):
         self.mqtt_client = None
         self.mqtt_api = None
 
-        logger.info('MQTT Inverter initialized with base topic: %s (waiting for MQTT API connection)',
-                   self.inverter_topic)
+        logger.info(
+            'MQTT Inverter initialized with base topic: %s '
+            '(waiting for MQTT API connection)',
+            self.inverter_topic)
 
     def activate_mqtt(self, api_mqtt_api:MqttApi):
         """
@@ -268,7 +272,8 @@ class MqttInverter(InverterBaseclass):
         """
         if self.mqtt_client:
             status_topic = f'{self.inverter_topic}/status/#'
-            self.mqtt_client.message_callback_add(f'{self.inverter_topic}/status/#', self._on_message)
+            self.mqtt_client.message_callback_add(
+                f'{self.inverter_topic}/status/#', self._on_message)
             self.mqtt_client.subscribe(status_topic)
             logger.info('Subscribed to %s', status_topic)
 
