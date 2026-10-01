@@ -35,6 +35,7 @@ from .logic.grid_charge_target import GridChargeTargetConfig
 from .dynamictariff import DynamicTariff as tariff_factory
 from .inverter import Inverter as inverter_factory
 from .inverter import InverterError, InverterCommunicationError
+from .inverter import inverter_members
 from .forecastsolar import ForecastSolar as solar_factory
 
 from .forecastconsumption import Consumption as consumption_factory
@@ -191,16 +192,12 @@ class Batcontrol:
             nf_cfg=config.get('dynamic_network_fees', {})
         )
 
-        self.inverter = inverter_factory.create_inverter(
+        self.inverter = inverter_factory.create_inverters(
             config['inverter'])
 
-        # Get PV charge rate limits from inverter config (with defaults),
-        # falling back to inverter attribute for backward compatibility
-        self.max_pv_charge_rate = config['inverter'].get(
-            'max_pv_charge_rate',
-            getattr(self.inverter, 'max_pv_charge_rate', 0),
+        self.max_pv_charge_rate, self.min_pv_charge_rate = (
+            self._aggregate_pv_charge_rates(config['inverter'], self.inverter)
         )
-        self.min_pv_charge_rate = config['inverter'].get('min_pv_charge_rate', 0)
 
         # Validate min/max PV charge rate configuration at startup
         if (
@@ -513,6 +510,39 @@ class Batcontrol:
                 del self.evcc_api
         except Exception as exc:
             logger.exception("Error during Batcontrol shutdown: %s", exc)
+
+    @staticmethod
+    def _aggregate_pv_charge_rates(inverter_config, inverter) -> tuple:
+        """ Determine the group-wide PV charge rate limits in W.
+
+        The limits come from the inverter config, falling back to the inverter
+        attribute for backward compatibility. With several inverters the
+        per-inverter limits are summed up, except that a single unlimited
+        inverter (max_pv_charge_rate 0) makes the whole group unlimited,
+        because the total PV charge power cannot be bounded any more.
+
+        Returns:
+            tuple: (max_pv_charge_rate, min_pv_charge_rate) in W.
+        """
+        inverter_configs = (
+            inverter_config if isinstance(inverter_config, list)
+            else [inverter_config]
+        )
+        members = inverter_members(inverter)
+        max_rates = [
+            member_config.get(
+                'max_pv_charge_rate',
+                getattr(member, 'max_pv_charge_rate', 0),
+            )
+            for member_config, member in zip(inverter_configs, members)
+        ]
+        max_pv_charge_rate = 0 if any(
+            rate <= 0 for rate in max_rates) else sum(max_rates)
+        min_pv_charge_rate = sum(
+            member_config.get('min_pv_charge_rate', 0)
+            for member_config in inverter_configs
+        )
+        return max_pv_charge_rate, min_pv_charge_rate
 
     @staticmethod
     def _validate_market_price_refresh_time(value: str) -> None:
