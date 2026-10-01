@@ -91,12 +91,17 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
         hhmm = time.strftime('%H:%M:%S', time.localtime(self.next_update_ts+10))
         schedule_once(hhmm, self.refresh_data, 'solar-forecast-refresh')
 
-    def refresh_data(self) -> None:
-        """ Refresh data from provider if needed """
+    def refresh_data(self, force: bool = False) -> None:
+        """ Refresh data from provider if needed
+
+        Args:
+            force: Bypass the minimum time between updates. An active rate
+                   limit blackout window is still respected.
+        """
         with self._refresh_data_lock:
             now = time.time()
 
-            if now > self.next_update_ts:
+            if force or now > self.next_update_ts:
                 if self.rate_limit_blackout_window_ts > now:
                     logger.info(
                         'Rate limit blackout window in place until %s (another %d seconds)',

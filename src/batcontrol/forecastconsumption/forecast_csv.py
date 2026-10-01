@@ -74,14 +74,11 @@ class ForecastConsumptionCsv(ForecastConsumptionBaseclass):
             "under consumption_forecast:  annual_consumption ")
         return 1
 
-    def reload_profile(self) -> bool:
+    def refresh_data(self) -> None:
         """Re-read the load profile CSV from disk.
 
         The new profile only replaces the active one if it can be read and
         has the required columns; otherwise the old profile stays in use.
-
-        Returns:
-            True if the profile was reloaded, False otherwise.
         """
         try:
             dataframe = pd.read_csv(self.path_to_load_profile)
@@ -95,12 +92,11 @@ class ForecastConsumptionCsv(ForecastConsumptionBaseclass):
             logger.error(
                 "[ForecastCSV] Reloading load profile '%s' failed, keeping "
                 "previous profile: %s", self.path_to_load_profile, err)
-            return False
+            return
         self.dataframe = dataframe
         self.scaling_factor = scaling_factor
         logger.info("[ForecastCSV] Reloaded load profile '%s'",
                     self.path_to_load_profile)
-        return True
 
     def _get_forecast_native(self, hours: int) -> dict[int, float]:
         """Get hour-aligned forecast at native (60-minute) resolution.
