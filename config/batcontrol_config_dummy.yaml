@@ -95,6 +95,40 @@ peak_shaving:
 #  1. Comment out the "dummy" type below
 #  2. Uncomment and configure a real inverter type (e.g., fronius_gen24 or fronius-modbus)
 #  3. Update the address and, if needed, credentials for your actual inverter
+#
+#  MULTIPLE INVERTERS / BATTERIES:
+#  NOTE: Only available with a YAML config (Docker / Compose / local Python). The
+#  Home Assistant add-on is configured through its UI, which cannot express a list
+#  of inverters, so these settings are not mirrored into the add-on.
+#
+#  This section can also be a LIST of inverters. batcontrol then treats them as
+#  one large battery: capacities are summed, the SoC is the capacity-weighted
+#  average, and a charge rate is split over the inverters proportional to their
+#  free capacity (capped by each max_grid_charge_rate). An inverter that cannot
+#  take any power is set to avoid-discharge, so a full battery never feeds the
+#  one that is charging from the grid. Each inverter keeps its own MQTT subtree
+#  <base_topic>/inverters/<n>/ in list order (0, 1, ...).
+#
+#  inverter:
+#    - type: fronius_gen24
+#      address: 192.0.2.10
+#      user: customer
+#      password: YOUR-PASSWORD
+#      max_grid_charge_rate: 5000
+#    - type: fronius-modbus
+#      address: 192.0.2.11
+#      capacity: 5000
+#      max_grid_charge_rate: 3000
+#
+#  Notes for the list form:
+#  - max_pv_charge_rate values are summed; a single inverter with 0 (unlimited)
+#    makes the whole group unlimited.
+#  - min_pv_charge_rate values are summed.
+#  - A small charge rate is NOT smeared over all inverters: it first pays a full
+#    min_charge_rate (default 500 W) for as many inverters as it can reach, and
+#    only the remainder is split by free capacity. So 500 W goes to one inverter
+#    and 1000 W to two, instead of 250 W each.
+#  - Every MQTT inverter needs its own base_topic (or 'default' for all of them).
 #--------------------------
 inverter:
   type: dummy # DEMO ONLY - Change to a real inverter type for real operation
@@ -125,6 +159,12 @@ inverter:
                         # A requested limit of 0 (complete charge blocking) bypasses this floor.
                         # Example: set to 100 to ensure at least 100W charging when a non-zero limit is active.
                         # Only affects mode 8; ignored in other modes.
+  min_charge_rate: 500 # Watt, STATIC lower limit for grid charging of THIS inverter.
+                       # ONLY relevant with several inverters: it decides how many of
+                       # them a small charge rate can feed at once, instead of giving
+                       # each an unusably small share - see the notes above. With a
+                       # single inverter it has no effect, because batcontrol already
+                       # raises every charge rate to 500 W. Default: 500.
   # fronius_inverter_id: '1' # Optional: ID of the inverter in Fronius API (default: '1')
   # fronius_controller_id: '0' # Optional: ID of the controller in Fronius API (default: '0')
   # capacity: 10000 # Optional: fixed battery capacity in Wh. If set, overrides the

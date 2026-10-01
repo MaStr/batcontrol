@@ -4,14 +4,33 @@ from .inverter_interface import InverterInterface
 DEFAULT_MIN_SOC = 5
 DEFAULT_MAX_SOC = 100
 
+# Minimum charge rate per inverter in W. Charging a battery with a few hundred
+# watts is inefficient, which is why the logic layer already raises a group
+# charge rate to the same value - see MIN_CHARGE_RATE in batcontrol.logic.common,
+# which this default mirrors (a test keeps the two in sync).
+DEFAULT_MIN_CHARGE_RATE = 500
+
 
 class InverterBaseclass(InverterInterface):
+    # This class is deliberately a flat holder for the properties every
+    # inverter has (SOC limits, capacity, rate limits, MQTT wiring).
+    # pylint: disable=too-many-instance-attributes
     def __init__(self, config):
         self.min_soc = -1
         self.max_soc = -1
         self.mqtt_api = None
         self.capacity = -1
         self.inverter_num = 0
+        # Rate limits of THIS inverter in W. They are what lets InverterGroup
+        # split a group-wide rate without pushing a single inverter outside its
+        # own working range. The factory overwrites them from the config.
+        # Upper limit for PV -> battery charging; 0 means no limit.
+        self.max_pv_charge_rate = config.get('max_pv_charge_rate', 0)
+        # Lower limit for grid -> battery charging.
+        self.min_charge_rate = config.get(
+            'min_charge_rate', DEFAULT_MIN_CHARGE_RATE)
+        # Lower limit for PV -> battery charging; 0 means no minimum.
+        self.min_pv_charge_rate = config.get('min_pv_charge_rate', 0)
 
     def get_capacity(self) -> float:
         """ Dummy implementation """

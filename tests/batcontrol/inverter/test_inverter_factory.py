@@ -1,7 +1,9 @@
 import pytest
 
+from batcontrol.inverter.group import InverterGroup
 from batcontrol.inverter.inverter import Inverter
 from batcontrol.inverter.mqtt_inverter import MqttInverter
+from batcontrol.inverter.resilient_wrapper import ResilientInverterWrapper
 
 
 @pytest.fixture(autouse=True)
@@ -289,3 +291,156 @@ def test_factory_forwards_fronius_capacity_override(mocker):
             "capacity": 9600,
         }
     )
+
+
+class TestCreateInverters:
+    """create_inverters() builds a single inverter or an InverterGroup."""
+
+    @staticmethod
+    def _dummy(max_grid_charge_rate=5000):
+        return {
+            "type": "dummy",
+            "max_grid_charge_rate": max_grid_charge_rate,
+            "enable_resilient_wrapper": False,
+        }
+
+    def test_mapping_creates_a_single_inverter(self):
+        """A mapping keeps the pre-multi-inverter behaviour."""
+        inverter = Inverter.create_inverters(self._dummy())
+
+        assert not isinstance(inverter, InverterGroup)
+        assert inverter.max_grid_charge_rate == 5000
+
+    def test_single_entry_list_creates_a_single_inverter(self):
+        """One list entry needs no group - and keeps inverter_num 0."""
+        inverter = Inverter.create_inverters([self._dummy()])
+
+        assert not isinstance(inverter, InverterGroup)
+        assert inverter.inverter_num == 0
+
+    def test_two_entries_create_a_group(self):
+        inverter = Inverter.create_inverters([
+            self._dummy(5000),
+            self._dummy(3000),
+        ])
+
+        assert isinstance(inverter, InverterGroup)
+        assert len(inverter) == 2
+        assert inverter.max_grid_charge_rate == 8000
+
+    def test_group_members_are_numbered_by_list_position(self):
+        """inverter_num drives the MQTT topic, so it must follow the config."""
+        inverter = Inverter.create_inverters([self._dummy(), self._dummy()])
+
+        assert [member.inverter_num for member in inverter.inverters] == [0, 1]
+
+    def test_numbering_is_independent_of_the_process_wide_counter(self):
+        """A second create_inverters() call restarts at 0."""
+        Inverter.num_inverters = 7
+
+        inverter = Inverter.create_inverters([self._dummy(), self._dummy()])
+
+        assert [member.inverter_num for member in inverter.inverters] == [0, 1]
+
+    def test_group_members_are_wrapped_resiliently_when_enabled(self):
+        """The resilient wrapper stays per inverter, not around the group."""
+        config = [
+            {"type": "dummy", "max_grid_charge_rate": 5000},
+            {"type": "dummy", "max_grid_charge_rate": 3000},
+        ]
+
+        inverter = Inverter.create_inverters(config)
+
+        assert isinstance(inverter, InverterGroup)
+        for member in inverter.inverters:
+            assert isinstance(member, ResilientInverterWrapper)
+
+    def test_mqtt_inverters_get_distinct_default_topics(self):
+        config = [
+            {
+                "type": "mqtt",
+                "capacity": 10000,
+                "max_grid_charge_rate": 5000,
+                "enable_resilient_wrapper": False,
+            },
+            {
+                "type": "mqtt",
+                "capacity": 5000,
+                "max_grid_charge_rate": 3000,
+                "enable_resilient_wrapper": False,
+            },
+        ]
+
+        inverter = Inverter.create_inverters(config)
+
+        topics = [
+            member.get_mqtt_inverter_topic() for member in inverter.inverters
+        ]
+        assert topics == ["inverters/0/", "inverters/1/"]
+
+    def test_duplicate_mqtt_base_topic_is_rejected(self):
+        """Sharing a topic would make both inverters read and write the same data."""
+        config = [
+            {
+                "type": "mqtt",
+                "capacity": 10000,
+                "max_grid_charge_rate": 5000,
+                "base_topic": "house/battery",
+            },
+            {
+                "type": "mqtt",
+                "capacity": 5000,
+                "max_grid_charge_rate": 3000,
+                "base_topic": "house/battery/",
+            },
+        ]
+
+        with pytest.raises(RuntimeError, match="share the base_topic"):
+            Inverter.create_inverters(config)
+
+    def test_distinct_mqtt_base_topics_are_accepted(self):
+        config = [
+            {
+                "type": "mqtt",
+                "capacity": 10000,
+                "max_grid_charge_rate": 5000,
+                "base_topic": "house/battery_a",
+                "enable_resilient_wrapper": False,
+            },
+            {
+                "type": "mqtt",
+                "capacity": 5000,
+                "max_grid_charge_rate": 3000,
+                "base_topic": "house/battery_b",
+                "enable_resilient_wrapper": False,
+            },
+        ]
+
+        inverter = Inverter.create_inverters(config)
+
+        assert isinstance(inverter, InverterGroup)
+
+    def test_empty_list_is_rejected(self):
+        with pytest.raises(RuntimeError, match="list is empty"):
+            Inverter.create_inverters([])
+
+    def test_non_mapping_config_is_rejected(self):
+        with pytest.raises(RuntimeError, match="mapping or a"):
+            Inverter.create_inverters("dummy")
+
+    def test_non_mapping_entry_is_rejected(self):
+        with pytest.raises(RuntimeError, match="entry 1 must be a mapping"):
+            Inverter.create_inverters([self._dummy(), "dummy"])
+
+    def test_already_created_inverters_are_shut_down_on_failure(self, mocker):
+        """A broken second entry must not leak the first inverter."""
+        shutdown = mocker.patch(
+            "batcontrol.inverter.dummy.Dummy.shutdown", autospec=True)
+
+        with pytest.raises(RuntimeError, match="Unknown inverter type"):
+            Inverter.create_inverters([
+                self._dummy(),
+                {"type": "does_not_exist", "max_grid_charge_rate": 5000},
+            ])
+
+        assert shutdown.call_count == 1
