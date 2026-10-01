@@ -23,7 +23,7 @@ def test_reload_picks_up_changed_file(tmp_path):
     assert fc.dataframe['energy'].iloc[0] == 100
 
     _write_profile(csv, 200)
-    assert fc.reload_profile() is True
+    fc.refresh_data()
     assert fc.dataframe['energy'].iloc[0] == 200
 
 
@@ -34,7 +34,7 @@ def test_reload_recomputes_scaling_factor(tmp_path):
     old_factor = fc.scaling_factor
 
     _write_profile(csv, 200)
-    assert fc.reload_profile() is True
+    fc.refresh_data()
     assert fc.scaling_factor == pytest.approx(old_factor / 2)
 
 
@@ -44,7 +44,7 @@ def test_reload_keeps_old_profile_on_invalid_file(tmp_path):
     fc = ForecastConsumptionCsv(str(csv), TZ)
 
     _write_profile(csv, 200, header='a,b,c,d')
-    assert fc.reload_profile() is False
+    fc.refresh_data()
     assert fc.dataframe['energy'].iloc[0] == 100
 
 
@@ -54,5 +54,5 @@ def test_reload_keeps_old_profile_if_file_missing(tmp_path):
     fc = ForecastConsumptionCsv(str(csv), TZ)
 
     csv.unlink()
-    assert fc.reload_profile() is False
+    fc.refresh_data()
     assert fc.dataframe['energy'].iloc[0] == 100

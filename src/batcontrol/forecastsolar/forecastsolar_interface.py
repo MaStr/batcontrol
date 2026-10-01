@@ -13,5 +13,5 @@ class ForecastSolarInterface(ABC):
         """ Get solar production of all installations up to next 48 hours """
 
     @abstractmethod
-    def refresh_data(self) -> None:
-        """ Refresh data from provider """
+    def refresh_data(self, force: bool = False) -> None:
+        """ Refresh data from provider (force: skip min. update interval) """

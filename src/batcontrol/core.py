@@ -479,9 +479,20 @@ class Batcontrol:
         except Exception as e:
             logger.error("Error during initial data fetch: %s", e)
 
-    def reload_load_profile(self) -> bool:
-        """ Re-read the consumption load profile file (triggered by SIGHUP) """
-        return self.fc_consumption.reload_profile()
+    def refresh_all_providers(self) -> None:
+        """ Force a refresh of all data providers (triggered by SIGHUP).
+
+        Solar forecast providers still respect their rate limit blackout
+        window. Errors of one provider do not stop the others.
+        """
+        for name, refresh in (
+                ('solar forecast', lambda: self.fc_solar.refresh_data(force=True)),
+                ('dynamic tariff', lambda: self.dynamic_tariff.refresh_data(force=True)),
+                ('consumption forecast', self.fc_consumption.refresh_data)):
+            try:
+                refresh()
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.error("Refresh of %s failed: %s", name, exc)
 
     def shutdown(self):
         """ Shutdown Batcontrol and dependent modules (inverter..) """

@@ -73,14 +73,6 @@ class ForecastConsumptionBaseclass(ForecastConsumptionInterface):
         data (e.g., from APIs) should override this method.
         """
 
-    def reload_profile(self) -> bool:
-        """Reload a file based profile from disk (e.g. on SIGHUP).
-
-        Default implementation does nothing. Returns True if a profile
-        was reloaded.
-        """
-        return False
-
     def get_forecast(self, hours: int) -> dict[int, float]:
         """Get forecast with automatic resolution handling.
 
