@@ -93,8 +93,10 @@ class ForecastConsumptionCsv(ForecastConsumptionBaseclass):
                 "[ForecastCSV] Reloading load profile '%s' failed, keeping "
                 "previous profile: %s", self.path_to_load_profile, err)
             return
-        self.dataframe = dataframe
-        self.scaling_factor = scaling_factor
+        # Swap both values together, readers hold the same lock in get_forecast
+        with self._forecast_lock:
+            self.dataframe = dataframe
+            self.scaling_factor = scaling_factor
         logger.info("[ForecastCSV] Reloaded load profile '%s'",
                     self.path_to_load_profile)
 
@@ -128,16 +130,6 @@ class ForecastConsumptionCsv(ForecastConsumptionBaseclass):
             np.array(list(prediction.values())).round(1)
         )
         return prediction
-
-    def calculate_scaling_factor(self, annual_consumption):
-        annual_consumption_load_profile = self.dataframe['energy'].sum(
-        ) * 8760 / 2016 / 1000
-        logger.info(
-            "The annual consumption of the applied load profile is %s kWh ",
-            annual_consumption_load_profile
-        )
-        scaling_factor = annual_consumption / annual_consumption_load_profile
-        return scaling_factor
 
     def load_data_file(self, datafile):
         df = pd.read_csv(datafile)

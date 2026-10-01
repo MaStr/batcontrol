@@ -1,4 +1,6 @@
 """Tests for reloading the CSV load profile (SIGHUP)."""
+import threading
+
 import pytest
 import pytz
 
@@ -56,3 +58,21 @@ def test_reload_keeps_old_profile_if_file_missing(tmp_path):
     csv.unlink()
     fc.refresh_data()
     assert fc.dataframe['energy'].iloc[0] == 100
+
+
+def test_refresh_swaps_profile_under_forecast_lock(tmp_path):
+    csv = tmp_path / "profile.csv"
+    _write_profile(csv, 100)
+    fc = ForecastConsumptionCsv(str(csv), TZ)
+    _write_profile(csv, 200)
+
+    done = threading.Event()
+    with fc._forecast_lock:  # pylint: disable=protected-access
+        thread = threading.Thread(
+            target=lambda: (fc.refresh_data(), done.set()))
+        thread.start()
+        assert not done.wait(0.3)
+        assert fc.dataframe['energy'].iloc[0] == 100
+    assert done.wait(5)
+    thread.join()
+    assert fc.dataframe['energy'].iloc[0] == 200
