@@ -10,6 +10,7 @@ logs/*
 test.py
 config/batcontrol_config.yaml.*
 config/batcontrol_config.yml.*
+config/*.csv
 run_infinite.sh
 tmp/*
 
