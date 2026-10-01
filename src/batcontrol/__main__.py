@@ -3,6 +3,7 @@ from .setup import setup_logging, load_config
 from .inverter import InverterOutageError
 import argparse
 import signal
+import time
 import threading
 import datetime
 import sys
@@ -81,17 +82,24 @@ def main() -> int:
 
     bc = Batcontrol(config)
 
-    # SIGHUP (kill -HUP <pid>) refreshes all providers. The handler only
-    # sets a flag; the reload happens in the main loop to avoid racing run().
+    # SIGHUP (kill -HUP <pid>) requests a refresh of all providers. The
+    # handler only logs and sets a flag; the refresh happens at the start of
+    # the next control loop interval, the running loop is not interrupted.
     reload_requested = threading.Event()
+
+    def _on_sighup(_signum, _frame):
+        logger.info("SIGHUP received: all providers will be refreshed "
+                    "in the next interval")
+        reload_requested.set()
+
     if hasattr(signal, 'SIGHUP'):
-        signal.signal(signal.SIGHUP, lambda _signum, _frame: reload_requested.set())
+        signal.signal(signal.SIGHUP, _on_sighup)
 
     try:
         while True:
             if reload_requested.is_set():
                 reload_requested.clear()
-                logger.info("SIGHUP received: refreshing all providers")
+                logger.info("Refreshing all providers (requested by SIGHUP)")
                 bc.refresh_all_providers()
             logger.info("Starting batcontrol")
             bc.run()
@@ -112,8 +120,7 @@ def main() -> int:
             next_eval += datetime.timedelta(minutes=EVALUATIONS_EVERY_MINUTES)
             sleeptime = (next_eval - loop_now).total_seconds()
             logger.info("Next evaluation at %s. Sleeping for %d seconds", next_eval.strftime('%H:%M:%S'), int(sleeptime))
-            # Wake up early on SIGHUP so the new data is applied right away
-            reload_requested.wait(sleeptime)
+            time.sleep(sleeptime)
     except KeyboardInterrupt:
         print("Shutting down")
     except InverterOutageError as e:

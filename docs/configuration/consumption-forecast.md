@@ -73,8 +73,9 @@ INFO [FC Cons] The hourly values from the load profile are scaled with a factor 
 After editing the load profile CSV you do not need to restart batcontrol. Send
 `SIGHUP` (signal 1) to the process. batcontrol then forces a refresh of **all**
 providers (solar forecast, dynamic tariff, consumption forecast): the load profile
-CSV is re-read, the scaling factor is recalculated and a new evaluation runs
-immediately.
+CSV is re-read and the scaling factor is recalculated. The refresh happens at the
+start of the next evaluation interval (every 3 minutes), the running loop is not
+interrupted.
 
 ```bash
 kill -HUP <pid>                       # plain process
