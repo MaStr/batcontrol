@@ -1,10 +1,12 @@
 # %%
 import datetime
-import math
 import logging
-import pandas as pd
-import numpy as np
+import math
 import os
+
+import numpy as np
+import pandas as pd
+
 from .baseclass import ForecastConsumptionBaseclass
 
 
@@ -119,8 +121,12 @@ class ForecastConsumptionCsv(ForecastConsumptionBaseclass):
         for h in range(hours):
             delta_t = datetime.timedelta(hours=h)
             t1 = t0 + delta_t
-            energy = df.loc[df['hour'] == t1.hour].loc[df['month'] ==
-                                                       t1.month].loc[df['weekday'] == t1.weekday()]['energy'].median()
+            energy = (
+                df.loc[df['hour'] == t1.hour]
+                  .loc[df['month'] == t1.month]
+                  .loc[df['weekday'] == t1.weekday()]['energy']
+                  .median()
+            )
             if math.isnan(energy):
                 energy = df['energy'].median()
             prediction[h] = energy * self.scaling_factor

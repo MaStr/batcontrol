@@ -1,6 +1,7 @@
 """ Implement Tibber API to get dynamic electricity prices
 
-Tibber API supports both HOURLY and QUARTER_HOURLY resolution via the priceInfo resolution parameter.
+Tibber API supports both HOURLY and QUARTER_HOURLY resolution
+via the priceInfo resolution parameter.
 """
 
 import datetime

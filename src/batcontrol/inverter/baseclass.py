@@ -74,11 +74,13 @@ class InverterBaseclass(InverterInterface):
 
     def refresh_api_values(self):
         if self.mqtt_api:
-            self.mqtt_api.generic_publish(self.get_mqtt_inverter_topic() + 'SOC', self.get_SOC())
-            self.mqtt_api.generic_publish(self.get_mqtt_inverter_topic() + 'stored_energy', self.get_stored_energy())
-            self.mqtt_api.generic_publish(self.get_mqtt_inverter_topic() + 'stored_usable_energy', self.get_stored_usable_energy())
-            self.mqtt_api.generic_publish(self.get_mqtt_inverter_topic() + 'free_capacity', self.get_free_capacity())
-            self.mqtt_api.generic_publish(self.get_mqtt_inverter_topic() + 'max_capacity', self.get_max_capacity())
+            topic = self.get_mqtt_inverter_topic()
+            self.mqtt_api.generic_publish(topic + 'SOC', self.get_SOC())
+            self.mqtt_api.generic_publish(topic + 'stored_energy', self.get_stored_energy())
+            self.mqtt_api.generic_publish(
+                topic + 'stored_usable_energy', self.get_stored_usable_energy())
+            self.mqtt_api.generic_publish(topic + 'free_capacity', self.get_free_capacity())
+            self.mqtt_api.generic_publish(topic + 'max_capacity', self.get_max_capacity())
 
     def publish_inverter_discovery_messages(self):
         """Publish Home Assistant MQTT Auto Discovery messages for common inverter sensors"""

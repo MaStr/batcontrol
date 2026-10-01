@@ -6,7 +6,8 @@ The following topics are published:
 - /status: online/offline status of batcontrol
 - /evaluation_intervall: interval in seconds
 - /last_evaluation: timestamp of last evaluation
-- /mode: operational mode (-1 = charge from grid, 0 = avoid discharge, 8 = limit battery charge, 10 = discharge allowed)
+- /mode: operational mode (-1 = charge from grid, 0 = avoid discharge,
+  8 = limit battery charge, 10 = discharge allowed)
 - /max_charging_from_grid_limit: charge limit in 0.1-1
 - /max_charging_from_grid_limit_percent: charge limit in %
 - /min_grid_charge_soc: configured optional minimum grid-charge target in 0.0-1.0
@@ -30,8 +31,10 @@ The following topics are published:
 - /control_source: source that last selected the current control state (api or optimizer)
 - /solar_surplus_wh: expected solar surplus energy in Wh (>0 means usable surplus available)
 - /solar_active: bool indicating whether solar is currently producing (slot 0 > 0)
-- /pv_start_battery_wh: battery level in Wh (above MIN_SOC) at the next net-charging point (when PV first exceeds consumption)
-- /forecast_min_battery_wh: minimum battery level in Wh (above MIN_SOC) over the entire forecast horizon (0 = shortage expected)
+- /pv_start_battery_wh: battery level in Wh (above MIN_SOC) at the next net-charging point
+  (when PV first exceeds consumption)
+- /forecast_min_battery_wh: minimum battery level in Wh (above MIN_SOC) over the entire
+  forecast horizon (0 = shortage expected)
 - /grid_charge_locked: bool indicating whether an external (e.g. HEMS/grid operator,
   section 14a EnWG) request is currently blocking charging from the grid
 
@@ -46,7 +49,8 @@ The Wh value is energy for that interval; power_w is the same quantity expressed
 as average power, so it stays comparable across both interval lengths.
 
 Implemented Input-API:
-- /mode/set: set mode (-1 = charge from grid, 0 = avoid discharge, 8 = limit battery charge, 10 = discharge allowed)
+- /mode/set: set mode (-1 = charge from grid, 0 = avoid discharge, 8 = limit battery charge,
+  10 = discharge allowed)
 - /charge_rate/set: set charge rate in W, sets mode to -1
 - /limit_battery_charge_rate/set: set dynamic battery charge rate limit in W
 - /always_allow_discharge_limit/set: set always discharge limit in 0.1-1
@@ -931,7 +935,9 @@ class MqttApi:
             None,
             self.base_topic +
             "/discharge_blocked",
-            value_template="{% if value | lower == 'true' %}blocked{% else %}not blocked{% endif %}")
+            value_template=(
+                "{% if value | lower == 'true' %}blocked"
+                "{% else %}not blocked{% endif %}"))
 
         self.publish_mqtt_discovery_message(
             "Reserved Energy Capacity",

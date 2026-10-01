@@ -49,7 +49,8 @@ class EvccSolar(ForecastSolarBaseclass):
         Baseclass handles conversion to hourly if needed.
     """
 
-    def __init__(self, pvinstallations, timezone, min_time_between_api_calls, api_delay, target_resolution=60):
+    def __init__(self, pvinstallations, timezone, min_time_between_api_calls,
+                 api_delay, target_resolution=60):
         """
         Initialize the EvccSolar instance.
 

@@ -94,7 +94,8 @@ class Batcontrol:
     def __init__(self, configdict: dict):
         # For API
         self.api_overwrite = False
-        # -1 = charge from grid , 0 = avoid discharge , 8 = limit battery charge, 10 = discharge allowed
+        # -1 = charge from grid, 0 = avoid discharge,
+        # 8 = limit battery charge, 10 = discharge allowed
         self.last_mode = None
         self.last_control_source = None
         self.last_charge_rate = 0

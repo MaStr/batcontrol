@@ -43,7 +43,8 @@ class ForecastSolar:
                                api_delay, target_resolution)
         elif requested_provider.lower() == 'homeassistant-solar-forecast-ml':
             # Parse HomeAssistant Solar Forecast ML configuration from pvinstallations
-            # Each installation can have type='homeassistant-solar-forecast-ml' with connection details
+            # Each installation can have type='homeassistant-solar-forecast-ml'
+            # with connection details
             provider = ForecastSolarHomeAssistantML(
                 pvinstallations=config,
                 timezone=timezone,

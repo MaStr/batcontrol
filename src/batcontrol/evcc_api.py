@@ -77,7 +77,8 @@ class EvccApi():
         self.evcc_is_charging = False
 
         self.evcc_loadpoint_status = {}
-        self.evcc_loadpoint_mode = {}       # topic_root -> mode string ("pv", "minpv", "smart", "now", "off")
+        # topic_root -> evcc mode string ("pv", "minpv", "smart", "now", "off")
+        self.evcc_loadpoint_mode = {}
         self.evcc_loadpoint_connected = {}  # topic_root -> bool
         self.list_topics_mode = []          # derived mode topics
         self.list_topics_connected = []     # derived connected topics

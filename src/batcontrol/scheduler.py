@@ -20,10 +20,11 @@ Implementation note:
     ``schedule.Scheduler`` instance and route all scheduling calls through it.
 """
 
-import threading
 import logging
-import schedule
+import threading
 from typing import Callable, Optional
+
+import schedule
 
 logger = logging.getLogger(__name__)
 

@@ -510,7 +510,8 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
 
                             if consumption < 0:
                                 logger.debug(
-                                    "Skipping negative consumption at %s: %.2f Wh", start_ts, consumption)
+                                    "Skipping negative consumption at %s: %.2f Wh",
+                                    start_ts, consumption)
                                 continue
 
                             key = (weekday, hour)
@@ -719,7 +720,8 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
 
                         if hourly_data > -1:
                             logger_ha_details.debug(
-                                "Fetched history data for %d days offset: %s", history_day, hourly_data)
+                                "Fetched history data for %d days offset: %s",
+                                history_day, hourly_data)
                             slot_results[history_day] = hourly_data
                         else:
                             logger_ha_details.warning(

@@ -1,12 +1,13 @@
 import logging
-import sys
 import os
-import yaml
+import sys
 from logging.handlers import RotatingFileHandler
+
+import yaml
 
 def setup_logging(level=logging.INFO, logfile=None, max_logfile_size_kb=200):
     """Configure root logger with consistent formatting.
-    
+
     Args:
         level (int): Log level to set for the root logger.
         logfile (str): If specified, log to this file as well as the console.
@@ -18,21 +19,21 @@ def setup_logging(level=logging.INFO, logfile=None, max_logfile_size_kb=200):
     # Create root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
-    
+
     # Clear existing handlers to avoid duplicates
     root_logger.handlers = []
-    
+
     # Create formatter with module name included
     formatter = logging.Formatter(
         "%(asctime)s %(levelname)s [%(name)s] %(message)s",
         "%Y-%m-%d %H:%M:%S"
     )
-    
+
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
-    
+
     # File handler if specified
     if logfile:
         if not os.path.exists(os.path.dirname(logfile)):
@@ -50,10 +51,10 @@ def load_config(configfile:str) -> dict:
 
     Args:
         configfile (str): Path to the config file
-    
+
     Returns:
         dict: The loaded configuration
-        
+
     Raises:
         RuntimeError: If the config file is not found or no PV installations are found
 
@@ -70,5 +71,5 @@ def load_config(configfile:str) -> dict:
         pass
     else:
         raise RuntimeError('No PV Installation found')
-    
+
     return config

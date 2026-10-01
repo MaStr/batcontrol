@@ -89,7 +89,8 @@ class ModbusTCPClient:
             )
         if len(resp) != byte_count + 2:
             raise RuntimeError(
-                f"Read response data length mismatch: expected {byte_count + 2} bytes, got {len(resp)}"
+                f"Read response data length mismatch: "
+                f"expected {byte_count + 2} bytes, got {len(resp)}"
             )
 
         return [
