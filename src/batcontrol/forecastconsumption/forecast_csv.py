@@ -45,28 +45,62 @@ class ForecastConsumptionCsv(ForecastConsumptionBaseclass):
             )
 
         self.path_to_load_profile = loadprofile
+        self.annual_consumption = annual_consumption
         if datafile:
             self.create_loadprofile(datafile, self.path_to_load_profile)
         self.load_loadprofile()
-        if annual_consumption > 0:
-            self.scaling_factor = self.calculate_scaling_factor(
-                annual_consumption)
+        self.scaling_factor = self._compute_scaling_factor(self.dataframe)
+
+    def _compute_scaling_factor(self, dataframe) -> float:
+        """Log and return the scaling factor for the given load profile."""
+        if self.annual_consumption > 0:
+            annual_consumption_load_profile = dataframe['energy'].sum(
+            ) * 8760 / 2016 / 1000
+            scaling_factor = self.annual_consumption / annual_consumption_load_profile
             logger.info(
                 "The hourly values from the load profile are scaled with a "
                 "factor of %.2f to match the annual consumption of %d kWh",
-                self.scaling_factor,
-                annual_consumption
+                scaling_factor,
+                self.annual_consumption
             )
-        else:
-            self.scaling_factor = 1
-            annual_consumption_load_profile = self.dataframe['energy'].sum(
-            ) * 8760 / 2016 / 1000
-            logger.info(
-                "The annual consumption of the applied load profile is %.2f kWh ",
-                annual_consumption_load_profile)
-            logger.info(
-                "You can specify your estimated annual consumption in the config file "
-                "under consumption_forecast:  annual_consumption ")
+            return scaling_factor
+        annual_consumption_load_profile = dataframe['energy'].sum(
+        ) * 8760 / 2016 / 1000
+        logger.info(
+            "The annual consumption of the applied load profile is %.2f kWh ",
+            annual_consumption_load_profile)
+        logger.info(
+            "You can specify your estimated annual consumption in the config file "
+            "under consumption_forecast:  annual_consumption ")
+        return 1
+
+    def reload_profile(self) -> bool:
+        """Re-read the load profile CSV from disk.
+
+        The new profile only replaces the active one if it can be read and
+        has the required columns; otherwise the old profile stays in use.
+
+        Returns:
+            True if the profile was reloaded, False otherwise.
+        """
+        try:
+            dataframe = pd.read_csv(self.path_to_load_profile)
+            missing = {'month', 'weekday', 'hour', 'energy'} - set(dataframe.columns)
+            if missing:
+                raise ValueError(f"missing columns {sorted(missing)}")
+            if dataframe.empty:
+                raise ValueError("load profile is empty")
+            scaling_factor = self._compute_scaling_factor(dataframe)
+        except Exception as err:  # pylint: disable=broad-exception-caught
+            logger.error(
+                "[ForecastCSV] Reloading load profile '%s' failed, keeping "
+                "previous profile: %s", self.path_to_load_profile, err)
+            return False
+        self.dataframe = dataframe
+        self.scaling_factor = scaling_factor
+        logger.info("[ForecastCSV] Reloaded load profile '%s'",
+                    self.path_to_load_profile)
+        return True
 
     def _get_forecast_native(self, hours: int) -> dict[int, float]:
         """Get hour-aligned forecast at native (60-minute) resolution.

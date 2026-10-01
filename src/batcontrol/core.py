@@ -479,6 +479,10 @@ class Batcontrol:
         except Exception as e:
             logger.error("Error during initial data fetch: %s", e)
 
+    def reload_load_profile(self) -> bool:
+        """ Re-read the consumption load profile file (triggered by SIGHUP) """
+        return self.fc_consumption.reload_profile()
+
     def shutdown(self):
         """ Shutdown Batcontrol and dependent modules (inverter..) """
         logger.info('Shutting down Batcontrol')
