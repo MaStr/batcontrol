@@ -8,7 +8,9 @@ inverter status changes (new mode, or a significant change of the charge rate /
 PV limit).
 
 This is the foundation for answering "why did batcontrol do this?" from the
-outside, for example from a chat bot or an MCP server.
+outside, for example from a chat bot or an MCP server. For what the Home
+Assistant "Decision" sensor itself looks like and how to read it, see
+[Understanding the Decision Sensor](../features/decision-sensor.md).
 
 ## Data model
 
@@ -16,7 +18,7 @@ Defined in `src/batcontrol/logic/decision_trace.py`.
 
 | Type | Purpose |
 |------|---------|
-| `DecisionRecord` | One step: `decision`, `outcome`, `reason`, `inputs`, `decisive` |
+| `DecisionRecord` | One step: `decision`, `outcome`, `reason`, `inputs`, `decisive`, `explanation()` |
 | `DecisionTrace` | Steps of one cycle plus timestamp. `decisive_record()` returns the step that determined the result |
 
 A step is *decisive* when it determines the control settings at the time it
@@ -49,6 +51,21 @@ force charge, PV limit of the limit mode, `null` for the other modes).
 
 Reason codes are part of the interface: consumers may match on them, so they are
 not renamed lightly.
+
+### Plain-language explanations
+
+`DecisionRecord.explanation()` renders one sentence for a reason code, meant
+for a human rather than the source code -- it is what ends up in the "Decision"
+sensor's state (`DecisionTrace.status_text()`) and as `why` in `to_dict()`
+(both on the record and, for the decisive step, on the trace itself). The
+mapping lives in `_REASON_EXPLANATIONS` (`decision_trace.py`): most entries
+are a plain string with `{input_key}` placeholders, filled in via
+`str.format(**record.inputs)` from the record's own inputs -- the same
+numbers already captured for the log line, so adding an explanation never
+needs a new input. A reason with no placeholders is used as-is. If filling
+in the placeholders fails (a key is missing, e.g. because a record was built
+before an explanation existed for its reason), `explanation()` falls back to
+a readable version of the reason code itself and never raises.
 
 ## Logging
 
@@ -137,4 +154,8 @@ attributes topic.
 3. Mark it `decisive=True` only if it determines the control settings.
 4. Add the unit of new numeric inputs to `_INPUT_FORMATS` in
    `decision_trace.py`, otherwise they are printed unformatted.
-5. Keep reason strings ASCII-only.
+5. Add a plain-language entry for a new reason to `_REASON_EXPLANATIONS`,
+   with `{input_key}` placeholders for the numbers that explain it (see
+   "Plain-language explanations" above). Without one, the Decision sensor
+   and `why` fall back to the raw reason code.
+6. Keep reason strings ASCII-only.

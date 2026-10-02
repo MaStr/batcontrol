@@ -74,6 +74,7 @@ plugins:
           - features/peak-shaving-scenarios.md: Worked example day for every peak shaving rule combination
           - features/battery-control-expert.md: Advanced tuning parameters
           - features/price-difference-calculation.md: How price thresholds are calculated
+          - features/decision-sensor.md: How to read the Home Assistant Decision sensor, with worked examples
         Integrations:
           - integrations/mqtt-api.md: MQTT state publishing, runtime overrides, and Home Assistant auto-discovery
           - integrations/mqtt-inverter.md: Integrating any battery system via MQTT bridge
@@ -101,6 +102,7 @@ nav:
       - Peak Shaving: features/peak-shaving.md
       - Peak Shaving Scenarios: features/peak-shaving-scenarios.md
       - Price Difference Calculation: features/price-difference-calculation.md
+      - Understanding the Decision Sensor: features/decision-sensor.md
   - Integrations:
       - MQTT API: integrations/mqtt-api.md
       - Forecast Metrics: integrations/forecast-metrics.md
