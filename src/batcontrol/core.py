@@ -508,6 +508,9 @@ class Batcontrol:
             if self.evcc_api is not None:
                 self.evcc_api.shutdown()
                 del self.evcc_api
+            if self.mqtt_api is not None:
+                self.mqtt_api.shutdown()
+                del self.mqtt_api
         except Exception as exc:
             logger.exception("Error during Batcontrol shutdown: %s", exc)
 
