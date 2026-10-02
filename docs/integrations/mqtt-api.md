@@ -24,6 +24,7 @@ mqtt:
 | `broker` | string | `localhost` | MQTT broker hostname or IP address |
 | `port` | integer | `1883` | MQTT broker port (1883 for unencrypted, 8883 for TLS) |
 | `topic` | string | `house/batcontrol` | Base topic for all batcontrol MQTT messages |
+| `client_id` | string | `batcontrol` | Optional unique client identifier for this instance; set it per deployment when several batcontrol instances share one broker |
 | `username` | string | `user` | MQTT broker username (if authentication required) |
 | `password` | string | `password` | MQTT broker password (if authentication required) |
 
