@@ -970,6 +970,7 @@ class Batcontrol:
             control_source=control_source,
             decided_by=decided_by.decision if decided_by else None,
             value=value)
+        trace.log_full_trace(logger)
         self.decision_journal.commit(trace, mode, control_source, value)
 
     def __set_mode(self, mode, control_source: str = CONTROL_SOURCE_OPTIMIZER,

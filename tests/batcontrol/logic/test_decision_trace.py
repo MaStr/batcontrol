@@ -165,6 +165,37 @@ class TestDecisionTrace:
 
         assert trace.records == [first, second]
 
+    def test_log_full_trace_logs_every_step_at_debug(self, caplog):
+        logger = logging.getLogger('test.decision_trace.full')
+        trace = DecisionTrace()
+        trace.add(_record(decision=Decision.DISCHARGE,
+                          outcome=Outcome.FORBIDDEN,
+                          reason=Reason.RESERVE_REQUIRED, inputs={}))
+        # added via step(), like peak shaving skips and core.py overrides:
+        # never logged individually, must still show up in the full dump.
+        trace.step(Decision.OVERRIDE, Outcome.APPLIED,
+                   Reason.EXTERNAL_DISCHARGE_BLOCK, decisive=True)
+
+        with caplog.at_level(logging.DEBUG, logger='test.decision_trace.full'):
+            trace.log_full_trace(logger)
+
+        assert len(caplog.records) == 1
+        message = caplog.records[0].getMessage()
+        assert caplog.records[0].levelno == logging.DEBUG
+        assert 'Decision trace (2 steps):' in message
+        assert '[Rule] Discharge decision: forbidden (RESERVE_REQUIRED)' in message
+        assert '[Rule] Override: applied (EXTERNAL_DISCHARGE_BLOCK)' in message
+
+    def test_log_full_trace_does_nothing_when_debug_is_disabled(self, caplog):
+        logger = logging.getLogger('test.decision_trace.full')
+        trace = DecisionTrace()
+        trace.add(_record())
+
+        with caplog.at_level(logging.INFO, logger='test.decision_trace.full'):
+            trace.log_full_trace(logger)
+
+        assert caplog.records == []
+
     def test_to_dict_contains_timestamp_and_decided_by(self):
         timestamp = datetime.datetime(2025, 6, 20, 12, 30,
                                       tzinfo=datetime.timezone.utc)

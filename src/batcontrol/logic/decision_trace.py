@@ -329,6 +329,19 @@ class DecisionTrace:
         """Append all steps of another trace."""
         self.records.extend(other.records)
 
+    def log_full_trace(self, log: logging.Logger) -> None:
+        """Log every step of this trace as one DEBUG block, e.g. with
+        ``loglevel: debug``. Independent of the per-step logging in
+        ``add()``: some steps (peak shaving/solar limit skips, core.py
+        overrides) are added via ``step()`` without a logger and are
+        otherwise never logged at all."""
+        if not log.isEnabledFor(logging.DEBUG):
+            return
+        log.debug(
+            'Decision trace (%d steps):\n%s',
+            len(self.records),
+            '\n'.join(record.summary() for record in self.records))
+
     def decisive_record(self) -> Optional[DecisionRecord]:
         """The last decisive step, i.e. the one that determined the outcome."""
         for record in reversed(self.records):

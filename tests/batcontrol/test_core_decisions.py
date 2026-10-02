@@ -117,6 +117,27 @@ class TestCoreDecisionJournal:
         assert trace.timestamp is not None
         assert bc._pending.trace is None  # pylint: disable=protected-access
 
+    def test_full_trace_is_logged_at_debug(self, setup, caplog):
+        bc, _inverter, _tariff, _consumption = setup
+
+        with caplog.at_level('DEBUG', logger='batcontrol.core'):
+            bc.run()
+
+        lines = [r.getMessage() for r in caplog.records
+                 if r.getMessage().startswith('Decision trace (')]
+        assert len(lines) == 1
+        assert '[Rule] Discharge decision:' in lines[0]
+        assert '[Rule] Mode decision:' in lines[0]
+
+    def test_full_trace_is_not_logged_above_debug(self, setup, caplog):
+        bc, _inverter, _tariff, _consumption = setup
+
+        with caplog.at_level('INFO', logger='batcontrol.core'):
+            bc.run()
+
+        assert not any(r.getMessage().startswith('Decision trace (')
+                       for r in caplog.records)
+
     def test_grid_charge_decision_reaches_the_journal(self, setup):
         bc, inverter, tariff, consumption = setup
         self._need_grid_charge(inverter, consumption, tariff)

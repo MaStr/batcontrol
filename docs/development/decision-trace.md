@@ -79,6 +79,20 @@ logic classes log decisive steps at `INFO` and all other steps at `DEBUG`:
 Peak shaving and solar limit keep their existing `[PeakShaving]` and
 `[SolarLimit]` log lines; their records are only added to the trace.
 
+Some steps are added via `trace.step(...)` without a logger (peak shaving /
+solar limit skips, core.py's overrides) and are never logged individually.
+`core.py` logs the **complete** trace of every control cycle as one
+`DEBUG`-level block once it is final (`DecisionTrace.log_full_trace()`), so
+`loglevel: debug` always shows every step, including those. This duplicates
+the per-step lines above; that's the point of a DEBUG dump.
+
+```
+DEBUG Decision trace (3 steps):
+[Rule] Discharge decision: forbidden (RESERVE_REQUIRED), ...
+[Rule] Grid recharge decision: charge (GRID_RECHARGE_REQUIRED), ...
+[Rule] Mode decision: force_charge (GRID_RECHARGE_REQUIRED), mode=-1, control_source=optimizer, decided_by=grid_recharge, value=2133
+```
+
 ## Journal and status change listeners
 
 Defined in `src/batcontrol/decision_journal.py`. `Batcontrol.decision_journal`
