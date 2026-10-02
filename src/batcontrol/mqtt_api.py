@@ -108,7 +108,7 @@ class MqttApi:
         self.base_topic = self.base_topic.rstrip('/')
         self.auto_discover_topic = self.auto_discover_topic.rstrip('/')
 
-        self.client = mqtt.Client()
+        self.client = mqtt.Client(client_id='batcontrol')
         if 'logger' in config and config['logger'] is True:
             self.client.enable_logger(logger)
 

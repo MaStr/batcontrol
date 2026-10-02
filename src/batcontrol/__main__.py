@@ -103,6 +103,11 @@ def main() -> int:
     if hasattr(signal, 'SIGHUP'):
         signal.signal(signal.SIGHUP, _on_sighup)
 
+    def _on_sigterm(_signum, _frame):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, _on_sigterm)
+
     try:
         while True:
             if reload_requested.is_set():
