@@ -591,6 +591,22 @@ class TestPublishStatusChange:
             'batcontrol/decision/attributes'
         assert 'Failed to publish decision attributes' in caplog.text
 
+    def test_warns_when_the_text_publish_itself_fails(self, caplog):
+        """The attributes already went out at that point and cannot be
+        un-published; a warning is the best that can be done so the
+        mismatch is visible instead of silent."""
+        api = _make_publish_stub()
+        api.client.publish.side_effect = [
+            MagicMock(rc=mqtt.MQTT_ERR_SUCCESS),   # attributes
+            MagicMock(rc=mqtt.MQTT_ERR_QUEUE_SIZE),  # text
+        ]
+
+        with caplog.at_level('WARNING'):
+            api.publish_status_change(self._event())
+
+        assert api.client.publish.call_count == 2
+        assert 'Failed to publish decision text' in caplog.text
+
     def test_discovery_offers_decision_sensor_with_attributes(self):
         api = _make_discovery_stub()
 

@@ -144,7 +144,9 @@ is published again in every evaluation, like the mode, so an event that
 happened while the broker was unreachable reaches the sensor afterwards.
 The attributes are published first, and the text only if that publish's
 return code reports success, so the text topic never advances ahead of the
-attributes topic.
+attributes topic. The return code of the text publish is checked too; if
+it fails, the mismatch (attributes ahead of text) cannot be undone at that
+point, so it is only logged as a warning.
 
 ## Adding a decision step
 

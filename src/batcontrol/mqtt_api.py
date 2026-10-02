@@ -689,11 +689,20 @@ class MqttApi:
                 'Failed to publish decision attributes (rc=%s), '
                 'Decision sensor not updated', info.rc)
             return
-        self.client.publish(
+        text_info = self.client.publish(
             self._topic(TOPIC_DECISION),
             event.trace.status_text(),
             retain=True
         )
+        if text_info.rc != mqtt.MQTT_ERR_SUCCESS:
+            # The attributes are already published at this point; logging
+            # is the best we can do without retrying, so the mismatch is at
+            # least visible instead of silently leaving the two topics out
+            # of sync.
+            logger.warning(
+                'Failed to publish decision text (rc=%s); attributes were '
+                'already published and are now ahead of the retained state',
+                text_info.rc)
 
     def publish_peak_shaving_enabled(self, enabled: bool) -> None:
         """ Publish peak shaving enabled status to MQTT
