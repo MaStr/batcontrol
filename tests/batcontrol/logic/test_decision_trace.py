@@ -66,6 +66,7 @@ class TestDecisionRecord:
             'decision': 'grid_recharge',
             'outcome': 'charge',
             'reason': 'GRID_RECHARGE_REQUIRED',
+            'why': 'Grid recharge required',
             'decisive': False,
             'inputs': {'stored_energy': 2000.0, 'slots': 3},
         }
@@ -182,14 +183,17 @@ class TestDecisionTrace:
 
 
 class TestStatusText:
-    """The mode with its value and reason as one string."""
+    """The mode with its value and the decisive step's explanation as one
+    string. The explanation comes from the decisive record (which carries
+    the numbers), not from the mode record itself (see TestExplanation for
+    the explanation() mechanism in isolation)."""
 
     @staticmethod
-    def _trace(outcome, reason, **inputs):
+    def _trace(outcome, reason, decisive_inputs=None, **mode_inputs):
         trace = DecisionTrace()
         trace.add(DecisionRecord(Decision.GRID_RECHARGE, Outcome.CHARGE,
-                                 Reason.GRID_RECHARGE_REQUIRED, decisive=True))
-        trace.add(DecisionRecord(Decision.MODE, outcome, reason, inputs))
+                                 reason, decisive_inputs or {}, decisive=True))
+        trace.add(DecisionRecord(Decision.MODE, outcome, reason, mode_inputs))
         return trace
 
     def test_force_charge_with_rate(self):
@@ -198,6 +202,19 @@ class TestStatusText:
 
         assert trace.status_text() == \
             'Charge from Grid 1250 W - Grid recharge required'
+
+    def test_explains_the_numbers_behind_a_grid_recharge(self):
+        trace = self._trace(
+            'force_charge', Reason.GRID_RECHARGE_REQUIRED,
+            decisive_inputs={'stored_usable_energy': 900.0,
+                             'reserved_energy': 2500.0,
+                             'recharge_energy': 1600.0},
+            value=2133)
+
+        assert trace.status_text() == (
+            'Charge from Grid 2133 W - usable energy (900 Wh) is below the '
+            '2500 Wh reserved for upcoming expensive hours, so 1600 Wh is '
+            'charged from the grid')
 
     def test_limit_mode_with_pv_limit(self):
         trace = self._trace('limit_battery_charge_rate',
@@ -218,21 +235,31 @@ class TestStatusText:
         ('allow_discharging', 'Discharge Allowed'),
         ('avoid_discharging', 'Avoid Discharge'),
     ])
-    def test_modes_without_value(self, outcome, label):
+    def test_static_explanation_replaces_the_raw_reason_code(
+            self, outcome, label):
         trace = self._trace(outcome, Reason.NO_RECHARGE_REQUIRED)
 
-        assert trace.status_text() == f'{label} - No recharge required'
+        assert trace.status_text() == (
+            f'{label} - stored energy is sufficient until prices rise '
+            'again, so no grid charging is needed')
 
-    @pytest.mark.parametrize('reason, text', [
-        (Reason.GRID_RECHARGE_REQUIRED, 'Grid recharge required'),
-        (Reason.NO_PV_PRODUCTION, 'No PV production'),
-        (Reason.EVCC_EV_EXPECTS_PV_SURPLUS, 'EVCC EV expects PV surplus'),
-        (Reason.API_REQUEST, 'API request'),
-    ])
-    def test_reason_is_readable_and_keeps_acronyms(self, reason, text):
-        trace = self._trace('avoid_discharging', reason)
+    def test_falls_back_to_the_reason_code_when_inputs_are_missing(self):
+        """A data-driven explanation whose inputs are not on the decisive
+        record must degrade to the readable reason code, not raise."""
+        trace = self._trace('force_charge', Reason.GRID_RECHARGE_REQUIRED,
+                            value=1)
 
-        assert trace.status_text() == f'Avoid Discharge - {text}'
+        assert trace.status_text() == 'Charge from Grid 1 W - Grid recharge required'
+
+    def test_static_explanation_ignores_extra_inputs(self):
+        """API_REQUEST has no placeholders; a record with extra inputs
+        (e.g. requested_mode, present only when a mode request fell back
+        to a different one) must still render the plain static text."""
+        trace = self._trace('avoid_discharging', Reason.API_REQUEST,
+                            decisive_inputs={'requested_mode': 8})
+
+        assert trace.status_text() == (
+            'Avoid Discharge - requested via the API or Home Assistant')
 
     def test_empty_without_mode_record(self):
         trace = DecisionTrace()
@@ -255,3 +282,65 @@ class TestStatusText:
             trace = self._trace('limit_battery_charge_rate', reason,
                                 value=123456)
             assert len(trace.status_text()) <= 255
+
+
+class TestExplanation:
+    """DecisionRecord.explanation(): the plain language "why" behind a
+    reason code, used by status_text() and exposed as to_dict()['why']."""
+
+    def test_data_driven_explanation_uses_the_record_s_inputs(self):
+        record = _record(
+            reason=Reason.RESERVE_REQUIRED,
+            inputs={'stored_usable_energy': 900.0, 'reserved_energy': 2500.0})
+
+        assert record.explanation() == (
+            'usable energy (900 Wh) is below the 2500 Wh reserved for '
+            'upcoming expensive hours')
+
+    def test_format_spec_turns_a_ratio_into_a_percentage(self):
+        record = _record(
+            reason=Reason.ALWAYS_ALLOW_DISCHARGE_LIMIT,
+            inputs={'stored_energy': 8200.0, 'always_allow_discharge_limit': 0.8})
+
+        assert record.explanation() == (
+            'stored energy (8200 Wh) is above the always-allow-discharge '
+            'level (80% of capacity)')
+
+    def test_static_explanation_ignores_inputs(self):
+        record = _record(reason=Reason.NO_PV_PRODUCTION, inputs={})
+
+        assert record.explanation() == 'there is currently no solar production'
+
+    def test_falls_back_to_reason_code_on_missing_input(self, caplog):
+        """A record built before an explanation existed for its reason, or
+        one missing an expected key, must not raise -- only degrade."""
+        record = _record(reason=Reason.GRID_RECHARGE_REQUIRED, inputs={})
+
+        with caplog.at_level(logging.DEBUG):
+            explanation = record.explanation()
+
+        assert explanation == 'Grid recharge required'
+        assert 'No explanation' in caplog.text
+
+    def test_unknown_reason_falls_back_to_reason_code(self):
+        record = _record(reason='SOME_FUTURE_REASON', inputs={})
+
+        assert record.explanation() == 'Some future reason'
+
+    def test_is_included_in_to_dict(self):
+        record = _record(reason=Reason.NO_PV_PRODUCTION, inputs={})
+
+        assert record.to_dict()['why'] == 'there is currently no solar production'
+
+    def test_trace_to_dict_exposes_the_decisive_step_s_why(self):
+        trace = DecisionTrace()
+        trace.add(_record(reason=Reason.NO_PV_PRODUCTION, inputs={},
+                          decisive=True))
+
+        assert trace.to_dict()['why'] == 'there is currently no solar production'
+
+    def test_trace_to_dict_why_is_none_without_a_decisive_step(self):
+        trace = DecisionTrace()
+        trace.add(_record(decisive=False))
+
+        assert trace.to_dict()['why'] is None

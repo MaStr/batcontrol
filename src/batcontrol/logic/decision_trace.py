@@ -21,6 +21,8 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
+logger = logging.getLogger(__name__)
+
 
 class Decision:
     """Identifiers of the decision steps a control cycle can go through."""
@@ -154,6 +156,96 @@ def _format_input(key: str, value: Any) -> str:
     return f'{key}={rendered}'
 
 
+def _reason_text(reason: str) -> str:
+    """GRID_RECHARGE_REQUIRED -> Grid recharge required.
+
+    Used as the fallback explanation for a reason code that has no entry
+    in ``_REASON_EXPLANATIONS``, or whose explanation could not be built
+    from the record's inputs (see :meth:`DecisionRecord.explanation`).
+    """
+    words = [word if word in _ACRONYMS else word.lower()
+             for word in reason.split('_')]
+    if words[0] not in _ACRONYMS:
+        words[0] = words[0].capitalize()
+    return ' '.join(words)
+
+
+# One-sentence, plain-language explanation per reason code, for a human
+# reading the Home Assistant "Decision" sensor or the trace JSON rather than
+# the source code. Entries with ``{placeholder}`` fields are filled in by
+# ``str.format(**self.inputs)`` from the record's own inputs -- the same
+# numbers already captured for the log line, so no extra data is needed.
+# ``:.0%`` turns a 0..1 ratio into a percentage, same as elsewhere in the
+# format mini-language. A static string (no placeholders) is used as-is.
+# See :meth:`DecisionRecord.explanation`.
+_REASON_EXPLANATIONS = {
+    Reason.ALWAYS_ALLOW_DISCHARGE_LIMIT:
+        'stored energy ({stored_energy:.0f} Wh) is above the '
+        'always-allow-discharge level ({always_allow_discharge_limit:.0%} '
+        'of capacity)',
+    Reason.USABLE_ENERGY_EXCEEDS_RESERVE:
+        'usable energy ({stored_usable_energy:.0f} Wh) exceeds the '
+        '{reserved_energy:.0f} Wh reserved for upcoming expensive hours',
+    Reason.RESERVE_REQUIRED:
+        'usable energy ({stored_usable_energy:.0f} Wh) is below the '
+        '{reserved_energy:.0f} Wh reserved for upcoming expensive hours',
+    Reason.GRID_RECHARGE_REQUIRED:
+        'usable energy ({stored_usable_energy:.0f} Wh) is below the '
+        '{reserved_energy:.0f} Wh reserved for upcoming expensive hours, '
+        'so {recharge_energy:.0f} Wh is charged from the grid',
+    Reason.GRID_CHARGE_LIMIT_REACHED:
+        'stored energy ({stored_energy:.0f} Wh) is already at or above '
+        'the {charge_limit_capacity:.0f} Wh grid-charging limit',
+    Reason.NO_RECHARGE_REQUIRED:
+        'stored energy is sufficient until prices rise again, '
+        'so no grid charging is needed',
+    Reason.PV_CHARGE_LIMITED:
+        'PV charging is capped at {final_limit_w} W ({active_components}) '
+        'so the battery does not fill up before {allow_full_battery_after}:00',
+    # final_limit_w is only ever None when this rule did not set a limit,
+    # i.e. for a different reason (NO_LIMIT_NEEDED) than this one.
+    Reason.CLIP_ABSORPTION_LIMIT:
+        'the battery charges at {final_limit_w} W to absorb solar surplus '
+        'that would otherwise be clipped at the {feed_in_limit_w:.0f} W '
+        'feed-in limit',
+    Reason.NO_LIMIT_NEEDED: 'no PV-charge limit is needed right now',
+    Reason.NO_CLIP_PREDICTED:
+        'no clipping is predicted at the {feed_in_limit_w:.0f} W feed-in '
+        'limit, so PV charging is not limited',
+    Reason.PRICE_LIMIT_MISSING:
+        'the price-based peak-shaving limit has no price_limit configured, '
+        'so it has no effect',
+    Reason.NO_PV_PRODUCTION: 'there is currently no solar production',
+    Reason.PAST_FULL_BATTERY_HOUR:
+        'it is past the {allow_full_battery_after}:00 target hour, '
+        'so peak shaving no longer limits charging',
+    Reason.ALWAYS_ALLOW_DISCHARGE_REGION:
+        'the battery is already above the always-allow-discharge level, '
+        'so this rule is skipped',
+    Reason.FORCE_CHARGE_ACTIVE:
+        'grid charging (mode -1) is active and takes priority over this rule',
+    Reason.DISCHARGE_NOT_ALLOWED:
+        'the battery is preserved for high-price hours, so this rule has no effect',
+    Reason.EVCC_CHARGING: 'evcc is actively charging the car, so peak shaving is paused',
+    Reason.EVCC_EV_EXPECTS_PV_SURPLUS:
+        'an EV is connected in solar-surplus mode, so peak shaving is paused',
+    Reason.EXTERNAL_DISCHARGE_BLOCK:
+        'an external system (such as evcc) requested that the battery not discharge',
+    Reason.EXTERNAL_DISCHARGE_UNBLOCK:
+        'the external discharge block was lifted; the next evaluation decides what to do',
+    Reason.GRID_CHARGE_LOCK:
+        'an external request (e.g. a grid operator signal) is blocking '
+        'charging from the grid',
+    Reason.FORECAST_ERROR_FALLBACK:
+        'forecast data could not be refreshed for {seconds_since_error} '
+        'seconds, falling back to a safe mode',
+    Reason.CALCULATION_FAILED:
+        'the control calculation failed; falling back to a safe mode',
+    Reason.API_REQUEST: 'requested via the API or Home Assistant',
+    Reason.UNSPECIFIED: 'no specific reason was recorded for this change',
+}
+
+
 @dataclass(frozen=True)
 class DecisionRecord:
     """One decision step of a control cycle.
@@ -178,12 +270,32 @@ class DecisionRecord:
                 _format_input(key, value) for key, value in self.inputs.items())
         return text
 
+    def explanation(self) -> str:
+        """One sentence, plain language explanation of this step, for a
+        human reading the HA sensor or the trace JSON rather than the
+        source code. Fills the ``{placeholder}`` fields of the template
+        for this record's reason code (see ``_REASON_EXPLANATIONS``) from
+        its own inputs; falls back to a readable version of the reason
+        code itself if there is no template, or if filling it in fails
+        (e.g. an expected input is missing -- this must never raise into
+        a log line or the MQTT publish)."""
+        template = _REASON_EXPLANATIONS.get(self.reason)
+        if template is not None:
+            try:
+                return template.format(**self.inputs)
+            except (KeyError, IndexError, ValueError):
+                logger.debug(
+                    'No explanation for reason %s from inputs %s',
+                    self.reason, self.inputs, exc_info=True)
+        return _reason_text(self.reason)
+
     def to_dict(self) -> Dict[str, Any]:
         """JSON friendly representation."""
         return {
             'decision': self.decision,
             'outcome': self.outcome,
             'reason': self.reason,
+            'why': self.explanation(),
             'decisive': self.decisive,
             'inputs': {key: plain_value(value) for key, value in self.inputs.items()},
         }
@@ -223,8 +335,10 @@ class DecisionTrace:
         return None
 
     def status_text(self) -> str:
-        """The resulting mode with its value and the reason as one string,
-        e.g. ``Charge from Grid 1250 W - Grid recharge required``.
+        """The resulting mode with its value and a plain language
+        explanation as one string, e.g. ``Charge from Grid 1250 W - usable
+        energy (900 Wh) is below the 2500 Wh reserved for upcoming
+        expensive hours, so 1600 Wh is charged from the grid``.
         Empty if the trace has no mode record yet."""
         mode = next((r for r in reversed(self.records)
                      if r.decision == Decision.MODE), None)
@@ -234,16 +348,13 @@ class DecisionTrace:
         value = mode.inputs.get('value')
         if value is not None:
             text += f' {int(value)} W'
-        return text + ' - ' + self._reason_text(mode.reason)
-
-    @staticmethod
-    def _reason_text(reason: str) -> str:
-        """GRID_RECHARGE_REQUIRED -> Grid recharge required"""
-        words = [word if word in _ACRONYMS else word.lower()
-                 for word in reason.split('_')]
-        if words[0] not in _ACRONYMS:
-            words[0] = words[0].capitalize()
-        return ' '.join(words)
+        # The mode record's own inputs do not carry the numbers behind the
+        # decision (those live on the decisive step); use that step's
+        # explanation, falling back to the reason code if there is none.
+        decisive = self.decisive_record()
+        explanation = decisive.explanation() if decisive is not None \
+            else _reason_text(mode.reason)
+        return f'{text} - {explanation}'
 
     def to_dict(self) -> Dict[str, Any]:
         """JSON friendly representation."""
@@ -256,5 +367,6 @@ class DecisionTrace:
                  'outcome': decisive.outcome,
                  'reason': decisive.reason}
                 if decisive is not None else None),
+            'why': decisive.explanation() if decisive is not None else None,
             'records': [record.to_dict() for record in self.records],
         }
