@@ -285,7 +285,7 @@ class DecisionRecord:
         if template is not None:
             try:
                 return template.format(**self.inputs)
-            except (KeyError, IndexError, ValueError):
+            except (KeyError, IndexError, ValueError, TypeError):
                 logger.debug(
                     'No explanation for reason %s from inputs %s',
                     self.reason, self.inputs, exc_info=True)

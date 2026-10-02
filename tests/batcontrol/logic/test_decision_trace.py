@@ -353,6 +353,16 @@ class TestExplanation:
         assert explanation == 'Grid recharge required'
         assert 'No explanation' in caplog.text
 
+    def test_falls_back_to_reason_code_on_none_input_with_numeric_spec(self):
+        """Copilot review on PR #429: a numeric format spec (e.g. ':.0f')
+        raises TypeError, not KeyError/ValueError, when the input is None.
+        explanation() must still degrade, not raise."""
+        record = _record(reason=Reason.GRID_CHARGE_LIMIT_REACHED,
+                         inputs={'stored_energy': None,
+                                 'charge_limit_capacity': None})
+
+        assert record.explanation() == 'Grid charge limit reached'
+
     def test_unknown_reason_falls_back_to_reason_code(self):
         record = _record(reason='SOME_FUTURE_REASON', inputs={})
 
