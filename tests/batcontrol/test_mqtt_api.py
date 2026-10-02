@@ -4,6 +4,7 @@ import json
 from unittest.mock import MagicMock, call, patch
 
 import numpy as np
+import paho.mqtt.client as mqtt
 import pytest
 
 from batcontrol.core import Batcontrol
@@ -60,6 +61,7 @@ def _make_publish_stub():
     api.base_topic = 'batcontrol'
     api.client = MagicMock()
     api.client.is_connected.return_value = True
+    api.client.publish.return_value.rc = mqtt.MQTT_ERR_SUCCESS
     api._topic = MqttApi._topic.__get__(api, MqttApi)
     api.publish_SOC = MqttApi.publish_SOC.__get__(api, MqttApi)
     api.publish_discharge_blocked = (
@@ -574,6 +576,20 @@ class TestPublishStatusChange:
         api.publish_status_change(self._event())
 
         api.client.publish.assert_not_called()
+
+    def test_text_is_not_published_if_attributes_publish_fails(self, caplog):
+        """A broker-level publish failure (e.g. queue full) must not let the
+        text topic advance ahead of the attributes topic."""
+        api = _make_publish_stub()
+        api.client.publish.return_value.rc = mqtt.MQTT_ERR_QUEUE_SIZE
+
+        with caplog.at_level('WARNING'):
+            api.publish_status_change(self._event())
+
+        assert api.client.publish.call_count == 1
+        assert api.client.publish.call_args.args[0] == \
+            'batcontrol/decision/attributes'
+        assert 'Failed to publish decision attributes' in caplog.text
 
     def test_discovery_offers_decision_sensor_with_attributes(self):
         api = _make_discovery_stub()

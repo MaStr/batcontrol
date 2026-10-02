@@ -125,6 +125,9 @@ them as the **Decision** sensor, with the JSON as attributes. The content
 changes on status changes only, not on every evaluation. The last status change
 is published again in every evaluation, like the mode, so an event that
 happened while the broker was unreachable reaches the sensor afterwards.
+The attributes are published first, and the text only if that publish's
+return code reports success, so the text topic never advances ahead of the
+attributes topic.
 
 ## Adding a decision step
 

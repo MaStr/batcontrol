@@ -677,11 +677,18 @@ class MqttApi:
                 'Decision attributes are not JSON serializable, '
                 'Decision sensor not updated')
             return
-        self.client.publish(
+        # Only publish the text once the attributes are queued successfully,
+        # so the text topic never advances ahead of the attributes.
+        info = self.client.publish(
             self._topic(TOPIC_DECISION_ATTRIBUTES),
             attributes,
             retain=True
         )
+        if info.rc != mqtt.MQTT_ERR_SUCCESS:
+            logger.warning(
+                'Failed to publish decision attributes (rc=%s), '
+                'Decision sensor not updated', info.rc)
+            return
         self.client.publish(
             self._topic(TOPIC_DECISION),
             event.trace.status_text(),
