@@ -749,3 +749,34 @@ class TestPublishSolarActive:
         api.client.is_connected.return_value = False
         api.publish_solar_active(True)
         api.client.publish.assert_not_called()
+
+
+class TestShutdown:
+    """MqttApi.shutdown() must publish offline and disconnect cleanly."""
+
+    def _make_stub(self, connected: bool = True):
+        api = MagicMock(spec=MqttApi)
+        api.base_topic = 'batcontrol'
+        api.client = MagicMock()
+        api.client.is_connected.return_value = connected
+        api.shutdown = MqttApi.shutdown.__get__(api, MqttApi)
+        return api
+
+    def test_publishes_offline_when_connected(self):
+        api = self._make_stub(connected=True)
+        api.shutdown()
+        api.client.publish.assert_called_once_with(
+            'batcontrol/status', 'offline', retain=True
+        )
+
+    def test_calls_disconnect_when_connected(self):
+        api = self._make_stub(connected=True)
+        api.shutdown()
+        api.client.disconnect.assert_called_once()
+
+    def test_calls_loop_stop_always(self):
+        api = self._make_stub(connected=False)
+        api.shutdown()
+        api.client.loop_stop.assert_called_once()
+        api.client.publish.assert_not_called()
+        api.client.disconnect.assert_not_called()

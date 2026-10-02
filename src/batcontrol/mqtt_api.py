@@ -712,6 +712,14 @@ class MqttApi:
 
     # For depended APIs like the Fronius Inverter classes, which is not
     # directly batcontrol.
+    def shutdown(self) -> None:
+        """Publish offline status and cleanly disconnect from the broker."""
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/status', 'offline', retain=True)
+            self.client.disconnect()
+        self.client.loop_stop()
+
     def generic_publish(self, topic: str, value: str) -> None:
         """ Publish a generic value to a topic
             For depended APIs like the Fronius Inverter classes, which is not directly batcontrol.
