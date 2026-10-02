@@ -107,8 +107,17 @@ class MqttApi:
         # Remove trailing slashes if present to avoid double slashes in topics
         self.base_topic = self.base_topic.rstrip('/')
         self.auto_discover_topic = self.auto_discover_topic.rstrip('/')
+        if 'client_id' in config:
+            client_id = config['client_id']
+            if client_id is None:
+                raise ValueError('mqtt: client_id must not be null when configured')
+            client_id = str(client_id).strip()
+            if not client_id:
+                raise ValueError('mqtt: client_id must be a non-empty string when configured')
+        else:
+            client_id = 'batcontrol'
 
-        self.client = mqtt.Client(client_id='batcontrol')
+        self.client = mqtt.Client(client_id=client_id)
         if 'logger' in config and config['logger'] is True:
             self.client.enable_logger(logger)
 
@@ -710,16 +719,17 @@ class MqttApi:
                 retain=True
             )
 
-    # For depended APIs like the Fronius Inverter classes, which is not
-    # directly batcontrol.
     def shutdown(self) -> None:
         """Publish offline status and cleanly disconnect from the broker."""
         if self.client.is_connected():
             self.client.publish(
                 self.base_topic + '/status', 'offline', retain=True)
+            time.sleep(0.1)
             self.client.disconnect()
         self.client.loop_stop()
 
+    # For depended APIs like the Fronius Inverter classes, which is not
+    # directly batcontrol.
     def generic_publish(self, topic: str, value: str) -> None:
         """ Publish a generic value to a topic
             For depended APIs like the Fronius Inverter classes, which is not directly batcontrol.

@@ -31,6 +31,67 @@ def _make_message(topic: str, payload):
     return msg
 
 
+class TestClientIdConfig:
+    """The MQTT client ID should default to batcontrol but be user-overridable."""
+
+    def test_defaults_to_batcontrol(self):
+        config = {
+            'broker': 'localhost',
+            'port': 1883,
+            'topic': 'house/batcontrol',
+            'auto_discover_enable': False,
+            'tls': False,
+        }
+
+        with patch('batcontrol.mqtt_api.mqtt.Client') as mock_client:
+            mock_client.return_value.is_connected.return_value = False
+            MqttApi(config)
+
+        mock_client.assert_called_once_with(client_id='batcontrol')
+
+    def test_uses_configured_client_id(self):
+        config = {
+            'broker': 'localhost',
+            'port': 1883,
+            'topic': 'house/batcontrol',
+            'client_id': 'house-batcontrol-1',
+            'auto_discover_enable': False,
+            'tls': False,
+        }
+
+        with patch('batcontrol.mqtt_api.mqtt.Client') as mock_client:
+            mock_client.return_value.is_connected.return_value = False
+            MqttApi(config)
+
+        mock_client.assert_called_once_with(client_id='house-batcontrol-1')
+
+    def test_rejects_empty_client_id(self):
+        config = {
+            'broker': 'localhost',
+            'port': 1883,
+            'topic': 'house/batcontrol',
+            'client_id': '',
+            'auto_discover_enable': False,
+            'tls': False,
+        }
+
+        with pytest.raises(ValueError, match='client_id'):
+            MqttApi(config)
+
+    def test_rejects_whitespace_only_client_id(self):
+        config = {
+            'broker': 'localhost',
+            'port': 1883,
+            'topic': 'house/batcontrol',
+            'client_id': '   ',
+            'auto_discover_enable': False,
+            'tls': False,
+        }
+
+        with pytest.raises(ValueError, match='client_id'):
+            MqttApi(config)
+
+
 def _make_discovery_stub():
     """Return a minimal stub for discovery helper tests."""
     api = MagicMock(spec=MqttApi)

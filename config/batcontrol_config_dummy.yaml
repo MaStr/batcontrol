@@ -231,6 +231,7 @@ mqtt:
   broker: localhost
   port: 1883
   topic: house/batcontrol
+  client_id: batcontrol # optional, default: batcontrol
   username: user
   password: password
   retry_attempts: 5 # optional, default: 5
