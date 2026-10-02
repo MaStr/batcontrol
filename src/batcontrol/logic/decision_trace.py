@@ -115,6 +115,7 @@ _ENERGY = '%0.1f Wh'
 _POWER = '%d W'
 _INPUT_FORMATS = {
     'current_price': _PRICE,
+    'cheaper_price': _PRICE,
     'min_dynamic_price_difference': _PRICE,
     'always_allow_discharge_limit': '%.2f',
     'stored_energy': _ENERGY,
@@ -123,6 +124,7 @@ _INPUT_FORMATS = {
     'requested_recharge_energy': _ENERGY,
     'required_recharge_energy': _ENERGY,
     'recharge_energy': _ENERGY,
+    'high_price_energy_demand': _ENERGY,
     'available_grid_charge_capacity': _ENERGY,
     'charge_limit_capacity': _ENERGY,
     'remaining_time': '%0.2f h',

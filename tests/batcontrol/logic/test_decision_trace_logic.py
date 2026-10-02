@@ -83,6 +83,13 @@ class TestSharedDecisionSteps:
         assert recharge.inputs['stored_energy'] == 2000
         assert recharge.inputs['charge_rate'] == settings.charge_rate
         assert discharge.inputs['reserved_energy'] > discharge.inputs['stored_usable_energy']
+        # high_price_slots/recharge_window_end are relative slot indices, not
+        # clock times -- ported from the removed "[Rule] Required Energy ..."/
+        # "[Rule] Evaluation window ..." debug lines, see __get_required_recharge_energy.
+        assert recharge.inputs['high_price_slots'] == [1, 2]
+        assert recharge.inputs['high_price_energy_demand'] == 3500
+        assert recharge.inputs['recharge_window_end'] == 3
+        assert recharge.inputs['interval_minutes'] == 60
 
     def test_grid_recharge_is_logged_at_info(self, logic_cls, caplog):
         logic = _logic(logic_cls)
@@ -132,6 +139,10 @@ class TestSharedDecisionSteps:
         discharge = logic.get_decision_trace().records[0]
         assert discharge.inputs['cheaper_price_slot'] == 1
         assert discharge.inputs['evaluation_slots'] == 1
+        # cheaper_price is the price found at cheaper_price_slot, ported
+        # from the removed "[Rule] Future price: ..." debug line.
+        assert discharge.inputs['cheaper_price'] == 0.10
+        assert discharge.inputs['interval_minutes'] == 60
 
     def test_no_recharge_required_keeps_battery(self, logic_cls):
         logic = _logic(logic_cls)

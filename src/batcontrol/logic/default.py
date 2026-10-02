@@ -1,6 +1,6 @@
 import datetime
 import logging
-from typing import Optional
+from typing import Optional, List, Tuple
 
 import numpy as np
 
@@ -147,13 +147,18 @@ class DefaultLogic(LogicInterface):
 
             # Defaults to 0, only calculate if charging is possible
             required_recharge_energy = 0
+            high_price_slots: List[int] = []
+            high_price_energy_demand = 0.0
+            window_end_slot = 0
 
             logger.debug('Charging allowed: %s', is_charging_possible)
             if is_charging_possible:
                 logger.debug('Charging is allowed, because SOC is below %.0f%%',
                              charging_limit_percent
                              )
-                required_recharge_energy = self.__get_required_recharge_energy(
+                (required_recharge_energy, high_price_slots,
+                 high_price_energy_demand, window_end_slot
+                 ) = self.__get_required_recharge_energy(
                     calc_input,
                     net_consumption[:max_slot],
                     prices
@@ -224,7 +229,11 @@ class DefaultLogic(LogicInterface):
                     recharge_energy=required_recharge_energy,
                     allowed_charging_energy=allowed_charging_energy,
                     remaining_time=remaining_time,
-                    charge_rate=charge_rate), logger)
+                    charge_rate=charge_rate,
+                    high_price_slots=high_price_slots,
+                    high_price_energy_demand=high_price_energy_demand,
+                    recharge_window_end=window_end_slot,
+                    interval_minutes=self.interval_minutes), logger)
 
                 #self.force_charge(charge_rate)
                 inverter_control_settings.charge_from_grid = True
@@ -270,37 +279,15 @@ class DefaultLogic(LogicInterface):
 
         max_slots = len(net_consumption)
         cheaper_price_slot = None
+        cheaper_price = None
         # relevant time range : until next recharge possibility
         for slot in range(1, max_slots):
             future_price = prices[slot]
             if future_price <= current_price-min_dynamic_price_difference:
                 max_slots = slot
                 cheaper_price_slot = slot
-                logger.debug(
-                    "[Rule] Recharge possible in %d slots, limiting evaluation window.",
-                    slot)
-                logger.debug(
-                    "[Rule] Future price: %.3f < Current price: %.3f - dyn_price_diff. %.3f ",
-                    future_price,
-                    current_price,
-                    min_dynamic_price_difference
-                )
+                cheaper_price = future_price
                 break
-
-        slot_start = calc_timestamp.replace(
-            minute=(calc_timestamp.minute // self.interval_minutes) * self.interval_minutes,
-            second=0,
-            microsecond=0
-        )
-        last_time = (slot_start + datetime.timedelta(
-            minutes=max_slots * self.interval_minutes
-        )).astimezone(self.timezone).strftime("%H:%M")
-
-        logger.debug(
-            'Evaluating next %d slots until %s',
-            max_slots,
-            last_time
-        )
         # distribute remaining energy
         consumption = np.array(net_consumption)
         consumption[consumption < 0] = 0
@@ -373,27 +360,17 @@ class DefaultLogic(LogicInterface):
 
         self.calculation_output.reserved_energy = reserved_storage
 
-        if len(higher_price_slots) > 0:
-            # This message refers to relative slots (e.g. "next 2 slots"),
-            # not specific clock times (e.g. "at 2 o'clock").
-            logger.debug("[Rule] Reserved Energy will be used in the next slots: %s",
-                         higher_price_slots[::-1])
-            logger.debug(
-                "[Rule] Reserved Energy: %0.1f Wh. Usable in Battery: %0.1f Wh",
-                reserved_storage,
-                calc_input.stored_usable_energy
-            )
-        else:
-            logger.debug("[Rule] No reserved energy required, because no "
-                         "'high price' slots in evaluation window.")
-
-
         discharge_allowed = calc_input.stored_usable_energy > reserved_storage
+        # higher_price_slots/cheaper_price_slot are relative slot indices
+        # (e.g. "slot 2"), not clock times -- interval_minutes lets a
+        # consumer turn one into an actual time span.
         self.decision_trace.add(discharge_evaluated(
             discharge_allowed, calc_input, self.calculation_output,
             evaluation_slots=max_slots,
-            higher_price_slots=len(higher_price_slots),
-            cheaper_price_slot=cheaper_price_slot), logger)
+            higher_price_slots=higher_price_slots[::-1],
+            cheaper_price_slot=cheaper_price_slot,
+            cheaper_price=cheaper_price,
+            interval_minutes=self.interval_minutes), logger)
 
         return discharge_allowed
 
@@ -411,14 +388,18 @@ class DefaultLogic(LogicInterface):
         return False
 
  # %%
-    def __get_required_recharge_energy(self, calc_input: CalculationInput,
-                                              net_consumption: list, prices: dict) -> float:
+    def __get_required_recharge_energy(
+            self, calc_input: CalculationInput, net_consumption: list,
+            prices: dict) -> Tuple[float, List[int], float, int]:
         """ Calculate the required energy to shift toward high price slots.
 
             If a recharge price window is detected, the energy required to
             recharge the battery to the next high price slots is calculated.
 
-            return: float (Energy in Wh)
+            return: (recharge_energy, high_price_slots, high_price_energy_demand,
+                      window_end) -- recharge_energy/high_price_energy_demand in
+                Wh, high_price_slots/window_end relative slot indices, all
+                passed on to the grid_recharge_charge decision record.
          """
         current_price = prices[0]
         max_slot = len(net_consumption)
@@ -449,13 +430,6 @@ class DefaultLogic(LogicInterface):
 
         self.recharge_window_end = max_slot
 
-        # As max_slot is 1 at minimum, no protection against out of range needed.
-        logger.debug(
-            "[Rule] Evaluation window for recharge energy until slot %d with price %0.3f",
-            max_slot-1,
-            prices[max_slot-1]
-        )
-
         # get high price slots
         high_price_slots = []
         for slot in range(max_slot):
@@ -484,24 +458,26 @@ class DefaultLogic(LogicInterface):
             required_energy += energy_to_shift
 
         if required_energy > 0.0:
-            logger.debug("[Rule] Required Energy: %0.1f Wh is based on next 'high price' slots %s",
-                         required_energy,
-                         high_price_slots
-                         )
             recharge_energy = required_energy-calc_input.stored_usable_energy
-            logger.debug("[Rule] Stored usable Energy: %0.1f , Recharge Energy: %0.1f Wh",
-                         calc_input.stored_usable_energy,
-                         recharge_energy
-                         )
-        else:
+            # high_price_slots/required_energy are ported into the
+            # grid_recharge_charge decision record below; stored_usable_energy
+            # and recharge_energy are already on that record too, this is
+            # just a plain debug trace, not a [Rule] entry.
             logger.debug(
-                "[Rule] No additional energy required, because stored energy is sufficient."
+                "Stored usable Energy: %0.1f , Recharge Energy: %0.1f Wh",
+                calc_input.stored_usable_energy,
+                recharge_energy
             )
+        else:
+            # Not ported into the trace: the eventual grid_recharge_idle
+            # record's NO_RECHARGE_REQUIRED reason already covers this.
+            logger.debug(
+                "No additional energy required, because stored energy is sufficient.")
             recharge_energy = 0.0
 
         if required_energy == 0.0:
             self.calculation_output.required_recharge_energy = recharge_energy
-            return recharge_energy
+            return recharge_energy, high_price_slots, required_energy, max_slot
 
         recharge_target = apply_grid_charge_target_to_recharge(
             config=self.calculation_parameters.grid_charge_target,
@@ -524,7 +500,7 @@ class DefaultLogic(LogicInterface):
         if recharge_energy > free_capacity:
             recharge_energy = free_capacity
             logger.debug(
-                "[Rule] Recharge limited by free capacity: %0.1f Wh", recharge_energy)
+                "Recharge limited by free capacity: %0.1f Wh", recharge_energy)
 
         if not self.common.is_charging_above_minimum(recharge_energy):
             recharge_energy = 0.0
@@ -534,7 +510,7 @@ class DefaultLogic(LogicInterface):
             recharge_energy = recharge_energy + self.common.min_charge_energy
 
         self.calculation_output.required_recharge_energy = recharge_energy
-        return recharge_energy
+        return recharge_energy, high_price_slots, required_energy, max_slot
 
     def __calculate_min_dynamic_price_difference(self, price: float) -> float:
         """ Calculate the dynamic limit for the current price """

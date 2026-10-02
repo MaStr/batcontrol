@@ -161,3 +161,8 @@ point, so it is only logged as a warning.
    "Plain-language explanations" above). Without one, the Decision sensor
    and `why` fall back to the raw reason code.
 6. Keep reason strings ASCII-only.
+7. If an input is a relative slot index or a list of them (0 = the current
+   interval, not a clock time), add `interval_minutes` to the same record's
+   inputs so a consumer can turn a slot into an actual time span. See
+   `higher_price_slots`/`cheaper_price_slot` on the discharge rule and
+   `high_price_slots`/`recharge_window_end` on the grid recharge decision.
