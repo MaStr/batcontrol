@@ -1,5 +1,9 @@
 ## General options
 
+Several batteries
+
+The `inverter:` section can also be a **list** of the configurations below, which makes batcontrol treat all of them as one aggregated battery. See [Multiple Inverters](https://mastr.github.io/batcontrol/configuration/multiple-inverters/index.md).
+
 ### max_grid_charge_rate
 
 This is the upper limit to charge the battery from grid. Value is WATT. This value should not be above the limit of your inverter.

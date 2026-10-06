@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://mastr.github.io/batcontrol/configuration/dynamic-tariff-provider/">
       
       
-        <link rel="prev" href="../inverter-configuration/">
+        <link rel="prev" href="../multiple-inverters/">
       
       
         <link rel="next" href="../solar-forecast/">
@@ -496,6 +496,34 @@
     
   
     Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multiple-inverters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiple Inverters
   
 
     
@@ -1674,8 +1702,9 @@ hours.</p>
 <p>The charge rate is not evenly distributed across low-price hours by default.</p>
 <ul>
 <li>For <strong>more even charging</strong> across low-price hours, enable
-  <code>soften_price_difference_on_charging</code> and set <code>max_grid_charge_rate</code> to a
-  modest value (e.g. battery capacity / low-price hours).</li>
+  <code>soften_price_difference_on_charging</code>. With the charging window
+  (<code>spread_grid_charge_over_charge_window</code>, enabled by default) the charge
+  rate is spread over all remaining slots of the low-price block.</li>
 <li>For a <strong>late charging start</strong> (optimise efficiency, keep the battery at
   high SOC for less time), disable <code>soften_price_difference_on_charging</code>.</li>
 </ul>
@@ -1811,7 +1840,7 @@ and <strong>energyforecast_total_price</strong>) already deliver final prices an
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../inverter-configuration/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Inverter">
+          <a href="../multiple-inverters/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Multiple Inverters">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1821,7 +1850,7 @@ and <strong>energyforecast_total_price</strong>) already deliver final prices an
                 Previous
               </span>
               <div class="md-ellipsis">
-                Inverter
+                Multiple Inverters
               </div>
             </div>
           </a>

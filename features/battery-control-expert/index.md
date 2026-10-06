@@ -69,6 +69,27 @@ Without `soften_price_difference_on_charging`, Batcontrol would see €0.295 as 
 
 The **downside** is, that not each cent of saving is achieved.
 
+### Charging window (spread grid charging)
+
+- Config option: `spread_grid_charge_over_charge_window` ; true / false
+- Default: enabled
+- Only effective when `soften_price_difference_on_charging` is enabled
+
+With soften enabled, batcontrol already decides during a cheap block how much energy needs to be charged. Without a charging window, the charge rate is calculated for the remaining time of the **current** slot only. With 15-minute slots this requests very high charge rates (often capped at `max_grid_charge_rate`) and the battery is full long before the cheap block ends.
+
+With the charging window enabled, all directly following slots with a price **lower than or equal to** the current price are treated as one charging opportunity. The window ends at the first more expensive slot (even if it is only marginally more expensive) or at the end of the recharge evaluation window.
+
+```
+charge_rate = recharge_energy / (remaining time of current slot + slots in window * slot length)
+```
+
+Example: at 12:15 the price stays at 0.086 €/kWh until 15:00, 6.86 kWh need to be recharged:
+
+- without charging window: 6.86 kWh / 0.25 h × 1.1 ≈ 30 kW (capped at `max_grid_charge_rate`)
+- with charging window: 6.86 kWh / 2.75 h × 1.1 ≈ 2.7 kW
+
+The charge rate is recalculated on every run. As the window gets shorter, the rate rises, so the target energy is still reached before the expensive period starts. This leaves room for PV production during the cheap block. Set `spread_grid_charge_over_charge_window: false` to restore the previous behaviour (charge as fast as possible within the current slot).
+
 # Granularity in price calculations:
 
 - Config option: `round_price_digits`

@@ -113,6 +113,7 @@ battery_control_expert:
   charge_rate_multiplier: 1.1
   soften_price_difference_on_charging: false
   soften_price_difference_on_charging_factor: 5
+  spread_grid_charge_over_charge_window: true
   round_price_digits: 4
   production_offset_percent: 1.0
   preserve_min_grid_charge_soc: false
@@ -120,11 +121,12 @@ battery_control_expert:
 
 These expert parameters allow fine-tuning of Batcontrol's behavior. See [Battery Control Expert](https://mastr.github.io/batcontrol/features/battery-control-expert/index.md) for detailed explanations of each parameter:
 
-| Parameter                                    | Type    | Default | Description                                                                                       |
-| -------------------------------------------- | ------- | ------- | ------------------------------------------------------------------------------------------------- |
-| `charge_rate_multiplier`                     | float   | 1.1     | Multiplier for calculated charge rate to compensate for charging inefficiencies                   |
-| `soften_price_difference_on_charging`        | boolean | false   | Enable earlier charging based on more relaxed price difference calculations                       |
-| `soften_price_difference_on_charging_factor` | integer | 5       | Factor to soften price difference requirements when enabled                                       |
-| `round_price_digits`                         | integer | 4       | Decimal places for price rounding in comparisons                                                  |
-| `production_offset_percent`                  | float   | 1.0     | Multiplier to adjust solar production forecast (1.0 = no change, 0.8 = 80%, etc.)                 |
-| `preserve_min_grid_charge_soc`               | boolean | false   | Also preserve `min_grid_charge_soc` as reserved battery energy during cheap/pre-expensive windows |
+| Parameter                                    | Type    | Default | Description                                                                                                                                                      |
+| -------------------------------------------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `charge_rate_multiplier`                     | float   | 1.1     | Multiplier for calculated charge rate to compensate for charging inefficiencies                                                                                  |
+| `soften_price_difference_on_charging`        | boolean | false   | Enable earlier charging based on more relaxed price difference calculations                                                                                      |
+| `soften_price_difference_on_charging_factor` | integer | 5       | Factor to soften price difference requirements when enabled                                                                                                      |
+| `spread_grid_charge_over_charge_window`      | boolean | true    | With soften enabled: calculate the grid charge rate over all following slots that are not more expensive than the current slot, instead of the current slot only |
+| `round_price_digits`                         | integer | 4       | Decimal places for price rounding in comparisons                                                                                                                 |
+| `production_offset_percent`                  | float   | 1.0     | Multiplier to adjust solar production forecast (1.0 = no change, 0.8 = 80%, etc.)                                                                                |
+| `preserve_min_grid_charge_soc`               | boolean | false   | Also preserve `min_grid_charge_soc` as reserved battery energy during cheap/pre-expensive windows                                                                |

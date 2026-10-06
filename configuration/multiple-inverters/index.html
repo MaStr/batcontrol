@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://mastr.github.io/batcontrol/configuration/solar-forecast/">
+        <link rel="canonical" href="https://mastr.github.io/batcontrol/configuration/multiple-inverters/">
       
       
-        <link rel="prev" href="../dynamic-tariff-provider/">
+        <link rel="prev" href="../inverter-configuration/">
       
       
-        <link rel="next" href="../consumption-forecast/">
+        <link rel="next" href="../dynamic-tariff-provider/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Solar Forecast - Batcontrol Documentation</title>
+        <title>Multiple Inverters - Batcontrol Documentation</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#forecastsolar-default" class="md-skip">
+        <a href="#multiple-inverters-batteries" class="md-skip">
           Skip to content
         </a>
       
@@ -116,7 +116,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Solar Forecast
+              Multiple Inverters
             
           </span>
         </div>
@@ -513,10 +513,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../multiple-inverters/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiple Inverters
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -532,6 +559,176 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-values-are-aggregated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How values are aggregated
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How values are aggregated">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#max_pv_charge_rate-is-special" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        max_pv_charge_rate is special
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-charge-rates-are-distributed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How charge rates are distributed
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How charge rates are distributed">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-minimum-charge-rate-is-never-split-away" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The minimum charge rate is never split away
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#min_charge_rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        min_charge_rate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-full-battery-is-set-to-avoid-discharge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A full battery is set to avoid-discharge
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pv-charge-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PV charge limiting
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt-topics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT topics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT topics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mqtt-inverters-need-distinct-topics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT inverters need distinct topics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#outage-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Outage handling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -569,35 +766,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Solar Forecast
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../solar-forecast/" class="md-nav__link">
         
   
   
@@ -613,163 +785,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#forecastsolar-default" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Forecast.Solar (Default)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#local-evcc-instance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Local evcc instance
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#homeassistant-solar-forecast-ml" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        HomeAssistant Solar Forecast ML
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="HomeAssistant Solar Forecast ML">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#optional-parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Optional Parameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#solcast" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Solcast
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Solcast">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#free-hobbyist-account-registration-walkthrough" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Free hobbyist account (registration walkthrough)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Configuration
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#optional-percentile-parameter" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Optional percentile parameter
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#rate-limit" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rate limit
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#adjusting-production-forecasts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Adjusting Production Forecasts
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Adjusting Production Forecasts">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#production_offset_percent" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        production_offset_percent
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1284,6 +1299,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1292,79 +1309,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#forecastsolar-default" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Forecast.Solar (Default)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#local-evcc-instance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Local evcc instance
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#homeassistant-solar-forecast-ml" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        HomeAssistant Solar Forecast ML
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="HomeAssistant Solar Forecast ML">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#optional-parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Optional Parameters
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#solcast" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Solcast
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Solcast">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#free-hobbyist-account-registration-walkthrough" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Free hobbyist account (registration walkthrough)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1374,23 +1318,24 @@
   </a>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#optional-percentile-parameter" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#how-values-are-aggregated" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Optional percentile parameter
+        How values are aggregated
       
     </span>
   </a>
   
-</li>
+    <nav class="md-nav" aria-label="How values are aggregated">
+      <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#rate-limit" class="md-nav__link">
+  <a href="#max_pv_charge_rate-is-special" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Rate limit
+        max_pv_charge_rate is special
       
     </span>
   </a>
@@ -1403,22 +1348,55 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#adjusting-production-forecasts" class="md-nav__link">
+  <a href="#how-charge-rates-are-distributed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Adjusting Production Forecasts
+        How charge rates are distributed
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Adjusting Production Forecasts">
+    <nav class="md-nav" aria-label="How charge rates are distributed">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#production_offset_percent" class="md-nav__link">
+  <a href="#the-minimum-charge-rate-is-never-split-away" class="md-nav__link">
     <span class="md-ellipsis">
       
-        production_offset_percent
+        The minimum charge rate is never split away
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#min_charge_rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        min_charge_rate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-full-battery-is-set-to-avoid-discharge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A full battery is set to avoid-discharge
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pv-charge-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PV charge limiting
       
     </span>
   </a>
@@ -1427,6 +1405,56 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt-topics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT topics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MQTT topics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mqtt-inverters-need-distinct-topics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT inverters need distinct topics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#outage-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Outage handling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1447,7 +1475,7 @@
 
 
   
-    <a href="https://github.com/MaStr/batcontrol/edit/main/docs/configuration/solar-forecast.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/MaStr/batcontrol/edit/main/docs/configuration/multiple-inverters.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -1455,151 +1483,285 @@
   
 
 
-  <h1>Solar Forecast</h1>
+<h1 id="multiple-inverters-batteries">Multiple Inverters / Batteries<a class="headerlink" href="#multiple-inverters-batteries" title="Permanent link">&para;</a></h1>
+<p>Since 0.9.1 the <code>inverter:</code> section accepts a <strong>list</strong> of inverters. batcontrol then
+treats all of them as one large battery: it sums their capacities, derives a common
+state of charge, and splits every charge command over the individual devices.</p>
+<p>The single-inverter form keeps working unchanged — nothing to do if you run one battery.</p>
+<div class="admonition warning">
+<p class="admonition-title">Not available in the Home Assistant add-on</p>
+<p>This feature requires a YAML configuration file, so it is only available for the
+Docker, Docker Compose and local Python installations. The
+<a href="https://github.com/MaStr/batcontrol_ha_addon">Home Assistant add-on</a> is
+configured through the add-on UI, whose <code>options</code>/<code>schema</code> form cannot express a
+list of inverters with per-entry type-specific keys. The add-on therefore stays
+on a single inverter, and the parameters on this page are intentionally <strong>not</strong>
+mirrored into the add-on configuration.</p>
+<p>If you run two batteries under Home Assistant, use the Docker or Compose
+installation instead — see <a href="../../getting-started/installation/">Installation</a>.</p>
+</div>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="nt">inverter</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fronius_gen24</span>
+<span class="w">    </span><span class="nt">address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">192.168.0.10</span>
+<span class="w">    </span><span class="nt">user</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">customer</span>
+<span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR-PASSWORD</span>
+<span class="w">    </span><span class="nt">max_grid_charge_rate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5000</span><span class="w">   </span><span class="c1"># Watt, limit of THIS inverter</span>
 
-<p>The following providers are currently available:</p>
-<ul>
-<li><a href="https://forecast.solar/">Forecast Solar</a></li>
-<li>local evcc instance - since 0.5.3</li>
-<li><a href="https://zara-toorox.github.io/">HomeAssistant Solar Forecast ML</a> - since 0.7.0</li>
-<li><a href="https://solcast.com/">Solcast</a> - since 0.8.1</li>
-</ul>
-<p>Multiple Installations can be entered, like this:</p>
-<p><div class="highlight"><pre><span></span><code>solar_forecast_provider: fcsolarapi
-pvinstallations:
-  - name: Haus #name
-    lat: 48.4334480
-    lon: 8.7654968
-    declination: 32 #inclination toward horizon 0..90 0=flat 90=vertical (e.g. wallmounted)
-    azimuth: -90 # -90:East, 0:South, 90:West -180..180
-    kWp: 15.695 # power in kWp
-  - name: Garage  #... further installations
-    lat: 48.4334480
-    lon: 8.7654968
-    declination: 32
-    azimuth: 87
-    kWp: 6.030
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fronius-modbus</span>
+<span class="w">    </span><span class="nt">address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">192.168.0.11</span>
+<span class="w">    </span><span class="nt">capacity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5000</span><span class="w">               </span><span class="c1"># Wh</span>
+<span class="w">    </span><span class="nt">max_grid_charge_rate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3000</span><span class="w">   </span><span class="c1"># Watt, limit of THIS inverter</span>
 </code></pre></div>
-The <strong>name</strong> must be a unique value.</p>
-<p>If a solar forecast provider is not available, batcontrol is running on cached values. It stops working if less then 12 hours of forecast are available. That should be enough to overcome outages.</p>
-<h2 id="forecastsolar-default">Forecast.Solar (Default)<a class="headerlink" href="#forecastsolar-default" title="Permanent link">&para;</a></h2>
-<p><a href="https://forecast.solar/">Forecast Solar</a> allows a limited amount of free requests with no subscription or account. </p>
-<p>The minimum configuration block is:</p>
-<div class="highlight"><pre><span></span><code>  - name: Haus #name
-    lat: 48.4334480
-    lon: 8.7654968
-    declination: 32 #inclination toward horizon 0..90 0=flat 90=vertical (e.g. wallmounted)
-    azimuth: -90 # -90:East, 0:South, 90:West -180..180
-    kWp: 15.695 # power in kWp
-</code></pre></div>
-<p>In addtion you can register and use an api key with adding:</p>
-<div class="highlight"><pre><span></span><code>  - name: Haus #name
-    lat: 48.4334480
-    lon: 8.7654968
-    declination: 32 #inclination toward horizon 0..90 0=flat 90=vertical (e.g. wallmounted)
-    azimuth: -90 # -90:East, 0:South, 90:West -180..180
-    kWp: 15.695 # power in kWp
-    api: ffff-ffff-fff-ffff
-</code></pre></div>
-<p>If you have an obstructed horizon, you can add a horizon modifier:</p>
-<div class="highlight"><pre><span></span><code>  - name: Haus #name
-    lat: 48.4334480
-    lon: 8.7654968
-    declination: 32 #inclination toward horizon 0..90 0=flat 90=vertical (e.g. wallmounted)
-    azimuth: -90 # -90:East, 0:South, 90:West -180..180
-    kWp: 15.695 # power in kWp
-    horizon: 30,30,30,0,0,0  # leave empty for default PVGIS horizon, only modify if solar array is shaded by trees or houses
-</code></pre></div>
-<h2 id="local-evcc-instance">Local evcc instance<a class="headerlink" href="#local-evcc-instance" title="Permanent link">&para;</a></h2>
-<p>evcc is able to collect its own PV forecast, which can be obtained via REST API. batcontrol can make use of that.</p>
-<p><div class="highlight"><pre><span></span><code>solar_forecast_provider: evcc-solar
-pvinstallations:
-  - name: Haus #name
-    url: http://evcc.local:7070/api/tariff/solar
-</code></pre></div>
-If evcc is running under HomeAssistant, you should use either <code>http://homeassistant:7070/api/tariff/solar</code> or <code>http://&lt;homeassistant-ip&gt;:7070/api/tariff/solar</code></p>
-<h2 id="homeassistant-solar-forecast-ml">HomeAssistant Solar Forecast ML<a class="headerlink" href="#homeassistant-solar-forecast-ml" title="Permanent link">&para;</a></h2>
-<p>The <a href="https://zara-toorox.github.io/">HomeAssistant Solar Forecast ML</a> integration (available via HACS) provides machine learning-based solar forecasts directly from your HomeAssistant instance. This provider requires the HACS integration to be installed first.
-Use the evcc based sensor, which might be additionally enabled in the SolarML Addon. Sensor name is <code>sensor.solar_forecast_ml_evcc_solar_prognose</code> . If you have startup issues, define sensor_unit <code>Wh</code>.</p>
-<p><strong>Minimum Requirements:</strong>
-- batcontrol version: 0.7.2
-- HomeAssistant addon minimum version: V16.2.0</p>
-<p>The minimum configuration is:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">solar_forecast_provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">homeassistant-solar-forecast-ml</span>
-<span class="nt">pvinstallations</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HA Solar ML Forecast</span>
-<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws://homeassistant.local:8123</span><span class="w">  </span><span class="c1"># Your HomeAssistant URL</span>
-<span class="w">    </span><span class="nt">api_token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">eyJ...</span><span class="w">                        </span><span class="c1"># Long-lived access token from HA Profile</span>
-<span class="w">    </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor.solar_forecast_ml_evcc_solar_prognose</span><span class="w">  </span><span class="c1"># Forecast sensor entity</span>
-</code></pre></div>
-<p>If you're running batcontrol in a HomeAssistant addon, use <code>ws://homeassistant:8123</code> as the base_url. For standalone installations, use your HomeAssistant IP or hostname.</p>
-<h3 id="optional-parameters">Optional Parameters<a class="headerlink" href="#optional-parameters" title="Permanent link">&para;</a></h3>
-<p>You can customize the behavior with additional parameters:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">pvinstallations</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HA Solar ML Forecast</span>
-<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws://homeassistant:8123</span>
-<span class="w">    </span><span class="nt">api_token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">eyJ...</span>
-<span class="w">    </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor.solar_forecast_ml_prognose_nachste_stunde</span>
-<span class="w">    </span><span class="nt">sensor_unit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span><span class="w">  </span><span class="c1"># Options: 'auto' (default, auto-detect), 'Wh', or 'kWh'</span>
-<span class="w">    </span><span class="nt">cache_ttl_hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">24.0</span><span class="w">  </span><span class="c1"># Cache duration in hours (default: 24.0)</span>
-</code></pre></div>
-<p>The <code>sensor_unit</code> parameter:
-- <code>auto</code> (default): Automatically detects the unit from the sensor
-- <code>Wh</code>: If you know your sensor reports in Wh
-- <code>kWh</code>: If you know your sensor reports in kWh</p>
-<p>Setting the explicit unit (<code>Wh</code> or <code>kWh</code>) can speed up startup by skipping auto-detection.</p>
-<h2 id="solcast">Solcast<a class="headerlink" href="#solcast" title="Permanent link">&para;</a></h2>
-<p><a href="https://solcast.com/">Solcast</a> provides satellite-based solar forecasts in native 30-minute resolution. batcontrol interpolates the values to 15-minute intervals (linear power interpolation) or aggregates them to hourly values, depending on your <code>time_resolution_minutes</code> setting.</p>
-<p>Solcast delivers three estimates per 30-minute period: a most-likely value (50 % percentile), a pessimistic one (10 %, more clouds) and an optimistic one (90 %, fewer clouds). By default batcontrol uses the most-likely value.</p>
-<h3 id="free-hobbyist-account-registration-walkthrough">Free hobbyist account (registration walkthrough)<a class="headerlink" href="#free-hobbyist-account-registration-walkthrough" title="Permanent link">&para;</a></h3>
-<p>Solcast offers a free "Home User" (hobbyist) account which is sufficient for batcontrol:</p>
+<p>Every entry is a complete inverter configuration, exactly as described in
+<a href="../inverter-configuration/">Inverter Configuration</a>. The types may be mixed freely —
+a Fronius GEN24 next to a Modbus inverter next to an MQTT bridge is fine.</p>
+<p>The order matters: it determines each inverter's number <code>n</code>, which is used for the
+MQTT subtree and the Home Assistant entity names (see <a href="#mqtt-topics">MQTT topics</a>).
+Inserting an inverter in the middle of the list renumbers the ones behind it.</p>
+<h2 id="how-values-are-aggregated">How values are aggregated<a class="headerlink" href="#how-values-are-aggregated" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Aggregation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Installed capacity, usable capacity, free capacity</td>
+<td>sum</td>
+</tr>
+<tr>
+<td>Stored energy, stored usable energy</td>
+<td>sum</td>
+</tr>
+<tr>
+<td>State of charge</td>
+<td>capacity-weighted average</td>
+</tr>
+<tr>
+<td><code>min_soc</code>, <code>max_soc</code></td>
+<td>capacity-weighted average</td>
+</tr>
+<tr>
+<td><code>max_grid_charge_rate</code></td>
+<td>sum</td>
+</tr>
+<tr>
+<td><code>max_pv_charge_rate</code></td>
+<td>sum, but see below</td>
+</tr>
+<tr>
+<td><code>min_pv_charge_rate</code></td>
+<td>sum</td>
+</tr>
+</tbody>
+</table>
+<p>A battery with twice the capacity therefore carries twice the weight in the group
+SoC. The logic that decides <em>when</em> to charge works on these aggregated numbers and
+is unaware of how many physical batteries there are.</p>
+<h3 id="max_pv_charge_rate-is-special">max_pv_charge_rate is special<a class="headerlink" href="#max_pv_charge_rate-is-special" title="Permanent link">&para;</a></h3>
+<p>For a single inverter <code>0</code> means "no limit". That carries over to the group: if <strong>any</strong>
+inverter has <code>max_pv_charge_rate: 0</code>, the whole group counts as unlimited, because
+batcontrol cannot bound the total PV charge power any more. Only if every inverter
+declares a positive limit is the group limit their sum.</p>
+<h2 id="how-charge-rates-are-distributed">How charge rates are distributed<a class="headerlink" href="#how-charge-rates-are-distributed" title="Permanent link">&para;</a></h2>
+<p>When the logic asks for a charge rate, the group splits it over the inverters
+<strong>proportional to their free capacity</strong>, so an empty battery gets more power than a
+nearly full one and both reach their target at roughly the same time. Each share is
+capped by that inverter's own <code>max_grid_charge_rate</code>; power that does not fit is
+redistributed over the remaining inverters.</p>
+<p>Example — 6000 W requested:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Capacity</th>
+<th>SoC</th>
+<th>Free capacity</th>
+<th>Own limit</th>
+<th>Share</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Inverter 0</td>
+<td>10000 Wh</td>
+<td>20 %</td>
+<td>7500 Wh</td>
+<td>5000 W</td>
+<td><strong>5000 W</strong> (capped)</td>
+</tr>
+<tr>
+<td>Inverter 1</td>
+<td>5000 Wh</td>
+<td>80 %</td>
+<td>750 Wh</td>
+<td>3000 W</td>
+<td><strong>1000 W</strong> (remainder)</td>
+</tr>
+</tbody>
+</table>
+<p>Inverter 0 would get 5454 W by its share of the free capacity, is capped at its
+5000 W limit, and the leftover 1000 W moves to inverter 1.</p>
+<p>If the requested rate exceeds the sum of all limits, each inverter simply runs at
+its own maximum.</p>
+<h3 id="the-minimum-charge-rate-is-never-split-away">The minimum charge rate is never split away<a class="headerlink" href="#the-minimum-charge-rate-is-never-split-away" title="Permanent link">&para;</a></h3>
+<p>Charging a battery with a few hundred watts is inefficient, which is why the logic
+layer already raises any group charge rate to <code>MIN_CHARGE_RATE</code> (500 W). Splitting
+500 W into 250 W + 250 W would throw that guarantee away, so the distribution works
+the other way round:</p>
 <ol>
-<li>Register at <a href="https://solcast.com/free-rooftop-solar-forecasting">solcast.com</a> and choose the free <strong>Home User</strong> (hobbyist) plan.</li>
-<li>In the Solcast toolkit, create a <strong>Rooftop Site</strong>. Enter your location (latitude/longitude), panel tilt, azimuth and capacity (kWp) there — the site geometry lives in your Solcast account, <strong>not</strong> in the batcontrol configuration.</li>
-<li>Copy the site's <strong>resource id</strong> (shown in the site details, format <code>xxxx-xxxx-xxxx-xxxx</code>).</li>
-<li>Copy your <strong>API key</strong> from the Solcast account settings.</li>
+<li>Walk the inverters in order of free capacity and take as many as the requested
+   rate can pay a full minimum for.</li>
+<li>Give each of them its minimum.</li>
+<li>Spread whatever is left over those same inverters, proportional to free capacity.</li>
 </ol>
-<p>The free account is limited to <strong>one location with up to two rooftop sites</strong> (e.g. an east/west split) and <strong>10 API requests per day</strong>.</p>
-<h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
-<p>The minimum configuration is:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">solar_forecast_provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">solcast</span>
-<span class="nt">pvinstallations</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Haus</span><span class="w"> </span><span class="c1">#name</span>
-<span class="w">    </span><span class="nt">resource_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xxxx-xxxx-xxxx-xxxx</span><span class="w">  </span><span class="c1"># from your Solcast rooftop site</span>
-<span class="w">    </span><span class="nt">apikey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-solcast-api-key</span><span class="w">      </span><span class="c1"># from your Solcast account settings</span>
+<p>The inverters the rate does not reach get 0 W. The requested total is always kept
+exactly — batcontrol never buys more grid power than the optimizer asked for.</p>
+<p>For two inverters with 7500 Wh and 250 Wh free capacity and a 500 W minimum each:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">Requested</th>
+<th style="text-align: right;">Inverter 0</th>
+<th style="text-align: right;">Inverter 1</th>
+<th>Comment</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">300 W</td>
+<td style="text-align: right;">300 W</td>
+<td style="text-align: right;">0 W</td>
+<td>below one minimum, goes to the emptier battery</td>
+</tr>
+<tr>
+<td style="text-align: right;">500 W</td>
+<td style="text-align: right;">500 W</td>
+<td style="text-align: right;">0 W</td>
+<td>pays exactly one minimum</td>
+</tr>
+<tr>
+<td style="text-align: right;">800 W</td>
+<td style="text-align: right;">800 W</td>
+<td style="text-align: right;">0 W</td>
+<td>not enough for a second minimum</td>
+</tr>
+<tr>
+<td style="text-align: right;">1000 W</td>
+<td style="text-align: right;">500 W</td>
+<td style="text-align: right;">500 W</td>
+<td>pays two minima, no remainder</td>
+</tr>
+<tr>
+<td style="text-align: right;">1200 W</td>
+<td style="text-align: right;">694 W</td>
+<td style="text-align: right;">506 W</td>
+<td>two minima plus 200 W split 7500 : 250</td>
+</tr>
+<tr>
+<td style="text-align: right;">2000 W</td>
+<td style="text-align: right;">1468 W</td>
+<td style="text-align: right;">532 W</td>
+<td>two minima plus 1000 W split 7500 : 250</td>
+</tr>
+<tr>
+<td style="text-align: right;">6000 W</td>
+<td style="text-align: right;">5000 W</td>
+<td style="text-align: right;">1000 W</td>
+<td>inverter 0 capped at its 5000 W limit</td>
+</tr>
+</tbody>
+</table>
+<p>As a result the two batteries drift apart in SoC while the requested rate is small,
+and converge again once it is large enough to feed both.</p>
+<h3 id="min_charge_rate">min_charge_rate<a class="headerlink" href="#min_charge_rate" title="Permanent link">&para;</a></h3>
+<p>The minimum defaults to 500 W per inverter and can be raised per inverter if a
+device needs more to charge efficiently. It only takes effect with several
+inverters — with a single inverter batcontrol already raises every charge rate to
+500 W, so there is nothing left to distribute:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">inverter</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fronius_gen24</span>
+<span class="w">    </span><span class="nt">address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">192.168.0.10</span>
+<span class="w">    </span><span class="nt">user</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">customer</span>
+<span class="w">    </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">YOUR-PASSWORD</span>
+<span class="w">    </span><span class="nt">max_grid_charge_rate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5000</span>
+<span class="w">    </span><span class="nt">min_charge_rate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span><span class="w">      </span><span class="c1"># this inverter wants at least 1000 W</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fronius-modbus</span>
+<span class="w">    </span><span class="nt">address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">192.168.0.11</span>
+<span class="w">    </span><span class="nt">capacity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5000</span>
+<span class="w">    </span><span class="nt">max_grid_charge_rate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3000</span>
 </code></pre></div>
-<p>For two rooftop sites (e.g. east/west arrays) use one entry per site. The API key is the same for both, each site has its own resource id:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">solar_forecast_provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">solcast</span>
-<span class="nt">pvinstallations</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Dach Ost</span>
-<span class="w">    </span><span class="nt">resource_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xxxx-xxxx-xxxx-aaaa</span>
-<span class="w">    </span><span class="nt">apikey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-solcast-api-key</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Dach West</span>
-<span class="w">    </span><span class="nt">resource_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xxxx-xxxx-xxxx-bbbb</span>
-<span class="w">    </span><span class="nt">apikey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-solcast-api-key</span>
+<p>An inverter whose <code>max_grid_charge_rate</code> is below its own <code>min_charge_rate</code> can
+never charge efficiently and is skipped unless it is the only candidate.</p>
+<p>For PV charge limiting the equivalent floor is <code>min_pv_charge_rate</code>, which defaults
+to <code>0</code> (no minimum) and therefore keeps the plain proportional split unless you set
+it.</p>
+<h3 id="a-full-battery-is-set-to-avoid-discharge">A full battery is set to avoid-discharge<a class="headerlink" href="#a-full-battery-is-set-to-avoid-discharge" title="Permanent link">&para;</a></h3>
+<p>An inverter that receives <strong>no</strong> share during grid charging is not left in its
+previous mode — it is set to <em>avoid discharge</em>. Without this, a full battery would
+happily discharge into the battery that is being charged from the grid, which would
+cycle both batteries for nothing and draw grid power that never gets stored.</p>
+<h3 id="pv-charge-limiting">PV charge limiting<a class="headerlink" href="#pv-charge-limiting" title="Permanent link">&para;</a></h3>
+<p><code>MODE_LIMIT_BATTERY_CHARGE_RATE</code> (mode 8) is distributed the same way, with each
+share capped by the inverter's own <code>max_pv_charge_rate</code> and floored at its
+<code>min_pv_charge_rate</code>. A requested limit of <code>0</code> (block charging entirely) is passed
+to every inverter without distribution.</p>
+<h2 id="mqtt-topics">MQTT topics<a class="headerlink" href="#mqtt-topics" title="Permanent link">&para;</a></h2>
+<p>Each inverter keeps its own subtree under batcontrol's base topic, numbered by its
+position in the config list:</p>
+<div class="highlight"><pre><span></span><code>batcontrol/inverters/0/SOC
+batcontrol/inverters/0/stored_energy
+batcontrol/inverters/1/SOC
+batcontrol/inverters/1/stored_energy
+...
 </code></pre></div>
-<h3 id="optional-percentile-parameter">Optional percentile parameter<a class="headerlink" href="#optional-percentile-parameter" title="Permanent link">&para;</a></h3>
-<p>You can select which estimate batcontrol uses per installation:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">pvinstallations</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Haus</span>
-<span class="w">    </span><span class="nt">resource_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xxxx-xxxx-xxxx-xxxx</span>
-<span class="w">    </span><span class="nt">apikey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-solcast-api-key</span>
-<span class="w">    </span><span class="nt">percentile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">  </span><span class="c1"># 10 (pessimistic), 50 (default, most likely), 90 (optimistic)</span>
+<p>The top-level topics (<code>batcontrol/SOC</code>, <code>batcontrol/max_energy_capacity</code>,
+<code>batcontrol/stored_energy_capacity</code>, ...) report the <strong>aggregated</strong> values of the
+whole group, so existing dashboards keep working.</p>
+<p>Home Assistant auto-discovery publishes one entity set per inverter, named
+<code>Inverter &lt;n&gt; ...</code> with unique IDs <code>batcontrol_inverter_&lt;n&gt;_*</code>.</p>
+<h3 id="mqtt-inverters-need-distinct-topics">MQTT inverters need distinct topics<a class="headerlink" href="#mqtt-inverters-need-distinct-topics" title="Permanent link">&para;</a></h3>
+<p>If you configure several inverters of <code>type: mqtt</code>, each needs its own <code>base_topic</code>
+— otherwise both would read the same status and send their commands to the same
+receiver. batcontrol refuses to start on a duplicate:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">inverter</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mqtt</span>
+<span class="w">    </span><span class="nt">base_topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">house/battery_a</span>
+<span class="w">    </span><span class="nt">capacity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10000</span>
+<span class="w">    </span><span class="nt">max_grid_charge_rate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5000</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mqtt</span>
+<span class="w">    </span><span class="nt">base_topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">house/battery_b</span>
+<span class="w">    </span><span class="nt">capacity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5000</span>
+<span class="w">    </span><span class="nt">max_grid_charge_rate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3000</span>
 </code></pre></div>
-<p>A pessimistic setting (<code>percentile: 10</code>) makes batcontrol plan with less expected solar production, which reduces the risk of an undercharged battery on cloudy days.</p>
-<h3 id="rate-limit">Rate limit<a class="headerlink" href="#rate-limit" title="Permanent link">&para;</a></h3>
-<p>batcontrol keeps well within the free tier's 10 requests/day: it enforces a minimum refresh interval of 3 hours per configured site, scaled with the number of sites (one site: every 3 hours, two sites: every 6 hours — at most 8 requests per day, leaving 2 in reserve). If the API reports that the quota is exhausted (HTTP 429), batcontrol pauses requests and keeps working on cached forecast data.</p>
-<h2 id="adjusting-production-forecasts">Adjusting Production Forecasts<a class="headerlink" href="#adjusting-production-forecasts" title="Permanent link">&para;</a></h2>
-<h3 id="production_offset_percent">production_offset_percent<a class="headerlink" href="#production_offset_percent" title="Permanent link">&para;</a></h3>
-<p>If your actual solar production systematically differs from the forecast (e.g., winter snow coverage, panel degradation, or consistently higher performance), you can adjust the entire forecast using the <code>production_offset_percent</code> parameter in the <code>battery_control_expert</code> section:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">battery_control_expert</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">production_offset_percent</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.8</span><span class="w">  </span><span class="c1"># Use 80% of the forecast (20% reduction)</span>
-</code></pre></div>
-<p>This multiplier is applied to all forecasted values:
-- <code>1.0</code> = no adjustment (default)
-- <code>0.8</code> = 80% of forecast (useful for winter/snow conditions)
-- <code>1.1</code> = 110% of forecast (for systems that consistently outperform)</p>
-<p>For detailed information, see <a href="../../features/battery-control-expert/#adjust-solar-production-forecast">Battery Control Expert - production_offset_percent</a>.</p>
+<p>Leaving <code>base_topic</code> at its default (<code>default</code>) for all of them is also fine: the
+topic is then derived from the inverter number and is unique by construction
+(<code>batcontrol/inverters/0/</code>, <code>batcontrol/inverters/1/</code>, ...).</p>
+<h2 id="outage-handling">Outage handling<a class="headerlink" href="#outage-handling" title="Permanent link">&para;</a></h2>
+<p>The <a href="../inverter-configuration/#resilient-wrapper-options-since-070">resilient wrapper</a>
+is applied <strong>per inverter</strong>, so <code>enable_resilient_wrapper</code> and
+<code>outage_tolerance_minutes</code> are configured per entry. If one inverter becomes
+unreachable, that inverter's wrapper reports the outage and batcontrol skips the
+control cycle — it does not keep controlling the remaining batteries on a partial
+picture, because the aggregated SoC would be wrong.</p>
+<p><code>refresh_api_values</code> (MQTT publishing) and <code>shutdown</code> are best-effort: a failing
+inverter is logged and the remaining ones are still served.</p>
+<h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Commands are not transactional.</strong> If an inverter fails midway through a group
+  command, the inverters before it have already been switched. The next control
+  cycle reconciles the state.</li>
+<li><strong>No per-inverter strategy.</strong> All inverters follow the same mode; batcontrol does
+  not, for example, charge one battery from the grid while discharging another.</li>
+<li>The <code>battery_control</code> limits (<code>max_charging_from_grid_limit</code>,
+  <code>always_allow_discharge_limit</code>, <code>min_grid_charge_soc</code>) apply to the <strong>group</strong> SoC,
+  not to individual batteries.</li>
+<li><strong>Not configurable from the Home Assistant add-on UI</strong>, which is limited to a
+  single inverter — see the note at the top of this page.</li>
+</ul>
 
 
 
@@ -1635,7 +1797,7 @@ Use the evcc based sensor, which might be additionally enabled in the SolarML Ad
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../dynamic-tariff-provider/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Dynamic Tariff Provider">
+          <a href="../inverter-configuration/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Inverter">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1645,20 +1807,20 @@ Use the evcc based sensor, which might be additionally enabled in the SolarML Ad
                 Previous
               </span>
               <div class="md-ellipsis">
-                Dynamic Tariff Provider
+                Inverter
               </div>
             </div>
           </a>
         
         
           
-          <a href="../consumption-forecast/" class="md-footer__link md-footer__link--next" aria-label="Next: Consumption Forecast">
+          <a href="../dynamic-tariff-provider/" class="md-footer__link md-footer__link--next" aria-label="Next: Dynamic Tariff Provider">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Consumption Forecast
+                Dynamic Tariff Provider
               </div>
             </div>
             <div class="md-footer__button md-icon">

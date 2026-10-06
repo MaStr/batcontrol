@@ -514,6 +514,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../configuration/multiple-inverters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiple Inverters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../configuration/dynamic-tariff-provider/" class="md-nav__link">
         
   
@@ -2081,7 +2109,7 @@ where it matters, and the example day reaches zero curtailment.</p>
 <td>Not applied</td>
 </tr>
 <tr>
-<td>EV connected in PV mode (evcc)</td>
+<td>EV connected in PV-surplus mode (evcc: <code>pv</code>, <code>minpv</code>, <code>smart</code>)</td>
 <td>Bypassed</td>
 <td>Not applied</td>
 </tr>
@@ -2096,7 +2124,7 @@ where it matters, and the example day reaches zero curtailment.</p>
 <p>When an EV charger is managed by <a href="../../integrations/evcc-connection/">evcc</a>:</p>
 <ul>
 <li><strong>EV actively charging</strong> (<code>charging=true</code>): peak shaving is disabled because the EV is already consuming excess PV energy.</li>
-<li><strong>EV connected in PV mode</strong> (<code>connected=true</code> AND <code>mode=pv</code>): peak shaving is disabled because evcc will naturally absorb surplus PV once its threshold is reached.</li>
+<li><strong>EV connected in PV-surplus mode</strong> (<code>connected=true</code> AND <code>mode</code> is one of <code>pv</code>, <code>minpv</code>, <code>smart</code>): peak shaving is disabled because evcc will naturally absorb surplus PV once its threshold is reached.</li>
 <li><strong>EV disconnects or mode changes</strong>: peak shaving is automatically re-enabled.</li>
 </ul>
 <h2 id="home-assistant-auto-discovery">Home Assistant Auto-Discovery<a class="headerlink" href="#home-assistant-auto-discovery" title="Permanent link">&para;</a></h2>

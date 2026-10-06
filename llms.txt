@@ -21,6 +21,7 @@ across the day using forecasts, and works with both dynamic and static tariffs.
 
 - [Main Configuration](https://mastr.github.io/batcontrol/configuration/batcontrol-configuration/index.md): Main configuration file reference
 - [Inverter](https://mastr.github.io/batcontrol/configuration/inverter-configuration/index.md): Fronius Gen24, Fronius Modbus, and MQTT inverter configuration
+- [Multiple Inverters](https://mastr.github.io/batcontrol/configuration/multiple-inverters/index.md): Running several inverters/batteries as one aggregated battery
 - [Dynamic Tariff Provider](https://mastr.github.io/batcontrol/configuration/dynamic-tariff-provider/index.md): Tibber, aWATTar, evcc, EnergyForecast, and static tariff zones
 - [Solar Forecast](https://mastr.github.io/batcontrol/configuration/solar-forecast/index.md): Forecast.Solar, Solar-Prognose.de, evcc, and Home Assistant ML
 - [Consumption Forecast](https://mastr.github.io/batcontrol/configuration/consumption-forecast/index.md): CSV load profile and Home Assistant API forecast

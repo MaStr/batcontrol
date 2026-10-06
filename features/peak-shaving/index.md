@@ -230,23 +230,23 @@ The charge limit is published via MQTT:
 
 Peak shaving cap rules (time and price) are automatically bypassed in the following situations. However, **the solar floor always applies during predicted clipping** even after `allow_full_battery_after` and in the high-SOC region, because clipped energy is physically lost:
 
-| Condition                                             | Time/Price Caps     | Solar Floor                                                                                  |
-| ----------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------- |
-| No PV production (nighttime)                          | Bypassed            | Not applied                                                                                  |
-| Past `allow_full_battery_after` hour                  | Bypassed            | Still applies (if clipping predicted)                                                        |
-| Battery in `always_allow_discharge` region (high SOC) | Bypassed            | Still applies (if clipping predicted)                                                        |
-| Force-charge from grid active (Mode -1)               | Bypassed            | Not applied                                                                                  |
-| Discharge not allowed (battery preserved)             | Bypassed            | Not applied (no charge cap is active in this state, the inverter charges all surplus anyway) |
-| evcc is actively charging the EV                      | Bypassed            | Not applied                                                                                  |
-| EV connected in PV mode (evcc)                        | Bypassed            | Not applied                                                                                  |
-| `price_limit` not configured                          | Price rule inactive | Not affected                                                                                 |
+| Condition                                                      | Time/Price Caps     | Solar Floor                                                                                  |
+| -------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------- |
+| No PV production (nighttime)                                   | Bypassed            | Not applied                                                                                  |
+| Past `allow_full_battery_after` hour                           | Bypassed            | Still applies (if clipping predicted)                                                        |
+| Battery in `always_allow_discharge` region (high SOC)          | Bypassed            | Still applies (if clipping predicted)                                                        |
+| Force-charge from grid active (Mode -1)                        | Bypassed            | Not applied                                                                                  |
+| Discharge not allowed (battery preserved)                      | Bypassed            | Not applied (no charge cap is active in this state, the inverter charges all surplus anyway) |
+| evcc is actively charging the EV                               | Bypassed            | Not applied                                                                                  |
+| EV connected in PV-surplus mode (evcc: `pv`, `minpv`, `smart`) | Bypassed            | Not applied                                                                                  |
+| `price_limit` not configured                                   | Price rule inactive | Not affected                                                                                 |
 
 ## evcc Interaction
 
 When an EV charger is managed by [evcc](https://mastr.github.io/batcontrol/integrations/evcc-connection/index.md):
 
 - **EV actively charging** (`charging=true`): peak shaving is disabled because the EV is already consuming excess PV energy.
-- **EV connected in PV mode** (`connected=true` AND `mode=pv`): peak shaving is disabled because evcc will naturally absorb surplus PV once its threshold is reached.
+- **EV connected in PV-surplus mode** (`connected=true` AND `mode` is one of `pv`, `minpv`, `smart`): peak shaving is disabled because evcc will naturally absorb surplus PV once its threshold is reached.
 - **EV disconnects or mode changes**: peak shaving is automatically re-enabled.
 
 ## Home Assistant Auto-Discovery

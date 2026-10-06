@@ -71,6 +71,19 @@ INFO [FC Cons] The annual consumption of the applied load profile is 3225.29 kWh
 INFO [FC Cons] The hourly values from the load profile are scaled with a factor of 1.40 to match the annual consumption of 4500 kWh
 ```
 
+### Refreshing Data and Reloading the Load Profile (SIGHUP)
+
+After editing the load profile CSV you do not need to restart batcontrol. Send `SIGHUP` (signal 1) to the process. batcontrol then forces a refresh of **all** providers (solar forecast, dynamic tariff, consumption forecast): the load profile CSV is re-read and the scaling factor is recalculated. The refresh happens at the start of the next evaluation interval (every 3 minutes), the running loop is not interrupted.
+
+```
+kill -HUP <pid>                       # plain process
+docker kill --signal=HUP batcontrol   # Docker container
+```
+
+- A rate limit blackout window of a solar forecast provider (e.g. after HTTP 429) is respected, the provider is then not queried before it ends.
+- If the new CSV is missing, empty or lacks the columns `month,weekday,hour,energy`, an error is logged and the previous profile stays active.
+- SIGHUP is not available on Windows.
+
 ### Default Load Profile
 
 If no load profile is specified, batcontrol uses `default_load_profile.csv` as a fallback.

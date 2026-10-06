@@ -516,6 +516,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../multiple-inverters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiple Inverters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../dynamic-tariff-provider/" class="md-nav__link">
         
   
@@ -703,6 +731,17 @@
     <span class="md-ellipsis">
       
         How CSV Scaling Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#refreshing-data-and-reloading-the-load-profile-sighup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refreshing Data and Reloading the Load Profile (SIGHUP)
       
     </span>
   </a>
@@ -1691,6 +1730,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#refreshing-data-and-reloading-the-load-profile-sighup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refreshing Data and Reloading the Load Profile (SIGHUP)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#default-load-profile" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2166,6 +2216,23 @@ This means: In January, on Monday, at 8 AM, the consumption is 350 Wh.</p>
 <div class="highlight"><pre><span></span><code>INFO [FC Cons] The annual consumption of the applied load profile is 3225.29 kWh
 INFO [FC Cons] The hourly values from the load profile are scaled with a factor of 1.40 to match the annual consumption of 4500 kWh
 </code></pre></div></p>
+<h3 id="refreshing-data-and-reloading-the-load-profile-sighup">Refreshing Data and Reloading the Load Profile (SIGHUP)<a class="headerlink" href="#refreshing-data-and-reloading-the-load-profile-sighup" title="Permanent link">&para;</a></h3>
+<p>After editing the load profile CSV you do not need to restart batcontrol. Send
+<code>SIGHUP</code> (signal 1) to the process. batcontrol then forces a refresh of <strong>all</strong>
+providers (solar forecast, dynamic tariff, consumption forecast): the load profile
+CSV is re-read and the scaling factor is recalculated. The refresh happens at the
+start of the next evaluation interval (every 3 minutes), the running loop is not
+interrupted.</p>
+<div class="highlight"><pre><span></span><code><span class="nb">kill</span><span class="w"> </span>-HUP<span class="w"> </span>&lt;pid&gt;<span class="w">                       </span><span class="c1"># plain process</span>
+docker<span class="w"> </span><span class="nb">kill</span><span class="w"> </span>--signal<span class="o">=</span>HUP<span class="w"> </span>batcontrol<span class="w">   </span><span class="c1"># Docker container</span>
+</code></pre></div>
+<ul>
+<li>A rate limit blackout window of a solar forecast provider (e.g. after HTTP 429)
+  is respected, the provider is then not queried before it ends.</li>
+<li>If the new CSV is missing, empty or lacks the columns <code>month,weekday,hour,energy</code>,
+  an error is logged and the previous profile stays active.</li>
+<li>SIGHUP is not available on Windows.</li>
+</ul>
 <h3 id="default-load-profile">Default Load Profile<a class="headerlink" href="#default-load-profile" title="Permanent link">&para;</a></h3>
 <p>If no load profile is specified, batcontrol uses <code>default_load_profile.csv</code> as a fallback.</p>
 <hr />

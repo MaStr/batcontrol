@@ -496,6 +496,7 @@ battery_control_expert:
   charge_rate_multiplier: 1.1
   soften_price_difference_on_charging: false
   soften_price_difference_on_charging_factor: 5
+  spread_grid_charge_over_charge_window: true
   round_price_digits: 4
   production_offset_percent: 1.0
   preserve_min_grid_charge_soc: false
@@ -503,16 +504,21 @@ battery_control_expert:
 
 These expert parameters allow fine-tuning of Batcontrol's behavior. See [Battery Control Expert](https://mastr.github.io/batcontrol/features/battery-control-expert/index.md) for detailed explanations of each parameter:
 
-| Parameter                                    | Type    | Default | Description                                                                                       |
-| -------------------------------------------- | ------- | ------- | ------------------------------------------------------------------------------------------------- |
-| `charge_rate_multiplier`                     | float   | 1.1     | Multiplier for calculated charge rate to compensate for charging inefficiencies                   |
-| `soften_price_difference_on_charging`        | boolean | false   | Enable earlier charging based on more relaxed price difference calculations                       |
-| `soften_price_difference_on_charging_factor` | integer | 5       | Factor to soften price difference requirements when enabled                                       |
-| `round_price_digits`                         | integer | 4       | Decimal places for price rounding in comparisons                                                  |
-| `production_offset_percent`                  | float   | 1.0     | Multiplier to adjust solar production forecast (1.0 = no change, 0.8 = 80%, etc.)                 |
-| `preserve_min_grid_charge_soc`               | boolean | false   | Also preserve `min_grid_charge_soc` as reserved battery energy during cheap/pre-expensive windows |
+| Parameter                                    | Type    | Default | Description                                                                                                                                                      |
+| -------------------------------------------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `charge_rate_multiplier`                     | float   | 1.1     | Multiplier for calculated charge rate to compensate for charging inefficiencies                                                                                  |
+| `soften_price_difference_on_charging`        | boolean | false   | Enable earlier charging based on more relaxed price difference calculations                                                                                      |
+| `soften_price_difference_on_charging_factor` | integer | 5       | Factor to soften price difference requirements when enabled                                                                                                      |
+| `spread_grid_charge_over_charge_window`      | boolean | true    | With soften enabled: calculate the grid charge rate over all following slots that are not more expensive than the current slot, instead of the current slot only |
+| `round_price_digits`                         | integer | 4       | Decimal places for price rounding in comparisons                                                                                                                 |
+| `production_offset_percent`                  | float   | 1.0     | Multiplier to adjust solar production forecast (1.0 = no change, 0.8 = 80%, etc.)                                                                                |
+| `preserve_min_grid_charge_soc`               | boolean | false   | Also preserve `min_grid_charge_soc` as reserved battery energy during cheap/pre-expensive windows                                                                |
 
 ## General options
+
+Several batteries
+
+The `inverter:` section can also be a **list** of the configurations below, which makes batcontrol treat all of them as one aggregated battery. See [Multiple Inverters](https://mastr.github.io/batcontrol/configuration/multiple-inverters/index.md).
 
 ### max_grid_charge_rate
 
@@ -674,6 +680,172 @@ This option is for testing purposes only
 
 \*\*\* Sample needs to be added \*\*\*
 
+# Multiple Inverters / Batteries
+
+Since 0.9.1 the `inverter:` section accepts a **list** of inverters. batcontrol then treats all of them as one large battery: it sums their capacities, derives a common state of charge, and splits every charge command over the individual devices.
+
+The single-inverter form keeps working unchanged — nothing to do if you run one battery.
+
+Not available in the Home Assistant add-on
+
+This feature requires a YAML configuration file, so it is only available for the Docker, Docker Compose and local Python installations. The [Home Assistant add-on](https://github.com/MaStr/batcontrol_ha_addon) is configured through the add-on UI, whose `options`/`schema` form cannot express a list of inverters with per-entry type-specific keys. The add-on therefore stays on a single inverter, and the parameters on this page are intentionally **not** mirrored into the add-on configuration.
+
+If you run two batteries under Home Assistant, use the Docker or Compose installation instead — see [Installation](https://mastr.github.io/batcontrol/getting-started/installation/index.md).
+
+## Configuration
+
+```
+inverter:
+  - type: fronius_gen24
+    address: 192.168.0.10
+    user: customer
+    password: YOUR-PASSWORD
+    max_grid_charge_rate: 5000   # Watt, limit of THIS inverter
+
+  - type: fronius-modbus
+    address: 192.168.0.11
+    capacity: 5000               # Wh
+    max_grid_charge_rate: 3000   # Watt, limit of THIS inverter
+```
+
+Every entry is a complete inverter configuration, exactly as described in [Inverter Configuration](https://mastr.github.io/batcontrol/configuration/inverter-configuration/index.md). The types may be mixed freely — a Fronius GEN24 next to a Modbus inverter next to an MQTT bridge is fine.
+
+The order matters: it determines each inverter's number `n`, which is used for the MQTT subtree and the Home Assistant entity names (see [MQTT topics](#mqtt-topics)). Inserting an inverter in the middle of the list renumbers the ones behind it.
+
+## How values are aggregated
+
+| Value                                              | Aggregation               |
+| -------------------------------------------------- | ------------------------- |
+| Installed capacity, usable capacity, free capacity | sum                       |
+| Stored energy, stored usable energy                | sum                       |
+| State of charge                                    | capacity-weighted average |
+| `min_soc`, `max_soc`                               | capacity-weighted average |
+| `max_grid_charge_rate`                             | sum                       |
+| `max_pv_charge_rate`                               | sum, but see below        |
+| `min_pv_charge_rate`                               | sum                       |
+
+A battery with twice the capacity therefore carries twice the weight in the group SoC. The logic that decides *when* to charge works on these aggregated numbers and is unaware of how many physical batteries there are.
+
+### max_pv_charge_rate is special
+
+For a single inverter `0` means "no limit". That carries over to the group: if **any** inverter has `max_pv_charge_rate: 0`, the whole group counts as unlimited, because batcontrol cannot bound the total PV charge power any more. Only if every inverter declares a positive limit is the group limit their sum.
+
+## How charge rates are distributed
+
+When the logic asks for a charge rate, the group splits it over the inverters **proportional to their free capacity**, so an empty battery gets more power than a nearly full one and both reach their target at roughly the same time. Each share is capped by that inverter's own `max_grid_charge_rate`; power that does not fit is redistributed over the remaining inverters.
+
+Example — 6000 W requested:
+
+|            | Capacity | SoC  | Free capacity | Own limit | Share                  |
+| ---------- | -------- | ---- | ------------- | --------- | ---------------------- |
+| Inverter 0 | 10000 Wh | 20 % | 7500 Wh       | 5000 W    | **5000 W** (capped)    |
+| Inverter 1 | 5000 Wh  | 80 % | 750 Wh        | 3000 W    | **1000 W** (remainder) |
+
+Inverter 0 would get 5454 W by its share of the free capacity, is capped at its 5000 W limit, and the leftover 1000 W moves to inverter 1.
+
+If the requested rate exceeds the sum of all limits, each inverter simply runs at its own maximum.
+
+### The minimum charge rate is never split away
+
+Charging a battery with a few hundred watts is inefficient, which is why the logic layer already raises any group charge rate to `MIN_CHARGE_RATE` (500 W). Splitting 500 W into 250 W + 250 W would throw that guarantee away, so the distribution works the other way round:
+
+1. Walk the inverters in order of free capacity and take as many as the requested rate can pay a full minimum for.
+1. Give each of them its minimum.
+1. Spread whatever is left over those same inverters, proportional to free capacity.
+
+The inverters the rate does not reach get 0 W. The requested total is always kept exactly — batcontrol never buys more grid power than the optimizer asked for.
+
+For two inverters with 7500 Wh and 250 Wh free capacity and a 500 W minimum each:
+
+| Requested | Inverter 0 | Inverter 1 | Comment                                        |
+| --------- | ---------- | ---------- | ---------------------------------------------- |
+| 300 W     | 300 W      | 0 W        | below one minimum, goes to the emptier battery |
+| 500 W     | 500 W      | 0 W        | pays exactly one minimum                       |
+| 800 W     | 800 W      | 0 W        | not enough for a second minimum                |
+| 1000 W    | 500 W      | 500 W      | pays two minima, no remainder                  |
+| 1200 W    | 694 W      | 506 W      | two minima plus 200 W split 7500 : 250         |
+| 2000 W    | 1468 W     | 532 W      | two minima plus 1000 W split 7500 : 250        |
+| 6000 W    | 5000 W     | 1000 W     | inverter 0 capped at its 5000 W limit          |
+
+As a result the two batteries drift apart in SoC while the requested rate is small, and converge again once it is large enough to feed both.
+
+### min_charge_rate
+
+The minimum defaults to 500 W per inverter and can be raised per inverter if a device needs more to charge efficiently. It only takes effect with several inverters — with a single inverter batcontrol already raises every charge rate to 500 W, so there is nothing left to distribute:
+
+```
+inverter:
+  - type: fronius_gen24
+    address: 192.168.0.10
+    user: customer
+    password: YOUR-PASSWORD
+    max_grid_charge_rate: 5000
+    min_charge_rate: 1000      # this inverter wants at least 1000 W
+  - type: fronius-modbus
+    address: 192.168.0.11
+    capacity: 5000
+    max_grid_charge_rate: 3000
+```
+
+An inverter whose `max_grid_charge_rate` is below its own `min_charge_rate` can never charge efficiently and is skipped unless it is the only candidate.
+
+For PV charge limiting the equivalent floor is `min_pv_charge_rate`, which defaults to `0` (no minimum) and therefore keeps the plain proportional split unless you set it.
+
+### A full battery is set to avoid-discharge
+
+An inverter that receives **no** share during grid charging is not left in its previous mode — it is set to *avoid discharge*. Without this, a full battery would happily discharge into the battery that is being charged from the grid, which would cycle both batteries for nothing and draw grid power that never gets stored.
+
+### PV charge limiting
+
+`MODE_LIMIT_BATTERY_CHARGE_RATE` (mode 8) is distributed the same way, with each share capped by the inverter's own `max_pv_charge_rate` and floored at its `min_pv_charge_rate`. A requested limit of `0` (block charging entirely) is passed to every inverter without distribution.
+
+## MQTT topics
+
+Each inverter keeps its own subtree under batcontrol's base topic, numbered by its position in the config list:
+
+```
+batcontrol/inverters/0/SOC
+batcontrol/inverters/0/stored_energy
+batcontrol/inverters/1/SOC
+batcontrol/inverters/1/stored_energy
+...
+```
+
+The top-level topics (`batcontrol/SOC`, `batcontrol/max_energy_capacity`, `batcontrol/stored_energy_capacity`, ...) report the **aggregated** values of the whole group, so existing dashboards keep working.
+
+Home Assistant auto-discovery publishes one entity set per inverter, named `Inverter <n> ...` with unique IDs `batcontrol_inverter_<n>_*`.
+
+### MQTT inverters need distinct topics
+
+If you configure several inverters of `type: mqtt`, each needs its own `base_topic` — otherwise both would read the same status and send their commands to the same receiver. batcontrol refuses to start on a duplicate:
+
+```
+inverter:
+  - type: mqtt
+    base_topic: house/battery_a
+    capacity: 10000
+    max_grid_charge_rate: 5000
+  - type: mqtt
+    base_topic: house/battery_b
+    capacity: 5000
+    max_grid_charge_rate: 3000
+```
+
+Leaving `base_topic` at its default (`default`) for all of them is also fine: the topic is then derived from the inverter number and is unique by construction (`batcontrol/inverters/0/`, `batcontrol/inverters/1/`, ...).
+
+## Outage handling
+
+The [resilient wrapper](https://mastr.github.io/batcontrol/configuration/inverter-configuration/#resilient-wrapper-options-since-070) is applied **per inverter**, so `enable_resilient_wrapper` and `outage_tolerance_minutes` are configured per entry. If one inverter becomes unreachable, that inverter's wrapper reports the outage and batcontrol skips the control cycle — it does not keep controlling the remaining batteries on a partial picture, because the aggregated SoC would be wrong.
+
+`refresh_api_values` (MQTT publishing) and `shutdown` are best-effort: a failing inverter is logged and the remaining ones are still served.
+
+## Limitations
+
+- **Commands are not transactional.** If an inverter fails midway through a group command, the inverters before it have already been switched. The next control cycle reconciles the state.
+- **No per-inverter strategy.** All inverters follow the same mode; batcontrol does not, for example, charge one battery from the grid while discharging another.
+- The `battery_control` limits (`max_charging_from_grid_limit`, `always_allow_discharge_limit`, `min_grid_charge_soc`) apply to the **group** SoC, not to individual batteries.
+- **Not configurable from the Home Assistant add-on UI**, which is limited to a single inverter — see the note at the top of this page.
+
 Currently following data providers are available:
 
 - tibber
@@ -805,7 +977,7 @@ utility:
 
 The charge rate is not evenly distributed across low-price hours by default.
 
-- For **more even charging** across low-price hours, enable `soften_price_difference_on_charging` and set `max_grid_charge_rate` to a modest value (e.g. battery capacity / low-price hours).
+- For **more even charging** across low-price hours, enable `soften_price_difference_on_charging`. With the charging window (`spread_grid_charge_over_charge_window`, enabled by default) the charge rate is spread over all remaining slots of the low-price block.
 - For a **late charging start** (optimise efficiency, keep the battery at high SOC for less time), disable `soften_price_difference_on_charging`.
 
 In pure single-zone (static) mode, prices never differ between hours, so price-based scheduling has no effect — use it together with peak-shaving (see [#271](https://github.com/MaStr/batcontrol/issues/271)) or fixed charging-window settings.
@@ -1162,6 +1334,19 @@ When batcontrol loads the CSV profile, it:
 INFO [FC Cons] The annual consumption of the applied load profile is 3225.29 kWh
 INFO [FC Cons] The hourly values from the load profile are scaled with a factor of 1.40 to match the annual consumption of 4500 kWh
 ```
+
+### Refreshing Data and Reloading the Load Profile (SIGHUP)
+
+After editing the load profile CSV you do not need to restart batcontrol. Send `SIGHUP` (signal 1) to the process. batcontrol then forces a refresh of **all** providers (solar forecast, dynamic tariff, consumption forecast): the load profile CSV is re-read and the scaling factor is recalculated. The refresh happens at the start of the next evaluation interval (every 3 minutes), the running loop is not interrupted.
+
+```
+kill -HUP <pid>                       # plain process
+docker kill --signal=HUP batcontrol   # Docker container
+```
+
+- A rate limit blackout window of a solar forecast provider (e.g. after HTTP 429) is respected, the provider is then not queried before it ends.
+- If the new CSV is missing, empty or lacks the columns `month,weekday,hour,energy`, an error is logged and the previous profile stays active.
+- SIGHUP is not available on Windows.
 
 ### Default Load Profile
 
@@ -1889,23 +2074,23 @@ The charge limit is published via MQTT:
 
 Peak shaving cap rules (time and price) are automatically bypassed in the following situations. However, **the solar floor always applies during predicted clipping** even after `allow_full_battery_after` and in the high-SOC region, because clipped energy is physically lost:
 
-| Condition                                             | Time/Price Caps     | Solar Floor                                                                                  |
-| ----------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------- |
-| No PV production (nighttime)                          | Bypassed            | Not applied                                                                                  |
-| Past `allow_full_battery_after` hour                  | Bypassed            | Still applies (if clipping predicted)                                                        |
-| Battery in `always_allow_discharge` region (high SOC) | Bypassed            | Still applies (if clipping predicted)                                                        |
-| Force-charge from grid active (Mode -1)               | Bypassed            | Not applied                                                                                  |
-| Discharge not allowed (battery preserved)             | Bypassed            | Not applied (no charge cap is active in this state, the inverter charges all surplus anyway) |
-| evcc is actively charging the EV                      | Bypassed            | Not applied                                                                                  |
-| EV connected in PV mode (evcc)                        | Bypassed            | Not applied                                                                                  |
-| `price_limit` not configured                          | Price rule inactive | Not affected                                                                                 |
+| Condition                                                      | Time/Price Caps     | Solar Floor                                                                                  |
+| -------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------- |
+| No PV production (nighttime)                                   | Bypassed            | Not applied                                                                                  |
+| Past `allow_full_battery_after` hour                           | Bypassed            | Still applies (if clipping predicted)                                                        |
+| Battery in `always_allow_discharge` region (high SOC)          | Bypassed            | Still applies (if clipping predicted)                                                        |
+| Force-charge from grid active (Mode -1)                        | Bypassed            | Not applied                                                                                  |
+| Discharge not allowed (battery preserved)                      | Bypassed            | Not applied (no charge cap is active in this state, the inverter charges all surplus anyway) |
+| evcc is actively charging the EV                               | Bypassed            | Not applied                                                                                  |
+| EV connected in PV-surplus mode (evcc: `pv`, `minpv`, `smart`) | Bypassed            | Not applied                                                                                  |
+| `price_limit` not configured                                   | Price rule inactive | Not affected                                                                                 |
 
 ## evcc Interaction
 
 When an EV charger is managed by [evcc](https://mastr.github.io/batcontrol/integrations/evcc-connection/index.md):
 
 - **EV actively charging** (`charging=true`): peak shaving is disabled because the EV is already consuming excess PV energy.
-- **EV connected in PV mode** (`connected=true` AND `mode=pv`): peak shaving is disabled because evcc will naturally absorb surplus PV once its threshold is reached.
+- **EV connected in PV-surplus mode** (`connected=true` AND `mode` is one of `pv`, `minpv`, `smart`): peak shaving is disabled because evcc will naturally absorb surplus PV once its threshold is reached.
 - **EV disconnects or mode changes**: peak shaving is automatically re-enabled.
 
 ## Home Assistant Auto-Discovery
@@ -2154,6 +2339,27 @@ Without `soften_price_difference_on_charging`, Batcontrol would see €0.295 as 
 
 The **downside** is, that not each cent of saving is achieved.
 
+### Charging window (spread grid charging)
+
+- Config option: `spread_grid_charge_over_charge_window` ; true / false
+- Default: enabled
+- Only effective when `soften_price_difference_on_charging` is enabled
+
+With soften enabled, batcontrol already decides during a cheap block how much energy needs to be charged. Without a charging window, the charge rate is calculated for the remaining time of the **current** slot only. With 15-minute slots this requests very high charge rates (often capped at `max_grid_charge_rate`) and the battery is full long before the cheap block ends.
+
+With the charging window enabled, all directly following slots with a price **lower than or equal to** the current price are treated as one charging opportunity. The window ends at the first more expensive slot (even if it is only marginally more expensive) or at the end of the recharge evaluation window.
+
+```
+charge_rate = recharge_energy / (remaining time of current slot + slots in window * slot length)
+```
+
+Example: at 12:15 the price stays at 0.086 €/kWh until 15:00, 6.86 kWh need to be recharged:
+
+- without charging window: 6.86 kWh / 0.25 h × 1.1 ≈ 30 kW (capped at `max_grid_charge_rate`)
+- with charging window: 6.86 kWh / 2.75 h × 1.1 ≈ 2.7 kW
+
+The charge rate is recalculated on every run. As the window gets shorter, the rate rises, so the target energy is still reached before the expensive period starts. This leaves room for PV production during the cheap block. Set `spread_grid_charge_over_charge_window: false` to restore the previous behaviour (charge as fast as possible within the current slot).
+
 # Granularity in price calculations:
 
 - Config option: `round_price_digits`
@@ -2321,15 +2527,16 @@ mqtt:
 
 ### Basic Parameters
 
-| Parameter  | Type    | Default            | Description                                           |
-| ---------- | ------- | ------------------ | ----------------------------------------------------- |
-| `enabled`  | boolean | `false`            | Enable or disable the MQTT API                        |
-| `logger`   | boolean | `false`            | Enable MQTT logging for debugging                     |
-| `broker`   | string  | `localhost`        | MQTT broker hostname or IP address                    |
-| `port`     | integer | `1883`             | MQTT broker port (1883 for unencrypted, 8883 for TLS) |
-| `topic`    | string  | `house/batcontrol` | Base topic for all batcontrol MQTT messages           |
-| `username` | string  | `user`             | MQTT broker username (if authentication required)     |
-| `password` | string  | `password`         | MQTT broker password (if authentication required)     |
+| Parameter   | Type    | Default            | Description                                                                                                                   |
+| ----------- | ------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`   | boolean | `false`            | Enable or disable the MQTT API                                                                                                |
+| `logger`    | boolean | `false`            | Enable MQTT logging for debugging                                                                                             |
+| `broker`    | string  | `localhost`        | MQTT broker hostname or IP address                                                                                            |
+| `port`      | integer | `1883`             | MQTT broker port (1883 for unencrypted, 8883 for TLS)                                                                         |
+| `topic`     | string  | `house/batcontrol` | Base topic for all batcontrol MQTT messages                                                                                   |
+| `client_id` | string  | `batcontrol`       | Optional unique client identifier for this instance; set it per deployment when several batcontrol instances share one broker |
+| `username`  | string  | `user`             | MQTT broker username (if authentication required)                                                                             |
+| `password`  | string  | `password`         | MQTT broker password (if authentication required)                                                                             |
 
 ## Advanced Configuration
 
@@ -3061,10 +3268,10 @@ Batcontrol subscribes to the following evcc MQTT topics:
 
 For every configured `.../charging` topic, batcontrol additionally subscribes to the sibling topics:
 
-- `evcc/loadpoints/1/mode` - Loadpoint charging mode (`pv`, `now`, `minpv`, `off`)
+- `evcc/loadpoints/1/mode` - Loadpoint charging mode (`pv`, `minpv`, `smart`, `now`, `off`)
 - `evcc/loadpoints/1/connected` - Whether an EV is connected (`true`/`false`)
 
-These are used by [peak shaving](https://mastr.github.io/batcontrol/features/peak-shaving/index.md): peak shaving is automatically disabled while evcc is actively charging or while an EV is connected in PV mode, and re-enabled when the EV disconnects or the mode changes.
+These are used by [peak shaving](https://mastr.github.io/batcontrol/features/peak-shaving/index.md): peak shaving is automatically disabled while evcc is actively charging or while an EV is connected in a PV-surplus mode (`pv`, `minpv`, or `smart`), and re-enabled when the EV disconnects or the mode changes.
 
 ### Buffer SOC (Optional)
 

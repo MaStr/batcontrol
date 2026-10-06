@@ -664,6 +664,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../multiple-inverters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiple Inverters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../dynamic-tariff-provider/" class="md-nav__link">
         
   
@@ -1440,6 +1468,7 @@ Details about the Price configuration can be found on <a href="../../features/pr
   charge_rate_multiplier: 1.1
   soften_price_difference_on_charging: false
   soften_price_difference_on_charging_factor: 5
+  spread_grid_charge_over_charge_window: true
   round_price_digits: 4
   production_offset_percent: 1.0
   preserve_min_grid_charge_soc: false
@@ -1472,6 +1501,12 @@ Details about the Price configuration can be found on <a href="../../features/pr
 <td>integer</td>
 <td>5</td>
 <td>Factor to soften price difference requirements when enabled</td>
+</tr>
+<tr>
+<td><code>spread_grid_charge_over_charge_window</code></td>
+<td>boolean</td>
+<td>true</td>
+<td>With soften enabled: calculate the grid charge rate over all following slots that are not more expensive than the current slot, instead of the current slot only</td>
 </tr>
 <tr>
 <td><code>round_price_digits</code></td>

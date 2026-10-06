@@ -16,7 +16,7 @@
         <link rel="prev" href="../batcontrol-configuration/">
       
       
-        <link rel="next" href="../dynamic-tariff-provider/">
+        <link rel="next" href="../multiple-inverters/">
       
       
         
@@ -736,6 +736,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multiple-inverters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiple Inverters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1530,6 +1558,12 @@
   <h1>Inverter</h1>
 
 <h2 id="general-options">General options<a class="headerlink" href="#general-options" title="Permanent link">&para;</a></h2>
+<div class="admonition tip">
+<p class="admonition-title">Several batteries</p>
+<p>The <code>inverter:</code> section can also be a <strong>list</strong> of the configurations below,
+which makes batcontrol treat all of them as one aggregated battery. See
+<a href="../multiple-inverters/">Multiple Inverters</a>.</p>
+</div>
 <h3 id="max_grid_charge_rate">max_grid_charge_rate<a class="headerlink" href="#max_grid_charge_rate" title="Permanent link">&para;</a></h3>
 <p>This is the upper limit to charge the battery from grid. Value is WATT. This value should not be above the limit of your inverter.</p>
 <p>Default:
@@ -1692,13 +1726,13 @@ With adding <code>#</code> in front of the value, this limit is not set and will
         
         
           
-          <a href="../dynamic-tariff-provider/" class="md-footer__link md-footer__link--next" aria-label="Next: Dynamic Tariff Provider">
+          <a href="../multiple-inverters/" class="md-footer__link md-footer__link--next" aria-label="Next: Multiple Inverters">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Dynamic Tariff Provider
+                Multiple Inverters
               </div>
             </div>
             <div class="md-footer__button md-icon">

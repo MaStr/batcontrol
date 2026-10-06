@@ -514,6 +514,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../configuration/multiple-inverters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiple Inverters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../configuration/dynamic-tariff-provider/" class="md-nav__link">
         
   
@@ -2099,10 +2127,10 @@
 <h3 id="loadpoint-mode-and-connection-state-derived-automatically">Loadpoint Mode and Connection State (derived automatically)<a class="headerlink" href="#loadpoint-mode-and-connection-state-derived-automatically" title="Permanent link">&para;</a></h3>
 <p>For every configured <code>.../charging</code> topic, batcontrol additionally subscribes to the sibling topics:</p>
 <ul>
-<li><code>evcc/loadpoints/1/mode</code> - Loadpoint charging mode (<code>pv</code>, <code>now</code>, <code>minpv</code>, <code>off</code>)</li>
+<li><code>evcc/loadpoints/1/mode</code> - Loadpoint charging mode (<code>pv</code>, <code>minpv</code>, <code>smart</code>, <code>now</code>, <code>off</code>)</li>
 <li><code>evcc/loadpoints/1/connected</code> - Whether an EV is connected (<code>true</code>/<code>false</code>)</li>
 </ul>
-<p>These are used by <a href="../../features/peak-shaving/">peak shaving</a>: peak shaving is automatically disabled while evcc is actively charging or while an EV is connected in PV mode, and re-enabled when the EV disconnects or the mode changes.</p>
+<p>These are used by <a href="../../features/peak-shaving/">peak shaving</a>: peak shaving is automatically disabled while evcc is actively charging or while an EV is connected in a PV-surplus mode (<code>pv</code>, <code>minpv</code>, or <code>smart</code>), and re-enabled when the EV disconnects or the mode changes.</p>
 <h3 id="buffer-soc-optional">Buffer SOC (Optional)<a class="headerlink" href="#buffer-soc-optional" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>evcc/site/bufferSoc</code> - Dynamic discharge threshold (integer 0-100)</li>

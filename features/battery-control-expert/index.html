@@ -514,6 +514,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../configuration/multiple-inverters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiple Inverters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../configuration/dynamic-tariff-provider/" class="md-nav__link">
         
   
@@ -1159,6 +1187,31 @@ This means that any future price that is lower or equal to the current price (cu
 Now, a future price will only be considered “cheaper” if it's <strong>less than or equal</strong> to <code>€0.29/kWh</code>. If the next hour’s price is <code>€0.295/kWh</code> (which is indeed lower than <code>€0.30/kWh</code>), Batcontrol <strong>will not</strong> count it as cheap enough to interrupt the current evaluation period—because <code>€0.295</code> is still higher than `€0.29.</p>
 <p>Without <code>soften_price_difference_on_charging</code>, Batcontrol would see €0.295 as cheaper than €0.30, so it does not evaluate for chasing a marginally lower price. By introducing this “softening” factor, we allow batcontrol to decide earlier how much energy needs to be charged. This helps in scenarios where the <strong>battery can not be charged to maximum within one hour</strong>. It ensures Batcontrol waits for a more significant price drop before adjusting its strategy, too.</p>
 <p>The <strong>downside</strong> is, that not each cent of saving is achieved.</p>
+<h3 id="charging-window-spread-grid-charging">Charging window (spread grid charging)<a class="headerlink" href="#charging-window-spread-grid-charging" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Config option: <code>spread_grid_charge_over_charge_window</code> ; true / false</li>
+<li>Default: enabled</li>
+<li>Only effective when <code>soften_price_difference_on_charging</code> is enabled</li>
+</ul>
+<p>With soften enabled, batcontrol already decides during a cheap block how much energy needs to be
+charged. Without a charging window, the charge rate is calculated for the remaining time of the
+<strong>current</strong> slot only. With 15-minute slots this requests very high charge rates (often capped at
+<code>max_grid_charge_rate</code>) and the battery is full long before the cheap block ends.</p>
+<p>With the charging window enabled, all directly following slots with a price <strong>lower than or equal
+to</strong> the current price are treated as one charging opportunity. The window ends at the first more
+expensive slot (even if it is only marginally more expensive) or at the end of the recharge
+evaluation window.</p>
+<div class="highlight"><pre><span></span><code>charge_rate = recharge_energy / (remaining time of current slot + slots in window * slot length)
+</code></pre></div>
+<p>Example: at 12:15 the price stays at 0.086 €/kWh until 15:00, 6.86 kWh need to be recharged:</p>
+<ul>
+<li>without charging window: 6.86 kWh / 0.25 h × 1.1 ≈ 30 kW (capped at <code>max_grid_charge_rate</code>)</li>
+<li>with charging window: 6.86 kWh / 2.75 h × 1.1 ≈ 2.7 kW</li>
+</ul>
+<p>The charge rate is recalculated on every run. As the window gets shorter, the rate rises, so the
+target energy is still reached before the expensive period starts. This leaves room for PV
+production during the cheap block. Set <code>spread_grid_charge_over_charge_window: false</code> to restore
+the previous behaviour (charge as fast as possible within the current slot).</p>
 <h1 id="granularity-in-price-calculations">Granularity in price calculations:<a class="headerlink" href="#granularity-in-price-calculations" title="Permanent link">&para;</a></h1>
 <ul>
 <li>Config option: <code>round_price_digits</code></li>
