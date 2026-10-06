@@ -6,7 +6,6 @@ from .logic_interface import (
     CalculationOutput,
     InverterControlSettings,
     PeakShavingConfig,
-    PEAK_SHAVING_VALID_MODES,
 )
 from .common import CommonLogic
 from .next import NextLogic

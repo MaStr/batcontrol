@@ -708,17 +708,6 @@ class MqttApi:
                 retain=True
             )
 
-    def publish_peak_shaving_mode(self, mode: str) -> None:
-        """ Publish peak shaving mode to MQTT
-            /peak_shaving/mode
-        """
-        if self.client.is_connected():
-            self.client.publish(
-                self.base_topic + '/peak_shaving/mode',
-                str(mode),
-                retain=True
-            )
-
     def shutdown(self) -> None:
         """Publish offline status and cleanly disconnect from the broker."""
         if self.client.is_connected():
@@ -902,17 +891,6 @@ class MqttApi:
             min_value=-1.0,
             max_value=1.0,
             step_value=0.01)
-
-        self.publish_mqtt_discovery_message(
-            "Peak Shaving Mode",
-            "batcontrol_peak_shaving_mode",
-            "select",
-            None,
-            None,
-            self.base_topic + "/peak_shaving/mode",
-            self.base_topic + "/peak_shaving/mode/set",
-            entity_category="config",
-            options=["time", "price", "combined"])
 
         # sensors
         self.publish_mqtt_discovery_message(
@@ -1099,6 +1077,13 @@ class MqttApi:
             self.client.publish(
                 self.auto_discover_topic +
                 '/sensor/batcontrol/batcontrol_night_surplus_wh/config',
+                '',
+                retain=True)
+            # TODO(0.11.0): remove once brokers have been cleaned up.
+            # peak_shaving.mode select was removed in 0.10.0.
+            self.client.publish(
+                self.auto_discover_topic +
+                '/select/batcontrol/batcontrol_peak_shaving_mode/config',
                 '',
                 retain=True)
 

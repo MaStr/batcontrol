@@ -50,7 +50,7 @@ peak_shaving:
 | `feed_in_limit_w` | int | `0` | Absolute feed-in power limit in watts (solar rule). Formula: `0.6 * kWp * 1000`. Set to `0` to disable. |
 | `feed_in_limit_headroom` | float | `1.0` | Safety factor (>= 1.0) on the forecast surplus (solar rule). Recommended: `1.1` if clipping is observed. |
 
-**Deprecated:** The old `mode` parameter (`time` / `price` / `combined`) is still accepted for backward compatibility and mapped to the switches at startup; a deprecation warning is logged. New configurations should use the switch-based design above.
+**Removed in 0.10.0:** The old `mode` parameter (`time` / `price` / `combined`) is no longer supported; a configuration containing it is rejected at startup. Use the switches above instead (`time` = `time_active` only, `price` = `price_active` only, `combined` = both).
 
 ### MQTT Runtime Control
 
@@ -61,7 +61,6 @@ The following parameters can be changed at runtime via MQTT without restarting b
 | `{base}/peak_shaving/enabled/set` | `true` / `false` | Enable or disable peak shaving |
 | `{base}/peak_shaving/allow_full_battery_after/set` | int 0-23 | Change the target hour for the time rule |
 | `{base}/peak_shaving/price_limit/set` | float | Change the price threshold for the price rule |
-| `{base}/peak_shaving/mode/set` | `time` / `price` / `combined` | Deprecated: kept for backward compatibility, mapped onto `time_active`/`price_active` |
 
 The rule switches themselves (`time_active`, `price_active`, `solar_cap_active`) and the solar parameters (`feed_in_limit_w`, `feed_in_limit_headroom`) have no MQTT setters and require restarting batcontrol to take effect.
 
@@ -126,12 +125,10 @@ Only slots within the **production window** are considered. The production windo
 
 When multiple rules are active, the **strictest (lowest non-negative) limit wins**. For example, if the time rule suggests 500 W and the price rule suggests 300 W, the applied limit is 300 W. This conservative approach prioritizes the rules in combination rather than overriding each other.
 
-**Backward compatibility:** the old `mode` parameter (`time` / `price` / `combined`) is still accepted and mapped to the switches at startup:
+**Migration:** the old `mode` parameter was removed in 0.10.0. Replace it with the switches:
 - `mode: time` → `time_active: true`, `price_active: false`
 - `mode: price` → `time_active: false`, `price_active: true`
 - `mode: combined` → `time_active: true`, `price_active: true`
-
-New configurations should use the switch-based design.
 
 ## Solar Feed-in Limit (Solarspitzengesetz)
 

@@ -409,11 +409,6 @@ class Batcontrol:
                     self.api_set_peak_shaving_price_limit,
                     float
                 )
-                self.mqtt_api.register_set_callback(
-                    'peak_shaving/mode',
-                    self.api_set_peak_shaving_mode,
-                    str
-                )
                 grid_charge_lock_topic = config.get(
                     'mqtt').get('grid_charge_lock_topic')
                 if grid_charge_lock_topic:
@@ -1148,8 +1143,6 @@ class Batcontrol:
                 self.peak_shaving_config.allow_full_battery_after)
             self.mqtt_api.publish_peak_shaving_price_limit(
                 self.peak_shaving_config.price_limit)
-            self.mqtt_api.publish_peak_shaving_mode(
-                self.peak_shaving_config.mode)
             # Trigger Inverter
             self.inverter.refresh_api_values()
 
@@ -1398,29 +1391,3 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_peak_shaving_price_limit(
                 new_config.price_limit)
-
-    def api_set_peak_shaving_mode(self, mode: str):
-        """ Set peak shaving operating mode via external API request.
-            The change is temporary and will not be written to the config file.
-
-            ``mode`` is deprecated (see PeakShavingConfig.from_config), but
-            this setter is kept for backward compatibility: it also updates
-            the underlying time_active/price_active switches using the same
-            mapping so runtime mode changes keep working.
-        """
-        normalized = (mode or '').strip().lower()
-        try:
-            new_config = dataclasses.replace(
-                self.peak_shaving_config,
-                mode=normalized,
-                time_active=normalized in ('time', 'combined'),
-                price_active=normalized in ('price', 'combined'),
-            )
-        except ValueError as exc:
-            logger.warning(
-                'API: Invalid peak_shaving mode %r: %s', mode, exc)
-            return
-        logger.info('API: Setting peak shaving mode to %s', new_config.mode)
-        self.peak_shaving_config = new_config
-        if self.mqtt_api is not None:
-            self.mqtt_api.publish_peak_shaving_mode(new_config.mode)
