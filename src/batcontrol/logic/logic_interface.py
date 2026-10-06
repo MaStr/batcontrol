@@ -7,9 +7,6 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Shared tuple of valid peak-shaving operating modes.
-PEAK_SHAVING_VALID_MODES = ('time', 'price', 'combined')
-
 
 def _default_grid_charge_target_config():
     """Create default grid-charge target strategy config lazily."""
@@ -21,28 +18,20 @@ def _default_grid_charge_target_config():
 class PeakShavingConfig:  # pylint: disable=too-many-instance-attributes
     """ Holds peak shaving configuration parameters, initialized from the config dict.
 
-    Range/type validation runs in ``__post_init__``. The "combined mode without
-    price_limit" fallback warning is emitted in :py:meth:`from_config` only,
+    Range/type validation runs in ``__post_init__``. The "price_active without
+    price_limit" warning is emitted in :py:meth:`from_config` only,
     so it fires once at config load and not on every ``dataclasses.replace``
     in the per-evaluation build path.
 
-    ``mode`` is DEPRECATED in favour of explicit per-rule switches
-    (``time_active``, ``price_active``, ``solar_cap_active``); see
-    :py:meth:`from_config` for the mapping and
+    Rules are selected by the explicit switches ``time_active``,
+    ``price_active`` and ``solar_cap_active``; see
     docs/development/solar-limit-evaluation.md for the rationale.
     """
     enabled: bool = False
-    mode: str = 'combined'
     allow_full_battery_after: int = 14
     price_limit: Optional[float] = None
-    # ``None`` is a resolution sentinel, not a valid external value: when
-    # left unset, __post_init__ derives it from ``mode`` (backward
-    # compatibility for code that still constructs this dataclass directly
-    # with ``mode=`` instead of the explicit switches). Externally these
-    # fields always behave as booleans defaulting to True (i.e. equivalent
-    # to today's 'combined' mode) once construction has completed.
-    time_active: Optional[bool] = None
-    price_active: Optional[bool] = None
+    time_active: bool = True
+    price_active: bool = True
     solar_cap_active: bool = False
     # Feed-in power limit in W for the solar_cap rule. 0 = neutral (rule has
     # no effect even if solar_cap_active is true).
@@ -54,11 +43,6 @@ class PeakShavingConfig:  # pylint: disable=too-many-instance-attributes
     def __post_init__(self):
         """Validate configuration values and raise ValueError with a clear,
         config-key-based message on invalid input."""
-        if self.mode not in PEAK_SHAVING_VALID_MODES:
-            raise ValueError(
-                f"peak_shaving.mode must be one of "
-                f"{PEAK_SHAVING_VALID_MODES}, got '{self.mode}'"
-            )
         if not isinstance(self.allow_full_battery_after, int) \
                 or isinstance(self.allow_full_battery_after, bool):
             raise ValueError(
@@ -99,35 +83,17 @@ class PeakShavingConfig:  # pylint: disable=too-many-instance-attributes
                 f"peak_shaving.feed_in_limit_headroom must be >= 1.0, "
                 f"got {self.feed_in_limit_headroom}"
             )
-        # Resolve the deprecated ``mode`` into the explicit switches when the
-        # caller did not set them explicitly (see the field comment above).
-        # ``from_config`` always passes concrete booleans, so this path only
-        # matters for direct dataclass construction (tests, expert use).
-        if self.time_active is None:
-            self.time_active = self.mode in ('time', 'combined')
-        if self.price_active is None:
-            self.price_active = self.mode in ('price', 'combined')
 
     @classmethod
     def from_config(cls, config: dict) -> 'PeakShavingConfig':
         """ Create a PeakShavingConfig instance from a configuration dict.
 
-        Emits a one-time warning when peak shaving is enabled in 'combined'
-        mode without a configured ``price_limit``: the price component is
-        disabled in that case and behaviour falls back to time-only.
+        Emits a one-time warning when ``price_active`` is enabled without a
+        configured ``price_limit``: the price component is disabled in that
+        case and behaviour falls back to time-only (if ``time_active``).
 
-        ``mode`` is deprecated in favour of the explicit switches
-        ``time_active``/``price_active``/``solar_cap_active``. If any switch
-        key is present in the config, the switches win; a ``mode`` key
-        present alongside them has no effect on the switches (warning
-        logged), but its value is still validated -- an invalid ``mode``
-        raises ValueError so configuration typos fail fast instead of being
-        silently swallowed. If only ``mode`` is present, it is mapped onto
-        the switches (``time`` -> ``time_active=True, price_active=False``;
-        ``price`` -> ``price_active=True, time_active=False``;
-        ``combined`` -> both True) and a one-time deprecation warning is
-        logged at config load. If neither is present, the defaults apply
-        (equivalent to ``combined``).
+        The removed ``mode`` key is rejected with a ValueError so stale
+        configurations fail fast instead of being silently ignored.
         """
         ps = config.get('peak_shaving', {})
         price_limit_raw = ps.get('price_limit', None)
@@ -144,43 +110,21 @@ class PeakShavingConfig:  # pylint: disable=too-many-instance-attributes
                     f"got {price_limit_raw!r}"
                 ) from exc
 
-        mode = ps.get('mode', 'combined')
-        switch_keys = ('time_active', 'price_active', 'solar_cap_active')
-        switches_present = any(key in ps for key in switch_keys)
-        mode_present = 'mode' in ps
-
-        if switches_present:
-            if mode_present:
-                logger.warning(
-                    "peak_shaving.mode is deprecated and ignored because "
-                    "explicit switches (time_active/price_active/"
-                    "solar_cap_active) are configured. Remove peak_shaving.mode "
-                    "from the configuration to silence this warning."
-                )
-            time_active = ps.get('time_active', True)
-            price_active = ps.get('price_active', True)
-        elif mode_present:
-            # One-time deprecation warning at config load; the per-cycle
-            # dataclasses.replace path does not go through from_config, so
-            # this does not repeat on every evaluation.
-            logger.warning(
-                "peak_shaving.mode is deprecated; use the explicit switches "
-                "time_active/price_active/solar_cap_active instead. Mapping "
-                "mode='%s' onto the switches for now.", mode
+        if 'mode' in ps:
+            raise ValueError(
+                "peak_shaving.mode was removed. Use the explicit switches "
+                "time_active/price_active/solar_cap_active instead "
+                "(time -> time_active: true, price_active: false; "
+                "price -> time_active: false, price_active: true; "
+                "combined -> both true)."
             )
-            time_active = mode in ('time', 'combined')
-            price_active = mode in ('price', 'combined')
-        else:
-            time_active = True
-            price_active = True
 
         instance = cls(
             enabled=ps.get('enabled', False),
-            mode=mode,
             allow_full_battery_after=ps.get('allow_full_battery_after', 14),
             price_limit=price_limit,
-            time_active=time_active,
-            price_active=price_active,
+            time_active=ps.get('time_active', True),
+            price_active=ps.get('price_active', True),
             solar_cap_active=ps.get('solar_cap_active', False),
             feed_in_limit_w=ps.get('feed_in_limit_w', 0.0),
             feed_in_limit_headroom=ps.get('feed_in_limit_headroom', 1.0),
@@ -189,8 +133,8 @@ class PeakShavingConfig:  # pylint: disable=too-many-instance-attributes
                 and instance.price_limit is None:
             if instance.time_active:
                 logger.warning(
-                    "peak_shaving price_active is enabled (combined-equivalent: "
-                    "time_active and price_active both active) but no "
+                    "peak_shaving price_active is enabled (with "
+                    "time_active also active) but no "
                     "peak_shaving.price_limit configured: the price "
                     "component is disabled; falling back to time-only "
                     "behaviour. Set a numeric price_limit or disable "

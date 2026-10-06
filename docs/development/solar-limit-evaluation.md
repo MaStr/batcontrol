@@ -87,8 +87,8 @@ harmful move is filling capacity with exportable energy.
 
 With three rule flavors (target time, price, solar) the previous `mode` string
 (`time`/`price`/`combined`) becomes confusing. Agreed design: **one explicit switch
-per rule**; `mode` is deprecated and mapped onto the switches at load time
-(`time` -> `time_active`, `price` -> `price_active`, `combined` -> both):
+per rule**; `mode` was removed in 0.10.0 (migration: `time` -> `time_active`,
+`price` -> `price_active`, `combined` -> both):
 
 ```yaml
 peak_shaving:

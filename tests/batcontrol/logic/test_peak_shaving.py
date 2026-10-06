@@ -250,7 +250,7 @@ class TestPeakShavingDecision(unittest.TestCase):
             max_capacity=self.max_capacity,
             peak_shaving=PeakShavingConfig(
                 enabled=True, allow_full_battery_after=14,
-                mode='combined',
+                time_active=True, price_active=True,
                 # required; tests use high prices so no cheap slots
                 price_limit=0.05),
         )
@@ -376,7 +376,7 @@ class TestPeakShavingDecision(unittest.TestCase):
         self.assertFalse(result.allow_discharge)
 
     def test_price_limit_none_combined_falls_back_to_time_only(self):
-        """price_limit=None with mode='combined' -> falls back to time-only.
+        """price_limit=None with time_active=True, price_active=True -> falls back to time-only.
 
         The time component does not need price_limit, so combined mode
         remains active with only the time-based limiter. At 08:00 with
@@ -391,7 +391,7 @@ class TestPeakShavingDecision(unittest.TestCase):
             max_capacity=self.max_capacity,
             peak_shaving=PeakShavingConfig(
                 enabled=True, allow_full_battery_after=14,
-                mode='combined', price_limit=None),
+                time_active=True, price_active=True, price_limit=None),
         )
         self.logic.set_calculation_parameters(params)
         settings = self._make_settings()
@@ -403,7 +403,7 @@ class TestPeakShavingDecision(unittest.TestCase):
         self.assertEqual(result.limit_battery_charge_rate, 500)
 
     def test_price_limit_none_price_mode_disables_peak_shaving(self):
-        """price_limit=None with mode='price' -> peak shaving disabled.
+        """price_limit=None with time_active=False, price_active=True -> peak shaving disabled.
 
         'price' mode has no fallback: without a price_limit, there is no
         component to apply, so the entire peak shaving is skipped.
@@ -415,7 +415,7 @@ class TestPeakShavingDecision(unittest.TestCase):
             max_capacity=self.max_capacity,
             peak_shaving=PeakShavingConfig(
                 enabled=True, allow_full_battery_after=14,
-                mode='price', price_limit=None),
+                time_active=False, price_active=True, price_limit=None),
         )
         self.logic.set_calculation_parameters(params)
         settings = self._make_settings()
@@ -480,7 +480,7 @@ class TestPeakShavingDecision(unittest.TestCase):
             peak_shaving=PeakShavingConfig(
                 enabled=True, allow_full_battery_after=14,
                 # price_limit not needed for 'time' mode
-                mode='time', price_limit=None),
+                time_active=True, price_active=False, price_limit=None),
         )
         self.logic.set_calculation_parameters(params)
         settings = self._make_settings()
@@ -505,7 +505,7 @@ class TestPeakShavingDecision(unittest.TestCase):
             max_capacity=self.max_capacity,
             peak_shaving=PeakShavingConfig(
                 enabled=True, allow_full_battery_after=14,
-                mode='price', price_limit=0.05),
+                time_active=False, price_active=True, price_limit=0.05),
         )
         self.logic.set_calculation_parameters(params)
         settings = self._make_settings()
@@ -629,7 +629,7 @@ class TestPeakShavingPriceBased(unittest.TestCase):
             max_capacity=self.max_capacity,
             peak_shaving=PeakShavingConfig(
                 enabled=True, allow_full_battery_after=14,
-                mode='price', price_limit=0.05),
+                time_active=False, price_active=True, price_limit=0.05),
         )
         self.logic.set_calculation_parameters(self.params)
 
@@ -744,7 +744,7 @@ class TestPeakShavingPriceBased(unittest.TestCase):
 
     def test_combine_price_and_time_limits_stricter_wins(self):
         """
-        Both limits active (mode='combined'): stricter limit wins.
+        Both limits active (time_active=True, price_active=True): stricter limit wins.
         Setup at 08:00, target 14:00 (6 slots remaining).
         High prices except slot 4 (cheap).
         """
@@ -755,7 +755,7 @@ class TestPeakShavingPriceBased(unittest.TestCase):
             max_capacity=self.max_capacity,
             peak_shaving=PeakShavingConfig(
                 enabled=True, allow_full_battery_after=14,
-                mode='combined', price_limit=0.05),
+                time_active=True, price_active=True, price_limit=0.05),
         )
         logic = NextLogic(timezone=datetime.timezone.utc, interval_minutes=60)
         logic.set_calculation_parameters(params_combined)
@@ -901,7 +901,7 @@ class TestPeakShavingMinChargeRate(unittest.TestCase):
             min_price_difference_rel=0.2,
             max_capacity=self._MAX_CAPACITY,
             peak_shaving=PeakShavingConfig(
-                enabled=True, allow_full_battery_after=14, mode='time'),
+                enabled=True, allow_full_battery_after=14, time_active=True, price_active=False),
         )
         logic.set_calculation_parameters(params)
         return logic

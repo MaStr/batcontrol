@@ -647,29 +647,6 @@ class TestPeakShavingPriceLimitApi:
             bc.mqtt_api.publish_peak_shaving_price_limit.assert_not_called()
 
 
-class TestPeakShavingModeApi:
-    """Batcontrol.api_set_peak_shaving_mode must validate and round-trip."""
-
-    def test_each_valid_mode_is_accepted(self):
-        for mode in ('time', 'price', 'combined'):
-            bc = _make_bc_stub()
-            Batcontrol.api_set_peak_shaving_mode(bc, mode)
-            assert bc.peak_shaving_config.mode == mode
-            bc.mqtt_api.publish_peak_shaving_mode.assert_called_once_with(mode)
-
-    def test_uppercase_is_normalised(self):
-        bc = _make_bc_stub()
-        Batcontrol.api_set_peak_shaving_mode(bc, 'TIME')
-        assert bc.peak_shaving_config.mode == 'time'
-
-    def test_invalid_mode_keeps_old_value(self):
-        original = PeakShavingConfig(mode='price')
-        bc = _make_bc_stub(original)
-        Batcontrol.api_set_peak_shaving_mode(bc, 'bogus')
-        assert bc.peak_shaving_config is original
-        bc.mqtt_api.publish_peak_shaving_mode.assert_not_called()
-
-
 def _make_solar_publish_stub():
     """Stub for solar surplus / solar_active publish tests."""
     api = MagicMock(spec=MqttApi)
