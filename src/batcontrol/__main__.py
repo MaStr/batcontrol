@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 
+from .banner import log_startup_banner
 from .core import Batcontrol
 from .setup import setup_logging, load_config
 from .inverter import InverterOutageError
@@ -73,6 +74,10 @@ def main() -> int:
         logfile=logfile,
         max_logfile_size_kb=max_logfile_size)
     logger = logging.getLogger(__name__)
+
+    # Startup eyecatcher, emitted exactly once. Logged after the final logging
+    # setup so that it also reaches the logfile.
+    log_startup_banner()
 
     # Reduce the default loglevel for urllib3.connectionpool
     if not log_everything:
