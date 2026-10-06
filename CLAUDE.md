@@ -50,6 +50,12 @@ tmp/                      # Throwaway experiments — NEVER committed
   retained topics.
 - **Interval resolution:** 15-minute internally — see `interval_utils.py` and
   `docs/development/15-min-transform.md`.
+- **Decision trace:** every control-cycle decision (discharge rule, grid recharge, peak
+  shaving, solar limit, external overrides like evcc/API/grid-charge-lock) is recorded as a
+  `DecisionRecord` in a `DecisionTrace` (`logic/decision_trace.py`), collected into an
+  in-memory `DecisionJournal` (`decision_journal.py`) that notifies listeners on a mode or
+  value change. The MQTT "Decision" sensor (`mqtt_api.py`) is the first listener. See
+  `docs/development/decision-trace.md` and `docs/features/decision-sensor.md`.
 
 ## Change Checklist
 
@@ -62,6 +68,14 @@ tmp/                      # Throwaway experiments — NEVER committed
 5. Config parameters must also be mirrored into the Home Assistant add-on repo
    (`MaStr/batcontrol_ha_addon`: `options:` + `schema:` in the add-on `config.yaml`). That repo
    ships a `port-batcontrol-change` skill which automates the steps.
+6. New/changed control-flow branch that decides or overrides the inverter mode (in `core.py`,
+   `logic/default.py`, `logic/next.py`) -> add/extend a `DecisionRecord` (see
+   `logic/decision_records.py` for the shared discharge/grid-recharge builders, `core.py`'s
+   `__override_scope`/`__record_clamp` for overrides outside the logic) and a plain-language
+   entry in `_REASON_EXPLANATIONS` (`logic/decision_trace.py`). Update the reason-code table in
+   `docs/development/decision-trace.md`. Skipping this makes the change invisible to the
+   Decision sensor and to the journal's `add_listener()` endpoint — no error is raised, so this
+   is easy to miss in review.
 
 ## Releasing
 
@@ -92,3 +106,7 @@ python -m batcontrol [--config PATH] [--one-shot]
   `config/load_profile_default.csv`, and the `config/` folder from this repo by path — renaming
   or moving these files breaks the add-on build.
 - Branch names: `copilot/feature-name` or `copilot/bugfix-name` (unless the harness assigns one).
+- `Reason` codes (`logic/decision_trace.py`) are a stable, externally consumed contract (HA
+  "Decision" sensor, decision journal listeners) — add new ones rather than renaming existing
+  ones. A reason without an entry in `_REASON_EXPLANATIONS` still works (falls back to a
+  readable version of the code itself) but should get one.
