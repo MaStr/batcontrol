@@ -1649,5 +1649,78 @@ class TestGridChargeLockTopicRegistration:
         bc.shutdown()
 
 
+class TestPeakShavingStartupAnnouncement:
+    """Startup announcement when peak_shaving.enabled is true.
+
+    Up to 0.10.0 peak shaving only ran with battery_control.type "next" and
+    was documented as having no effect otherwise, so an existing config may
+    carry enabled: true from a time when it did nothing. It now applies to
+    every logic type, so the activation is announced once at startup
+    instead of only showing up in the per-cycle [PeakShaving] lines.
+    """
+
+    BASE_CONFIG = {
+        'timezone': 'Europe/Berlin',
+        'time_resolution_minutes': 60,
+        'inverter': {
+            'type': 'dummy',
+            'max_grid_charge_rate': 5000,
+            'max_pv_charge_rate': 0,
+            'min_pv_charge_rate': 0,
+        },
+        'utility': {'type': 'tibber', 'apikey': 'test_token'},
+        'pvinstallations': [],
+        'consumption_forecast': {'type': 'simple', 'value': 500},
+        'battery_control': {
+            'max_charging_from_grid_limit': 0.8,
+            'min_price_difference': 0.05,
+        },
+        'mqtt': {'enabled': False},
+    }
+
+    def _patch_core(self, mocker):
+        mock_inverter = mocker.MagicMock()
+        mock_inverter.max_pv_charge_rate = 0
+        mock_inverter.get_max_capacity.return_value = 10000
+        mocker.patch('batcontrol.core.tariff_factory.create_tarif_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.inverter_factory.create_inverter',
+                     autospec=True, return_value=mock_inverter)
+        mocker.patch('batcontrol.core.solar_factory.create_solar_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.consumption_factory.create_consumption',
+                     autospec=True, return_value=mocker.MagicMock())
+
+    def _build(self, mocker, caplog, logic_type, peak_shaving_enabled):
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control'] = dict(self.BASE_CONFIG['battery_control'])
+        config['battery_control']['type'] = logic_type
+        config['peak_shaving'] = {
+            'enabled': peak_shaving_enabled,
+            'allow_full_battery_after': 14,
+        }
+        with caplog.at_level(logging.INFO, logger='batcontrol.core'):
+            bc = Batcontrol(config)
+        bc.shutdown()
+        return caplog.text
+
+    @pytest.mark.parametrize('logic_type', ['default', 'next'])
+    def test_enabled_is_announced_for_every_logic_type(
+            self, mocker, caplog, logic_type):
+        """The announcement does not depend on battery_control.type."""
+        text = self._build(mocker, caplog, logic_type, True)
+
+        assert 'Peak shaving is ENABLED' in text
+        assert 'allow_full_battery_after=14:00' in text
+
+    @pytest.mark.parametrize('logic_type', ['default', 'next'])
+    def test_disabled_is_not_announced(self, mocker, caplog, logic_type):
+        """No announcement when the feature stays off."""
+        text = self._build(mocker, caplog, logic_type, False)
+
+        assert 'Peak shaving is ENABLED' not in text
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

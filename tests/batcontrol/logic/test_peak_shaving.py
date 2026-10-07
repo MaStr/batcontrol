@@ -1,4 +1,4 @@
-"""Tests for the NextLogic peak shaving feature.
+"""Tests for the DefaultLogic peak shaving feature.
 
 Tests cover:
 - _calculate_peak_shaving_charge_limit algorithm
@@ -31,8 +31,8 @@ class TestPeakShavingAlgorithm(unittest.TestCase):
 
     def setUp(self):
         self.max_capacity = 10000  # 10 kWh
-        self.logic = NextLogic(timezone=datetime.timezone.utc,
-                               interval_minutes=60)
+        self.logic = DefaultLogic(timezone=datetime.timezone.utc,
+                                  interval_minutes=60)
         self.common = CommonLogic.get_instance(
             charge_rate_multiplier=1.1,
             always_allow_discharge_limit=0.90,
@@ -177,8 +177,8 @@ class TestPeakShavingAlgorithm(unittest.TestCase):
         power -- see forecastsolar/baseclass.py. They must not be
         multiplied by interval_hours again when summed.
         """
-        logic_15 = NextLogic(timezone=datetime.timezone.utc,
-                             interval_minutes=15)
+        logic_15 = DefaultLogic(timezone=datetime.timezone.utc,
+                                interval_minutes=15)
         logic_15.set_calculation_parameters(self.params)
 
         # Target 14:00, current 13:00 -> 4 slots of 15 min
@@ -209,8 +209,8 @@ class TestPeakShavingAlgorithm(unittest.TestCase):
         1000 Wh free capacity -- and the function incorrectly skipped
         the cap (-1) instead of applying the counter-linear ramp.
         """
-        logic_15 = NextLogic(timezone=datetime.timezone.utc,
-                             interval_minutes=15)
+        logic_15 = DefaultLogic(timezone=datetime.timezone.utc,
+                                interval_minutes=15)
         logic_15.set_calculation_parameters(self.params)
 
         # Target 14:00, current 13:00 -> 4 slots of 15 min.
@@ -236,8 +236,8 @@ class TestPeakShavingDecision(unittest.TestCase):
 
     def setUp(self):
         self.max_capacity = 10000
-        self.logic = NextLogic(timezone=datetime.timezone.utc,
-                               interval_minutes=60)
+        self.logic = DefaultLogic(timezone=datetime.timezone.utc,
+                                  interval_minutes=60)
         self.common = CommonLogic.get_instance(
             charge_rate_multiplier=1.1,
             always_allow_discharge_limit=0.90,
@@ -523,8 +523,8 @@ class TestPeakShavingDisabled(unittest.TestCase):
 
     def setUp(self):
         self.max_capacity = 10000
-        self.logic = NextLogic(timezone=datetime.timezone.utc,
-                               interval_minutes=60)
+        self.logic = DefaultLogic(timezone=datetime.timezone.utc,
+                                  interval_minutes=60)
         self.common = CommonLogic.get_instance(
             charge_rate_multiplier=1.1,
             always_allow_discharge_limit=0.90,
@@ -561,6 +561,76 @@ class TestPeakShavingDisabled(unittest.TestCase):
         self.assertEqual(result.limit_battery_charge_rate, -1)
 
 
+class TestPeakShavingEndToEndViaDefaultLogic(unittest.TestCase):
+    """Regression: peak shaving runs end-to-end through DefaultLogic.
+
+    Peak shaving used to live in NextLogic only, so a plain DefaultLogic
+    instance never applied a PV charge limit at all.  The feature is now
+    part of DefaultLogic, so calculate() must put the limit on the
+    inverter control settings without any NextLogic involved.
+    """
+
+    MAX_CAPACITY = 10000
+    # 08:00 is before allow_full_battery_after=14 -> time limiter active
+    TS = datetime.datetime(2025, 6, 20, 8, 0, 0,
+                           tzinfo=datetime.timezone.utc)
+
+    def _make_logic(self, peak_shaving_enabled):
+        """Build a DefaultLogic via the shared scenario helper."""
+        return make_logic(
+            DefaultLogic,
+            capacity_wh=self.MAX_CAPACITY,
+            max_charging_from_grid_limit=0.79,
+            always_allow_discharge_limit=0.90,
+            min_grid_charge_soc=None,
+            preserve_min_grid_charge_soc=False,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            peak_shaving=PeakShavingConfig(
+                enabled=peak_shaving_enabled,
+                allow_full_battery_after=14,
+                time_active=True, price_active=False),
+        )
+
+    def _make_calc_input(self):
+        """PV surplus that does not fit into the remaining free capacity.
+
+        stored_energy=7000 Wh of 10000 Wh is below the 90%
+        always_allow_discharge gate, so discharge stays allowed and peak
+        shaving is not skipped.  Flat high prices mean no cheap slot ahead
+        and therefore no grid recharge override.
+        8 slots * (5000 - 500) Wh = 36000 Wh surplus > 3000 Wh free.
+        """
+        stored_energy = 7000
+        return CalculationInput(
+            production=np.array([5000] * 8, dtype=float),
+            consumption=np.array([500] * 8, dtype=float),
+            prices={slot: 10.0 for slot in range(8)},
+            stored_energy=stored_energy,
+            stored_usable_energy=stored_energy - self.MAX_CAPACITY * 0.05,
+            free_capacity=self.MAX_CAPACITY - stored_energy,
+        )
+
+    def test_enabled_peak_shaving_limits_charge_rate(self):
+        """peak_shaving.enabled=True -> calculate() sets a charge limit."""
+        logic = self._make_logic(peak_shaving_enabled=True)
+
+        self.assertTrue(logic.calculate(self._make_calc_input(), self.TS))
+
+        result = logic.get_inverter_control_settings()
+        self.assertTrue(result.allow_discharge)
+        self.assertGreaterEqual(result.limit_battery_charge_rate, 0)
+
+    def test_disabled_peak_shaving_leaves_charge_rate_unlimited(self):
+        """peak_shaving.enabled=False -> calculate() leaves the limit at -1."""
+        logic = self._make_logic(peak_shaving_enabled=False)
+
+        self.assertTrue(logic.calculate(self._make_calc_input(), self.TS))
+
+        result = logic.get_inverter_control_settings()
+        self.assertEqual(result.limit_battery_charge_rate, -1)
+
+
 class TestLogicFactory(unittest.TestCase):
     """Test logic factory type selection."""
 
@@ -572,16 +642,29 @@ class TestLogicFactory(unittest.TestCase):
         )
 
     def test_default_type(self):
-        """type: default -> DefaultLogic."""
+        """type: default -> DefaultLogic, and never the NextLogic alias.
+
+        NextLogic is only a backwards-compatible subclass alias.  A config
+        asking for 'default' must not silently end up on it.
+        """
         config = {'battery_control': {'type': 'default'}}
         logic = Logic.create_logic(60, config, datetime.timezone.utc)
         self.assertIsInstance(logic, DefaultLogic)
+        self.assertNotIsInstance(logic, NextLogic)
 
     def test_next_type(self):
         """type: next -> NextLogic."""
         config = {'battery_control': {'type': 'next'}}
         logic = Logic.create_logic(60, config, datetime.timezone.utc)
         self.assertIsInstance(logic, NextLogic)
+
+    def test_next_logic_is_default_logic_subclass(self):
+        """NextLogic is kept as a silent alias of DefaultLogic.
+
+        'type: next' in existing configs must keep working and behave
+        exactly like 'type: default'.
+        """
+        self.assertTrue(issubclass(NextLogic, DefaultLogic))
 
     def test_missing_type_defaults_to_default(self):
         """No type key -> DefaultLogic."""
@@ -615,8 +698,8 @@ class TestPeakShavingPriceBased(unittest.TestCase):
     def setUp(self):
         self.max_capacity = 10000
         self.interval_minutes = 60
-        self.logic = NextLogic(timezone=datetime.timezone.utc,
-                               interval_minutes=self.interval_minutes)
+        self.logic = DefaultLogic(timezone=datetime.timezone.utc,
+                                  interval_minutes=self.interval_minutes)
         self.common = CommonLogic.get_instance(
             charge_rate_multiplier=1.1,
             always_allow_discharge_limit=0.90,
@@ -757,7 +840,7 @@ class TestPeakShavingPriceBased(unittest.TestCase):
                 enabled=True, allow_full_battery_after=14,
                 time_active=True, price_active=True, price_limit=0.05),
         )
-        logic = NextLogic(timezone=datetime.timezone.utc, interval_minutes=60)
+        logic = DefaultLogic(timezone=datetime.timezone.utc, interval_minutes=60)
         logic.set_calculation_parameters(params_combined)
 
         ts = datetime.datetime(2025, 6, 20, 8, 0, 0, tzinfo=datetime.timezone.utc)
@@ -848,7 +931,7 @@ class TestPeakShavingPriceBased(unittest.TestCase):
         double-scaling bug the surplus was seen as only 300 Wh (<= free),
         so the function incorrectly returned -1 (no cap).
         """
-        logic_15 = NextLogic(timezone=datetime.timezone.utc, interval_minutes=15)
+        logic_15 = DefaultLogic(timezone=datetime.timezone.utc, interval_minutes=15)
         logic_15.set_calculation_parameters(self.params)
         prices = [0, 0, 10, 10]
         production = [600, 600, 500, 500]
@@ -869,7 +952,7 @@ class TestPeakShavingPriceBased(unittest.TestCase):
         With the double-scaling bug the reserve was seen as only 300 Wh,
         giving additional_allowed = 1200 Wh -> 2400 W (4x too loose).
         """
-        logic_15 = NextLogic(timezone=datetime.timezone.utc, interval_minutes=15)
+        logic_15 = DefaultLogic(timezone=datetime.timezone.utc, interval_minutes=15)
         logic_15.set_calculation_parameters(self.params)
         prices = [10, 10, 0, 0]
         production = [300, 300, 600, 600]
@@ -894,7 +977,7 @@ class TestPeakShavingMinChargeRate(unittest.TestCase):
             always_allow_discharge_limit=0.90,
             max_capacity=self._MAX_CAPACITY,
         )
-        logic = NextLogic(timezone=datetime.timezone.utc, interval_minutes=60)
+        logic = DefaultLogic(timezone=datetime.timezone.utc, interval_minutes=60)
         params = CalculationParameters(
             max_charging_from_grid_limit=0.79,
             min_price_difference=0.05,
@@ -987,13 +1070,13 @@ class TestPeakShavingMinChargeRate(unittest.TestCase):
 
 
 
-class TestNextLogicGridRechargeLogging(unittest.TestCase):
-    """Tests recharge decision logging for NextLogic."""
+class TestDefaultLogicGridRechargeLogging(unittest.TestCase):
+    """Tests recharge decision logging for DefaultLogic."""
 
     def setUp(self):
         self.max_capacity = 10000
-        self.logic = NextLogic(timezone=datetime.timezone.utc,
-                               interval_minutes=60)
+        self.logic = DefaultLogic(timezone=datetime.timezone.utc,
+                                  interval_minutes=60)
         CommonLogic.get_instance(
             charge_rate_multiplier=1.1,
             always_allow_discharge_limit=0.80,
@@ -1021,12 +1104,12 @@ class TestNextLogicGridRechargeLogging(unittest.TestCase):
         )
 
     def test_grid_recharge_decision_is_logged(self):
-        """NextLogic logs the shared grid recharge decision summary."""
+        """DefaultLogic logs the shared grid recharge decision summary."""
         calc_input = self._make_grid_charge_input()
 
         calc_timestamp = datetime.datetime(2025, 6, 20, 12, 30, 0,
                                            tzinfo=datetime.timezone.utc)
-        with self.assertLogs('batcontrol.logic.next', level='INFO') as logs:
+        with self.assertLogs('batcontrol.logic.default', level='INFO') as logs:
             self.assertTrue(self.logic.calculate(calc_input, calc_timestamp))
 
         result = self.logic.get_inverter_control_settings()
@@ -1041,7 +1124,7 @@ class TestNextLogicGridRechargeLogging(unittest.TestCase):
         self.assertIn('charge_rate=', log_output)
 
     def test_min_grid_charge_soc_increases_recharge_energy(self):
-        """NextLogic applies the optional minimum grid-charge SoC target."""
+        """DefaultLogic applies the optional minimum grid-charge SoC target."""
         self.logic.set_calculation_parameters(CalculationParameters(
             max_charging_from_grid_limit=0.79,
             min_price_difference=0.05,
@@ -1060,7 +1143,7 @@ class TestNextLogicGridRechargeLogging(unittest.TestCase):
         self.assertAlmostEqual(calc_output.required_recharge_energy, 3600.0)
 
     def test_min_grid_charge_soc_blocks_discharge_during_cheap_window(self):
-        """NextLogic expert option preserves battery before expensive demand."""
+        """DefaultLogic expert option preserves battery before expensive demand."""
         self.logic.set_calculation_parameters(CalculationParameters(
             max_charging_from_grid_limit=0.79,
             min_price_difference=0.05,
@@ -1093,7 +1176,7 @@ class TestNextLogicGridRechargeLogging(unittest.TestCase):
         self.assertGreater(calc_output.reserved_energy, 2000)
 
     def test_min_grid_charge_soc_does_not_block_discharge_at_high_price(self):
-        """NextLogic does not preserve battery when current price is high."""
+        """DefaultLogic does not preserve battery when current price is high."""
         self.logic.set_calculation_parameters(CalculationParameters(
             max_charging_from_grid_limit=0.79,
             min_price_difference=0.05,
@@ -1124,7 +1207,7 @@ class TestNextLogicGridRechargeLogging(unittest.TestCase):
 
 
 class TestSolarLimitIntegration(unittest.TestCase):
-    """Integration tests for the solar_cap rule via NextLogic.
+    """Integration tests for the solar_cap rule via DefaultLogic.
 
     Logic instances are built with tests/batcontrol/logic/helpers.py's
     make_logic(), extended to accept a full PeakShavingConfig directly.
@@ -1174,7 +1257,7 @@ class TestSolarLimitIntegration(unittest.TestCase):
         )
 
     def _make_logic(self, peak_shaving):
-        return make_logic(NextLogic, capacity_wh=self.MAX_CAPACITY,
+        return make_logic(DefaultLogic, capacity_wh=self.MAX_CAPACITY,
                           peak_shaving=peak_shaving)
 
     def test_floor_overrides_time_cap(self):

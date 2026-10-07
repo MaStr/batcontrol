@@ -78,7 +78,7 @@ def grid_recharge_charge(calc_input: CalculationInput,  # pylint: disable=too-ma
     """Battery is charged from the grid.
 
     ``high_price_slots``/``recharge_window_end`` are relative slot indices
-    (returned by ``__get_required_recharge_energy`` alongside the energy
+    (returned by ``_get_required_recharge_energy`` alongside the energy
     itself) -- ``interval_minutes`` is included so a consumer can turn one
     into an actual time span, same as for the discharge rule.
     """
@@ -118,10 +118,10 @@ def grid_recharge_idle(calc_input: CalculationInput, *,  # pylint: disable=too-m
     """Battery is kept as it is: no grid charging.
 
     Five distinct situations end up here, told apart purely from the
-    numbers already computed by __get_required_recharge_energy -- no
+    numbers already computed by _get_required_recharge_energy -- no
     extra flag is needed:
     - GRID_CHARGE_LIMIT_REACHED: SoC is already above the grid-charging
-      limit; __get_required_recharge_energy was never called, so
+      limit; _get_required_recharge_energy was never called, so
       high_price_slots etc. are at their defaults (empty/zero).
     - NO_HIGH_PRICE_SLOTS: no slot in the evaluation window is priced
       high enough to justify reserving/recharging for it at all.

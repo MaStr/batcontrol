@@ -10,7 +10,8 @@ log_everything: false # if false debug messages from fronius.auth and urllib3.co
 max_logfile_size: 200 #kB
 logfile_path: logs/batcontrol.log
 battery_control:
-  type: default  # Logic type: 'default' (standard) or 'next' (includes peak shaving)
+  type: default  # Logic type: 'default' is the recommended standard logic.
+                 # 'next' is a historical alias kept for existing configurations and behaves identically.
                                  # min_price_difference is the absolute minimum price difference in Euro to justify charging your battery
                                  # if min_price_difference_rel results in a higher price difference, that will be used
   min_price_difference: 0.05     # minimum price difference in Euro to justify charging your battery
@@ -48,7 +49,8 @@ battery_control_expert:
 #  Three independent rules manage PV battery charging: spread charging until a target
 #  hour (time rule), reserve capacity for cheap-price windows (price rule), and absorb
 #  PV power above the feed-in limit to prevent clipping (solar rule).
-#  Requires logic type 'next' in battery_control section.
+#  Independent of battery_control.type - peak shaving works with every logic type,
+#  it only needs 'enabled: true' below.
 #
 #  Rule switches (each independently toggle-able):
 #    time_active      - spread charging until allow_full_battery_after

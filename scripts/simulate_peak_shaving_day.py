@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Day simulation for NextLogic peak shaving.
+"""Day simulation for DefaultLogic peak shaving.
 
 Simulates a summer day with a realistic PV production bell-curve.
 Runs through each hour slot, calls the peak shaving logic with the
@@ -25,7 +25,7 @@ import numpy as np
 # Allow running from project root without installing the package
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from batcontrol.logic.next import NextLogic
+from batcontrol.logic.default import DefaultLogic
 from batcontrol.logic.logic_interface import (
     CalculationInput,
     CalculationParameters,
@@ -128,7 +128,7 @@ def apply_one_hour(production_w: float, consumption_w: float,
     net_surplus_w = production_w - consumption_w  # positive = PV excess
 
     if net_surplus_w <= 0:
-        # Consuming from battery or grid – peak shaving does not apply
+        # Consuming from battery or grid - peak shaving does not apply
         actual_charge_w = 0.0
         actual_feed_in_w = 0.0
         discharge_w = min(-net_surplus_w, stored_wh / INTERVAL_H)
@@ -183,7 +183,8 @@ params_shaving = CalculationParameters(
     peak_shaving=PeakShavingConfig(
         enabled=True,
         allow_full_battery_after=TARGET_HOUR,
-        mode='time',  # pure time-based ramp
+        time_active=True,  # pure time-based ramp
+        price_active=False,
     ),
 )
 
@@ -220,7 +221,7 @@ total_charged_base = 0.0
 total_charged_shav = 0.0
 
 # Build a fresh logic per iteration (it carries state via CommonLogic singleton)
-logic_shav = NextLogic(timezone=TZ, interval_minutes=INTERVAL_MIN)
+logic_shav = DefaultLogic(timezone=TZ, interval_minutes=INTERVAL_MIN)
 logic_shav.set_calculation_parameters(params_shaving)
 
 for hour in range(24):
@@ -292,7 +293,7 @@ print()
 print(f"{'Slot':>5}  {'Time':>6}  {'PV (W)':>8}  {'n remain':>9}  {'raw limit (W)':>14}  {'applied (W)':>12}")
 print("-" * 65)
 
-logic_ramp = NextLogic(timezone=TZ, interval_minutes=INTERVAL_MIN)
+logic_ramp = DefaultLogic(timezone=TZ, interval_minutes=INTERVAL_MIN)
 logic_ramp.set_calculation_parameters(params_shaving)
 ramp_soc = INITIAL_SOC_WH
 
@@ -342,10 +343,11 @@ def run_scenario(target_hour: int, initial_soc_wh: float) -> dict:
         peak_shaving=PeakShavingConfig(
             enabled=True,
             allow_full_battery_after=target_hour,
-            mode='time',
+            time_active=True,
+            price_active=False,
         ),
     )
-    logic = NextLogic(timezone=TZ, interval_minutes=INTERVAL_MIN)
+    logic = DefaultLogic(timezone=TZ, interval_minutes=INTERVAL_MIN)
     logic.set_calculation_parameters(params)
 
     soc = float(initial_soc_wh)

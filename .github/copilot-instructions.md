@@ -46,7 +46,7 @@ This is a Python based repository providing an application for controlling batte
 6. Never commit content of `tmp`.
 7. User documentation lives in the `docs/` folder and is published via MkDocs to https://mastr.github.io/batcontrol/ — add or update pages there and register new pages in `mkdocs.yml`.
 8. Ensure compatibility with supported Python versions (3.9 to 3.13)
-9. A change that affects which inverter mode is chosen, or why (`core.py`, `logic/default.py`,
-   `logic/next.py`), must stay traceable: add or extend a `DecisionRecord` with a plain-language
+9. A change that affects which inverter mode is chosen, or why (`core.py`,
+   `logic/default.py`), must stay traceable: add or extend a `DecisionRecord` with a plain-language
    explanation (`logic/decision_trace.py`, `logic/decision_records.py`). This feeds the MQTT
    "Decision" sensor and the in-memory decision journal — see `docs/development/decision-trace.md`.

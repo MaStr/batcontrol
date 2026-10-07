@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Day simulation for NextLogic price-based peak shaving.
+"""Day simulation for DefaultLogic price-based peak shaving.
 
-Simulates a summer day using the **price-based** algorithm only (mode='price').
+Simulates a summer day using the **price-based** algorithm only (price_active).
 
 Scenario:
   - Realistic PV production bell-curve (same as simulate_peak_shaving_day.py)
@@ -10,7 +10,7 @@ Scenario:
   - Battery starts at ~15% SOC
   - Two traces compared:
       Baseline  : no peak shaving
-      PriceShav : mode='price', price_limit applied
+      PriceShav : price_active, price_limit applied
 
 The question answered:
   "With a cheap window at 12-13, does the price-based algo reserve capacity
@@ -27,7 +27,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from batcontrol.logic.next import NextLogic
+from batcontrol.logic.default import DefaultLogic
 from batcontrol.logic.logic_interface import (
     CalculationInput,
     CalculationParameters,
@@ -51,7 +51,7 @@ CONSUMPTION_W = 400      # W   constant house load
 PRICE_LIMIT   = 0.05     # EUR/kWh
 
 # allow_full_battery_after is required by CalculationParameters even if we
-# only use mode='price'.  Set it past the production window so it never
+# only use the price rule.  Set it past the production window so it never
 # interferes with our price-based scenario.
 ALLOW_FULL_AFTER = 23
 
@@ -157,7 +157,8 @@ params_price = CalculationParameters(
     peak_shaving=PeakShavingConfig(
         enabled=True,
         allow_full_battery_after=ALLOW_FULL_AFTER,
-        mode='price',
+        time_active=False,
+        price_active=True,
         price_limit=PRICE_LIMIT,
     ),
 )
@@ -176,20 +177,20 @@ print()
 # Print price and production overview
 # ---------------------------------------------------------------------------
 print("Hour-by-hour forecast:")
-print(f"  {'Hour':>5}  {'Price €/kWh':>11}  {'PV (W)':>8}  {'Surplus (W)':>11}  {'<= limit':>8}")
-print("  " + "-" * 52)
+print(f"  {'Hour':>5}  {'Price EUR/kWh':>13}  {'PV (W)':>8}  {'Surplus (W)':>11}  {'<= limit':>8}")
+print("  " + "-" * 54)
 for h in range(24):
     price    = PRICE_PROFILE[h]
     prod     = PRODUCTION_PROFILE_W[h]
     surplus  = max(prod - CONSUMPTION_W, 0)
     cheap_mk = "  CHEAP <--" if price <= PRICE_LIMIT else ""
-    print(f"  {h:02d}:00  {price:>11.3f}  {prod:>8.0f}  {surplus:>11.0f}{cheap_mk}")
+    print(f"  {h:02d}:00  {price:>13.3f}  {prod:>8.0f}  {surplus:>11.0f}{cheap_mk}")
 print()
 
 # ---------------------------------------------------------------------------
 # Main simulation loop
 # ---------------------------------------------------------------------------
-logic_shav  = NextLogic(timezone=TZ, interval_minutes=INTERVAL_MIN)
+logic_shav  = DefaultLogic(timezone=TZ, interval_minutes=INTERVAL_MIN)
 logic_shav.set_calculation_parameters(params_price)
 
 soc_base = float(INITIAL_SOC_WH)
@@ -300,7 +301,7 @@ print(f"  {'Hour':>5}  {'PV (W)':>8}  {'Price':>7}  "
 print("  " + "-" * 80)
 
 debug_soc = float(INITIAL_SOC_WH)
-debug_logic = NextLogic(timezone=TZ, interval_minutes=INTERVAL_MIN)
+debug_logic = DefaultLogic(timezone=TZ, interval_minutes=INTERVAL_MIN)
 debug_logic.set_calculation_parameters(params_price)
 
 # We need CommonLogic still pointing to the right instance
