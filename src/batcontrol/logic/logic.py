@@ -18,19 +18,20 @@ class Logic:
         logic = None
         if request_type == 'default':
             if Logic.print_class_message:
-                logger.info('Using "default" logic')
+                logger.info('Using "default" logic (incl. peak shaving)')
                 Logic.print_class_message = False
             logic = DefaultLogic(timezone, interval_minutes=time_resolution_minutes)
         elif request_type == 'next':
             if Logic.print_class_message:
-                logger.info('Using "next" logic (with peak shaving support)')
+                logger.info('Using "next" logic (alias for "default"; '
+                            'peak shaving is now part of "default")')
                 Logic.print_class_message = False
             logic = NextLogic(timezone, interval_minutes=time_resolution_minutes)
         else:
             raise RuntimeError(
                 f'[Logic] Unknown logic type "{request_type}" specified in configuration')
 
-        # Apply expert tuning attributes (shared between default and next)
+        # Apply expert tuning attributes
         if config.get('battery_control_expert', None) is not None:
             battery_control_expert = config.get('battery_control_expert', {})
             attribute_list = [

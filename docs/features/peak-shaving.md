@@ -8,18 +8,22 @@ Peak shaving solves this by **limiting the PV-to-battery charge rate** so the ba
 
 ## Status
 
-The algorithm is in the status "experimental", which is the reason why it is only available in the logic type `next`. After collecting enough experience with that feature, it will move into `default` eventually.
+Peak shaving is **stable** and part of the standard battery control logic.
 
 ## Prerequisites
 
-Peak shaving was introduced with 0.8.0 and is only available with the **`next` logic type**. Set this in the `battery_control` section of your configuration:
+Peak shaving was introduced with 0.8.0 in the `next` logic type. Since 0.10.0 it is part of the standard logic, so no particular `battery_control.type` has to be selected any more -- setting `peak_shaving.enabled: true` is enough.
 
-```yaml
-battery_control:
-  type: next   # Required -- 'default' does not include peak shaving
-```
+Existing configurations with `type: next` keep working unchanged: `next` is only an alias for the standard logic and behaves identically.
 
-The `default` logic type does not support peak shaving at all. Enabling peak shaving without switching to `next` has no effect.
+!!! warning "Upgrading from 0.9.x or earlier with `type: default`"
+    Before 0.10.0, `peak_shaving.enabled: true` had **no effect** unless
+    `battery_control.type` was set to `next`. If your configuration carries
+    `enabled: true` from that time, peak shaving now becomes active on the
+    first control cycle after the upgrade and starts limiting PV-to-battery
+    charging. batcontrol logs a one-time `Peak shaving is ENABLED ...` line at
+    startup so the change is visible. Set `peak_shaving.enabled: false` if you
+    do not want the feature.
 
 ## Configuration
 
@@ -268,9 +272,6 @@ The charge limit is recalculated every evaluation cycle (typically every 3 minut
 **Simple time-based setup** -- spread charging until 14:00, no price or solar awareness:
 
 ```yaml
-battery_control:
-  type: next
-
 peak_shaving:
   enabled: true
   time_active: true
@@ -282,9 +283,6 @@ peak_shaving:
 **Price-aware combined setup** -- reserve capacity for cheap slots below 5 ct/kWh:
 
 ```yaml
-battery_control:
-  type: next
-
 peak_shaving:
   enabled: true
   time_active: true
@@ -297,9 +295,6 @@ peak_shaving:
 **With solar feed-in limit** -- add clipping absorption for a 10 kWp plant (6000 W limit):
 
 ```yaml
-battery_control:
-  type: next
-
 peak_shaving:
   enabled: true
   time_active: true

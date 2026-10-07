@@ -1,3 +1,26 @@
+"""DefaultLogic - battery control logic for Batcontrol.
+
+This module provides the DefaultLogic class with the price-based core
+logic: it evaluates whether the battery is allowed to discharge, how much
+energy has to be recharged from the grid to cover upcoming high-price
+slots, and at which rate that recharge happens.
+
+On top of that it runs two optional post-processing steps, both gated on
+``peak_shaving.enabled``:
+
+* Peak shaving manages the PV battery charging rate so the battery fills
+  up gradually, reaching full capacity by a configurable target hour
+  (``allow_full_battery_after``). This prevents the battery from being
+  full too early in the day, avoiding excessive feed-in during midday PV
+  peak hours.
+* The solar limit (``solar_cap``) rule caps/floors the PV charge rate
+  around a predicted feed-in limit clip window so the clipped energy is
+  absorbed by the battery instead of being curtailed.
+
+Usage:
+    Select via ``type: default`` in the battery_control config section.
+    ``type: next`` is a silent alias, see :py:mod:`batcontrol.logic.next`.
+"""
 import datetime
 import logging
 from typing import Optional, List, Tuple
@@ -14,11 +37,12 @@ from .decision_records import (
     grid_recharge_charge,
     grid_recharge_idle,
 )
-from .decision_trace import DecisionTrace
+from .decision_trace import Decision, DecisionTrace, Outcome, Reason
 from .grid_charge_target import (
     apply_grid_charge_target_to_recharge,
     apply_grid_charge_target_to_reserve,
 )
+from . import solar_limit
 
 # Minimum remaining time in hours to prevent division by very small numbers
 # when calculating charge rates. This constant serves as a safety threshold:
@@ -46,7 +70,7 @@ class DefaultLogic(LogicInterface):
         # expensive than the current slot (only effective with soften enabled)
         self.spread_grid_charge_over_charge_window = True
         # End of the recharge evaluation window (exclusive), set by
-        # __get_required_recharge_energy
+        # _get_required_recharge_energy
         self.recharge_window_end = 1
         self.timezone = timezone
         self.interval_minutes = interval_minutes
@@ -107,6 +131,10 @@ class DefaultLogic(LogicInterface):
         """ Get the decision steps recorded during the last calculation """
         return self.decision_trace
 
+    # ------------------------------------------------------------------ #
+    #  Main control logic                                                 #
+    # ------------------------------------------------------------------ #
+
     def calculate_inverter_mode(self, calc_input: CalculationInput,
                                 calc_timestamp: Optional[datetime.datetime] = None
                                 ) -> InverterControlSettings:
@@ -132,11 +160,10 @@ class DefaultLogic(LogicInterface):
         # ensure availability of data
         max_slot = min(len(net_consumption), len(prices))
 
-        if self.__is_discharge_allowed(calc_input, net_consumption, prices, calc_timestamp):
+        if self._is_discharge_allowed(calc_input, net_consumption, prices, calc_timestamp):
             inverter_control_settings.allow_discharge = True
             inverter_control_settings.limit_battery_charge_rate = -1 # no limit
 
-            return inverter_control_settings
         else:  # discharge not allowed
             logger.debug('Discharging is NOT allowed')
             inverter_control_settings.allow_discharge = False
@@ -160,7 +187,7 @@ class DefaultLogic(LogicInterface):
                 (required_recharge_energy, high_price_slots,
                  high_price_energy_demand, recharge_energy_before_minimum,
                  window_end_slot
-                 ) = self.__get_required_recharge_energy(
+                 ) = self._get_required_recharge_energy(
                     calc_input,
                     net_consumption[:max_slot],
                     prices
@@ -192,29 +219,7 @@ class DefaultLogic(LogicInterface):
                 # The charge rate must be sufficient to reach target energy before the
                 # current price interval (or the charging window) ends, while staying
                 # within safe operating limits
-                current_minute = calc_timestamp.minute
-                current_second = calc_timestamp.second
-
-                if self.interval_minutes == 15:
-                    # For 15-minute intervals: find start of current interval (0, 15, 30, or 45)
-                    # and calculate time remaining until the next interval boundary
-                    current_interval_start = (current_minute // 15) * 15
-                    remaining_minutes = (current_interval_start + 15
-                                         - current_minute - current_second / 60)
-                else:  # 60 minutes
-                    # For 60-minute intervals: calculate time remaining until next hour
-                    remaining_minutes = 60 - current_minute - current_second / 60
-
-                # Convert remaining time to hours for charge rate calculation
-                remaining_time = remaining_minutes / 60
-
-                # Apply minimum time threshold to prevent extreme charge rates
-                # Near the end of an interval (e.g., at XX:59:59), the remaining time
-                # approaches zero, which would cause charge_rate = energy / time to spike
-                # to unrealistic values. MIN_REMAINING_TIME_HOURS ensures we never divide
-                # by less than 1 minute, keeping charge rates within practical bounds.
-                # Note: interval_minutes is validated in core.py (must be 15 or 60)
-                remaining_time = max(remaining_time, MIN_REMAINING_TIME_HOURS)
+                remaining_time = self._remaining_interval_hours(calc_timestamp)
 
                 if self.spread_grid_charge_over_charge_window:
                     remaining_time = extend_to_grid_charge_window(
@@ -252,10 +257,485 @@ class DefaultLogic(LogicInterface):
                     recharge_energy_before_minimum=recharge_energy_before_minimum,
                     interval_minutes=self.interval_minutes),
                     logger)
-        #
+
+        # ----- Peak Shaving Post-Processing ----- #
+        if self.calculation_parameters.peak_shaving.enabled:
+            inverter_control_settings = self._apply_peak_shaving(
+                inverter_control_settings, calc_input, calc_timestamp)
+            inverter_control_settings = self._apply_solar_limit(
+                inverter_control_settings, calc_input, calc_timestamp)
+
         return inverter_control_settings
 
-    def __is_discharge_allowed(self, calc_input: CalculationInput,
+    # ------------------------------------------------------------------ #
+    #  Shared helpers                                                     #
+    # ------------------------------------------------------------------ #
+
+    def _remaining_interval_hours(self, calc_timestamp: datetime.datetime) -> float:
+        """Return the remaining time (in hours) within the current interval.
+
+        For 15-minute resolution this is the time until the next quarter-hour
+        boundary; for 60-minute resolution the time until the next full hour.
+        Floored at ``MIN_REMAINING_TIME_HOURS`` to avoid division by very
+        small numbers (and the resulting unreasonably high charge rates) when
+        called close to an interval boundary.
+        """
+        current_minute = calc_timestamp.minute
+        current_second = calc_timestamp.second
+
+        if self.interval_minutes == 15:
+            # For 15-minute intervals: find start of current interval
+            # (0, 15, 30, or 45) and calculate the time remaining until the
+            # next interval boundary
+            current_interval_start = (current_minute // 15) * 15
+            remaining_minutes = (current_interval_start + 15
+                                 - current_minute - current_second / 60)
+        else:  # 60 minutes
+            # For 60-minute intervals: calculate time remaining until next hour
+            # Note: interval_minutes is validated in core.py (must be 15 or 60)
+            remaining_minutes = 60 - current_minute - current_second / 60
+
+        # Convert remaining time to hours for charge rate calculation
+        remaining_time = remaining_minutes / 60
+
+        # Apply minimum time threshold to prevent extreme charge rates.
+        # Near the end of an interval (e.g., at XX:59:59), the remaining time
+        # approaches zero, which would cause charge_rate = energy / time to
+        # spike to unrealistic values. MIN_REMAINING_TIME_HOURS ensures we
+        # never divide by less than 1 minute, keeping charge rates within
+        # practical bounds.
+        return max(remaining_time, MIN_REMAINING_TIME_HOURS)
+
+    # ------------------------------------------------------------------ #
+    #  Peak Shaving                                                       #
+    # ------------------------------------------------------------------ #
+
+    def _trace_skip(self, decision: str, reason: str, **inputs) -> None:
+        """Record that a post-processing rule did not run. The rules keep
+        their own log statements, so the trace steps are not logged."""
+        self.decision_trace.step(decision, Outcome.SKIPPED, reason, **inputs)
+
+    def _apply_peak_shaving(self, settings: InverterControlSettings,
+                            calc_input: CalculationInput,
+                            calc_timestamp: datetime.datetime
+                            ) -> InverterControlSettings:
+        """Limit PV charge rate based on the active peak shaving switches.
+
+        Switch behaviour (peak_shaving.time_active / peak_shaving.price_active):
+          time_active  - spread remaining capacity until allow_full_battery_after
+          price_active - reserve capacity for upcoming cheap-price PV slots;
+                         inside cheap window, spread if surplus > free capacity
+          both active  - both limits computed, stricter one wins
+
+        Skipped when:
+        - price_active and price_limit is not configured, and time_active is
+          also not active (no other component to fall back to)
+        - No PV production right now (nighttime)
+        - Past allow_full_battery_after hour (both components)
+        - Battery in always_allow_discharge region (high SOC)
+        - Force-charge from grid active (MODE -1)
+        - Discharge not allowed (battery preserved for high-price hours)
+
+        If both time_active and price_active are set but price_limit is
+        None, falls back to time-only behaviour (the time component does
+        not require price_limit).
+
+        Note: evcc checks (charging, connected+pv mode) are handled in
+              core.py, not here. The solar_cap rule is a separate
+              post-processing step, see :py:meth:`_apply_solar_limit`.
+        """
+        time_active = self.calculation_parameters.peak_shaving.time_active
+        price_active = self.calculation_parameters.peak_shaving.price_active
+        price_limit = self.calculation_parameters.peak_shaving.price_limit
+
+        # Price component needs price_limit configured.
+        # If time_active is also off: skip entirely (no other component to
+        # fall back to). If time_active is on: fall back to time-only
+        # behaviour. The user is informed once at config-load time by
+        # PeakShavingConfig, so this path stays at debug level to avoid
+        # per-cycle log spam.
+        if price_active and price_limit is None:
+            if not time_active:
+                logger.debug('[PeakShaving] Skipped: price_limit not '
+                             'configured and price_active is the only '
+                             'active component')
+                self._trace_skip(Decision.PEAK_SHAVING, Reason.PRICE_LIMIT_MISSING)
+                return settings
+            logger.debug('[PeakShaving] price_limit not configured; '
+                         'using time-only component')
+            price_active = False
+
+        # No production right now: skip
+        if calc_input.production[0] <= 0:
+            self._trace_skip(Decision.PEAK_SHAVING, Reason.NO_PV_PRODUCTION)
+            return settings
+
+        # Past target hour: skip (applies to all modes)
+        full_battery_after = self.calculation_parameters.peak_shaving.allow_full_battery_after
+        if calc_timestamp.hour >= full_battery_after:
+            self._trace_skip(Decision.PEAK_SHAVING, Reason.PAST_FULL_BATTERY_HOUR,
+                             allow_full_battery_after=full_battery_after)
+            return settings
+
+        # In always_allow_discharge region: skip
+        if self.common.is_discharge_always_allowed_capacity(calc_input.stored_energy):
+            logger.debug('[PeakShaving] Skipped: battery in always_allow_discharge region')
+            self._trace_skip(Decision.PEAK_SHAVING,
+                             Reason.ALWAYS_ALLOW_DISCHARGE_REGION)
+            return settings
+
+        # Force charge takes priority over peak shaving
+        if settings.charge_from_grid:
+            logger.warning('[PeakShaving] Skipped: force_charge (MODE -1) active, '
+                           'grid charging takes priority')
+            self._trace_skip(Decision.PEAK_SHAVING, Reason.FORCE_CHARGE_ACTIVE)
+            return settings
+
+        # Battery preserved for high-price hours -- don't limit PV charging
+        if not settings.allow_discharge:
+            logger.debug('[PeakShaving] Skipped: discharge not allowed, '
+                         'battery preserved for high-price hours')
+            self._trace_skip(Decision.PEAK_SHAVING, Reason.DISCHARGE_NOT_ALLOWED)
+            return settings
+
+        # Compute limits according to the active switches
+        price_limit_w = -1
+        time_limit_w = -1
+
+        if price_active:
+            price_limit_w = self._calculate_peak_shaving_charge_limit_price_based(calc_input)
+        if time_active:
+            time_limit_w = self._calculate_peak_shaving_charge_limit(calc_input, calc_timestamp)
+
+        candidates = [v for v in (price_limit_w, time_limit_w) if v >= 0]
+        if not candidates:
+            logger.debug('[PeakShaving] Evaluated: no limit needed')
+            self.decision_trace.step(
+                Decision.PEAK_SHAVING, Outcome.NOT_NEEDED,
+                Reason.NO_LIMIT_NEEDED,
+                time_active=time_active, price_active=price_active)
+            return settings
+
+        charge_limit = min(candidates)
+
+        # Enforce minimum charge rate: avoid inefficient low-power scenarios.
+        # 0 is kept as-is (means block charging entirely).
+        charge_limit = self.common.enforce_min_pv_charge_rate(charge_limit)
+
+        # Apply charge rate limit (keep more restrictive if one already exists)
+        if settings.limit_battery_charge_rate < 0:
+            settings.limit_battery_charge_rate = charge_limit
+        else:
+            settings.limit_battery_charge_rate = min(
+                settings.limit_battery_charge_rate, charge_limit)
+
+        # Note: allow_discharge is already True here (checked above).
+        # The limit_battery_charge_rate mode in the inverter layer requires
+        # allow_discharge=True to work correctly.
+
+        active_components = ','.join(
+            name for name, active in
+            (('time', time_active), ('price', price_active)) if active
+        ) or 'none'
+        logger.info('[PeakShaving] active=%s, PV limit: %d W '
+                    '(price-based=%s W, time-based=%s W, full by %d:00)',
+                    active_components, settings.limit_battery_charge_rate,
+                    price_limit_w if price_limit_w >= 0 else 'off',
+                    time_limit_w if time_limit_w >= 0 else 'off',
+                    self.calculation_parameters.peak_shaving.allow_full_battery_after)
+        self.decision_trace.step(
+            Decision.PEAK_SHAVING, Outcome.LIMIT_SET, Reason.PV_CHARGE_LIMITED,
+            decisive=True,
+            active_components=active_components,
+            final_limit_w=settings.limit_battery_charge_rate,
+            price_limit_w=price_limit_w if price_limit_w >= 0 else None,
+            time_limit_w=time_limit_w if time_limit_w >= 0 else None,
+            allow_full_battery_after=(
+                self.calculation_parameters.peak_shaving.allow_full_battery_after))
+
+        return settings
+
+    def _apply_solar_limit(self, settings: InverterControlSettings,
+                           calc_input: CalculationInput,
+                           calc_timestamp: datetime.datetime
+                           ) -> InverterControlSettings:
+        """Apply the solar_cap rule (feed-in limit clip absorption).
+
+        See docs/development/solar-limit-evaluation.md for the algorithm and
+        the priority rule between rule flavours. In short: this rule emits a
+        reservation cap ahead of the predicted clip window and a floor
+        (minimum permitted charge rate) plus capacity-preserving cap inside
+        it, so the existing time/price peak-shaving caps do not cause
+        curtailment. The floor overrides every cap (``final = max(floor,
+        min(caps))``) because a cap below the floor destroys energy.
+
+        Gated on peak_shaving.enabled (checked by the caller),
+        peak_shaving.solar_cap_active and a configured feed_in_limit_w > 0.
+
+        Deliberately smaller skip list than :py:meth:`_apply_peak_shaving`:
+        this rule must still act at high SoC (always_allow_discharge region)
+        and past allow_full_battery_after -- the clip window physically
+        outlasts the target hour. Skipped only when:
+        - No PV production right now (nighttime)
+        - Force-charge from grid active (MODE -1)
+        - Discharge not allowed (inverter charges surplus unrestricted there
+          anyway)
+        """
+        peak_shaving = self.calculation_parameters.peak_shaving
+        if not peak_shaving.solar_cap_active or peak_shaving.feed_in_limit_w <= 0:
+            return settings
+
+        if calc_input.production[0] <= 0:
+            self._trace_skip(Decision.SOLAR_LIMIT, Reason.NO_PV_PRODUCTION)
+            return settings
+
+        if settings.charge_from_grid:
+            logger.debug('[SolarLimit] Skipped: force_charge (MODE -1) active, '
+                         'grid charging takes priority')
+            self._trace_skip(Decision.SOLAR_LIMIT, Reason.FORCE_CHARGE_ACTIVE)
+            return settings
+
+        if not settings.allow_discharge:
+            logger.debug('[SolarLimit] Skipped: discharge not allowed, '
+                         'inverter charges surplus unrestricted')
+            self._trace_skip(Decision.SOLAR_LIMIT, Reason.DISCHARGE_NOT_ALLOWED)
+            return settings
+
+        interval_h = self.interval_minutes / 60.0
+        slot0_hours = self._remaining_interval_hours(calc_timestamp)
+
+        floor_w, cap_w = solar_limit.compute_solar_limit(
+            calc_input.production,
+            calc_input.consumption,
+            peak_shaving.feed_in_limit_w,
+            interval_h,
+            calc_input.free_capacity,
+            self.common.max_capacity,
+            headroom=peak_shaving.feed_in_limit_headroom,
+            slot0_hours=slot0_hours,
+        )
+
+        if floor_w == 0 and cap_w < 0:
+            logger.debug('[SolarLimit] Evaluated: no clip predicted, '
+                         'no limit needed')
+            self.decision_trace.step(
+                Decision.SOLAR_LIMIT, Outcome.NOT_NEEDED,
+                Reason.NO_CLIP_PREDICTED,
+                feed_in_limit_w=peak_shaving.feed_in_limit_w)
+            return settings
+
+        previous_limit_w = settings.limit_battery_charge_rate
+        final_w = solar_limit.merge_limits(
+            floor_w, [previous_limit_w, cap_w])
+
+        if final_w > 0:
+            final_w = self.common.enforce_min_pv_charge_rate(final_w)
+
+        settings.limit_battery_charge_rate = final_w
+
+        logger.info('[SolarLimit] floor=%d W, cap=%s W, final PV limit=%s W '
+                    '(feed_in_limit=%.0f W)',
+                    floor_w,
+                    cap_w if cap_w >= 0 else 'off',
+                    final_w if final_w >= 0 else 'off',
+                    peak_shaving.feed_in_limit_w)
+        limit_set = final_w >= 0
+        self.decision_trace.step(
+            Decision.SOLAR_LIMIT,
+            Outcome.LIMIT_SET if limit_set else Outcome.NOT_NEEDED,
+            Reason.CLIP_ABSORPTION_LIMIT if limit_set else Reason.NO_LIMIT_NEEDED,
+            # Only decisive if this rule changed the limit. The merge can
+            # also end up at the limit an earlier rule (peak shaving) set.
+            decisive=limit_set and final_w != previous_limit_w,
+            floor_w=floor_w,
+            cap_w=cap_w if cap_w >= 0 else None,
+            final_limit_w=final_w if limit_set else None,
+            previous_limit_w=previous_limit_w if previous_limit_w >= 0 else None,
+            feed_in_limit_w=peak_shaving.feed_in_limit_w)
+
+        return settings
+
+    def _calculate_peak_shaving_charge_limit_price_based(
+            self, calc_input: CalculationInput) -> int:
+        """Reserve battery free capacity for upcoming cheap-price PV slots.
+
+        Only slots within the production window are considered as cheap slots.
+        The production window ends at the first slot where production is zero;
+        beyond that there is no PV generation so no capacity needs to be
+        reserved.
+
+        When currently inside a cheap window (first cheap slot == 0):
+          If total PV surplus in the window exceeds free capacity, spread
+          the free capacity evenly over all remaining cheap slots so the
+          battery fills gradually rather than hitting 100% in the first slot.
+          If surplus <= free capacity no limit is needed.
+
+        When before the cheap window:
+          1. Sum PV surplus during cheap slots -> target_reserve_wh.
+          2. additional_allowed = free_capacity - target_reserve_wh.
+          3. If additional_allowed <= 0: block PV charging (return 0).
+          4. Spread additional_allowed evenly over slots before the window.
+
+        Returns:
+            int: charge rate limit in W, or -1 if no limit needed.
+        """
+        price_limit = self.calculation_parameters.peak_shaving.price_limit
+        prices = calc_input.prices
+        interval_hours = self.interval_minutes / 60.0
+
+        # Note: production/consumption are already Wh energy per slot (see
+        # forecastsolar/baseclass.py), not average power -- surplus sums
+        # below must NOT be scaled by interval_hours again. interval_hours
+        # is only needed to convert a Wh/slot rate back to an average W.
+
+        # Limit cheap-slot search to the production window.
+        # The production window ends at the first slot with zero production;
+        # beyond that there is no PV generation and no need to reserve capacity.
+        production_end = len(prices)
+        for i, prod in enumerate(calc_input.production):
+            if float(prod) == 0:
+                production_end = i
+                break
+
+        cheap_slots = [i for i, p in enumerate(prices)
+                       if i < production_end and p is not None and p <= price_limit]
+        if not cheap_slots:
+            return -1  # No cheap slots in the production window
+
+        first_cheap_slot = cheap_slots[0]
+
+        # -- Currently inside cheap window -------------------------------- #
+        if first_cheap_slot == 0:
+            total_cheap_surplus_wh = 0.0
+            for i in cheap_slots:
+                if i < len(calc_input.production) and i < len(calc_input.consumption):
+                    surplus = (float(calc_input.production[i])
+                               - float(calc_input.consumption[i]))
+                    if surplus > 0:
+                        total_cheap_surplus_wh += surplus
+
+            if total_cheap_surplus_wh <= calc_input.free_capacity:
+                return -1  # Battery can absorb everything, no limit needed
+
+            # Surplus exceeds free capacity: spread evenly over cheap slots
+            charge_rate_w = (calc_input.free_capacity
+                             / len(cheap_slots) / interval_hours)
+            logger.debug(
+                '[PeakShaving] In cheap window: surplus %.0f Wh > free %.0f Wh, '
+                'spreading over %d slots -> %d W',
+                total_cheap_surplus_wh, calc_input.free_capacity,
+                len(cheap_slots), int(charge_rate_w))
+            return int(charge_rate_w)
+
+        # -- Before cheap window: reserve capacity for it ----------------- #
+        total_cheap_surplus_wh = 0.0
+        for i in cheap_slots:
+            if i < len(calc_input.production) and i < len(calc_input.consumption):
+                surplus = float(calc_input.production[i]) - float(calc_input.consumption[i])
+                if surplus > 0:
+                    total_cheap_surplus_wh += surplus
+
+        if total_cheap_surplus_wh <= 0:
+            return -1  # No PV surplus expected during cheap slots
+
+        # Reserve capacity (capped at full battery capacity)
+        target_reserve_wh = min(total_cheap_surplus_wh, self.common.max_capacity)
+
+        additional_charging_allowed = calc_input.free_capacity - target_reserve_wh
+
+        if additional_charging_allowed <= 0:
+            logger.debug(
+                '[PeakShaving] Price-based: battery too full for cheap-window '
+                'reserve (free=%.0f Wh, reserve=%.0f Wh), blocking PV charge',
+                calc_input.free_capacity, target_reserve_wh)
+            return 0
+
+        # Spread allowed charging evenly over slots before cheap window
+        wh_per_slot = additional_charging_allowed / first_cheap_slot
+        charge_rate_w = wh_per_slot / interval_hours  # Wh/slot -> W
+
+        logger.debug(
+            '[PeakShaving] Price-based: cheap window at slot %d, '
+            'reserve=%.0f Wh, allowed=%.0f Wh -> %d W',
+            first_cheap_slot, target_reserve_wh, additional_charging_allowed,
+            int(charge_rate_w))
+
+        return int(charge_rate_w)
+
+    def _calculate_peak_shaving_charge_limit(self, calc_input: CalculationInput,
+                                             calc_timestamp: datetime.datetime) -> int:
+        """Calculate PV charge rate limit (counter-linear ramp) to fill battery by target hour.
+
+        Assigns weight k+1 to slot k (k=0 = now, k=n-1 = last slot before target),
+        so the allowed charge rate *increases* linearly as the target hour approaches.
+        The current slot gets the lowest allocation; the last slot gets the highest.
+
+        Weight of current slot: 1
+        Total weight:           n*(n+1)/2
+        Wh for current slot:    free_capacity * 1 / (n*(n+1)/2)
+                              = 2 * free_capacity / (n*(n+1))
+        Charge rate [W]:        wh_current / interval_hours
+
+        Returns:
+            int: charge rate limit in W, or -1 if no limit needed.
+        """
+        slot_start = calc_timestamp.replace(
+            minute=(calc_timestamp.minute // self.interval_minutes) * self.interval_minutes,
+            second=0, microsecond=0
+        )
+        target_time = calc_timestamp.replace(
+            hour=self.calculation_parameters.peak_shaving.allow_full_battery_after,
+            minute=0, second=0, microsecond=0
+        )
+
+        if target_time <= slot_start:
+            return -1  # Past target hour, no limit
+
+        slots_remaining = int(
+            (target_time - slot_start).total_seconds() / (self.interval_minutes * 60)
+        )
+        slots_remaining = min(slots_remaining, len(calc_input.production))
+
+        if slots_remaining <= 0:
+            return -1
+
+        # Calculate PV surplus per slot (only count positive surplus).
+        # production/consumption are already Wh energy per slot (see
+        # forecastsolar/baseclass.py), not average power, so no further
+        # interval_hours scaling is needed to sum them into an energy total.
+        pv_surplus = (calc_input.production[:slots_remaining]
+                      - calc_input.consumption[:slots_remaining])
+        pv_surplus = np.clip(pv_surplus, 0, None)  # Only positive surplus counts
+
+        # Sum expected PV surplus energy (Wh) over remaining slots
+        interval_hours = self.interval_minutes / 60.0
+        expected_surplus_wh = float(np.sum(pv_surplus))
+
+        free_capacity = calc_input.free_capacity
+
+        if expected_surplus_wh <= free_capacity:
+            return -1  # PV surplus won't fill battery early, no limit needed
+
+        if free_capacity <= 0:
+            return 0  # Battery is full, block PV charging
+
+        # Counter-linear ramp: current slot gets weight 1, last slot before
+        # target gets weight n.  This lifts the charge limit progressively
+        # as the target hour approaches instead of applying a flat cap.
+        # Total weight = n*(n+1)/2, so current-slot allocation:
+        #   wh_current = free_capacity * 1 / (n*(n+1)/2)
+        #              = 2 * free_capacity / (n * (n+1))
+        n = slots_remaining
+        wh_current_slot = 2.0 * free_capacity / (n * (n + 1))
+        charge_rate_w = wh_current_slot / interval_hours  # Wh -> W
+
+        return int(charge_rate_w)
+
+    # ------------------------------------------------------------------ #
+    #  Discharge evaluation                                               #
+    # ------------------------------------------------------------------ #
+
+    def _is_discharge_allowed(self, calc_input: CalculationInput,
                                     net_consumption: np.ndarray,
                                     prices: dict,
                                     calc_timestamp: Optional[datetime.datetime] = None) -> bool:
@@ -278,7 +758,7 @@ class DefaultLogic(LogicInterface):
 
         current_price = prices[0]
 
-        min_dynamic_price_difference = self.__calculate_min_dynamic_price_difference(
+        min_dynamic_price_difference = self._calculate_min_dynamic_price_difference(
             current_price)
 
         self.calculation_output.min_dynamic_price_difference = min_dynamic_price_difference
@@ -336,7 +816,7 @@ class DefaultLogic(LogicInterface):
         min_grid_charge_soc_active = (
             self.calculation_parameters.preserve_min_grid_charge_soc
             and reserved_storage > 0
-            and self.__has_grid_charge_soc_price_signal(
+            and self._has_grid_charge_soc_price_signal(
                 consumption,
                 prices,
                 max_slots,
@@ -380,11 +860,12 @@ class DefaultLogic(LogicInterface):
 
         return discharge_allowed
 
-    def __has_grid_charge_soc_price_signal(self, consumption: np.ndarray,
-                                           prices: dict,
-                                           max_slots: int,
-                                           current_price: float,
-                                           min_dynamic_price_difference: float) -> bool:
+    @staticmethod
+    def _has_grid_charge_soc_price_signal(consumption: np.ndarray,
+                                          prices: dict,
+                                          max_slots: int,
+                                          current_price: float,
+                                          min_dynamic_price_difference: float) -> bool:
         """Return True when a future price justifies preserving a grid-charge SoC target."""
         for slot in range(max_slots):
             future_price = prices[slot]
@@ -393,8 +874,11 @@ class DefaultLogic(LogicInterface):
                 return True
         return False
 
- # %%
-    def __get_required_recharge_energy(
+    # ------------------------------------------------------------------ #
+    #  Recharge energy calculation                                        #
+    # ------------------------------------------------------------------ #
+
+    def _get_required_recharge_energy(
             self, calc_input: CalculationInput, net_consumption: list,
             prices: dict) -> Tuple[float, List[int], float, float, int]:
         """ Calculate the required energy to shift toward high price slots.
@@ -421,7 +905,7 @@ class DefaultLogic(LogicInterface):
         production = -np.array(net_consumption)
         production[production < 0] = 0
         min_price_difference = self.calculation_parameters.min_price_difference
-        min_dynamic_price_difference = self.__calculate_min_dynamic_price_difference(
+        min_dynamic_price_difference = self._calculate_min_dynamic_price_difference(
             current_price)
 
         # evaluation period until price is first time lower then current price
@@ -528,7 +1012,7 @@ class DefaultLogic(LogicInterface):
         return (recharge_energy, high_price_slots, required_energy,
                recharge_energy_before_minimum, max_slot)
 
-    def __calculate_min_dynamic_price_difference(self, price: float) -> float:
+    def _calculate_min_dynamic_price_difference(self, price: float) -> float:
         """ Calculate the dynamic limit for the current price """
         return round(
             max(self.calculation_parameters.min_price_difference,

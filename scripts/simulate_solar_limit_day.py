@@ -40,7 +40,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from batcontrol.logic.next import NextLogic
+from batcontrol.logic.default import DefaultLogic
 from batcontrol.logic.logic_interface import (
     CalculationInput,
     CalculationParameters,
@@ -265,14 +265,14 @@ def run_day(prod_actual_w, cons_actual_w, capacity_wh,
         always_allow_discharge_limit=0.90,
         max_capacity=capacity_wh,
     )
-    logic = NextLogic(timezone=TZ, interval_minutes=interval_min)
+    logic = DefaultLogic(timezone=TZ, interval_minutes=interval_min)
     logic.set_calculation_parameters(CalculationParameters(
         max_charging_from_grid_limit=0.79,
         min_price_difference=0.05,
         min_price_difference_rel=0.2,
         max_capacity=capacity_wh,
         peak_shaving=PeakShavingConfig(
-            enabled=True, mode='time',
+            enabled=True, time_active=True, price_active=False,
             allow_full_battery_after=allow_full_after,
         ),
     ))

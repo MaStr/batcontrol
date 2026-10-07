@@ -19,8 +19,8 @@ The output is produced during the documentation build, so it is gitignored.
 Run this once before ``mkdocs serve`` to preview the charts locally.
 
 The simulation drives the REAL implementation: it builds a ``CalculationInput``
-per slot and calls ``NextLogic._apply_peak_shaving`` and
-``NextLogic._apply_solar_limit``, the same two post-processing steps
+per slot and calls ``DefaultLogic._apply_peak_shaving`` and
+``DefaultLogic._apply_solar_limit``, the same two post-processing steps
 ``calculate_inverter_mode`` runs. Nothing about the rules is re-implemented
 here, so the charts cannot drift away from the shipped behaviour.
 
@@ -55,7 +55,7 @@ from batcontrol.logic.logic_interface import (
     InverterControlSettings,
     PeakShavingConfig,
 )
-from batcontrol.logic.next import NextLogic
+from batcontrol.logic.default import DefaultLogic
 
 HERE = os.path.dirname(__file__)
 DEFAULT_DAY = os.path.join(HERE, 'data', 'peak_shaving_example_day.csv')
@@ -114,9 +114,9 @@ class Scenario:
         self.hours = np.arange(self.slots) * self.interval_h
 
     def make_logic(self, time_active, price_active, solar_cap_active, enabled):
-        """Build a NextLogic instance with the requested rule switches."""
-        logic = NextLogic(timezone=datetime.timezone.utc,
-                          interval_minutes=self.interval_minutes)
+        """Build a DefaultLogic instance with the requested rule switches."""
+        logic = DefaultLogic(timezone=datetime.timezone.utc,
+                             interval_minutes=self.interval_minutes)
         logic.set_calculation_parameters(CalculationParameters(
             max_charging_from_grid_limit=0.79,
             min_price_difference=0.05,

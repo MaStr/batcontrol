@@ -260,6 +260,24 @@ class Batcontrol:
         self.time_at_forecast_error = -1
 
         self.peak_shaving_config = PeakShavingConfig.from_config(config)
+        if self.peak_shaving_config.enabled:
+            # Up to 0.10.0 peak shaving only ran with battery_control.type
+            # "next" and was documented as having no effect otherwise, so a
+            # config may carry enabled: true from a time when it did nothing.
+            # It now applies to every logic type -- announce the activation
+            # once at startup instead of leaving it to be inferred from the
+            # per-cycle [PeakShaving] lines.
+            logger.info(
+                'Peak shaving is ENABLED and limits PV charging of the '
+                'battery (active rules: time=%s, price=%s, solar_cap=%s, '
+                'allow_full_battery_after=%d:00). It applies to every '
+                'battery_control.type; up to 0.10.0 it required type '
+                '"next". Set peak_shaving.enabled to false to switch it off.',
+                self.peak_shaving_config.time_active,
+                self.peak_shaving_config.price_active,
+                self.peak_shaving_config.solar_cap_active,
+                self.peak_shaving_config.allow_full_battery_after,
+            )
         if (self.peak_shaving_config.solar_cap_active
                 and self.peak_shaving_config.feed_in_limit_w > 0
                 and self.max_pv_charge_rate > 0):

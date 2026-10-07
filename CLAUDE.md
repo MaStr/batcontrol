@@ -21,7 +21,7 @@ uv run autopep8 --in-place <file>               # PEP8 formatting
 ```
 src/batcontrol/
   core.py                 # Main orchestrator
-  logic/                  # Battery control decisions (default, next)
+  logic/                  # Battery control decisions (default; `next` is an alias)
   inverter/               # Backends: Fronius HTTP, Fronius Modbus, MQTT, Dummy
   dynamictariff/          # Tariff providers: Awattar, Tibber, evcc, EnergyForecast, NetworkFees
   forecastsolar/          # Solar forecast: FCSolar, evcc, HA-ML, Solcast
@@ -39,8 +39,9 @@ tmp/                      # Throwaway experiments — NEVER committed
 
 ## Architecture
 
-- **Logic types:** `default` (price-based) and `next` (price-based + peak shaving), selected via
-  `battery_control.type` in config.
+- **Logic types:** `default` holds the full logic (price-based + peak shaving). `next` is kept
+  only as a backwards-compatible alias subclass of `DefaultLogic` and adds no behaviour;
+  selected via `battery_control.type` in config.
 - **Factory pattern:** inverter, tariff, and forecast providers all use `*_interface.py` base
   classes with a factory in `<module>.py`. New providers: implement the interface, register in
   the factory, add config keys.
@@ -68,8 +69,8 @@ tmp/                      # Throwaway experiments — NEVER committed
 5. Config parameters must also be mirrored into the Home Assistant add-on repo
    (`MaStr/batcontrol_ha_addon`: `options:` + `schema:` in the add-on `config.yaml`). That repo
    ships a `port-batcontrol-change` skill which automates the steps.
-6. New/changed control-flow branch that decides or overrides the inverter mode (in `core.py`,
-   `logic/default.py`, `logic/next.py`) -> add/extend a `DecisionRecord` (see
+6. New/changed control-flow branch that decides or overrides the inverter mode (in `core.py`
+   or `logic/default.py`) -> add/extend a `DecisionRecord` (see
    `logic/decision_records.py` for the shared discharge/grid-recharge builders, `core.py`'s
    `__override_scope`/`__record_clamp` for overrides outside the logic) and a plain-language
    entry in `_REASON_EXPLANATIONS` (`logic/decision_trace.py`). Update the reason-code table in

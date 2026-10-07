@@ -1,7 +1,9 @@
 """Decision traces produced by DefaultLogic and NextLogic.
 
-The rules shared by both logic types run against both classes; the peak
-shaving / solar limit steps only exist in NextLogic.
+The rules shared by both logic types run against both classes.  The peak
+shaving / solar limit steps live in DefaultLogic as well, so they are
+exercised against DefaultLogic; NextLogic is only a subclass alias kept
+for backwards compatibility with ``type: next`` configs.
 """
 import datetime
 import logging
@@ -85,7 +87,7 @@ class TestSharedDecisionSteps:
         assert discharge.inputs['reserved_energy'] > discharge.inputs['stored_usable_energy']
         # high_price_slots/recharge_window_end are relative slot indices, not
         # clock times -- ported from the removed "[Rule] Required Energy ..."/
-        # "[Rule] Evaluation window ..." debug lines, see __get_required_recharge_energy.
+        # "[Rule] Evaluation window ..." debug lines, see _get_required_recharge_energy.
         assert recharge.inputs['high_price_slots'] == [1, 2]
         assert recharge.inputs['high_price_energy_demand'] == 3500
         assert recharge.inputs['recharge_window_end'] == 3
@@ -175,7 +177,7 @@ class TestSharedDecisionSteps:
         # slot1 (price 0.21) and slot3 (price 0.22) sit between current_price
         # and the stricter grid-recharge threshold (0.25): the discharge rule
         # reserves against them too (forcing "forbidden"), but
-        # __get_required_recharge_energy's own high_price_slots is only [2]
+        # _get_required_recharge_energy's own high_price_slots is only [2]
         # (price 0.50). Slot1's 1200 Wh surplus production fully covers
         # slot2's 1000 Wh demand there.
         calc_input = _input(1800, [500, 0, 1000, 1600],
@@ -203,7 +205,7 @@ class TestSharedDecisionSteps:
         logic = _logic(logic_cls)
         # slot2 (price 0.22) widens the discharge rule's reserve (forcing
         # "forbidden") without being a high-price slot for
-        # __get_required_recharge_energy's stricter threshold (0.25); its
+        # _get_required_recharge_energy's stricter threshold (0.25); its
         # own high_price_slots stays [1], with 1600 Wh demand, fully
         # covered by the 2000 Wh stored_usable_energy.
         calc_input = _input(2500, [500, 1600, 900],
@@ -256,7 +258,7 @@ class TestSharedDecisionSteps:
             (Decision.GRID_RECHARGE, Outcome.NO_CHARGE,
              Reason.GRID_CHARGE_LIMIT_REACHED),
         ]
-        # __get_required_recharge_energy is never called here (SoC already
+        # _get_required_recharge_energy is never called here (SoC already
         # above the grid-charging limit), so these stay at their defaults.
         recharge = logic.get_decision_trace().records[1]
         assert recharge.inputs['high_price_slots'] == []
@@ -282,13 +284,13 @@ class TestSharedDecisionSteps:
 
 
 class TestPeakShavingSteps:
-    """Peak shaving and solar limit steps of NextLogic."""
+    """Peak shaving and solar limit steps of DefaultLogic."""
 
     @staticmethod
     def _logic(**peak_shaving_kwargs):
         peak_shaving_kwargs.setdefault('enabled', True)
         peak_shaving_kwargs.setdefault('allow_full_battery_after', 14)
-        return _logic(NextLogic, always_allow_discharge_limit=0.90,
+        return _logic(DefaultLogic, always_allow_discharge_limit=0.90,
                       peak_shaving=PeakShavingConfig(**peak_shaving_kwargs))
 
     @staticmethod
@@ -377,7 +379,7 @@ class TestPeakShavingSteps:
     def test_peak_shaving_records_do_not_duplicate_log_lines(self, caplog):
         logic = self._logic()
 
-        with caplog.at_level(logging.DEBUG, logger='batcontrol.logic.next'):
+        with caplog.at_level(logging.DEBUG, logger='batcontrol.logic.default'):
             self._apply_peak_shaving(logic, self._settings(), self._pv_input())
 
         info_lines = [r.getMessage() for r in caplog.records
@@ -437,7 +439,7 @@ class TestPeakShavingSteps:
             self, monkeypatch, previous_limit, expected_decisive):
         logic = self._logic(solar_cap_active=True, feed_in_limit_w=5000)
         logic.decision_trace = DecisionTrace()
-        monkeypatch.setattr('batcontrol.logic.next.solar_limit.compute_solar_limit',
+        monkeypatch.setattr('batcontrol.logic.default.solar_limit.compute_solar_limit',
                             lambda *args, **kwargs: (0, 3000))
         settings = self._settings(limit_battery_charge_rate=previous_limit)
 

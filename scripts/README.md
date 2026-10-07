@@ -78,8 +78,8 @@ published site is always regenerated from the committed input. Run it once
 locally before `mkdocs serve`, otherwise the charts report missing data.
 
 The simulation drives the shipped implementation -- it builds a
-`CalculationInput` per slot and calls `NextLogic._apply_peak_shaving` and
-`NextLogic._apply_solar_limit`, the same two post-processing steps
+`CalculationInput` per slot and calls `DefaultLogic._apply_peak_shaving` and
+`DefaultLogic._apply_solar_limit`, the same two post-processing steps
 `calculate_inverter_mode` runs -- so the published charts cannot drift away
 from the actual behaviour. No plotting dependencies: the charts are rendered
 in the browser by `docs/assets/js/peak-shaving-charts.js` (Chart.js, vendored
