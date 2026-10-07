@@ -941,3 +941,119 @@ class TestEvccForecastFormat:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestEventLoopHandling:
+    """Regression tests for the sync-to-asyncio bridge (Python 3.14).
+
+    Up to Python 3.13 asyncio.get_event_loop() silently created a loop; since
+    3.14 it raises RuntimeError. The provider used to work around that by
+    creating a loop it never closed, which stayed registered as the thread's
+    current loop. These tests pin down that the provider now releases its loop.
+    """
+
+    @staticmethod
+    def _current_loop():
+        """Return the thread's current event loop, or None if there is none."""
+        try:
+            return asyncio.get_event_loop()
+        except RuntimeError:
+            return None
+
+    @pytest.fixture(autouse=True)
+    def _no_current_loop(self):
+        """Start each test without a current event loop, as the daemon does."""
+        asyncio.set_event_loop(None)
+        yield
+        asyncio.set_event_loop(None)
+
+    @staticmethod
+    def _provider(pv_installations, timezone, sensor_unit="kWh"):
+        """Build a provider without triggering the unit auto-detection."""
+        return ForecastSolarHomeAssistantML(
+            pvinstallations=pv_installations,
+            timezone=timezone,
+            base_url="http://homeassistant.local:8123",
+            api_token="test_token",
+            entity_id="sensor.solar_forecast",
+            sensor_unit=sensor_unit
+        )
+
+    def test_check_sensor_unit_leaves_no_current_loop(
+            self, pv_installations, timezone):
+        """sensor_unit='auto' runs _check_sensor_unit during construction."""
+        mock_ws = AsyncMock()
+        mock_ws.recv = AsyncMock(side_effect=[
+            json.dumps({"type": "auth_required"}),
+            json.dumps({"type": "auth_ok"}),
+            json.dumps({
+                "id": 1,
+                "type": "result",
+                "success": True,
+                "result": [{
+                    "entity_id": "sensor.solar_forecast",
+                    "state": "123",
+                    "attributes": {"unit_of_measurement": "kWh"}
+                }]
+            })
+        ])
+        mock_ws.send = AsyncMock()
+        mock_ws.close = AsyncMock()
+
+        async def mock_connect_coro(*args, **kwargs):
+            return mock_ws
+
+        with patch(
+            'src.batcontrol.forecastsolar.forecast_homeassistant_ml.connect',
+            side_effect=mock_connect_coro
+        ):
+            provider = self._provider(
+                pv_installations, timezone, sensor_unit="auto")
+
+        assert provider.unit_conversion_factor == 1000.0
+        assert self._current_loop() is None
+
+    def test_get_raw_data_leaves_no_current_loop_on_success(
+            self, pv_installations, timezone, ha_entity_state):
+        """A successful fetch must not leave a loop registered behind."""
+        provider = self._provider(pv_installations, timezone)
+
+        async def fake_fetch():
+            return ha_entity_state
+
+        with patch.object(provider, '_fetch_entity_state_async', fake_fetch):
+            result = provider.get_raw_data_from_provider(
+                pv_installations[0]['name'])
+
+        assert result == ha_entity_state
+        assert self._current_loop() is None
+
+    def test_get_raw_data_leaves_no_current_loop_on_failure(
+            self, pv_installations, timezone):
+        """A failing fetch must also release the loop."""
+        provider = self._provider(pv_installations, timezone)
+
+        async def raise_error(*args, **kwargs):
+            raise OSError("Connection refused")
+
+        with patch(
+            'src.batcontrol.forecastsolar.forecast_homeassistant_ml.connect',
+            side_effect=raise_error
+        ):
+            with pytest.raises(ProviderError):
+                provider.get_raw_data_from_provider(
+                    pv_installations[0]['name'])
+
+        assert self._current_loop() is None
+
+    def test_get_raw_data_rejects_async_context(
+            self, pv_installations, timezone):
+        """Calling the sync wrapper from a running loop must fail loudly."""
+        provider = self._provider(pv_installations, timezone)
+
+        async def call_from_async_context():
+            with pytest.raises(ProviderError, match="running event loop"):
+                provider.get_raw_data_from_provider(
+                    pv_installations[0]['name'])
+
+        asyncio.run(call_from_async_context())

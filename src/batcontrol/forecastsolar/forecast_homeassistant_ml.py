@@ -9,7 +9,6 @@ Supported sensor:
 
 """
 
-import asyncio
 import datetime
 import json
 import logging
@@ -17,6 +16,8 @@ from typing import Dict, Optional
 
 from websockets.asyncio.client import connect
 from websockets.exceptions import WebSocketException
+
+from ..async_utils import run_coroutine
 from .baseclass import ForecastSolarBaseclass, ProviderError
 
 logger = logging.getLogger(__name__)
@@ -143,14 +144,7 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
             ValueError: If unit_of_measurement is neither Wh nor kWh
             RuntimeError: If sensor cannot be queried
         """
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            # No event loop in current thread, create a new one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        return loop.run_until_complete(self._check_sensor_unit_async())
+        return run_coroutine(self._check_sensor_unit_async())
 
     async def _check_sensor_unit_async(self) -> float:
         """Async implementation of sensor unit check
@@ -328,13 +322,7 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
             ProviderError: If WebSocket connection or API request fails
         """
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        try:
-            return loop.run_until_complete(self._fetch_entity_state_async())
+            return run_coroutine(self._fetch_entity_state_async())
         except (OSError, WebSocketException, RuntimeError) as e:
             logger.error(
                 'HomeAssistant WebSocket request failed for entity %s: %s',

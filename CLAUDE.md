@@ -1,15 +1,15 @@
 # CLAUDE.md — batcontrol
 
 batcontrol charges a home battery when grid prices are cheap and preserves it for expensive
-hours, based on dynamic tariffs, solar forecast, and consumption forecast. Python 3.9-3.13
-(primary target: 3.11). Full contribution guidelines:
+hours, based on dynamic tariffs, solar forecast, and consumption forecast. Python 3.11-3.14
+(primary target: 3.14). Full contribution guidelines:
 [`.github/copilot-instructions.md`](.github/copilot-instructions.md)
 
 ## Commands
 
 ```bash
 ./run_tests.sh                                  # full suite + coverage (creates .venv via uv)
-uv venv --python 3.13 --allow-existing          # setup only
+uv venv --python 3.14 --allow-existing          # setup only
 uv pip install -e '.[test]' pylint autopep8     # lint tools are not part of the test extras
 uv run pytest tests/ -k <name>                  # single test / subset
 uv run pylint src/batcontrol                    # target score >= 9.0 (10 if achievable)

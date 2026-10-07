@@ -1,6 +1,7 @@
 #!/bin/bash
 
-uv venv --python 3.13 --allow-existing
+# Override with e.g. PYTHON_VERSION=3.11 ./run_tests.sh
+uv venv --python "${PYTHON_VERSION:-3.14}" --allow-existing
 
 # Install the package together with test dependencies from pyproject.toml
 uv pip install -e '.[test]'
