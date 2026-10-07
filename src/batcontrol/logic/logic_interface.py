@@ -5,6 +5,8 @@ from typing import Optional, Any
 import datetime
 import numpy as np
 
+from .decision_trace import DecisionTrace
+
 logger = logging.getLogger(__name__)
 
 
@@ -243,3 +245,7 @@ class LogicInterface(ABC):
     def get_inverter_control_settings(self) -> InverterControlSettings:
         """ Get the inverter control settings from the last calculation """
         pass
+
+    def get_decision_trace(self) -> DecisionTrace:
+        """ Get the decision steps recorded during the last calculation """
+        return DecisionTrace()
