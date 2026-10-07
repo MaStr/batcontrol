@@ -1,10 +1,15 @@
 """Tests for HomeAssistant consumption forecasting"""
 
+import asyncio
+import contextlib
 import datetime
+import gc
 import json
+import warnings
 from unittest.mock import patch, AsyncMock
 import pytz
 import pytest
+from src.batcontrol.async_utils import managed_event_loop
 from src.batcontrol.forecastconsumption.forecast_homeassistant import (
     ForecastConsumptionHomeAssistant
 )
@@ -1003,3 +1008,133 @@ class TestSensorUnitConfiguration:
             mock_check.assert_called_once()
             assert forecaster.sensor_unit == 'auto'
             assert forecaster.unit_conversion_factor == 1.0
+
+
+class TestEventLoopHandling:
+    """Regression tests for the sync-to-asyncio bridge (Python 3.14).
+
+    Up to Python 3.13 asyncio.get_event_loop() silently created a loop; since
+    3.14 it raises RuntimeError. The provider used to work around that by
+    creating a loop it never closed, which stayed registered as the thread's
+    current loop. These tests pin down that the provider now owns and releases
+    its loops.
+    """
+
+    @staticmethod
+    def _current_loop():
+        """Return the thread's current event loop, or None if there is none."""
+        try:
+            return asyncio.get_event_loop()
+        except RuntimeError:
+            return None
+
+    @pytest.fixture(autouse=True)
+    def _no_current_loop(self):
+        """Start each test without a current event loop, as the daemon does."""
+        asyncio.set_event_loop(None)
+        yield
+        asyncio.set_event_loop(None)
+
+    @patch('src.batcontrol.forecastconsumption.forecast_homeassistant.connect')
+    def test_check_sensor_unit_leaves_no_current_loop(
+            self, mock_connect, base_config):
+        """_check_sensor_unit must not leave a loop registered behind."""
+        mock_websocket = AsyncMock()
+        mock_websocket.recv = AsyncMock(side_effect=[
+            json.dumps({"type": "auth_required"}),
+            json.dumps({"type": "auth_ok"}),
+            json.dumps({
+                "id": 1,
+                "type": "result",
+                "success": True,
+                "result": [{
+                    "entity_id": base_config['entity_id'],
+                    "state": "123",
+                    "attributes": {"unit_of_measurement": "kWh"}
+                }]
+            })
+        ])
+        mock_websocket.send = AsyncMock()
+        mock_websocket.close = AsyncMock()
+
+        async def mock_connect_coro(*args, **kwargs):
+            return mock_websocket
+
+        mock_connect.side_effect = mock_connect_coro
+
+        forecaster = ForecastConsumptionHomeAssistant(**base_config)
+
+        assert forecaster.unit_conversion_factor == 1000.0
+        assert self._current_loop() is None
+
+    @patch('src.batcontrol.forecastconsumption.forecast_homeassistant.connect')
+    def test_fetch_hourly_statistics_leaves_no_current_loop(
+            self, mock_connect, base_config, mock_unit_check):
+        """The private loop of _fetch_hourly_statistics must be released."""
+        forecaster = ForecastConsumptionHomeAssistant(**base_config)
+
+        async def raise_error(*args, **kwargs):
+            raise OSError("Connection refused")
+
+        mock_connect.side_effect = raise_error
+
+        start = datetime.datetime(2025, 10, 27, 0, 0, tzinfo=pytz.UTC)
+        end = datetime.datetime(2025, 10, 28, 0, 0, tzinfo=pytz.UTC)
+
+        with pytest.raises(RuntimeError):
+            forecaster._fetch_hourly_statistics(start, end)
+
+        assert self._current_loop() is None
+
+    def test_fetch_hourly_statistics_rejects_async_context(
+            self, base_config, mock_unit_check):
+        """The async-context guard used to be dead code and never fired.
+
+        It raised RuntimeError inside the very try block that caught
+        RuntimeError, so the call silently fell through to asyncio.run().
+        """
+        forecaster = ForecastConsumptionHomeAssistant(**base_config)
+
+        start = datetime.datetime(2025, 10, 27, 0, 0, tzinfo=pytz.UTC)
+        end = datetime.datetime(2025, 10, 28, 0, 0, tzinfo=pytz.UTC)
+
+        async def call_from_async_context():
+            with pytest.raises(RuntimeError, match="running event loop"):
+                forecaster._fetch_hourly_statistics(start, end)
+
+        # The old code let the coroutine fall through to asyncio.run(), which
+        # abandoned it and emitted "coroutine was never awaited".
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            asyncio.run(call_from_async_context())
+            gc.collect()
+
+    @patch('src.batcontrol.forecastconsumption.forecast_homeassistant.connect')
+    def test_refresh_data_closes_its_loop(
+            self, mock_connect, base_config, mock_unit_check):
+        """refresh_data_with_limit must close the loop it opened."""
+        forecaster = ForecastConsumptionHomeAssistant(**base_config)
+
+        async def raise_error(*args, **kwargs):
+            raise OSError("Connection refused")
+
+        mock_connect.side_effect = raise_error
+
+        captured = {}
+        real_managed_event_loop = managed_event_loop
+
+        @contextlib.contextmanager
+        def spy():
+            with real_managed_event_loop() as loop:
+                captured['loop'] = loop
+                yield loop
+
+        with patch(
+            'src.batcontrol.forecastconsumption.forecast_homeassistant'
+            '.managed_event_loop',
+            spy
+        ):
+            forecaster.refresh_data_with_limit(2)
+
+        assert captured['loop'].is_closed()
+        assert self._current_loop() is None

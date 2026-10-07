@@ -5,7 +5,6 @@ It fetches historical consumption data for configured time periods and calculate
 statistics for each hour to predict future consumption.
 """
 
-import asyncio
 import datetime
 import json
 import logging
@@ -15,6 +14,8 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from cachetools import TTLCache
 from websockets.asyncio.client import connect
+
+from ..async_utils import managed_event_loop, run_coroutine
 from .baseclass import ForecastConsumptionBaseclass
 
 logger = logging.getLogger(__name__)
@@ -171,14 +172,7 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
             ValueError: If unit_of_measurement is neither Wh nor kWh
             RuntimeError: If sensor cannot be queried
         """
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            # No event loop in current thread, create a new one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        return loop.run_until_complete(self._check_sensor_unit_async())
+        return run_coroutine(self._check_sensor_unit_async())
 
     async def _check_sensor_unit_async(self) -> float:
         """Async implementation of sensor unit check
@@ -566,21 +560,12 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
         Returns:
             Float
         """
-        # Run async function in event loop
-        # Use asyncio.run() for Python 3.10+ compatibility
-        try:
-            loop = asyncio.get_running_loop()
-            # If we're already in an async context, we can't use asyncio.run()
-            # This shouldn't happen in practice for this method
-            raise RuntimeError(
-                "Cannot call _fetch_hourly_statistics from async context")
-        except RuntimeError:
-            # No running loop - this is the expected case
-            # asyncio.run() creates a new event loop, runs the coroutine, and
-            # closes it
-            return asyncio.run(
-                self._fetch_hourly_statistics_async(start_time, end_time)
-            )
+        # Runs on a private event loop that is closed again afterwards.
+        # run_coroutine() refuses to run from an async context, which this
+        # method must not be called from.
+        return run_coroutine(
+            self._fetch_hourly_statistics_async(start_time, end_time)
+        )
 
     def _update_cache_with_statistics(
         self,
@@ -634,54 +619,28 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
             reference_slots[day_offset] = self.history_weights[idx]
         return reference_slots
 
-    def refresh_data_with_limit(self, hours: int) -> None:
-        """Refresh historical data with specified hour limit
+    # pylint: disable=too-many-locals,too-many-branches
+    def _collect_history_periods(
+        self,
+        loop,
+        missing_periods,
+        now: datetime.datetime,
+        reference_slots: Dict[int, int],
+        history_periods: Dict[int, float]
+    ) -> None:
+        """Fetch history data for all missing hour slots over one connection.
+
+        Opens a single WebSocket connection, queries every missing hour slot
+        for every configured history day, and writes the weighted result into
+        history_periods.
 
         Args:
-            hours: Number of hours to refresh (typically up to 48)
+            loop: Event loop used to drive the coroutines. Owned by the caller.
+            missing_periods: Hour offsets that are not cached yet.
+            now: Reference timestamp, aligned to a full hour.
+            reference_slots: Mapping of history day offset to weight.
+            history_periods: Output dict, filled with hour offset to Wh.
         """
-        logger.info("Refreshing consumption forecast data from HomeAssistant")
-
-        now = datetime.datetime.now(tz=self.timezone)
-
-        # always have the next 48 hours in the forecast
-        # Create a list of cache_keys to ensure they are present
-        cache_keys = [
-            self._get_cache_key(
-                (now + datetime.timedelta(hours=h)).weekday(),
-                (now + datetime.timedelta(hours=h)).hour
-            )
-            for h in range(hours)
-        ]
-
-        # Create a list of missing history data periods
-        missing_periods = []
-        for h in range(hours):
-            if cache_keys[h] not in self.consumption_cache:
-                missing_periods.append(h)
-
-        if missing_periods:
-            logger.info(
-                "Collecting data for missing hours: %s",
-                missing_periods)
-        else:
-            logger.debug(
-                "All forecast hours present in cache, no refresh needed")
-            return
-
-        # now as full hour
-        now = now.replace(minute=0, second=0, microsecond=0)
-
-        reference_slots = self._get_reference_slots()
-        history_periods = {}  # Dict mapping hour offset to consumption value
-
-        # Connect to WebSocket once for all requests
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
         websocket = None
 
         try:
@@ -764,6 +723,54 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
             # Disconnect websocket
             if websocket is not None:
                 loop.run_until_complete(self._websocket_disconnect(websocket))
+
+    def refresh_data_with_limit(self, hours: int) -> None:
+        """Refresh historical data with specified hour limit
+
+        Args:
+            hours: Number of hours to refresh (typically up to 48)
+        """
+        logger.info("Refreshing consumption forecast data from HomeAssistant")
+
+        now = datetime.datetime.now(tz=self.timezone)
+
+        # always have the next 48 hours in the forecast
+        # Create a list of cache_keys to ensure they are present
+        cache_keys = [
+            self._get_cache_key(
+                (now + datetime.timedelta(hours=h)).weekday(),
+                (now + datetime.timedelta(hours=h)).hour
+            )
+            for h in range(hours)
+        ]
+
+        # Create a list of missing history data periods
+        missing_periods = []
+        for h in range(hours):
+            if cache_keys[h] not in self.consumption_cache:
+                missing_periods.append(h)
+
+        if missing_periods:
+            logger.info(
+                "Collecting data for missing hours: %s",
+                missing_periods)
+        else:
+            logger.debug(
+                "All forecast hours present in cache, no refresh needed")
+            return
+
+        # now as full hour
+        now = now.replace(minute=0, second=0, microsecond=0)
+
+        reference_slots = self._get_reference_slots()
+        history_periods = {}  # Dict mapping hour offset to consumption value
+
+        # Connect to WebSocket once for all requests. The loop is reused for
+        # every request on that connection and closed when the block exits.
+        with managed_event_loop() as loop:
+            self._collect_history_periods(
+                loop, missing_periods, now, reference_slots, history_periods
+            )
 
         if not history_periods:
             logger.error(

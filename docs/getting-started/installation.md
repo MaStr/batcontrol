@@ -108,12 +108,13 @@ Add the [batcontrol_ha_addon](https://github.com/MaStr/batcontrol_ha_addon) repo
 
 ## Local Python
 
-Requires Python 3.13 and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.11 or newer (3.11 - 3.14 are supported and tested in CI; the
+Docker image ships Python 3.14) and [uv](https://docs.astral.sh/uv/).
 
 ```sh
 git clone https://github.com/MaStr/batcontrol.git
 cd batcontrol
-uv venv --python 3.13 --allow-existing
+uv venv --python 3.14 --allow-existing
 source .venv/bin/activate
 uv pip install .
 ```
@@ -170,7 +171,7 @@ For working on the batcontrol source code, use an editable install:
 ```sh
 git clone https://github.com/MaStr/batcontrol.git
 cd batcontrol
-uv venv --python 3.13 --allow-existing
+uv venv --python 3.14 --allow-existing
 source .venv/bin/activate
 uv pip install --editable '.[test]'
 ```

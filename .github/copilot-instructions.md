@@ -8,7 +8,7 @@ This is a Python based repository providing an application for controlling batte
 - Remove excessive whitespaces.
 - Follow PEP8 standards. Use autopep8 for that.
 - Check against pylint. Target score is like 9.0-9.5, if you can achieve 10, do it.
-- Build against Python 3.11 primarily, ensure compatibility with versions 3.9 to 3.13.
+- Build against Python 3.14 primarily, ensure compatibility with versions 3.11 to 3.14.
 - Run all tests with `run_tests.sh` .
 - Create new parameters in `config/batcontrol_config_dummy.yaml` .
 
@@ -45,8 +45,8 @@ This is a Python based repository providing an application for controlling batte
 5. Lay test scripts for verification and simple testing into the folder `scripts`.
 6. Never commit content of `tmp`.
 7. User documentation lives in the `docs/` folder and is published via MkDocs to https://mastr.github.io/batcontrol/ — add or update pages there and register new pages in `mkdocs.yml`.
-8. Ensure compatibility with supported Python versions (3.9 to 3.13)
-9. A change that affects which inverter mode is chosen, or why (`core.py`,
-   `logic/default.py`), must stay traceable: add or extend a `DecisionRecord` with a plain-language
+8. Ensure compatibility with supported Python versions (3.11 to 3.14)
+9. A change that affects which inverter mode is chosen, or why (`core.py`, `logic/default.py`,
+   `logic/next.py`), must stay traceable: add or extend a `DecisionRecord` with a plain-language
    explanation (`logic/decision_trace.py`, `logic/decision_records.py`). This feeds the MQTT
    "Decision" sensor and the in-memory decision journal — see `docs/development/decision-trace.md`.
