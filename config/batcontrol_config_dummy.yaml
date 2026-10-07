@@ -117,7 +117,7 @@ utility:
   fees: 0.015 # awattar and energyforecast only
   markup: 0.03 # awattar and energyforecast only
   # apikey: YOUR_API_KEY # mandatory for tibber, energyforecast and energyforecast_total_price
-  # market_zone: DE # energyforecast only: DE/LU, AT, FR, NL, BE, PL, DK1, DK2. Default: DE
+  # market_zone: DE # both energyforecast providers: DE/LU, AT, FR, NL, BE, PL, DK1, DK2. Default: DE
   #
   # energyforecast_total_price: the API returns the full price incl. dynamic network
   # fees, VAT and markup - do not set vat/fees/markup and do not enable dynamic_network_fees.
