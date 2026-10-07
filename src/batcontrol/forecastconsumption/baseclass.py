@@ -7,8 +7,10 @@ solar and tariff forecasts.
 
 import datetime
 import logging
+import math
 import threading
 from abc import abstractmethod
+from typing import Optional
 from .forecastconsumption_interface import ForecastConsumptionInterface
 from ..interval_utils import upsample_forecast, downsample_to_hourly
 
@@ -26,6 +28,10 @@ class ForecastConsumptionBaseclass(ForecastConsumptionInterface):
     Subclasses must:
     1. Set self.native_resolution in __init__
     2. Implement _get_forecast_native(hours) to return hour-aligned data
+
+    Note:
+        get_forecast() is called with a number of slots at target_resolution,
+        _get_forecast_native() with the matching number of hours.
     """
 
     def __init__(self, timezone, target_resolution: int = 60,
@@ -73,17 +79,34 @@ class ForecastConsumptionBaseclass(ForecastConsumptionInterface):
         data (e.g., from APIs) should override this method.
         """
 
-    def get_forecast(self, hours: int) -> dict[int, float]:
+    def get_forecast(self, requested_slots: int) -> dict[int, float]:
         """Get forecast with automatic resolution handling.
 
+        The request is resolution-neutral: it asks for a number of slots at
+        the target_resolution the provider was initialized with. Converting
+        that into the amount of source data to read is done here, so each
+        provider only ever sees its own native unit (hours).
+
         Args:
-            hours: Number of hours to forecast (at hourly resolution)
+            requested_slots: Number of slots to forecast, counted at
+                target_resolution and starting with the current slot.
+                This matches the slot indices used by the price and
+                production forecasts in core.py.
 
         Returns:
-            Dict where [0] = current interval, [1] = next interval, etc.
-            Ready for core.py to factorize [0] based on elapsed time.
+            Dict where [0] = current slot, [1] = next slot, etc.
+            At most `requested_slots` entries, fewer if the provider has
+            less data. Ready for core.py to factorize [0] based on elapsed
+            time.
         """
         with self._forecast_lock:
+            # The slots already elapsed in the current hour are dropped by
+            # _shift_to_current_interval, so they have to be fetched on top of
+            # the requested ones.
+            offset = self._current_interval_in_hour()
+            hours = math.ceil(
+                (requested_slots + offset) * self.target_resolution / 60)
+
             # Get hour-aligned forecast from provider at native resolution
             native_forecast = self._get_forecast_native(hours)
 
@@ -99,9 +122,23 @@ class ForecastConsumptionBaseclass(ForecastConsumptionInterface):
 
             # Shift indices to start from CURRENT interval
             current_aligned_forecast = self._shift_to_current_interval(
-                converted_forecast)
+                converted_forecast, offset)
 
-            return current_aligned_forecast
+            # Drop the slots fetched only to compensate the shift
+            return {idx: value
+                    for idx, value in current_aligned_forecast.items()
+                    if idx < requested_slots}
+
+    def _current_interval_in_hour(self) -> int:
+        """Number of target-resolution intervals already elapsed in this hour.
+
+        At 10:20 with a target resolution of 15 minutes this is 1, because the
+        current interval 10:15-10:30 is the second one of the hour.
+        """
+        now = datetime.datetime.now(
+            datetime.timezone.utc).astimezone(
+            self.timezone)
+        return now.minute // self.target_resolution
 
     # pylint: disable=unused-argument
     def _convert_resolution(
@@ -138,7 +175,8 @@ class ForecastConsumptionBaseclass(ForecastConsumptionInterface):
         return forecast
 
     def _shift_to_current_interval(
-            self, forecast: dict[int, float]) -> dict[int, float]:
+            self, forecast: dict[int, float],
+            offset: Optional[int] = None) -> dict[int, float]:
         """Shift hour-aligned indices to current-interval alignment.
 
         At time 10:20, if target resolution is 15 min:
@@ -148,21 +186,21 @@ class ForecastConsumptionBaseclass(ForecastConsumptionInterface):
 
         Args:
             forecast: Hour-aligned forecast at target resolution
+            offset: Number of intervals to drop. Determined from the current
+                time if not given. get_forecast() passes the same value it
+                used to size its request, so both stay consistent even across
+                an hour boundary.
 
         Returns:
             Current-interval aligned forecast
         """
-        now = datetime.datetime.now(
-            datetime.timezone.utc).astimezone(
-            self.timezone)
-        current_minute = now.minute
-
         # Find which interval we're in within the current hour
-        current_interval_in_hour = current_minute // self.target_resolution
+        current_interval_in_hour = offset
+        if current_interval_in_hour is None:
+            current_interval_in_hour = self._current_interval_in_hour()
 
-        logger.debug('%s: Current time %s, shifting by %d intervals',
+        logger.debug('%s: Shifting by %d intervals',
                      self.__class__.__name__,
-                     now.strftime('%H:%M:%S'),
                      current_interval_in_hour)
 
         # Shift indices: drop past intervals, renumber from 0

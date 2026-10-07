@@ -804,6 +804,12 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
             Dict mapping hour index to energy value (Wh per hour)
             Index 0 = start of current hour
         """
+        if hours > MAX_FORECAST_HOURS:
+            logger.warning(
+                "Requested %d forecast hours, limiting to %d hours",
+                hours, MAX_FORECAST_HOURS)
+            hours = MAX_FORECAST_HOURS
+
         # Check if cache has all required keys for the forecast hours
         # Calculate now inside the lock to avoid race conditions around hour
         # boundaries

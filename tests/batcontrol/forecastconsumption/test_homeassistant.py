@@ -11,7 +11,8 @@ import pytz
 import pytest
 from src.batcontrol.async_utils import managed_event_loop
 from src.batcontrol.forecastconsumption.forecast_homeassistant import (
-    ForecastConsumptionHomeAssistant
+    ForecastConsumptionHomeAssistant,
+    MAX_FORECAST_HOURS
 )
 
 
@@ -1138,3 +1139,56 @@ class TestEventLoopHandling:
 
         assert captured['loop'].is_closed()
         assert self._current_loop() is None
+
+
+class TestForecastHorizonLimit:
+    """Tests for the MAX_FORECAST_HOURS limit (issue #446)"""
+
+    @pytest.fixture
+    def forecaster(self, base_config, mock_unit_check):
+        """Forecaster with a fully populated cache"""
+        instance = ForecastConsumptionHomeAssistant(**base_config)
+        with instance._cache_lock:
+            for weekday in range(7):
+                for hour in range(24):
+                    key = instance._get_cache_key(weekday, hour)
+                    instance.consumption_cache[key] = 100.0
+        return instance
+
+    @patch.object(ForecastConsumptionHomeAssistant, 'refresh_data_with_limit')
+    def test_native_forecast_is_limited(self, mock_refresh, forecaster):
+        """A request beyond MAX_FORECAST_HOURS is cut down, not forwarded"""
+        prediction = forecaster._get_forecast_native(MAX_FORECAST_HOURS + 52)
+
+        assert len(prediction) == MAX_FORECAST_HOURS
+        assert not mock_refresh.called
+
+    @patch.object(ForecastConsumptionHomeAssistant, 'refresh_data_with_limit')
+    def test_native_forecast_below_limit_is_untouched(
+            self, mock_refresh, forecaster):
+        """A request within the limit is served in full"""
+        prediction = forecaster._get_forecast_native(24)
+
+        assert len(prediction) == 24
+        assert not mock_refresh.called
+
+    @patch.object(ForecastConsumptionHomeAssistant, 'refresh_data_with_limit')
+    def test_refresh_is_limited_on_cache_miss(self, mock_refresh, base_config,
+                                              mock_unit_check):
+        """A cold cache does not trigger a refresh beyond the limit"""
+        instance = ForecastConsumptionHomeAssistant(**base_config)
+
+        def populate_cache(hours):
+            now = datetime.datetime.now(tz=instance.timezone)
+            with instance._cache_lock:
+                for h in range(hours):
+                    future_time = now + datetime.timedelta(hours=h)
+                    key = instance._get_cache_key(
+                        future_time.weekday(), future_time.hour)
+                    instance.consumption_cache[key] = 100.0
+
+        mock_refresh.side_effect = populate_cache
+
+        instance._get_forecast_native(96)
+
+        mock_refresh.assert_called_once_with(MAX_FORECAST_HOURS)
