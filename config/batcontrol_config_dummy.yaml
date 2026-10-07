@@ -1,114 +1,73 @@
 #--------------------------
-#  Batcontrol Configuration
-#  See more Details in: https://mastr.github.io/batcontrol/configuration/batcontrol-configuration/
+#  Batcontrol Configuration - all parameters, short comments.
+#  Details for every section: https://mastr.github.io/batcontrol/configuration/batcontrol-configuration/
+#  Anything omitted keeps its default; optional sections are off by default.
 #--------------------------
-timezone: Europe/Berlin #your time zone. not optional.
-time_resolution_minutes: 60 # Time resolution for forecasts: 15 (quarter-hourly) or 60 (hourly). Default: 60
-loglevel: debug
+timezone: Europe/Berlin # required, e.g. Europe/Berlin
+time_resolution_minutes: 60 # forecast resolution: 15 or 60. Default: 60
+loglevel: debug # debug | info | warning | error
 logfile_enabled: true
-log_everything: false # if false debug messages from fronius.auth and urllib3.connectionpool will be suppressed
-max_logfile_size: 200 #kB
+log_everything: false # true also logs fronius.auth and urllib3.connectionpool debug output
+max_logfile_size: 200 # kB
 logfile_path: logs/batcontrol.log
-battery_control:
-  type: default  # Logic type: 'default' is the recommended standard logic.
-                 # 'next' is a historical alias kept for existing configurations and behaves identically.
-                                 # min_price_difference is the absolute minimum price difference in Euro to justify charging your battery
-                                 # if min_price_difference_rel results in a higher price difference, that will be used
-  min_price_difference: 0.05     # minimum price difference in Euro to justify charging your battery
-  min_price_difference_rel: 0.10 # Percentage (in decimal) of the current price to justify charging your battery
-                                 #    _rel helps to avoid charging at high prices with less efficiency
-  always_allow_discharge_limit: 0.90 # 0.00 to 1.00 above this SOC limit using energy from the battery is always allowed
-  max_charging_from_grid_limit: 0.89 # 0.00 to 1.00 charging from the grid is only allowed until this SOC limit
-  # min_grid_charge_soc: 0.55        # optional 0.00 to 1.00 target to preserve/charge before expensive slots
-  # grid_charge_target_strategy: fixed # fixed = use min_grid_charge_soc unchanged; forecast = keep it as reserve after expensive slots
-  min_recharge_amount: 100           # in Wh, start & minimum amount of energy to recharge the battery
 
 #--------------------------
-#  Battery Control Expert Tuning Parameters
-#  See more Details in: https://mastr.github.io/batcontrol/features/battery-control-expert/
+#  Battery Control
+#--------------------------
+battery_control:
+  type: default # 'default' is the standard logic; 'next' is a historical alias, same behaviour
+  min_price_difference: 0.05 # Euro/kWh, absolute gain needed to charge from grid
+  min_price_difference_rel: 0.10 # ... or this share of the current price; the higher one wins
+  always_allow_discharge_limit: 0.90 # 0.00-1.00, above this SoC discharging is always allowed
+  max_charging_from_grid_limit: 0.89 # 0.00-1.00, charge from grid only up to this SoC
+  min_recharge_amount: 100 # Wh, minimum energy per grid recharge
+  # min_grid_charge_soc: 0.55 # 0.00-1.00, SoC to preserve/charge before expensive slots
+  # grid_charge_target_strategy: fixed # fixed = use min_grid_charge_soc as is; forecast = keep as reserve
+
+#--------------------------
+#  Battery Control Expert Tuning - optional, whole section can be removed.
+#  https://mastr.github.io/batcontrol/features/battery-control-expert/
 #--------------------------
 battery_control_expert:
-  charge_rate_multiplier: 1.1 # Increase (>1) calculated charge rate to compensate charge inefficiencies.
-  soften_price_difference_on_charging: False # enable earlier charging based on a more relaxed calculation
-                                             # future_price <= current_price-min_price_difference/soften_price_difference_on_charging_factor
-  soften_price_difference_on_charging_factor: 5
-  spread_grid_charge_over_charge_window: True # only with soften_price_difference_on_charging:
-                                              # spread grid charging over all following slots
-                                              # with a price <= current price (charging window)
-                                              # instead of the current slot only
-  round_price_digits: 4 # round price to n digits after the comma
-  production_offset_percent: 1.0 # Adjust production forecast by a percentage (1.0 = 100%, 0.8 = 80%, etc.)
-                                 # Useful for winter mode when solar panels are covered with snow
-  preserve_min_grid_charge_soc: false # If true, also preserve min_grid_charge_soc as reserved energy during cheap/pre-expensive slots
-  # market_price_refresh_time: "12:30" # UTC time for a daily hard price refresh.
-  #   Use this to pick up newly published next-day prices (e.g. EPEX Spot ~12:00 UTC).
-  #   Format: "HH:MM". Default: "12:30".
+  charge_rate_multiplier: 1.1 # >1 compensates charge inefficiencies
+  soften_price_difference_on_charging: False # charge earlier using a relaxed price comparison
+  soften_price_difference_on_charging_factor: 5 # divisor for the relaxed comparison
+  spread_grid_charge_over_charge_window: True # spread grid charging over the whole charging window
+  round_price_digits: 4 # round prices to n digits
+  production_offset_percent: 1.0 # scale solar forecast (0.8 = 80%), e.g. snow-covered panels
+  preserve_min_grid_charge_soc: false # also reserve min_grid_charge_soc during cheap slots
+  # market_price_refresh_time: "12:30" # UTC "HH:MM" for the daily hard price refresh. Default: "12:30"
 
 #--------------------------
-#  Peak Shaving
-#  Three independent rules manage PV battery charging: spread charging until a target
-#  hour (time rule), reserve capacity for cheap-price windows (price rule), and absorb
-#  PV power above the feed-in limit to prevent clipping (solar rule).
-#  Independent of battery_control.type - peak shaving works with every logic type,
-#  it only needs 'enabled: true' below.
-#
-#  Rule switches (each independently toggle-able):
-#    time_active      - spread charging until allow_full_battery_after
-#    price_active     - reserve capacity for slots at or below price_limit
-#    solar_cap_active - absorb PV power above feed_in_limit_w (German 60% rule)
-#
-#  Priority: all active caps are combined, strictest (minimum) wins. The solar floor
-#  (charge needed to absorb clipped power) overrides all caps, because clipped energy
-#  is physically lost and takes precedence over economic optimization. The floor also
-#  applies after allow_full_battery_after and at high SoC, so the battery may reach
-#  100% later than the target hour on clipping days.
-#
-#  The former 'mode' parameter was removed; a config containing it is rejected.
-#  Migration: time -> time_active only, price -> price_active only, combined -> both.
-#
-#  Runtime control via MQTT: 'enabled', 'allow_full_battery_after' and 'price_limit'.
-#  The rule switches and the feed_in_limit_* parameters require a restart.
+#  Peak Shaving - limits PV charging. Works with every battery_control.type.
+#  Three independent rules, all active caps combined, strictest wins. The solar
+#  floor overrides all caps, because clipped energy is physically lost.
+#  Runtime changeable via MQTT: enabled, allow_full_battery_after, price_limit.
+#  The removed 'mode' parameter is now rejected: time -> time_active,
+#  price -> price_active, combined -> both.
+#  https://mastr.github.io/batcontrol/features/peak-shaving/
 #--------------------------
 peak_shaving:
   enabled: false
-  time_active: true              # target-time rule: spread charging until allow_full_battery_after
-  price_active: true             # price rule: reserve capacity for cheap-price PV windows
-  solar_cap_active: false        # solar feed-in limit rule: absorb PV power above feed_in_limit_w
-  allow_full_battery_after: 14   # Hour (0-23) - battery should be full by this hour (time rule)
-  price_limit: 0.05              # Euro/kWh - cheap-slot threshold (price rule); -1 disables the price rule component
-  feed_in_limit_w: 0             # Watt - grid feed-in power limit (solar rule). 0 = neutral/off.
-                                 # German Solarspitzengesetz: 60% of installed power,
-                                 # formula: 0.6 * kWp * 1000 (e.g. 6000 for a 10 kWp plant).
-  feed_in_limit_headroom: 1.0    # Safety factor >= 1.0 on the forecast surplus (solar rule).
-                                 # Solar forecasts underestimate clear-day peaks; 1.1 recommended
-                                 # if curtailment losses are observed. Do NOT use
-                                 # battery_control_expert.production_offset_percent for this.
+  time_active: true # time rule: spread charging until allow_full_battery_after
+  price_active: true # price rule: reserve capacity for slots at or below price_limit
+  solar_cap_active: false # solar rule: absorb PV power above feed_in_limit_w
+  allow_full_battery_after: 14 # hour 0-23 the battery should be full (time rule)
+  price_limit: 0.05 # Euro/kWh cheap-slot threshold (price rule); -1 disables it
+  feed_in_limit_w: 0 # Watt grid feed-in limit (solar rule), 0 = off. Solarspitzengesetz: 0.6 * kWp * 1000
+  feed_in_limit_headroom: 1.0 # >=1.0 safety factor on the forecast surplus; 1.1 if curtailment is observed
 
 #--------------------------
 #  Inverter
-#  See more Details in: https://mastr.github.io/batcontrol/configuration/inverter-configuration/
+#  https://mastr.github.io/batcontrol/configuration/inverter-configuration/
 #
-#  IMPORTANT: This configuration uses a "dummy" inverter for demonstration purposes.
-#  The dummy inverter returns static values to make batcontrol work out of the box.
+#  DEMO ONLY: 'dummy' returns static values so batcontrol starts out of the box.
+#  For real operation replace the type below and set address/credentials.
 #
-#  For real operation, you MUST:
-#  1. Comment out the "dummy" type below
-#  2. Uncomment and configure a real inverter type (e.g., fronius_gen24 or fronius-modbus)
-#  3. Update the address and, if needed, credentials for your actual inverter
-#
-#  MULTIPLE INVERTERS / BATTERIES:
-#  NOTE: Only available with a YAML config (Docker / Compose / local Python). The
-#  Home Assistant add-on is configured through its UI, which cannot express a list
-#  of inverters, so these settings are not mirrored into the add-on.
-#
-#  This section can also be a LIST of inverters. batcontrol then treats them as
-#  one large battery: capacities are summed, the SoC is the capacity-weighted
-#  average, and a charge rate is split over the inverters proportional to their
-#  free capacity (capped by each max_grid_charge_rate). An inverter that cannot
-#  take any power is set to avoid-discharge, so a full battery never feeds the
-#  one that is charging from the grid. Each inverter keeps its own MQTT subtree
-#  <base_topic>/inverters/<n>/ in list order (0, 1, ...).
-#
+#  This section may also be a LIST of inverters, treated as one large battery
+#  (capacities summed, capacity-weighted SoC, charge rate split by free capacity).
+#  YAML config only - the Home Assistant add-on UI cannot express a list.
+#  https://mastr.github.io/batcontrol/configuration/multiple-inverters/
 #  inverter:
 #    - type: fronius_gen24
 #      address: 192.0.2.10
@@ -119,241 +78,165 @@ peak_shaving:
 #      address: 192.0.2.11
 #      capacity: 5000
 #      max_grid_charge_rate: 3000
-#
-#  Notes for the list form:
-#  - max_pv_charge_rate values are summed; a single inverter with 0 (unlimited)
-#    makes the whole group unlimited.
-#  - min_pv_charge_rate values are summed.
-#  - A small charge rate is NOT smeared over all inverters: it first pays a full
-#    min_charge_rate (default 500 W) for as many inverters as it can reach, and
-#    only the remainder is split by free capacity. So 500 W goes to one inverter
-#    and 1000 W to two, instead of 250 W each.
-#  - Every MQTT inverter needs its own base_topic (or 'default' for all of them).
 #--------------------------
 inverter:
-  type: dummy # DEMO ONLY - Change to a real inverter type for real operation
-  # For real operation, uncomment and configure one of the following:
+  type: dummy # DEMO ONLY - use fronius_gen24, fronius-modbus or mqtt for real operation
   # type: fronius_gen24
-  # address: 192.0.2.10 # the local IP/host of your inverter. needs to be reachable from the machine that runs batcontrol
-  # user: customer # customer or technician lowercase only!!
+  # address: 192.0.2.10 # local IP/host, reachable from the machine running batcontrol
+  # user: customer # customer or technician, lowercase only
   # password: YOUR-PASSWORD
+  # fronius_inverter_id: '1' # ID in the Fronius API. Default: '1'
+  # fronius_controller_id: '0' # ID in the Fronius API. Default: '0'
   #
-  # Or use Fronius Modbus TCP instead of web-login control:
-  # type: fronius-modbus
+  # type: fronius-modbus # Modbus TCP instead of web-login control
   # address: 192.0.2.10
-  # port: 502 # Optional, default: 502
-  # unit_id: 1 # Optional, default: 1
-  # capacity: 10000 # Battery capacity in Wh
-  # revert_seconds: 0 # Optional, default: 0
+  # port: 502 # Default: 502
+  # unit_id: 1 # Default: 1
+  # revert_seconds: 0 # Default: 0
   #
-  # Or use a generic MQTT bridge (see docs/integrations/mqtt-inverter.md for topic layout):
-  # type: mqtt
-  # base_topic: default # Optional, else uses batcontrol's base MQTT topic structure
-  # capacity: 10000 # Battery capacity in Wh
-  # cache_ttl: 120 # Optional, default: 120. Seconds an SOC value from MQTT stays valid before get_SOC() blocks.
-  max_grid_charge_rate: 5000 # Watt, Upper limit for Grid to Battery charge rate.
-  max_pv_charge_rate: 0 # Watt, STATIC upper limit for PV to Battery charge rate. Set to 0 for unlimited charging.
-                        # Applied in MODE_ALLOW_DISCHARGING (10) and as upper bound in MODE_LIMIT_BATTERY_CHARGE_RATE (8).
-  min_pv_charge_rate: 0 # Watt, STATIC lower limit for MODE_LIMIT_BATTERY_CHARGE_RATE (8).
-                        # Only applied when the requested limit is > 0 (i.e. partial charging).
-                        # A requested limit of 0 (complete charge blocking) bypasses this floor.
-                        # Example: set to 100 to ensure at least 100W charging when a non-zero limit is active.
-                        # Only affects mode 8; ignored in other modes.
-  min_charge_rate: 500 # Watt, STATIC lower limit for grid charging of THIS inverter.
-                       # ONLY relevant with several inverters: it decides how many of
-                       # them a small charge rate can feed at once, instead of giving
-                       # each an unusably small share - see the notes above. With a
-                       # single inverter it has no effect, because batcontrol already
-                       # raises every charge rate to 500 W. Default: 500.
-  # fronius_inverter_id: '1' # Optional: ID of the inverter in Fronius API (default: '1')
-  # fronius_controller_id: '0' # Optional: ID of the controller in Fronius API (default: '0')
-  # capacity: 10000 # Optional: fixed battery capacity in Wh. If set, overrides the
-                     #   DesignedCapacity value that would otherwise be queried from the inverter.
-  enable_resilient_wrapper: true # Skip a control cycle on transient inverter outages instead of terminating (default: true)
-  outage_tolerance_minutes: 24 # Minutes to tolerate inverter outages before terminating (default: 24)
+  # type: mqtt # generic MQTT bridge, see docs/integrations/mqtt-inverter.md
+  # base_topic: default # Default: batcontrol's base MQTT topic. Each MQTT inverter needs its own
+  # cache_ttl: 120 # seconds an SOC value stays valid before get_SOC() blocks. Default: 120
+  #
+  # capacity: 10000 # Wh, required for fronius-modbus and mqtt; optional override for fronius_gen24
+  max_grid_charge_rate: 5000 # Watt, grid -> battery upper limit
+  max_pv_charge_rate: 0 # Watt, static PV -> battery upper limit. 0 = unlimited
+  min_pv_charge_rate: 0 # Watt, static floor for mode 8; only applied when the limit is > 0
+  min_charge_rate: 500 # Watt, grid charge floor of THIS inverter. Only relevant with several
+                       # inverters: decides how many of them a small rate can feed. Default: 500
+  enable_resilient_wrapper: true # skip a cycle on transient inverter outages. Default: true
+  outage_tolerance_minutes: 24 # minutes of outage tolerated before terminating. Default: 24
 
 #--------------------------
 #  Dynamic Tariff Provider
-#  See more Details in: https://mastr.github.io/batcontrol/configuration/dynamic-tariff-provider/
+#  https://mastr.github.io/batcontrol/configuration/dynamic-tariff-provider/
 #--------------------------
 utility:
-  type: awattar_de # [tibber, awattar_at, awattar_de, evcc, energyforecast, tariff_zones]
-  vat: 0.19 # only required for awattar and energyforecast
-  fees: 0.015 # only required for awattar and energyforecast
-  markup: 0.03 # only required for awattar and energyforecast
-  # tariff_zones supports 1, 2 or 3 zones and doubles as a static single-price mode.
-  # Single zone (static price): set only tariff_zone_1; zone_1_hours may be omitted
-  # and defaults to all 24 hours. Example:
-  #   type: tariff_zones
-  #   tariff_zone_1: 0.30   # flat price for the whole day, Euro/kWh incl. vat/fees
-  # tariff_zone_1: 0.2733 # only required for tariff_zones, Euro/kWh incl. vat/fees (peak hours)
-  # zone_1_hours: 7-22 # hours assigned to zone 1; supports ranges (7-22), singles (7), or mixed (0-5,6,7)
-  # tariff_zone_2: 0.1734 # optional: second zone price, Euro/kWh incl. vat/fees (off-peak hours)
-  # zone_2_hours: 0-6,23 # optional: hours assigned to zone 2 (required if tariff_zone_2 is set)
-  # tariff_zone_3: 0.2100 # optional third zone price
-  # zone_3_hours: 17-20 # optional hours for zone 3 (must not overlap with zone 1 or 2)
-  # apikey: YOUR_API_KEY # MANDATORY for energyforecast, energyforecast_total_price and tibber.
-  # market_zone: DE # optional for energyforecast/energyforecast_total_price: DE/LU (both map to DE-LU for the API, default), AT, FR, NL, BE, PL, DK1, DK2
+  type: awattar_de # tibber, awattar_at, awattar_de, evcc, energyforecast, energyforecast_total_price, tariff_zones
+  vat: 0.19 # awattar and energyforecast only
+  fees: 0.015 # awattar and energyforecast only
+  markup: 0.03 # awattar and energyforecast only
+  # apikey: YOUR_API_KEY # mandatory for tibber, energyforecast and energyforecast_total_price
+  # market_zone: DE # energyforecast only: DE/LU, AT, FR, NL, BE, PL, DK1, DK2. Default: DE
   #
-  # ALTERNATIVE: energyforecast_total_price
-  #   The API computes the full price (dynamic network fees + VAT + markup) in total_ct_kwh.
-  #   batcontrol uses total_ct_kwh as-is -- vat/fees/markup config fields are not needed
-  #   and dynamic_network_fees must not be enabled (the API already includes them).
-  #   Use this if you want the energyforecast.de API to handle all price components.
-  # type: energyforecast_total_price
-  # apikey: YOUR_API_KEY
-  # market_zone: DE  # optional, default: DE
+  # energyforecast_total_price: the API returns the full price incl. dynamic network
+  # fees, VAT and markup - do not set vat/fees/markup and do not enable dynamic_network_fees.
+  #
+  # tariff_zones: 1-3 zones, also serves as static single-price mode.
+  # tariff_zone_1: 0.2733 # Euro/kWh incl. vat/fees. Alone = flat price for the whole day
+  # zone_1_hours: 7-22 # ranges (7-22), singles (7) or mixed (0-5,6,7). Default with one zone: all 24h
+  # tariff_zone_2: 0.1734 # optional second zone
+  # zone_2_hours: 0-6,23 # required if tariff_zone_2 is set
+  # tariff_zone_3: 0.2100 # optional third zone
+  # zone_3_hours: 17-20 # must not overlap zone 1 or 2
 
 #--------------------------
-#  Dynamic Network Fees (para. 14a EnWG)
-#  Adds time-of-use NT/ST/HT network fees to energy prices.
-#  Only applies to providers that calculate fees locally: awattar, energyforecast.
-#  Not needed for all-inclusive providers: tibber, evcc, tariff_zones,
-#  energyforecast_total_price (the API already includes network fees in total_ct_kwh).
-#  Fee data (NET, excl. VAT) is fetched from dyn-net.batcontrol.software and
-#  added to the price before VAT is applied.
-#  Cache: 12 hours (tariffs change at most quarterly).
-#  Operator IDs: see https://dyn-net.batcontrol.software/
+#  Dynamic Network Fees (para. 14a EnWG) - adds time-of-use NT/ST/HT fees.
+#  Only for providers that calculate fees locally: awattar, energyforecast.
+#  Not for tibber, evcc, tariff_zones, energyforecast_total_price.
+#  Operator IDs: https://dyn-net.batcontrol.software/
 #--------------------------
 dynamic_network_fees:
-  enabled: false        # Set to true to activate dynamic network fees
-  country: de           # Country code: de, at, ch
-  operator: syna        # Network operator ID (e.g. syna, westnetz, ggv, ewr-netz)
-  # url: https://dyn-net.batcontrol.software/api/  # Optional: override for self-hosted instance
+  enabled: false
+  country: de # de, at, ch
+  operator: syna # e.g. syna, westnetz, ggv, ewr-netz
+  # url: https://dyn-net.batcontrol.software/api/ # override for a self-hosted instance
 
 #--------------------------
 #  MQTT API
-#  See more Details in: https://mastr.github.io/batcontrol/integrations/mqtt-api/
+#  https://mastr.github.io/batcontrol/integrations/mqtt-api/
 #--------------------------
 mqtt:
   enabled: false
-  logger: false
+  logger: false # also send log messages to MQTT
   broker: localhost
-  port: 1883
+  port: 1883 # 8883 for TLS
   topic: house/batcontrol
-  client_id: batcontrol # optional, default: batcontrol
+  client_id: batcontrol # Default: batcontrol
   username: user
   password: password
-  retry_attempts: 5 # optional, default: 5
-  retry_delay: 10 # seconds, optional, default: 10
-  # TLS: set tls to true and provide paths to CA cert and (optional) client cert/key
-  # for mutual TLS. Use port 8883 for TLS-secured brokers.
-  tls: false
-  cafile: /etc/ssl/certs/ca-certificates.crt  # path to CA certificate (required when tls: true)
-  certfile: /etc/ssl/certs/client.crt          # path to client certificate (optional, for mutual TLS)
-  keyfile: /etc/ssl/certs/client.key           # path to client private key (optional, for mutual TLS)
-  auto_discover_enable: true # enables mqtt auto discover => https://www.home-assistant.io/integrations/mqtt/#mqtt-discovery
-  auto_discover_topic: homeassistant # base topic path for auto discover config messages - default 'homeassistant' -> https://www.home-assistant.io/integrations/mqtt/#discovery-options
-  # Optional: external grid-charge lock signal (e.g. from a HEMS or grid operator
-  # controllable-consumption-device request, section 14a EnWG).
-  # This is a full/absolute topic, NOT nested below 'topic' above, since it is
-  # published by an external system. Mirrors evcc's "External Limit":
-  # https://docs.evcc.io/en/user-defined-devices/#external-limit
-  # Payload 1/true: block charging from the grid immediately.
-  # Payload 0/false (default): restore the previous max_charging_from_grid_limit.
+  retry_attempts: 5 # Default: 5
+  retry_delay: 10 # seconds. Default: 10
+  tls: false # true requires cafile; certfile/keyfile only for mutual TLS
+  cafile: /etc/ssl/certs/ca-certificates.crt
+  certfile: /etc/ssl/certs/client.crt
+  keyfile: /etc/ssl/certs/client.key
+  auto_discover_enable: true # Home Assistant MQTT discovery
+  auto_discover_topic: homeassistant # discovery base topic. Default: homeassistant
   # grid_charge_lock_topic: hems/batcontrol/grid_charge_lock
+  #   External grid-charge lock (HEMS or grid operator, para. 14a EnWG). Absolute
+  #   topic, NOT below 'topic'. Payload 1/true blocks grid charging, 0/false restores it.
 
 #--------------------------
 #  Forecast Solar
-#  See more Details in:  https://mastr.github.io/batcontrol/configuration/solar-forecast/
-#
-#  Supported providers:
-#  - fcsolarapi: Third-party solar forecast API (configured below, default)
-#  - homeassistant-solar-forecast-ml: HomeAssistant Solar Forecast ML integration (HACS)
-#  - evcc: local instance of evcc via REST API
-#  - solcast: Solcast rooftop API, free hobbyist account, see https://solcast.com/
-#
-#  DEMO: This configuration uses a simple PV installation for demonstration.
-#  For real operation, update the values below with your actual PV system details.
+#  https://mastr.github.io/batcontrol/configuration/solar-forecast/
+#  Providers: fcsolarapi (default), homeassistant-solar-forecast-ml, evcc, solcast
 #--------------------------
 solar_forecast_provider: fcsolarapi
 
 pvinstallations:
-  # PRIMARY: fcsolarapi provider - Uses PVGIS forecast based on location
-  - name: Demo PV System              # name - update this for your system
-    type: fcsolarapi                  # Optional: explicitly specify provider type
-    lat: 48.4334480                   # Update with your actual latitude
-    lon: 8.7654968                    # Update with your actual longitude
-    declination: 30                   # inclination toward horizon 0..90 0=flat 90=vertical
-    azimuth: 0                        # -90:East, 0:South, 90:West -180..180
-    kWp: 10.0                         # power in kWp - update with your actual system size
-    #horizon:                         # leave empty for default PVGIS horizon
+  # fcsolarapi: PVGIS-based forecast from the location below
+  - name: Demo PV System
+    type: fcsolarapi # optional, explicit provider type
+    lat: 48.4334480
+    lon: 8.7654968
+    declination: 30 # 0 = flat, 90 = vertical
+    azimuth: 0 # -90 = East, 0 = South, 90 = West
+    kWp: 10.0
+    # horizon: # leave empty for the default PVGIS horizon
 
-  # ALTERNATIVE: HomeAssistant Solar Forecast ML - Uses ML forecast from HomeAssistant
-  # Uncomment this section to use HomeAssistant Solar Forecast ML integration
+  # homeassistant-solar-forecast-ml (HACS integration)
   # - name: HA Solar ML Forecast
-  #   base_url: ws://homeassistant.local:8123  # Your HomeAssistant URL
-  #   api_token: eyJ...                           # Long-lived access token from HA Profile
-  #   entity_id: sensor.solar_forecast_ml_evcc_solar_prognose  # Forecast sensor entity
-  #   sensor_unit: auto                           # Options: 'auto' (detect), 'Wh', or 'kWh'
-  #   cache_ttl_hours: 24.0                       # Cache duration in hours
+  #   base_url: ws://homeassistant.local:8123
+  #   api_token: eyJ... # long-lived access token from the HA profile
+  #   entity_id: sensor.solar_forecast_ml_evcc_solar_prognose
+  #   sensor_unit: auto # auto (detect), Wh or kWh
+  #   cache_ttl_hours: 24.0
 
-  # ALTERNATIVE: Solcast - https://solcast.com/ (free hobbyist account, 10 requests/day)
-  # Site geometry (lat/lon, tilt, azimuth, kWp) is configured in the Solcast
-  # web toolkit, not here. Set solar_forecast_provider: solcast to use it.
+  # solcast - free hobbyist account, 10 requests/day. Site geometry is configured
+  # in the Solcast web toolkit, not here.
   # - name: Haus
-  #   resource_id: xxxx-xxxx-xxxx-xxxx  # from your Solcast rooftop site
-  #   apikey: your-solcast-api-key      # from your Solcast account settings
-  #   percentile: 50                    # optional: 10 (pessimistic), 50 (default), 90 (optimistic)
+  #   resource_id: xxxx-xxxx-xxxx-xxxx
+  #   apikey: your-solcast-api-key
+  #   percentile: 50 # 10 pessimistic, 50 default, 90 optimistic
 
 #--------------------------
 #  Forecast Consumption
-#  See more Details in: https://mastr.github.io/batcontrol/configuration/consumption-forecast/
-#
-#  Option 1: CSV-based forecast (default)
-#  Option 2: HomeAssistant API-based forecast
+#  https://mastr.github.io/batcontrol/configuration/consumption-forecast/
 #--------------------------
 consumption_forecast:
-  type: csv # Options: 'csv' or 'homeassistant-api'
+  type: csv # csv or homeassistant-api
   csv:
-    annual_consumption: 4500 # total consumption in kWh p.a. the load profile
-    load_profile: load_profile.csv #name of the load profile file within the config folder
+    annual_consumption: 4500 # kWh per year, scales the load profile
+    load_profile: load_profile.csv # file inside the config folder
 
-  # Uncomment to use HomeAssistant API for consumption forecasting
   # homeassistant_api:
-  #   base_url: ws://homeassistant:8123  # Your HomeAssistant URL
-  #   apitoken: YOUR_LONG_LIVED_ACCESS_TOKEN  # Get from HomeAssistant Profile
-  #   entity_id: sensor.energy_consumption  # Entity ID with consumption data (in Wh or kWh)
-  #   sensor_unit: auto  # Options: 'auto' (default, auto-detect), 'Wh', or 'kWh'
-  #                      # Set to 'Wh' or 'kWh' to skip auto-detection (faster startup)
-  #                      # Use 'auto' for first-time setup or if you're unsure
-  #   history_days: [-7, -14, -21]  # Days to look back for historical data
-  #   history_weights: [1, 1, 1]  # Weight for each history period (1-10), higher = more influence
-  #   cache_ttl_hours: 48.0  # How long to cache computed statistics (hours)
-  #   multiplier: 1.0  # Multiplier for forecast adjustment (1.0=unchanged, >1.0=increase, <1.0=decrease)
+  #   base_url: ws://homeassistant:8123
+  #   apitoken: YOUR_LONG_LIVED_ACCESS_TOKEN
+  #   entity_id: sensor.energy_consumption # consumption data in Wh or kWh
+  #   sensor_unit: auto # auto (default), Wh or kWh. Fixed values skip detection
+  #   history_days: [-7, -14, -21] # days to look back
+  #   history_weights: [1, 1, 1] # weight per period, 1-10
+  #   cache_ttl_hours: 48.0
+  #   multiplier: 1.0 # forecast adjustment, >1.0 increases
 
 #--------------------------
-# evcc connection
-#   listen to evcc mqtt messages to lock the battery if the car is charging
-#   See more Details in: https://mastr.github.io/batcontrol/integrations/evcc-connection/
+#  evcc connection - locks the battery while the car is charging
+#  https://mastr.github.io/batcontrol/integrations/evcc-connection/
 #--------------------------
 evcc:
   enabled: false
   broker: localhost
-  port: 1883
+  port: 1883 # 8883 for TLS
   status_topic: evcc/status
-  # one loadpoints that should be monitored
-  loadpoint_topic:
+  loadpoint_topic: # loadpoints to monitor
     - evcc/loadpoints/1/charging
     - evcc/loadpoints/2/charging
-  # if true (default) the battery will be locked while the car is charging.
-  # always_allow_discharge_limit is always relevant, together with the
-  # battery_halt_topic (if configured), evcc controls the battery lock state.
-  #
-  #         overshot.
-  block_battery_while_charging: true
+  block_battery_while_charging: true # lock the battery while the car charges. Default: true
   username: user
   password: password
-  # TLS: set tls to true and provide paths to CA cert and (optional) client cert/key
-  # for mutual TLS. Use port 8883 for TLS-secured brokers.
-  tls: false
-  cafile: /etc/ssl/certs/ca-certificates.crt  # path to CA certificate (required when tls: true)
-  certfile: /etc/ssl/certs/client.crt          # path to client certificate (optional, for mutual TLS)
-  keyfile: /etc/ssl/certs/client.key           # path to client private key (optional, for mutual TLS)
-  # Optional:
-  # Choose which topic should deliver the limit for the battery
-  # below this limit the battery will be locked
-  #  https://docs.evcc.io/docs/integrations/mqtt-api#site
-  # Active if following message appears:
-  #                  'Enabling battery threshold management.
-  battery_halt_topic: evcc/site/bufferSoc
+  tls: false # true requires cafile; certfile/keyfile only for mutual TLS
+  cafile: /etc/ssl/certs/ca-certificates.crt
+  certfile: /etc/ssl/certs/client.crt
+  keyfile: /etc/ssl/certs/client.key
+  battery_halt_topic: evcc/site/bufferSoc # optional, battery is locked below this limit
