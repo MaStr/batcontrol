@@ -30,7 +30,8 @@ src/batcontrol/
   scheduler.py            # Main loop
   mqtt_api.py             # State publishing + runtime config overrides
   evcc_api.py             # evcc integration
-config/batcontrol_config_dummy.yaml   # Reference config — every parameter documented here
+config/batcontrol_config_dummy.yaml   # Every parameter, one-line comments; also the
+                                      #   first-run template copied by entrypoint.sh
 tests/                    # pytest suite (mirrors package layout)
 docs/                     # MkDocs user docs -> https://mastr.github.io/batcontrol/
 scripts/                  # Standalone verification/helper scripts (committed)
@@ -60,8 +61,20 @@ tmp/                      # Throwaway experiments — NEVER committed
 
 ## Change Checklist
 
-1. New/changed config parameter -> add it to `config/batcontrol_config_dummy.yaml` with an
-   explanatory comment.
+1. New config parameter -> **ask the maintainer first**, do not add one on your own. Every
+   parameter in `config/batcontrol_config_dummy.yaml` is permanent surface: the file is also
+   the first-run template that `entrypoint.sh` copies for new Docker users, and each key has
+   to be carried, mirrored into the HA add-on (step 5) and supported forever. Propose the
+   parameter with its intended default and wait for a decision; a sensible hardcoded default
+   or an existing key is usually the better answer than a new knob.
+   Once approved, or when changing an existing parameter:
+   - add/update it in `config/batcontrol_config_dummy.yaml` with a **one-line** comment
+     (`# what it does, unit, Default: x`) - that file is a parameter list, not a manual, so
+     the long explanation belongs in `docs/`, never there.
+   - **document it under `docs/` - this is mandatory, not optional.** Put it in the matching
+     page (`docs/configuration/*` for config sections, `docs/features/*` for behaviour) and
+     register new pages in `mkdocs.yml`. A parameter that exists only in the YAML counts as
+     undocumented and is not done.
 2. New functionality -> add pytest in `tests/`; bug fix -> add a regression test for the bug.
 3. User-facing behavior -> update or add a page under `docs/` and register new pages in
    `mkdocs.yml`.

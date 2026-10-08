@@ -10,7 +10,9 @@ This is a Python based repository providing an application for controlling batte
 - Check against pylint. Target score is like 9.0-9.5, if you can achieve 10, do it.
 - Build against Python 3.14 primarily, ensure compatibility with versions 3.11 to 3.14.
 - Run all tests with `run_tests.sh` .
-- Create new parameters in `config/batcontrol_config_dummy.yaml` .
+- Do not add new config parameters on your own: ask the maintainer first and wait for approval. A new parameter is permanent surface - `config/batcontrol_config_dummy.yaml` is also the first-run template for new Docker users, and every key has to be mirrored into the Home Assistant add-on and supported long-term. Propose it with its intended default; a hardcoded default or an existing key is often the better answer.
+- Once approved, create the parameter in `config/batcontrol_config_dummy.yaml` with a short one-line comment (what it does, unit, default). Keep the long explanation out of that file - it is a parameter list, not a manual.
+- Every new or changed config parameter must also be documented in `docs/` (`docs/configuration/*` for config sections, `docs/features/*` for behaviour). The documentation entry is mandatory: a parameter that exists only in the YAML is not finished.
 
 ### Development Flow
 
