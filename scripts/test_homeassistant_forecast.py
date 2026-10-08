@@ -154,7 +154,8 @@ def main():
 
         # Get forecast for next N hours
         logger.info(f"Generating {FORECAST_HOURS}-hour forecast...")
-        forecast = forecaster.get_forecast(hours=FORECAST_HOURS)
+        # The factory defaults to 60-minute resolution, so one slot is one hour
+        forecast = forecaster.get_forecast(FORECAST_HOURS)
 
         if not forecast:
             logger.error("No forecast data received!")

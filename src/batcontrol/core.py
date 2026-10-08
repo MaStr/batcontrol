@@ -691,11 +691,14 @@ class Batcontrol:
             price_dict = self.dynamic_tariff.get_prices()
             production_forecast = self.fc_solar.get_forecast()
             # harmonize forecast horizon
+            # fc_period is a slot index at self.time_resolution, so the
+            # consumption forecast is requested in the same unit.
             fc_period = min(max(price_dict.keys()),
                             max(production_forecast.keys()))
+            requested_slots = fc_period + 1
             consumption_forecast = self.fc_consumption.get_forecast(
-                fc_period + 1)
-            if len(consumption_forecast) < fc_period + 1:
+                requested_slots)
+            if len(consumption_forecast) < requested_slots:
                 # Accept a shorter forecast horizon if not enough data is
                 # available
                 if len(consumption_forecast) < max(
@@ -706,7 +709,7 @@ class Batcontrol:
                             fc_period, len(consumption_forecast)))
                 logger.warning(
                     "Insufficient consumption forecast data available, reducing "
-                    "forecast to %d hours", len(consumption_forecast))
+                    "forecast to %d slots", len(consumption_forecast))
                 fc_period = len(consumption_forecast) - 1
         except Exception as e:
             logger.warning(

@@ -277,8 +277,20 @@ To minimize load on HomeAssistant:
 - Cache stores consumption values per weekday/hour combination
 - Cache is automatically refreshed when data is missing
 - Cache survives batcontrol restarts (in-memory cache)
+- The forecast horizon is capped at 48 hours, so one cold cache never
+  requests more than 48 hourly statistics per `history_days` entry
 
 **Cache key format:** `"weekday_hour"` (e.g., `"0_14"` = Monday 14:00)
+
+### Forecast Horizon and Time Resolution
+
+The forecast is requested in **slots** at the configured
+`time_resolution_minutes` (see
+[Batcontrol Configuration](batcontrol-configuration.md)), while
+HomeAssistant statistics are hourly. Batcontrol converts between the two, so
+a 24 hour horizon reads 24 hours of history in both 60-minute and 15-minute
+mode - the number of `recorder/statistics_during_period` requests does not
+depend on the time resolution.
 
 ### WebSocket Communication
 
