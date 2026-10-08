@@ -13,6 +13,7 @@ logfile_path: logs/batcontrol.log
 
 #--------------------------
 #  Battery Control
+#  https://mastr.github.io/batcontrol/configuration/batcontrol-configuration/
 #--------------------------
 battery_control:
   type: default # 'default' is the standard logic; 'next' is a historical alias, same behaviour
@@ -135,6 +136,7 @@ utility:
 #  Only for providers that calculate fees locally: awattar, energyforecast.
 #  Not for tibber, evcc, tariff_zones, energyforecast_total_price.
 #  Operator IDs: https://dyn-net.batcontrol.software/
+#  https://mastr.github.io/batcontrol/configuration/dynamic-tariff-provider/
 #--------------------------
 dynamic_network_fees:
   enabled: false
