@@ -259,7 +259,7 @@ class TestStatusText:
 
         assert trace.status_text() == (
             'Charge from Grid 2133 W - usable energy (900 Wh) is below the '
-            '2500 Wh reserved for upcoming expensive hours, so 1600 Wh is '
+            '2500 Wh reserved for upcoming more expensive hours, so 1600 Wh is '
             'charged from the grid')
 
     def test_limit_mode_with_pv_limit(self):
@@ -283,11 +283,10 @@ class TestStatusText:
     ])
     def test_static_explanation_replaces_the_raw_reason_code(
             self, outcome, label):
-        trace = self._trace(outcome, Reason.NO_RECHARGE_REQUIRED)
+        trace = self._trace(outcome, Reason.NO_PV_PRODUCTION)
 
         assert trace.status_text() == (
-            f'{label} - stored energy is sufficient until prices rise '
-            'again, so no grid charging is needed')
+            f'{label} - there is currently no solar production')
 
     def test_falls_back_to_the_reason_code_when_inputs_are_missing(self):
         """A data-driven explanation whose inputs are not on the decisive
@@ -341,16 +340,18 @@ class TestExplanation:
 
         assert record.explanation() == (
             'usable energy (900 Wh) is below the 2500 Wh reserved for '
-            'upcoming expensive hours')
+            'upcoming more expensive hours')
 
     def test_format_spec_turns_a_ratio_into_a_percentage(self):
         record = _record(
             reason=Reason.ALWAYS_ALLOW_DISCHARGE_LIMIT,
-            inputs={'stored_energy': 8200.0, 'always_allow_discharge_limit': 0.8})
+            inputs={'stored_energy': 8200.0,
+                    'always_allow_discharge_limit': 0.8,
+                    'always_allow_discharge_energy': 8000.0})
 
         assert record.explanation() == (
-            'stored energy (8200 Wh) is above the always-allow-discharge '
-            'level (80% of capacity)')
+            'battery holds 8200 Wh, above the always-allow-discharge '
+            'level of 80% (8000 Wh)')
 
     def test_static_explanation_ignores_inputs(self):
         record = _record(reason=Reason.NO_PV_PRODUCTION, inputs={})
@@ -400,3 +401,104 @@ class TestExplanation:
         trace.add(_record(decisive=False))
 
         assert trace.to_dict()['why'] is None
+
+
+class TestNotes:
+    """Value adjustments (charge rate clamps) do not replace the reason of
+    the mode, they are appended to its explanation."""
+
+    @staticmethod
+    def _trace_with_clamp():
+        trace = DecisionTrace()
+        trace.add(DecisionRecord(
+            Decision.GRID_RECHARGE, Outcome.CHARGE,
+            Reason.GRID_RECHARGE_REQUIRED,
+            {'stored_usable_energy': 900.0, 'reserved_energy': 2500.0,
+             'recharge_energy': 1600.0}, decisive=True))
+        trace.add(DecisionRecord(
+            Decision.OVERRIDE, Outcome.APPLIED,
+            Reason.GRID_CHARGE_RATE_CLAMPED,
+            {'requested_w': 3200, 'applied_w': 1000}))
+        trace.add(DecisionRecord(Decision.MODE, 'force_charge',
+                                 Reason.GRID_RECHARGE_REQUIRED,
+                                 {'value': 1000}))
+        return trace
+
+    def test_note_is_appended_to_the_decisive_explanation(self):
+        trace = self._trace_with_clamp()
+
+        assert trace.decisive_record().reason == Reason.GRID_RECHARGE_REQUIRED
+        assert trace.status_text() == (
+            'Charge from Grid 1000 W - usable energy (900 Wh) is below the '
+            '2500 Wh reserved for upcoming more expensive hours, so 1600 Wh '
+            'is charged from the grid (charge rate capped from 3200 W to '
+            '1000 W by the configured maximum grid charge rate)')
+        assert trace.to_dict()['why'] == trace.explanation()
+
+    def test_no_explanation_without_decisive_step(self):
+        trace = DecisionTrace()
+        trace.add(DecisionRecord(
+            Decision.OVERRIDE, Outcome.APPLIED, Reason.PV_CHARGE_RATE_CLAMPED,
+            {'requested_w': 5000, 'applied_w': 2000}))
+
+        assert trace.explanation() is None
+
+
+class TestPeakShavingExplanation:
+    """PV_CHARGE_LIMITED names the purpose of the active limits."""
+
+    @pytest.mark.parametrize('components, expected', [
+        ('time', 'PV charging is limited so the battery is not full '
+                 'before 14:00'),
+        ('price', 'PV charging is limited so room is kept for solar '
+                  'surplus in cheap-price hours'),
+        ('time,price', 'PV charging is limited so the battery is not full '
+                       'before 14:00 and room is kept for solar surplus in '
+                       'cheap-price hours'),
+    ])
+    def test_purpose_per_component(self, components, expected):
+        record = _record(reason=Reason.PV_CHARGE_LIMITED,
+                         inputs={'active_components': components,
+                                 'allow_full_battery_after': 14})
+
+        assert record.explanation() == expected
+
+    def test_unknown_components_fall_back_to_reason_code(self):
+        record = _record(reason=Reason.PV_CHARGE_LIMITED,
+                         inputs={'active_components': 'none',
+                                 'allow_full_battery_after': 14})
+
+        assert record.explanation() == 'PV charge limited'
+
+
+class TestAvoidDischargeExplanation:
+    """Regression: the Avoid Discharge text only said why the battery is
+    not charged from the grid, not why it is not discharged."""
+
+    _INPUTS = {
+        'stored_energy': 99999.0, 'stored_usable_energy': 99999.0,
+        'reserved_energy': 99999.0, 'charge_limit_capacity': 99999.0,
+        'recharge_energy_before_minimum': 99999.0,
+    }
+
+    @pytest.mark.parametrize('reason', [
+        Reason.GRID_CHARGE_LIMIT_REACHED,
+        Reason.NO_HIGH_PRICE_SLOTS,
+        Reason.HIGH_PRICE_DEMAND_COVERED_BY_PRODUCTION,
+        Reason.NO_RECHARGE_REQUIRED,
+        Reason.RECHARGE_BELOW_MINIMUM,
+    ])
+    def test_says_why_the_battery_is_held_and_not_recharged(self, reason):
+        trace = DecisionTrace()
+        trace.add(DecisionRecord(Decision.GRID_RECHARGE, Outcome.NO_CHARGE,
+                                 reason, dict(self._INPUTS), decisive=True))
+        trace.add(DecisionRecord(Decision.MODE, 'avoid_discharging', reason,
+                                 {'value': None}))
+
+        text = trace.status_text()
+
+        assert text.startswith(
+            'Avoid Discharge - battery is held for upcoming more expensive '
+            'hours (usable 99999 Wh, reserve 99999 Wh); no grid charging: ')
+        assert text.isascii()
+        assert len(text) <= 255

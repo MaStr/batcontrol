@@ -56,7 +56,8 @@ tmp/                      # Throwaway experiments — NEVER committed
   shaving, solar limit, external overrides like evcc/API/grid-charge-lock) is recorded as a
   `DecisionRecord` in a `DecisionTrace` (`logic/decision_trace.py`), collected into an
   in-memory `DecisionJournal` (`decision_journal.py`) that notifies listeners on a mode or
-  value change. The MQTT "Decision" sensor (`mqtt_api.py`) is the first listener. See
+  value change (listeners registered with `refresh=True` also on a reason change and every
+  15 min). The MQTT "Decision" sensor (`mqtt_api.py`) is the first listener. See
   `docs/development/decision-trace.md` and `docs/features/decision-sensor.md`.
 
 ## Change Checklist

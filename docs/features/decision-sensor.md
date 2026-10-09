@@ -29,9 +29,16 @@ The state always has the same shape:
 - **why** is one sentence explaining the mode, built from the numbers
   batcontrol actually used to decide.
 
-The sensor only updates when something meaningful changes: a different
-mode, or the charge rate / PV limit changing by 25&nbsp;% or more. Small,
-continuous adjustments between evaluations do not create a new state.
+The sensor updates when something meaningful changes: a different mode,
+the charge rate / PV limit changing by 25&nbsp;% or more, or a different
+reason. Otherwise it is refreshed every 15 minutes, so the numbers in the
+text are at most 15 minutes old. Small adjustments between evaluations do
+not create a new state right away.
+
+If a configured limit changes the charge rate or the PV limit that
+batcontrol calculated (`max_grid_charge_rate`, `max_pv_charge_rate`,
+`min_pv_charge_rate`), the reason stays the same and the adjustment is
+added in brackets at the end of the text.
 
 ## Worked examples
 
@@ -40,33 +47,52 @@ exactly what `status_text()` produces for the numbers shown.
 
 **Battery is allowed to discharge, there is enough energy**
 > Discharge Allowed - usable energy (3500 Wh) exceeds the 1200 Wh reserved
-> for upcoming expensive hours
+> for upcoming more expensive hours
 
 batcontrol is holding back 1200 Wh for a price spike it has already seen
 coming; the rest (3500 Wh usable) is free to use now.
 
 **Battery is charged from the grid**
 > Charge from Grid 2133 W - usable energy (900 Wh) is below the 2500 Wh
-> reserved for upcoming expensive hours, so 1600 Wh is charged from the grid
+> reserved for upcoming more expensive hours, so 1600 Wh is charged from the
+> grid
 
 The 900 Wh left is not enough to cover the reserve for the next expensive
 hours, so the missing 1600 Wh is bought now while it is cheap, at a rate
 that fills the battery before the current price slot ends.
 
-**Peak shaving slows down PV charging**
-> Limit Battery Charge 1200 W - PV charging is capped at 1200 W
-> (time,price) so the battery does not fill up before 16:00
+**Battery is held, but not charged from the grid**
+> Avoid Discharge - battery is held for upcoming more expensive hours
+> (usable 1300 Wh, reserve 1400 Wh); no grid charging: solar is forecast to
+> cover the demand of the hours where it would pay off
 
-See [Peak Shaving](peak-shaving.md): without the cap, the battery would
+The first part says why the battery is not discharged now: the energy is
+needed later, when power is more expensive than now. The second part says
+why it is not topped up from the grid either. Buying from the grid only pays
+off for hours that are clearly more expensive (by at least the minimum price
+difference), and here the solar forecast already covers those. Other
+endings are, for example, `the 8000 Wh grid charge limit is reached`, `no
+upcoming price is far enough above the current price to pay off` or `the
+missing 50 Wh are below the minimum charge amount`.
+
+**Peak shaving slows down PV charging**
+> Limit Battery Charge 1200 W - PV charging is limited so the battery is
+> not full before 16:00 and room is kept for solar surplus in cheap-price
+> hours
+
+See [Peak Shaving](peak-shaving.md): without the limit, the battery would
 fill up early and stop absorbing solar, well before the configured target
-hour (16:00 here).
+hour (16:00 here). The text names the active parts of peak shaving: the
+target hour (time based) and/or the cheap-price hours (price based).
 
 **Solar feed-in limit (`Solarspitzengesetz`) absorption**
-> Limit Battery Charge 900 W - the battery charges at 900 W to absorb
-> solar surplus that would otherwise be clipped at the 6000 W feed-in limit
+> Limit Battery Charge 900 W - PV charging is limited to keep battery room
+> for the solar surplus above the 6000 W feed-in limit, which would
+> otherwise be curtailed
 
 Production is about to exceed the configured 6000 W feed-in limit; rather
-than curtailing (= wasting) the surplus, the battery absorbs it.
+than curtailing (= wasting) the surplus, the battery keeps room for it and
+absorbs it.
 
 **An external system blocks discharge**
 > Avoid Discharge - an external system (such as evcc) requested that the
@@ -84,14 +110,14 @@ had no limit configured, so batcontrol fell back to a safe mode instead.
 
 **Forecasts could not be refreshed**
 > Discharge Allowed - forecast data could not be refreshed for 185
-> seconds, falling back to a safe mode
+> seconds, so discharging is allowed as a safe fallback
 
 batcontrol could not reach a forecast provider; after a short grace period
 it falls back to allowing discharge rather than guessing.
 
 **Battery is full enough to always allow discharge**
-> Discharge Allowed - stored energy (8200 Wh) is above the
-> always-allow-discharge level (80% of capacity)
+> Discharge Allowed - battery holds 8200 Wh, above the
+> always-allow-discharge level of 80% (8000 Wh)
 
 Above the configured `always_allow_discharge_limit`, batcontrol always
 allows discharging, regardless of price.

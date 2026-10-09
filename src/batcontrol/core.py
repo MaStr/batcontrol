@@ -398,9 +398,10 @@ class Batcontrol:
                 )
                 self.mqtt_api.wait_ready()
                 # The "Decision" sensor follows the status changes of the
-                # decision journal
+                # decision journal, plus the refreshes that keep the numbers
+                # and the reason in its text current
                 self.decision_journal.add_listener(
-                    self.mqtt_api.publish_status_change)
+                    self.mqtt_api.publish_status_change, refresh=True)
                 # Register for callbacks
                 self.mqtt_api.register_set_callback(
                     'mode',
@@ -975,14 +976,17 @@ class Batcontrol:
             max_pv_charge_rate, max_grid_charge_rate) changed the value the
             logic decided -- so the trace's "why" matches what was
             actually applied, instead of the logic's pre-clamp number
-            silently drifting from the mode record's value. A no-op if
-            there is no pending trace to add to (e.g. a direct API call
-            with no decision scope open) or if the clamp did not change
-            anything. """
+            silently drifting from the mode record's value. The clamp is
+            recorded as a note, not as a decisive step: it adjusts the
+            value, but the reason for the mode stays with the logic's step
+            and the clamp is appended to its explanation (see
+            DecisionTrace.explanation). A no-op if there is no pending
+            trace to add to (e.g. a direct API call with no decision scope
+            open) or if the clamp did not change anything. """
         if self._pending.trace is None or applied == requested:
             return
         self._pending.trace.step(
-            Decision.OVERRIDE, Outcome.APPLIED, reason, decisive=True,
+            Decision.OVERRIDE, Outcome.APPLIED, reason,
             requested_w=requested, applied_w=applied, **extra)
 
     def __commit_decision(self, mode, control_source: str, value):
@@ -1288,9 +1292,9 @@ class Batcontrol:
                 self.mqtt_api.publish_mode(self.last_mode)
             # like the mode, so a status change that happened while the
             # broker was unreachable reaches the Decision sensor later
-            last_change = self.decision_journal.last_status_change()
-            if last_change is not None:
-                self.mqtt_api.publish_status_change(last_change)
+            last_event = self.decision_journal.last_event()
+            if last_event is not None:
+                self.mqtt_api.publish_status_change(last_event)
             self.mqtt_api.publish_charge_rate(self.last_charge_rate)
             self.mqtt_api.publish_limit_battery_charge_rate(
                 self._limit_battery_charge_rate)
