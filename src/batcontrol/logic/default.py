@@ -249,7 +249,8 @@ class DefaultLogic(LogicInterface):
                 # keep current charge level. recharge if solar surplus available
                 inverter_control_settings.allow_discharge = False
                 self.decision_trace.add(grid_recharge_idle(
-                    calc_input, is_charging_possible=is_charging_possible,
+                    calc_input, self.calculation_output,
+                    is_charging_possible=is_charging_possible,
                     charge_limit_capacity=charge_limit_capacity,
                     required_recharge_energy=required_recharge_energy,
                     high_price_slots=high_price_slots,
@@ -752,7 +753,8 @@ class DefaultLogic(LogicInterface):
 
         if self.common.is_discharge_always_allowed_capacity(calc_input.stored_energy):
             self.decision_trace.add(discharge_always_allowed(
-                calc_input, self.common.get_always_allow_discharge_limit()),
+                calc_input, self.common.get_always_allow_discharge_limit(),
+                self.common.max_capacity),
                 logger)
             return True
 

@@ -217,9 +217,14 @@ class TestCoreDecisionJournal:
         override = event.trace.records[2]
         assert override.reason == Reason.GRID_CHARGE_RATE_CLAMPED
         assert override.inputs['applied_w'] == 1000
+        # the clamp is a note: the reason for the mode stays with the logic
+        assert not override.decisive
         mode = self._mode_record(event.trace)
-        assert mode.reason == Reason.GRID_CHARGE_RATE_CLAMPED
+        assert mode.reason == Reason.GRID_RECHARGE_REQUIRED
         assert mode.inputs['value'] == 1000
+        assert event.trace.explanation().startswith('usable energy (')
+        assert event.trace.explanation().endswith(
+            'to 1000 W by the configured maximum grid charge rate)')
         inverter.set_mode_force_charge.assert_called_once_with(1000)
 
     def test_pv_charge_rate_clamp_is_reflected_in_the_trace(self, setup):
@@ -245,8 +250,8 @@ class TestCoreDecisionJournal:
             'max_pv_charge_rate': 2000,
             'min_pv_charge_rate': 0,
         }
+        assert not override.decisive
         mode = self._mode_record(event.trace)
-        assert mode.reason == Reason.PV_CHARGE_RATE_CLAMPED
         assert mode.inputs['value'] == 2000
         inverter.set_mode_limit_battery_charge.assert_called_once_with(2000)
 
@@ -363,7 +368,7 @@ class TestCoreDecisionJournal:
             CommonLogic._instance = None  # pylint: disable=protected-access
 
         mqtt_api.publish_status_change.assert_called_once_with(
-            bc.decision_journal.last_status_change())
+            bc.decision_journal.last_event())
 
     def test_nothing_is_republished_before_the_first_status_change(
             self, mock_config, mocker):

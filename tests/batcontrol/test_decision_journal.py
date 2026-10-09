@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from batcontrol.decision_journal import (
-    DecisionJournal, KIND_MODE, KIND_VALUE,
+    DecisionJournal, KIND_MODE, KIND_REFRESH, KIND_VALUE,
 )
 from batcontrol.logic.decision_trace import (
     Decision, DecisionRecord, DecisionTrace, Outcome, Reason,
@@ -269,3 +269,129 @@ class TestValueChangeEvents:
 
         assert type(data['value']) is int  # pylint: disable=unidiomatic-typecheck
         assert json.dumps(data)
+
+
+class _Clock:
+    """Manually advanced clock for the refresh interval."""
+
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+
+class TestRefreshEvents:
+    """Listeners registered with refresh=True also get the latest trace when
+    the reason changes or the last event is 15 minutes old, so the numbers
+    and the reason in the Decision sensor text do not go stale while the
+    status stays the same."""
+
+    @staticmethod
+    def _journal():
+        clock = _Clock()
+        journal = DecisionJournal(refresh_interval=900, clock=clock)
+        status, refresh = [], []
+        journal.add_listener(status.append)
+        journal.add_listener(refresh.append, refresh=True)
+        return journal, clock, status, refresh
+
+    def test_refresh_after_interval_only_for_refresh_listeners(self):
+        journal, clock, status, refresh = self._journal()
+        journal.commit(_trace(), 10, 'optimizer')
+
+        clock.now += 899
+        assert journal.commit(_trace(), 10, 'optimizer') is None
+        clock.now += 1
+        latest = _trace()
+        event = journal.commit(latest, 10, 'optimizer')
+
+        assert event.kind == KIND_REFRESH
+        assert event.trace is latest
+        assert event.previous_mode is None
+        assert [e.kind for e in status] == [KIND_MODE]
+        assert [e.kind for e in refresh] == [KIND_MODE, KIND_REFRESH]
+
+    def test_refresh_restarts_the_interval(self):
+        journal, clock, _status, refresh = self._journal()
+        journal.commit(_trace(), 10, 'optimizer')
+
+        for _ in range(6):
+            clock.now += 300
+            journal.commit(_trace(), 10, 'optimizer')
+
+        assert [e.kind for e in refresh] == [KIND_MODE] + [KIND_REFRESH] * 2
+
+    def test_reason_change_is_a_refresh(self):
+        """Regression: the mode stayed Discharge Allowed while the reason
+        changed from the always-allow level to the reserve rule, the text
+        kept showing the old reason."""
+        journal, _clock, status, refresh = self._journal()
+        journal.commit(_trace(Reason.ALWAYS_ALLOW_DISCHARGE_LIMIT), 10,
+                       'optimizer')
+
+        changed = _trace(Reason.USABLE_ENERGY_EXCEEDS_RESERVE)
+        journal.commit(changed, 10, 'optimizer')
+        journal.commit(_trace(Reason.USABLE_ENERGY_EXCEEDS_RESERVE), 10,
+                       'optimizer')
+
+        assert [e.kind for e in refresh] == [KIND_MODE, KIND_REFRESH]
+        assert refresh[-1].trace is changed
+        assert len(status) == 1
+
+    def test_mode_change_wins_over_refresh(self):
+        journal, clock, _status, refresh = self._journal()
+        journal.commit(_trace(), 10, 'optimizer')
+
+        clock.now += 900
+        journal.commit(_trace(Reason.RESERVE_REQUIRED), 0, 'optimizer')
+
+        assert [e.kind for e in refresh] == [KIND_MODE, KIND_MODE]
+
+    def test_refresh_keeps_the_value_reference(self):
+        """The 25 % comparison stays against the last status change, a
+        refresh with a slightly different value must not move it."""
+        journal, clock, status, _refresh = self._journal()
+        journal.commit(_trace(), -1, 'optimizer', 1000)
+        first = journal.last_status_change()
+
+        clock.now += 900
+        journal.commit(_trace(), -1, 'optimizer', 1200)
+        assert journal.last_event().kind == KIND_REFRESH
+        assert journal.last_status_change() is first
+
+        journal.commit(_trace(), -1, 'optimizer', 1250)
+
+        assert [e.kind for e in status] == [KIND_MODE, KIND_VALUE]
+        assert status[-1].previous_value == 1000
+
+    def test_last_event_includes_refresh(self):
+        journal, clock, _status, _refresh = self._journal()
+        journal.commit(_trace(), 10, 'optimizer')
+        clock.now += 900
+        latest = _trace()
+        journal.commit(latest, 10, 'optimizer')
+
+        assert journal.last_event().kind == KIND_REFRESH
+        assert journal.last_event().trace is latest
+        assert journal.last_status_change().kind == KIND_MODE
+
+    def test_registering_again_updates_the_refresh_setting(self):
+        journal = DecisionJournal(refresh_interval=900, clock=_Clock())
+        events = []
+        journal.add_listener(events.append)
+        journal.add_listener(events.append, refresh=True)
+
+        journal.commit(_trace(Reason.ALWAYS_ALLOW_DISCHARGE_LIMIT), 10, 'x')
+        journal.commit(_trace(Reason.USABLE_ENERGY_EXCEEDS_RESERVE), 10, 'x')
+
+        assert [e.kind for e in events] == [KIND_MODE, KIND_REFRESH]
+
+    def test_refresh_event_is_json_serializable(self):
+        journal, clock, _status, refresh = self._journal()
+        journal.commit(_trace(), 10, 'optimizer')
+        clock.now += 900
+        journal.commit(_trace(), 10, 'optimizer')
+
+        data = json.loads(json.dumps(refresh[-1].to_dict()))
+        assert data['kind'] == 'refresh'

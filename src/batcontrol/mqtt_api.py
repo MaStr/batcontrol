@@ -31,8 +31,9 @@ The following topics are published:
 - /control_source: source that last selected the current control state (api or optimizer)
 - /decision: current mode with its value and the reason as text, e.g.
   "Charge from Grid 1250 W - Grid recharge required" (retained). Updated on a status
-  change of the decision journal: new mode, or the value of the mode changed by 25 %
-- /decision/attributes: JSON with the decision trace of that status change (retained),
+  change of the decision journal (new mode, or the value of the mode changed by 25 %)
+  and on its refresh events (reason changed, or 15 minutes since the last update)
+- /decision/attributes: JSON with the decision trace behind that text (retained),
   used as attributes of the Home Assistant "Decision" sensor
 - /solar_surplus_wh: expected solar surplus energy in Wh (>0 means usable surplus available)
 - /solar_active: bool indicating whether solar is currently producing (slot 0 > 0)
@@ -669,9 +670,10 @@ class MqttApi:
             )
 
     def publish_status_change(self, event: 'StatusChangeEvent') -> None:
-        """ Publish a status change of the decision journal: the mode with
-            its value and reason as text, and the decision trace behind it
-            as JSON attributes. Registered as journal listener in core.py.
+        """ Publish a status change or refresh event of the decision
+            journal: the mode with its value and reason as text, and the
+            decision trace behind it as JSON attributes. Registered as
+            journal listener (with refresh events) in core.py.
             /decision
             /decision/attributes
         """

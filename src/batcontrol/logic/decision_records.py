@@ -10,10 +10,11 @@ from .logic_interface import CalculationInput, CalculationOutput
 
 
 def discharge_always_allowed(calc_input: CalculationInput,
-                             always_allow_discharge_limit: float
-                             ) -> DecisionRecord:
+                             always_allow_discharge_limit: float,
+                             max_capacity: float) -> DecisionRecord:
     """Discharge is allowed because the battery is above the always allow
-    discharge limit."""
+    discharge limit. The limit is a ratio of ``max_capacity``; its energy
+    is recorded as well, so it can be compared with the stored energy."""
     return DecisionRecord(
         decision=Decision.DISCHARGE,
         outcome=Outcome.ALLOWED,
@@ -21,6 +22,8 @@ def discharge_always_allowed(calc_input: CalculationInput,
         inputs={
             'stored_energy': calc_input.stored_energy,
             'always_allow_discharge_limit': always_allow_discharge_limit,
+            'always_allow_discharge_energy':
+                max_capacity * always_allow_discharge_limit,
         },
         decisive=True,
     )
@@ -107,7 +110,8 @@ def grid_recharge_charge(calc_input: CalculationInput,  # pylint: disable=too-ma
     )
 
 
-def grid_recharge_idle(calc_input: CalculationInput, *,  # pylint: disable=too-many-arguments,too-many-positional-arguments
+def grid_recharge_idle(calc_input: CalculationInput,  # pylint: disable=too-many-arguments,too-many-positional-arguments
+                       calc_output: CalculationOutput, *,
                        is_charging_possible: bool,
                        charge_limit_capacity: float,
                        required_recharge_energy: float,
@@ -135,6 +139,12 @@ def grid_recharge_idle(calc_input: CalculationInput, *,  # pylint: disable=too-m
     high_price_slots is a relative slot index list, same as on
     discharge_evaluated/grid_recharge_charge -- interval_minutes is
     included for the same reason.
+
+    This step is only reached when the reserved energy rule forbids
+    discharging, so it is the decisive step of the Avoid Discharge mode.
+    ``stored_usable_energy``/``reserved_energy`` (the numbers of that rule)
+    are recorded as well, so its explanation can say both why the battery
+    is held and why it is not recharged from the grid.
     """
     if not is_charging_possible:
         reason = Reason.GRID_CHARGE_LIMIT_REACHED
@@ -152,6 +162,8 @@ def grid_recharge_idle(calc_input: CalculationInput, *,  # pylint: disable=too-m
         inputs={
             'current_price': calc_input.prices[0],
             'stored_energy': calc_input.stored_energy,
+            'stored_usable_energy': calc_input.stored_usable_energy,
+            'reserved_energy': calc_output.reserved_energy,
             'charge_limit_capacity': charge_limit_capacity,
             'required_recharge_energy': required_recharge_energy,
             'high_price_slots': high_price_slots,

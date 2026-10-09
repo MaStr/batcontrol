@@ -17,7 +17,7 @@ This module must not import other logic modules, so that
 import datetime
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 
@@ -177,6 +177,28 @@ def _reason_text(reason: str) -> str:
     return ' '.join(words)
 
 
+def _peak_shaving_explanation(inputs: Dict[str, Any]) -> str:
+    """PV_CHARGE_LIMITED: name the purpose of each active limit. The limit
+    itself is already part of the status text (mode value)."""
+    components = str(inputs['active_components']).split(',')
+    purposes = []
+    if 'time' in components:
+        purposes.append('the battery is not full before '
+                        f"{inputs['allow_full_battery_after']}:00")
+    if 'price' in components:
+        purposes.append('room is kept for solar surplus in cheap-price hours')
+    if not purposes:
+        raise KeyError('active_components')
+    return 'PV charging is limited so ' + ' and '.join(purposes)
+
+
+# Shared start of the explanations for "no grid charging" while discharging
+# is blocked (mode Avoid Discharge): the reason why the battery is held,
+# then why it is not recharged from the grid either.
+_HELD = ('battery is held for upcoming more expensive hours '
+         '(usable {stored_usable_energy:.0f} Wh, reserve '
+         '{reserved_energy:.0f} Wh); no grid charging: ')
+
 # One-sentence, plain-language explanation per reason code, for a human
 # reading the Home Assistant "Decision" sensor or the trace JSON rather than
 # the source code. Entries with ``{placeholder}`` fields are filled in by
@@ -184,47 +206,47 @@ def _reason_text(reason: str) -> str:
 # numbers already captured for the log line, so no extra data is needed.
 # ``:.0%`` turns a 0..1 ratio into a percentage, same as elsewhere in the
 # format mini-language. A static string (no placeholders) is used as-is.
+# A callable gets the inputs and returns the text, for explanations that
+# depend on the values (not only show them).
+# The explanation of a decisive step answers "why is the inverter in this
+# mode"; the mode label and its value precede it in the status text, so the
+# value is not repeated here.
 # See :meth:`DecisionRecord.explanation`.
-_REASON_EXPLANATIONS = {
+_REASON_EXPLANATIONS: Dict[str, Union[str, Callable[[Dict[str, Any]], str]]] = {
     Reason.ALWAYS_ALLOW_DISCHARGE_LIMIT:
-        'stored energy ({stored_energy:.0f} Wh) is above the '
-        'always-allow-discharge level ({always_allow_discharge_limit:.0%} '
-        'of capacity)',
+        'battery holds {stored_energy:.0f} Wh, above the '
+        'always-allow-discharge level of {always_allow_discharge_limit:.0%} '
+        '({always_allow_discharge_energy:.0f} Wh)',
     Reason.USABLE_ENERGY_EXCEEDS_RESERVE:
         'usable energy ({stored_usable_energy:.0f} Wh) exceeds the '
-        '{reserved_energy:.0f} Wh reserved for upcoming expensive hours',
+        '{reserved_energy:.0f} Wh reserved for upcoming more expensive hours',
     Reason.RESERVE_REQUIRED:
         'usable energy ({stored_usable_energy:.0f} Wh) is below the '
-        '{reserved_energy:.0f} Wh reserved for upcoming expensive hours',
+        '{reserved_energy:.0f} Wh reserved for upcoming more expensive hours',
     Reason.GRID_RECHARGE_REQUIRED:
         'usable energy ({stored_usable_energy:.0f} Wh) is below the '
-        '{reserved_energy:.0f} Wh reserved for upcoming expensive hours, '
+        '{reserved_energy:.0f} Wh reserved for upcoming more expensive hours, '
         'so {recharge_energy:.0f} Wh is charged from the grid',
     Reason.GRID_CHARGE_LIMIT_REACHED:
-        'stored energy ({stored_energy:.0f} Wh) is already at or above '
-        'the {charge_limit_capacity:.0f} Wh grid-charging limit',
+        _HELD + 'the {charge_limit_capacity:.0f} Wh grid charge limit is '
+        'reached ({stored_energy:.0f} Wh stored)',
     Reason.NO_HIGH_PRICE_SLOTS:
-        'no upcoming price is high enough to justify reserving or '
-        'recharging the battery for it',
+        _HELD + 'no upcoming price is far enough above the current price '
+        'to pay off',
     Reason.HIGH_PRICE_DEMAND_COVERED_BY_PRODUCTION:
-        'solar production is forecast to cover the demand at the upcoming '
-        'expensive hours, so no grid charging is needed',
+        _HELD + 'solar is forecast to cover the demand of the hours where '
+        'it would pay off',
     Reason.NO_RECHARGE_REQUIRED:
-        'stored energy is sufficient until prices rise again, '
-        'so no grid charging is needed',
+        _HELD + 'the stored energy already covers the demand of the hours '
+        'where it would pay off',
     Reason.RECHARGE_BELOW_MINIMUM:
-        'a grid recharge of {recharge_energy_before_minimum:.0f} Wh would be '
-        'needed, but that is below the minimum charge amount, so no grid '
-        'charging happens',
-    Reason.PV_CHARGE_LIMITED:
-        'PV charging is capped at {final_limit_w} W ({active_components}) '
-        'so the battery does not fill up before {allow_full_battery_after}:00',
-    # final_limit_w is only ever None when this rule did not set a limit,
-    # i.e. for a different reason (NO_LIMIT_NEEDED) than this one.
+        _HELD + 'the missing {recharge_energy_before_minimum:.0f} Wh are '
+        'below the minimum charge amount',
+    Reason.PV_CHARGE_LIMITED: _peak_shaving_explanation,
     Reason.CLIP_ABSORPTION_LIMIT:
-        'the battery charges at {final_limit_w} W to absorb solar surplus '
-        'that would otherwise be clipped at the {feed_in_limit_w:.0f} W '
-        'feed-in limit',
+        'PV charging is limited to keep battery room for the solar surplus '
+        'above the {feed_in_limit_w:.0f} W feed-in limit, which would '
+        'otherwise be curtailed',
     Reason.NO_LIMIT_NEEDED: 'no PV-charge limit is needed right now',
     Reason.NO_CLIP_PREDICTED:
         'no clipping is predicted at the {feed_in_limit_w:.0f} W feed-in '
@@ -240,34 +262,44 @@ _REASON_EXPLANATIONS = {
         'the battery is already above the always-allow-discharge level, '
         'so this rule is skipped',
     Reason.FORCE_CHARGE_ACTIVE:
-        'grid charging (mode -1) is active and takes priority over this rule',
+        'not applied because the battery is charging from the grid',
     Reason.DISCHARGE_NOT_ALLOWED:
-        'the battery is preserved for high-price hours, so this rule has no effect',
+        'not applied because discharging is currently blocked',
     Reason.EVCC_CHARGING: 'evcc is actively charging the car, so peak shaving is paused',
     Reason.EVCC_EV_EXPECTS_PV_SURPLUS:
         'an EV is connected in solar-surplus mode, so peak shaving is paused',
     Reason.EXTERNAL_DISCHARGE_BLOCK:
         'an external system (such as evcc) requested that the battery not discharge',
     Reason.EXTERNAL_DISCHARGE_UNBLOCK:
-        'the external discharge block was lifted; the next evaluation decides what to do',
+        'the external discharge block was lifted; discharging stays blocked '
+        'until the next evaluation decides the mode',
     Reason.GRID_CHARGE_LOCK:
-        'an external request (e.g. a grid operator signal) is blocking '
-        'charging from the grid',
+        'grid charging was locked by an external request (e.g. HEMS or grid '
+        'operator signal), so the running grid charge was stopped',
     Reason.FORECAST_ERROR_FALLBACK:
         'forecast data could not be refreshed for {seconds_since_error} '
-        'seconds, falling back to a safe mode',
+        'seconds, so discharging is allowed as a safe fallback',
     Reason.CALCULATION_FAILED:
-        'the control calculation failed; falling back to a safe mode',
+        'the control calculation failed, so discharging is allowed as a '
+        'safe fallback',
     Reason.API_REQUEST: 'requested via the API or Home Assistant',
     Reason.PV_CHARGE_RATE_CLAMPED:
-        'the PV charge rate was limited by the logic to {requested_w} W, '
-        'but is further capped to {applied_w} W by the configured PV '
-        'charge rate limits',
+        'PV limit adjusted from {requested_w} W to {applied_w} W by the '
+        'configured min/max PV charge rate',
     Reason.GRID_CHARGE_RATE_CLAMPED:
-        'the grid recharge rate was calculated as {requested_w} W, but is '
-        'capped to {applied_w} W by the configured maximum grid charge rate',
+        'charge rate capped from {requested_w} W to {applied_w} W by the '
+        'configured maximum grid charge rate',
     Reason.UNSPECIFIED: 'no specific reason was recorded for this change',
 }
+
+# Reasons of notes: steps that adjust the value the decisive step chose,
+# without changing why the mode was chosen. They are recorded as
+# non-decisive steps and appended to the decisive explanation in brackets,
+# see :meth:`DecisionTrace.explanation`.
+NOTE_REASONS = frozenset({
+    Reason.PV_CHARGE_RATE_CLAMPED,
+    Reason.GRID_CHARGE_RATE_CLAMPED,
+})
 
 
 @dataclass(frozen=True)
@@ -306,6 +338,8 @@ class DecisionRecord:
         template = _REASON_EXPLANATIONS.get(self.reason)
         if template is not None:
             try:
+                if callable(template):
+                    return template(self.inputs)
                 return template.format(**self.inputs)
             except (KeyError, IndexError, ValueError, TypeError):
                 logger.debug(
@@ -371,10 +405,24 @@ class DecisionTrace:
                 return record
         return None
 
+    def explanation(self) -> Optional[str]:
+        """Plain language "why" of this trace: the explanation of the
+        decisive step, followed by the notes (value adjustments such as
+        the charge rate clamps, see ``NOTE_REASONS``) in brackets.
+        None if the trace has no decisive step."""
+        decisive = self.decisive_record()
+        if decisive is None:
+            return None
+        text = decisive.explanation()
+        for record in self.records:
+            if record.reason in NOTE_REASONS and not record.decisive:
+                text += f' ({record.explanation()})'
+        return text
+
     def status_text(self) -> str:
         """The resulting mode with its value and a plain language
         explanation as one string, e.g. ``Charge from Grid 1250 W - usable
-        energy (900 Wh) is below the 2500 Wh reserved for upcoming
+        energy (900 Wh) is below the 2500 Wh reserved for upcoming more
         expensive hours, so 1600 Wh is charged from the grid``.
         Empty if the trace has no mode record yet."""
         mode = next((r for r in reversed(self.records)
@@ -388,9 +436,9 @@ class DecisionTrace:
         # The mode record's own inputs do not carry the numbers behind the
         # decision (those live on the decisive step); use that step's
         # explanation, falling back to the reason code if there is none.
-        decisive = self.decisive_record()
-        explanation = decisive.explanation() if decisive is not None \
-            else _reason_text(mode.reason)
+        explanation = self.explanation()
+        if explanation is None:
+            explanation = _reason_text(mode.reason)
         return f'{text} - {explanation}'
 
     def to_dict(self) -> Dict[str, Any]:
@@ -404,6 +452,6 @@ class DecisionTrace:
                  'outcome': decisive.outcome,
                  'reason': decisive.reason}
                 if decisive is not None else None),
-            'why': decisive.explanation() if decisive is not None else None,
+            'why': self.explanation(),
             'records': [record.to_dict() for record in self.records],
         }

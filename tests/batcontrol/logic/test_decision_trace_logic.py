@@ -193,8 +193,9 @@ class TestSharedDecisionSteps:
         assert recharge.inputs['high_price_slots'] == [2]
         assert recharge.inputs['high_price_energy_demand'] == 0
         assert recharge.explanation() == (
-            'solar production is forecast to cover the demand at the '
-            'upcoming expensive hours, so no grid charging is needed')
+            'battery is held for upcoming more expensive hours (usable '
+            '1300 Wh, reserve 1400 Wh); no grid charging: solar is forecast '
+            'to cover the demand of the hours where it would pay off')
 
     def test_no_recharge_required_keeps_battery_when_demand_is_stored(
             self, logic_cls):
@@ -241,8 +242,9 @@ class TestSharedDecisionSteps:
         assert recharge.inputs['high_price_energy_demand'] == 1550
         assert recharge.inputs['recharge_energy_before_minimum'] == 50
         assert recharge.explanation() == (
-            'a grid recharge of 50 Wh would be needed, but that is below '
-            'the minimum charge amount, so no grid charging happens')
+            'battery is held for upcoming more expensive hours (usable '
+            '1500 Wh, reserve 1550 Wh); no grid charging: the missing 50 Wh '
+            'are below the minimum charge amount')
 
     def test_grid_charge_limit_reached(self, logic_cls):
         logic = _logic(logic_cls)
