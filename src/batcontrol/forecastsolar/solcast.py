@@ -5,7 +5,7 @@ GET https://api.solcast.com.au/rooftop_sites/{resource_id}/forecasts
 
 The rooftop site (location, tilt, azimuth, capacity) is configured in the
 Solcast web toolkit, not in batcontrol. Each installation entry only needs
-the site's resource_id and the account's apikey.
+the site's resource_id and the account's api_token.
 
 The free hobbyist plan allows 10 API requests per day. Each configured
 installation costs one request per refresh, so the minimum time between
@@ -16,6 +16,7 @@ import datetime
 import logging
 import time
 import requests
+from ..value_utils import get_config_value
 from .baseclass import ForecastSolarBaseclass, ProviderError, RateLimitException
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ class Solcast(ForecastSolarBaseclass):
 
         Args:
             pvinstallations: List of PV installation configurations.
-                             Each entry needs 'name', 'resource_id' and 'apikey';
+                             Each entry needs 'name', 'resource_id' and 'api_token';
                              'percentile' (10, 50 or 90) is optional.
             timezone: Timezone for forecast data
             min_time_between_api_calls: Minimum seconds between API calls
@@ -62,9 +63,9 @@ class Solcast(ForecastSolarBaseclass):
             if not unit.get('resource_id'):
                 raise ValueError(
                     f'[Solcast] No resource_id provided for installation {name}')
-            if not unit.get('apikey'):
+            if not _get_api_token(unit):
                 raise ValueError(
-                    f'[Solcast] No API key provided for installation {name}')
+                    f'[Solcast] No api_token provided for installation {name}')
             percentile = unit.get('percentile', 50)
             if percentile not in PERCENTILE_FIELD_MAP:
                 raise ValueError(
@@ -143,7 +144,7 @@ class Solcast(ForecastSolarBaseclass):
 
         name = unit['name']
         resource_id = unit['resource_id']
-        apikey = unit['apikey']
+        api_token = _get_api_token(unit)
 
         url = f'{API_BASE_URL}/{resource_id}/forecasts'
         url += f'?format=json&hours={FORECAST_HOURS}'
@@ -153,7 +154,7 @@ class Solcast(ForecastSolarBaseclass):
 
         # API key goes into the Authorization header to keep it out of
         # logged URLs.
-        headers = {'Authorization': f'Bearer {apikey}'}
+        headers = {'Authorization': f'Bearer {api_token}'}
         try:
             response = requests.get(url, headers=headers, timeout=60)
         except requests.exceptions.RequestException as e:
@@ -168,11 +169,11 @@ class Solcast(ForecastSolarBaseclass):
                     f'[Solcast] Invalid JSON response: {e}') from e
         elif response.status_code in (401, 403):
             logger.error(
-                'API returned %s - Unauthorized, apikey correct?',
+                'API returned %s - Unauthorized, api_token correct?',
                 response.status_code)
             raise ProviderError(
                 f'[Solcast] API returned {response.status_code} - '
-                'Unauthorized, apikey correct?')
+                'Unauthorized, api_token correct?')
         elif response.status_code == 404:
             logger.error(
                 'API returned 404 - resource_id %s not found', resource_id)
@@ -222,3 +223,9 @@ class Solcast(ForecastSolarBaseclass):
         if blackout_ts <= 0:
             blackout_ts = time.time() + self._provider_min
         self.rate_limit_blackout_window_ts = blackout_ts
+
+
+def _get_api_token(unit: dict):
+    """Read the Solcast API token, accepting the deprecated 'apikey' spelling"""
+    return get_config_value(
+        unit, 'api_token', None, f"pvinstallations[{unit.get('name', '<unnamed>')}]")

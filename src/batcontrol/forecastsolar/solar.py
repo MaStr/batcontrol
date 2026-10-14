@@ -1,10 +1,20 @@
 """ Factory for solar forecast providers """
 
+import logging
+from typing import Optional
+
+from ..value_utils import get_config_value, parse_positive_number
 from .forecastsolar_interface import ForecastSolarInterface
 from .fcsolar import FCSolar
 from .evcc_solar import EvccSolar
-from .forecast_homeassistant_ml import ForecastSolarHomeAssistantML
+from .forecast_homeassistant_ml import ForecastSolarHomeAssistantML, PROVIDER_NAME
 from .solcast import Solcast
+
+logger = logging.getLogger(__name__)
+
+HA_ML_PROVIDER = PROVIDER_NAME
+HA_ML_DEFAULT_URL = 'ws://homeassistant.local:8123'
+DOC_URL = 'https://mastr.github.io/batcontrol/configuration/solar-forecast/'
 
 
 class ForecastSolar:
@@ -28,7 +38,7 @@ class ForecastSolar:
             target_resolution: Target resolution in minutes (15 or 60)
 
         Raises:
-            RuntimeError: If provider is unknown
+            RuntimeError: If provider is unknown or its configuration is incomplete
             ValueError: If configuration is invalid for the provider
         """
         provider = None
@@ -41,38 +51,145 @@ class ForecastSolar:
         elif requested_provider.lower() == 'solcast':
             provider = Solcast(config, timezone, min_time_between_api_calls,
                                api_delay, target_resolution)
-        elif requested_provider.lower() == 'homeassistant-solar-forecast-ml':
-            # Parse HomeAssistant Solar Forecast ML configuration from pvinstallations
-            # Each installation can have type='homeassistant-solar-forecast-ml'
-            # with connection details
-            provider = ForecastSolarHomeAssistantML(
-                pvinstallations=config,
-                timezone=timezone,
-                base_url=_get_config_value(config, 'base_url', 'ws://homeassistant.local:8123'),
-                api_token=_get_config_value(config, 'api_token', None),
-                entity_id=_get_config_value(config, 'entity_id', None),
-                min_time_between_api_calls=min_time_between_api_calls,
-                delay_evaluation_by_seconds=api_delay,
-                sensor_unit=_get_config_value(config, 'sensor_unit', 'auto'),
-                target_resolution=target_resolution
+        elif requested_provider.lower() == HA_ML_PROVIDER:
+            provider = _create_homeassistant_ml_provider(
+                config,
+                timezone,
+                min_time_between_api_calls,
+                api_delay,
+                target_resolution
             )
         else:
             raise RuntimeError(f'[ForecastSolar] Unknown provider {requested_provider}')
         return provider
 
 
-def _get_config_value(config: list, key: str, default=None):
-    """Extract configuration value from pvinstallations list
+def _create_homeassistant_ml_provider(
+        config: list,
+        timezone,
+        min_time_between_api_calls,
+        api_delay,
+        target_resolution: int) -> ForecastSolarInterface:
+    """Build the HomeAssistant Solar Forecast ML provider from pvinstallations
+
+    Picks the installation entry that belongs to this provider, reads its
+    connection details (accepting the deprecated 'base_url'/'apikey'
+    spellings) and refuses to continue when a mandatory key is missing.
+    """
+    installation = _select_installation(config, HA_ML_PROVIDER)
+    if installation is None:
+        raise RuntimeError(
+            f'[ForecastSolar] No pvinstallations entry matches provider '
+            f'{HA_ML_PROVIDER}. Add "type: {HA_ML_PROVIDER}" to the entry '
+            f'holding url, api_token and entity_id, and remove the entries '
+            f'of the other providers. See {DOC_URL}'
+        )
+    name = installation.get('name', '<unnamed>')
+    context = f'pvinstallations[{name}]'
+
+    url = get_config_value(installation, 'url', None, context)
+    if not url:
+        url = HA_ML_DEFAULT_URL
+        logger.warning(
+            '[ForecastSolar] No "url" configured for installation %s, '
+            'falling back to %s',
+            name, HA_ML_DEFAULT_URL
+        )
+
+    api_token = get_config_value(installation, 'api_token', None, context)
+    _require(api_token, 'api_token', name)
+
+    entity_id = get_config_value(installation, 'entity_id', None, context)
+    _require(entity_id, 'entity_id', name)
+
+    cache_ttl_hours = get_config_value(installation, 'cache_ttl_hours', None, context)
+    if cache_ttl_hours is not None:
+        cache_ttl_hours = parse_positive_number(
+            cache_ttl_hours, f'{context}.cache_ttl_hours')
+
+    kwargs = {
+        'pvinstallations': [installation],
+        'timezone': timezone,
+        'base_url': url,
+        'api_token': api_token,
+        'entity_id': entity_id,
+        'min_time_between_api_calls': min_time_between_api_calls,
+        'delay_evaluation_by_seconds': api_delay,
+        'sensor_unit': get_config_value(installation, 'sensor_unit', 'auto', context),
+        'target_resolution': target_resolution,
+    }
+    if cache_ttl_hours is not None:
+        kwargs['cache_ttl_hours'] = cache_ttl_hours
+
+    return ForecastSolarHomeAssistantML(**kwargs)
+
+
+def _require(value, key: str, name: str) -> None:
+    """Raise a RuntimeError naming the key and the installation it belongs to
+
+    The message spells out the deprecated alternatives, because reusing the
+    key name of another provider is what sent users down this path (#451).
+    """
+    if value:
+        return
+    aliases = {
+        'api_token': ' Note: "apikey"/"apitoken" are the deprecated spellings '
+                     'of this key - "apikey" is also the key name used by '
+                     'fcsolarapi and solcast.',
+        'entity_id': ' Use the sensor of the Solar Forecast ML integration, '
+                     'for example sensor.solar_forecast_ml_evcc_solar_prognose.',
+    }
+    hint = aliases.get(key, '')
+    raise RuntimeError(
+        f'[ForecastSolar] {HA_ML_PROVIDER} requires "{key}" in your '
+        f'pvinstallations configuration (installation "{name}").{hint} '
+        f'See {DOC_URL}'
+    )
+
+
+def _select_installation(config: list, requested_provider: str) -> Optional[dict]:
+    """Pick the pvinstallations entry that belongs to the requested provider
+
+    Selection order:
+      1. entry whose 'type' matches the requested provider
+      2. entry carrying 'entity_id', which only this provider uses
+         ('url' is no discriminator - evcc-solar uses the same key)
+      3. the single entry, if the list holds exactly one
+
+    Reading only the first entry used to silently ignore a correctly
+    configured entry further down the list (#451). With several entries and
+    no match there is nothing to guess: naming an unrelated entry in the
+    following error message would send the user to the wrong place.
 
     Args:
         config: List of pvinstallations dicts
-        key: Configuration key to find
-        default: Default value if key not found
+        requested_provider: Provider name from solar_forecast_provider
 
     Returns:
-        Value from first installation's config, or default if not found
+        The selected installation dict, or None if no entry can be identified
     """
-    if isinstance(config, list) and len(config) > 0:
-        if isinstance(config[0], dict):
-            return config[0].get(key, default)
-    return default
+    if not isinstance(config, list):
+        return None
+
+    entries = [entry for entry in config if isinstance(entry, dict)]
+    if not entries:
+        return None
+
+    for entry in entries:
+        entry_type = entry.get('type')
+        if isinstance(entry_type, str) and entry_type.lower() == requested_provider:
+            return entry
+
+    for entry in entries:
+        if entry.get('entity_id'):
+            if entry is not entries[0]:
+                logger.info(
+                    '[ForecastSolar] Using pvinstallations entry "%s" for %s',
+                    entry.get('name', '<unnamed>'), requested_provider
+                )
+            return entry
+
+    if len(entries) == 1:
+        return entries[0]
+
+    return None

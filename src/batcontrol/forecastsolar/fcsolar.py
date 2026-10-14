@@ -9,6 +9,7 @@ import math
 import json
 import logging
 import requests
+from ..value_utils import get_config_value
 from .baseclass import ForecastSolarBaseclass, ProviderError, RateLimitException
 
 
@@ -98,11 +99,11 @@ class FCSolar(ForecastSolarBaseclass):
         kwp = unit['kWp']
 
         apikey_urlmod = ''
-        if 'apikey' in unit.keys() and unit['apikey'] is not None:
-            apikey_urlmod = unit['apikey'] + "/"  # ForecastSolar api
-        # legacy naming in config file
-        elif 'api' in unit.keys() and unit['api'] is not None:
-            apikey_urlmod = unit['api'] + "/"  # ForecastSolar api
+        # 'apikey'/'api' are the deprecated spellings of 'api_token'
+        apikey = get_config_value(
+            unit, 'api_token', None, f"pvinstallations[{unit.get('name', '<unnamed>')}]")
+        if apikey:
+            apikey_urlmod = apikey + "/"  # ForecastSolar api
 
         horizon_querymod = ''
         if 'horizon' in unit.keys() and unit['horizon'] is not None:

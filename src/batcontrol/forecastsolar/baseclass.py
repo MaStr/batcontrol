@@ -5,6 +5,7 @@ import threading
 import time
 import random
 import logging
+from typing import Optional
 from .forecastsolar_interface import ForecastSolarInterface
 from ..fetcher.relaxed_caching import RelaxedCaching, CacheMissError
 from ..scheduler import schedule_once
@@ -41,8 +42,10 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
           values in Wh per 15 minutes
     """
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def __init__(self, pvinstallations, timezone, min_time_between_API_calls,
-                 delay_evaluation_by_seconds, target_resolution=60, native_resolution=60) -> None:
+                 delay_evaluation_by_seconds, target_resolution=60, native_resolution=60,
+                 cache_ttl_hours: Optional[float] = None) -> None:
         self.pvinstallations = pvinstallations
         self.next_update_ts = 0
         self.min_time_between_updates = min_time_between_API_calls
@@ -66,7 +69,12 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
         try:
             for unit in pvinstallations:
                 name = unit['name']
-                self.cache_list[name] = RelaxedCaching()
+                # None keeps RelaxedCaching's own default TTL as the single
+                # source of truth for providers that expose no TTL setting.
+                if cache_ttl_hours is None:
+                    self.cache_list[name] = RelaxedCaching()
+                else:
+                    self.cache_list[name] = RelaxedCaching(ttl_hours=cache_ttl_hours)
         except KeyError as e:
             raise ValueError("Each PV installation must have a 'name' key") from e
 

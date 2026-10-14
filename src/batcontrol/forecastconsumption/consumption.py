@@ -1,5 +1,6 @@
 """ Factory for creating consumption forecasters. """
 import logging
+from ..value_utils import get_config_value
 from .forecastconsumption_interface import ForecastConsumptionInterface
 from .forecast_csv import ForecastConsumptionCsv
 from .forecast_homeassistant import ForecastConsumptionHomeAssistant
@@ -59,19 +60,25 @@ def _create_homeassistant_forecast(
     else:
         ha_config = config
 
-    # Validate required parameters
-    required_params = ['base_url', 'apitoken', 'entity_id']
-    for param in required_params:
-        if param not in ha_config:
+    # Get configuration, accepting the deprecated 'base_url'/'apitoken' keys
+    context = 'consumption_forecast'
+    base_url = get_config_value(ha_config, 'url', None, context)
+    api_token = get_config_value(ha_config, 'api_token', None, context)
+    entity_id = get_config_value(ha_config, 'entity_id', None, context)
+
+    # Validate required parameters. Emptiness, not presence: the add-on
+    # delivers a field the user cleared as '' and an unset one as null,
+    # both of which used to reach HomeAssistant as a broken auth message.
+    for param, value in (
+            ('url', base_url),
+            ('api_token', api_token),
+            ('entity_id', entity_id)):
+        if not value:
             raise ValueError(
                 f"HomeAssistant consumption forecast requires '{param}' "
-                f"in consumption_forecast.homeassistant_api configuration"
+                f"in consumption_forecast configuration"
             )
 
-    # Get configuration with defaults
-    base_url = ha_config['base_url']
-    api_token = ha_config['apitoken']
-    entity_id = ha_config['entity_id']
     history_days = ha_config.get('history_days', [-7, -14, -21])
     history_weights = ha_config.get('history_weights', [1, 1, 1])
 

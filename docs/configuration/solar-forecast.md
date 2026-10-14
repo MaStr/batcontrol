@@ -93,12 +93,26 @@ The minimum configuration is:
 solar_forecast_provider: homeassistant-solar-forecast-ml
 pvinstallations:
   - name: HA Solar ML Forecast
-    base_url: ws://homeassistant.local:8123  # Your HomeAssistant URL
+    url: ws://homeassistant.local:8123       # Your HomeAssistant URL
     api_token: eyJ...                        # Long-lived access token from HA Profile
     entity_id: sensor.solar_forecast_ml_evcc_solar_prognose  # Forecast sensor entity
 ```
 
-If you're running batcontrol in a HomeAssistant addon, use `ws://homeassistant:8123` as the base_url. For standalone installations, use your HomeAssistant IP or hostname.
+If you're running batcontrol in a HomeAssistant addon, use `ws://homeassistant:8123` as the url. For standalone installations, use your HomeAssistant IP or hostname.
+
+!!! note "List only the entries of the provider you selected"
+    This provider uses a single `pvinstallations` entry: the one with a matching `type:`, or
+    the one carrying `entity_id`. Entries of *other* providers have to be removed, because
+    `fcsolarapi` and `solcast` read every entry in the list and fail on an entry that does not
+    carry their keys. With several entries and no way to tell which one is meant, batcontrol
+    stops at startup and asks you to add `type: homeassistant-solar-forecast-ml`.
+
+!!! info "Key names"
+    The credential is `api_token` and the endpoint is `url`, consistently across all
+    configuration sections. The older spellings `base_url`, `apikey` and `apitoken` are still
+    read, but log a deprecation warning at startup. The Home Assistant add-on offers only
+    `url` and `api_token` from version 0.10.0 on - rename them there in the same step as the
+    update.
 
 ### Optional Parameters
 
@@ -107,11 +121,11 @@ You can customize the behavior with additional parameters:
 ```yaml
 pvinstallations:
   - name: HA Solar ML Forecast
-    base_url: ws://homeassistant:8123
+    url: ws://homeassistant:8123
     api_token: eyJ...
     entity_id: sensor.solar_forecast_ml_prognose_nachste_stunde
     sensor_unit: auto  # Options: 'auto' (default, auto-detect), 'Wh', or 'kWh'
-    cache_ttl_hours: 24.0  # Cache duration in hours (default: 24.0)
+    cache_ttl_hours: 24.0  # Cache duration in hours (default: 12.0)
 ```
 
 The `sensor_unit` parameter:
@@ -120,6 +134,30 @@ The `sensor_unit` parameter:
 - `kWh`: If you know your sensor reports in kWh
 
 Setting the explicit unit (`Wh` or `kWh`) can speed up startup by skipping auto-detection.
+
+The `cache_ttl_hours` parameter controls how long an already fetched forecast stays usable as a
+fallback when HomeAssistant cannot be reached (default: 12 hours). It does not control how often
+batcontrol asks for a new forecast — that is the refresh interval of the provider.
+
+### Troubleshooting
+
+**Problem:** batcontrol stops at startup with
+`Auth message incorrectly formatted: expected str at 'access_token'. Got None`
+
+**Solution:** the access token never reached the provider. Check that
+
+- the token is configured as `api_token` — `apikey` is the key name of the fcsolarapi and
+  Solcast providers and was a common mix-up ([issue #451](https://github.com/MaStr/batcontrol/issues/451))
+- the token sits in the same `pvinstallations` entry as `entity_id` and `url`
+- the entry belongs to the selected provider (see the note above about `type:`)
+
+Since batcontrol 0.10.0 a missing token is reported as a configuration error naming the key,
+before any connection to HomeAssistant is attempted.
+
+**Problem:** `No "url" configured for installation <name>, falling back to ws://homeassistant.local:8123`
+
+**Solution:** your URL is not in the entry batcontrol selected. Use the key `url` (or the
+deprecated `base_url`) in the entry that also holds `entity_id`.
 
 ## Solcast
 
@@ -134,7 +172,7 @@ Solcast offers a free "Home User" (hobbyist) account which is sufficient for bat
 1. Register at [solcast.com](https://solcast.com/free-rooftop-solar-forecasting) and choose the free **Home User** (hobbyist) plan.
 2. In the Solcast toolkit, create a **Rooftop Site**. Enter your location (latitude/longitude), panel tilt, azimuth and capacity (kWp) there — the site geometry lives in your Solcast account, **not** in the batcontrol configuration.
 3. Copy the site's **resource id** (shown in the site details, format `xxxx-xxxx-xxxx-xxxx`).
-4. Copy your **API key** from the Solcast account settings.
+4. Copy your **API key** from the Solcast account settings (configured as `api_token`).
 
 The free account is limited to **one location with up to two rooftop sites** (e.g. an east/west split) and **10 API requests per day**.
 
@@ -147,7 +185,7 @@ solar_forecast_provider: solcast
 pvinstallations:
   - name: Haus #name
     resource_id: xxxx-xxxx-xxxx-xxxx  # from your Solcast rooftop site
-    apikey: your-solcast-api-key      # from your Solcast account settings
+    api_token: your-solcast-api-key   # from your Solcast account settings
 ```
 
 For two rooftop sites (e.g. east/west arrays) use one entry per site. The API key is the same for both, each site has its own resource id:
@@ -157,10 +195,10 @@ solar_forecast_provider: solcast
 pvinstallations:
   - name: Dach Ost
     resource_id: xxxx-xxxx-xxxx-aaaa
-    apikey: your-solcast-api-key
+    api_token: your-solcast-api-key
   - name: Dach West
     resource_id: xxxx-xxxx-xxxx-bbbb
-    apikey: your-solcast-api-key
+    api_token: your-solcast-api-key
 ```
 
 ### Optional percentile parameter
@@ -171,7 +209,7 @@ You can select which estimate batcontrol uses per installation:
 pvinstallations:
   - name: Haus
     resource_id: xxxx-xxxx-xxxx-xxxx
-    apikey: your-solcast-api-key
+    api_token: your-solcast-api-key
     percentile: 10  # 10 (pessimistic), 50 (default, most likely), 90 (optimistic)
 ```
 

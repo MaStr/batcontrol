@@ -217,3 +217,86 @@ class TestCreateHomeAssistantForecast:
 
         assert forecaster.sensor_unit == 'auto'
         mock_check.assert_called_once()
+
+
+class TestConfigKeyNames:
+    """Canonical 'url'/'api_token' keys and their deprecated spellings (#451)"""
+
+    @patch.object(ForecastConsumptionHomeAssistant, '_check_sensor_unit', return_value=1.0)
+    def test_canonical_keys(self, mock_check, timezone):  # pylint: disable=redefined-outer-name,unused-argument
+        """url/api_token are the documented key names"""
+        config = {
+            'type': 'homeassistant-api',
+            'homeassistant_api': {
+                'url': 'ws://localhost:8123',
+                'api_token': 'canonical_token',
+                'entity_id': 'sensor.test',
+                'sensor_unit': 'Wh'
+            }
+        }
+
+        forecaster = _create_homeassistant_forecast(timezone, config['homeassistant_api'])
+
+        assert forecaster.base_url == 'ws://localhost:8123'
+        assert forecaster.api_token == 'canonical_token'
+
+    @patch.object(ForecastConsumptionHomeAssistant, '_check_sensor_unit', return_value=1.0)
+    def test_deprecated_keys_still_work(self, mock_check, timezone):  # pylint: disable=redefined-outer-name,unused-argument
+        """base_url/apitoken keep working for hand-written configurations"""
+        config = {
+            'base_url': 'ws://legacy:8123',
+            'apitoken': 'legacy_token',
+            'entity_id': 'sensor.test',
+            'sensor_unit': 'Wh'
+        }
+
+        forecaster = _create_homeassistant_forecast(timezone, config)
+
+        assert forecaster.base_url == 'ws://legacy:8123'
+        assert forecaster.api_token == 'legacy_token'
+
+    @patch.object(ForecastConsumptionHomeAssistant, '_check_sensor_unit', return_value=1.0)
+    def test_canonical_key_wins_over_deprecated(self, mock_check, timezone):  # pylint: disable=redefined-outer-name,unused-argument
+        config = {
+            'url': 'ws://canonical:8123',
+            'base_url': 'ws://legacy:8123',
+            'api_token': 'canonical_token',
+            'apitoken': 'legacy_token',
+            'entity_id': 'sensor.test',
+            'sensor_unit': 'Wh'
+        }
+
+        forecaster = _create_homeassistant_forecast(timezone, config)
+
+        assert forecaster.base_url == 'ws://canonical:8123'
+        assert forecaster.api_token == 'canonical_token'
+
+    @pytest.mark.parametrize("missing", ['url', 'api_token', 'entity_id'])
+    def test_missing_key_raises_naming_it(self, timezone, missing):  # pylint: disable=redefined-outer-name
+        config = {
+            'url': 'ws://localhost:8123',
+            'api_token': 'test_token',
+            'entity_id': 'sensor.test',
+            'sensor_unit': 'Wh'
+        }
+        del config[missing]
+
+        with pytest.raises(ValueError, match=missing):
+            _create_homeassistant_forecast(timezone, config)
+
+    @pytest.mark.parametrize("empty", [None, ''])
+    def test_empty_token_raises(self, timezone, empty):  # pylint: disable=redefined-outer-name
+        """The add-on delivers a cleared field as '' and an unset one as null.
+
+        Regression for issue #451: the presence-only check let both through
+        and HomeAssistant answered with "expected str at 'access_token'".
+        """
+        config = {
+            'url': 'ws://localhost:8123',
+            'api_token': empty,
+            'entity_id': 'sensor.test',
+            'sensor_unit': 'Wh'
+        }
+
+        with pytest.raises(ValueError, match='api_token'):
+            _create_homeassistant_forecast(timezone, config)

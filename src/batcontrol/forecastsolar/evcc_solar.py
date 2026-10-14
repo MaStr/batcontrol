@@ -36,6 +36,7 @@ import datetime
 import logging
 import requests
 
+from ..value_utils import get_config_value
 from .baseclass import ForecastSolarBaseclass
 
 logger = logging.getLogger(__name__)
@@ -75,10 +76,13 @@ class EvccSolar(ForecastSolarBaseclass):
                 "[EvccSolar] evcc-solar provider expects exactly one installation configuration")
 
         installation = pvinstallations[0]
-        if 'url' not in installation:
+        url = get_config_value(
+            installation, 'url', None,
+            f"pvinstallations[{installation.get('name', '<unnamed>')}]")
+        if not url:
             raise ValueError("[EvccSolar] URL must be provided in installation configuration")
 
-        self.url = installation['url']
+        self.url = url
         logger.info('Initialized EvccSolar with URL: %s', self.url)
 
     def get_forecast_from_raw_data(self) -> dict[int, float]:

@@ -3,8 +3,73 @@
 These helpers are independent of the Batcontrol core and raise ValueError
 for values that cannot be interpreted.
 """
+import logging
 import math
-from typing import Optional
+from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
+
+# Canonical configuration key names and the deprecated spellings that are still
+# accepted for them. batcontrol grew three spellings for a credential
+# ('apikey', 'apitoken', 'api') and two for an endpoint ('url', 'base_url'),
+# which made users put the right value into the wrong key (issue #451).
+CONFIG_KEY_ALIASES = {
+    'url': ('base_url',),
+    'api_token': ('apikey', 'apitoken', 'api'),
+}
+
+# Deprecation warnings are emitted once per (context, deprecated key) so a
+# provider that reads the same key on every cycle does not flood the log.
+_warned_aliases = set()
+
+
+def reset_alias_warnings() -> None:
+    """Forget which deprecation warnings were already emitted (for tests)."""
+    _warned_aliases.clear()
+
+
+def get_config_value(
+        config: dict,
+        key: str,
+        default=None,
+        context: str = '') -> Any:
+    """Read a config value, falling back to deprecated spellings of its key.
+
+    An empty value (missing key, None or empty string) counts as not set. The
+    empty string matters for the HomeAssistant add-on, where a field the user
+    cleared in the UI arrives as '' instead of being absent.
+
+    Args:
+        config: Configuration mapping to read from
+        key: Canonical key name (see CONFIG_KEY_ALIASES)
+        default: Value to return when neither key nor alias is set
+        context: Config section for the warning, e.g. 'pvinstallations[Haus]'
+
+    Returns:
+        The configured value, or default if nothing is set
+    """
+    if not isinstance(config, dict):
+        return default
+
+    value = config.get(key)
+    if value or value == 0:
+        return value
+
+    for alias in CONFIG_KEY_ALIASES.get(key, ()):
+        value = config.get(alias)
+        if value or value == 0:
+            warning_key = (context, alias, key)
+            if warning_key not in _warned_aliases:
+                _warned_aliases.add(warning_key)
+                logger.warning(
+                    '[Config] "%s"%s is deprecated, please rename it to "%s"',
+                    alias,
+                    f' in {context}' if context else '',
+                    key
+                )
+            return value
+
+    return default
 
 
 def parse_optional_ratio(value, config_key: str) -> Optional[float]:
