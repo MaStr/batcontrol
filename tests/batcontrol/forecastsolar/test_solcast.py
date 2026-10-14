@@ -110,12 +110,20 @@ class TestSolcast:
                     min_time_between_api_calls=900,
                     delay_evaluation_by_seconds=0)
 
-    def test_missing_apikey(self, timezone):
-        """Test that a missing apikey raises ValueError."""
-        with pytest.raises(ValueError, match='API key'):
+    def test_missing_api_token(self, timezone):
+        """Test that a missing api_token raises ValueError."""
+        with pytest.raises(ValueError, match='api_token'):
             Solcast([{'name': 'default', 'resource_id': 'res-1'}], timezone,
                     min_time_between_api_calls=900,
                     delay_evaluation_by_seconds=0)
+
+    def test_apikey_alias_is_accepted(self, timezone):
+        """The deprecated 'apikey' spelling still configures the token."""
+        instance = Solcast([{'name': 'default', 'resource_id': 'res-1',
+                             'apikey': 'legacy-key'}], timezone,
+                           min_time_between_api_calls=900,
+                           delay_evaluation_by_seconds=0)
+        assert instance is not None
 
     def test_invalid_percentile(self, timezone):
         """Test that an invalid percentile raises ValueError."""

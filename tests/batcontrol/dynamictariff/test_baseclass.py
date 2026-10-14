@@ -409,14 +409,24 @@ class TestDynamicTariffFactory:
         assert provider.use_total_price is True
         assert provider.target_resolution == 15
 
-    def test_factory_energyforecast_total_price_requires_apikey(self, timezone):
-        """Test that energyforecast_total_price raises without apikey"""
+    def test_factory_energyforecast_total_price_requires_api_token(self, timezone):
+        """Test that energyforecast_total_price raises without api_token"""
         from batcontrol.dynamictariff.dynamictariff import DynamicTariff
 
         config = {'type': 'energyforecast_total_price'}
 
-        with pytest.raises(RuntimeError, match='apikey'):
+        with pytest.raises(RuntimeError, match='api_token'):
             DynamicTariff.create_tarif_provider(config, timezone, 900, 0)
+
+    def test_factory_energyforecast_total_price_accepts_apikey_alias(self, timezone):
+        """The deprecated 'apikey' spelling still configures the token"""
+        from batcontrol.dynamictariff.dynamictariff import DynamicTariff
+
+        config = {'type': 'energyforecast_total_price', 'apikey': 'legacy-key'}
+
+        provider = DynamicTariff.create_tarif_provider(config, timezone, 900, 0)
+
+        assert provider.token == 'legacy-key'
 
     def test_factory_energyforecast_total_price_no_vat_required(self, timezone):
         """Test that energyforecast_total_price does not require vat/fees/markup"""

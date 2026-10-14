@@ -133,8 +133,8 @@ def main():
         # Build configuration dict for factory
         config = {
             'type': 'homeassistant-api',
-            'base_url': HOMEASSISTANT_URL,
-            'apitoken': HOMEASSISTANT_TOKEN,
+            'url': HOMEASSISTANT_URL,
+            'api_token': HOMEASSISTANT_TOKEN,
             'entity_id': ENTITY_ID,
             'history_days': HISTORY_DAYS,
             'history_weights': HISTORY_WEIGHTS,

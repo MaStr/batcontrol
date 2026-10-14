@@ -117,7 +117,7 @@ utility:
   vat: 0.19 # awattar and energyforecast only
   fees: 0.015 # awattar and energyforecast only
   markup: 0.03 # awattar and energyforecast only
-  # apikey: YOUR_API_KEY # mandatory for tibber, energyforecast and energyforecast_total_price
+  # api_token: YOUR_API_KEY # mandatory for tibber, energyforecast and energyforecast_total_price (old name: apikey)
   # market_zone: DE # both energyforecast providers: DE/LU, AT, FR, NL, BE, PL, DK1, DK2. Default: DE
   #
   # energyforecast_total_price: the API returns the full price incl. dynamic network
@@ -188,18 +188,21 @@ pvinstallations:
     # horizon: # leave empty for the default PVGIS horizon
 
   # homeassistant-solar-forecast-ml (HACS integration)
+  # Keep only the entries of the provider you selected above: fcsolarapi and
+  # solcast read every entry, so a leftover entry of another provider fails.
   # - name: HA Solar ML Forecast
-  #   base_url: ws://homeassistant.local:8123
-  #   api_token: eyJ... # long-lived access token from the HA profile
+  #   type: homeassistant-solar-forecast-ml # optional, explicit provider type
+  #   url: ws://homeassistant.local:8123 # old name: base_url
+  #   api_token: eyJ... # long-lived access token from the HA profile (old name: apikey)
   #   entity_id: sensor.solar_forecast_ml_evcc_solar_prognose
   #   sensor_unit: auto # auto (detect), Wh or kWh
-  #   cache_ttl_hours: 24.0
+  #   cache_ttl_hours: 24.0 # how long a fetched forecast stays usable. Default: 12.0
 
   # solcast - free hobbyist account, 10 requests/day. Site geometry is configured
   # in the Solcast web toolkit, not here.
   # - name: Haus
   #   resource_id: xxxx-xxxx-xxxx-xxxx
-  #   apikey: your-solcast-api-key
+  #   api_token: your-solcast-api-key # old name: apikey
   #   percentile: 50 # 10 pessimistic, 50 default, 90 optimistic
 
 #--------------------------
@@ -213,8 +216,8 @@ consumption_forecast:
     load_profile: load_profile.csv # file inside the config folder
 
   # homeassistant_api:
-  #   base_url: ws://homeassistant:8123
-  #   apitoken: YOUR_LONG_LIVED_ACCESS_TOKEN
+  #   url: ws://homeassistant:8123 # old name: base_url
+  #   api_token: YOUR_LONG_LIVED_ACCESS_TOKEN # old name: apitoken
   #   entity_id: sensor.energy_consumption # consumption data in Wh or kWh
   #   sensor_unit: auto # auto (default), Wh or kWh. Fixed values skip detection
   #   history_days: [-7, -14, -21] # days to look back

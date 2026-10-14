@@ -151,6 +151,74 @@ class TestInitialization:
                 sensor_unit=None
             )
 
+    @pytest.mark.parametrize("missing_key", ["api_token", "entity_id", "base_url"])
+    @pytest.mark.parametrize("empty_value", [None, ""])
+    def test_init_without_credentials_raises(
+            self, pv_installations, timezone, missing_key, empty_value):
+        """Missing connection details must fail before any WebSocket connect
+
+        Regression for issue #451: an empty api_token used to be sent to
+        HomeAssistant as '{"type": "auth", "access_token": null}' and surfaced
+        as "expected str at 'access_token'. Got None" instead of naming the
+        config key.
+        """
+        kwargs = {
+            'pvinstallations': pv_installations,
+            'timezone': timezone,
+            'base_url': "http://homeassistant.local:8123",
+            'api_token': "test_token",
+            'entity_id': "sensor.solar_forecast",
+            'sensor_unit': "Wh",
+        }
+        kwargs[missing_key] = empty_value
+
+        with pytest.raises(ValueError, match=missing_key.replace('base_url', 'url')):
+            ForecastSolarHomeAssistantML(**kwargs)
+
+    def test_init_without_token_does_not_connect(self, pv_installations, timezone):
+        """sensor_unit 'auto' would open a WebSocket - validation comes first"""
+        with patch('src.batcontrol.forecastsolar.forecast_homeassistant_ml.connect'
+                   ) as mock_connect:
+            with pytest.raises(ValueError, match="api_token"):
+                ForecastSolarHomeAssistantML(
+                    pvinstallations=pv_installations,
+                    timezone=timezone,
+                    base_url="http://homeassistant.local:8123",
+                    api_token=None,
+                    entity_id="sensor.solar_forecast",
+                    sensor_unit="auto"
+                )
+
+        mock_connect.assert_not_called()
+
+    def test_init_error_names_the_installation(self, pv_installations, timezone):
+        """The message points at the installation that is misconfigured"""
+        with pytest.raises(ValueError) as excinfo:
+            ForecastSolarHomeAssistantML(
+                pvinstallations=pv_installations,
+                timezone=timezone,
+                base_url="http://homeassistant.local:8123",
+                api_token="",
+                entity_id="sensor.solar_forecast",
+                sensor_unit="Wh"
+            )
+
+        assert pv_installations[0]['name'] in str(excinfo.value)
+
+    def test_init_with_cache_ttl_hours(self, pv_installations, timezone):
+        """cache_ttl_hours is forwarded to the baseclass cache"""
+        provider = ForecastSolarHomeAssistantML(
+            pvinstallations=pv_installations,
+            timezone=timezone,
+            base_url="http://homeassistant.local:8123",
+            api_token="test_token",
+            entity_id="sensor.solar_forecast",
+            sensor_unit="Wh",
+            cache_ttl_hours=24.0
+        )
+        name = pv_installations[0]['name']
+        assert provider.cache_list[name].ttl_seconds == 24 * 3600
+
     def test_init_cache_configuration(self, pv_installations, timezone):
         """Test baseclass cache is properly configured"""
         provider = ForecastSolarHomeAssistantML(

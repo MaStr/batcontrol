@@ -28,6 +28,8 @@ logger_ha_details = logging.getLogger(
 logger_ha_communication = logging.getLogger(
     "batcontrol.forecastsolar.forecast_homeassistant_ml.communication")
 
+PROVIDER_NAME = 'homeassistant-solar-forecast-ml'
+
 
 # pylint: disable=too-many-instance-attributes
 class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
@@ -57,7 +59,8 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
         min_time_between_api_calls: int = 21600,
         delay_evaluation_by_seconds: int = 300,
         sensor_unit: Optional[str] = "auto",
-        target_resolution: int = 60
+        target_resolution: int = 60,
+        cache_ttl_hours: Optional[float] = None
     ) -> None:
         """Initialize HomeAssistant solar forecast provider
 
@@ -75,6 +78,12 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
                         If set to 'auto', queries Home Assistant to detect unit.
                         Default: auto (auto-detect)
             target_resolution: Target resolution in minutes (15 or 60)
+            cache_ttl_hours: How long a fetched forecast stays usable as a
+                        fallback, in hours. None keeps the cache default.
+
+        Raises:
+            ValueError: If api_token, entity_id, base_url or sensor_unit is missing
+                        or invalid
         """
         # Initialize baseclass with native 60-minute resolution
         super().__init__(
@@ -83,8 +92,24 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
             min_time_between_api_calls,
             delay_evaluation_by_seconds,
             target_resolution=target_resolution,
-            native_resolution=60
+            native_resolution=60,
+            cache_ttl_hours=cache_ttl_hours
         )
+
+        # The factory validates these too, but the provider is also
+        # constructed directly (tests, embedding) and the first thing
+        # __init__ may do is open a WebSocket - so an empty token has to
+        # fail here rather than as an obscure HomeAssistant auth error (#451).
+        installation_name = self._installation_name()
+        if not base_url:
+            raise ValueError(
+                f"[HA-SolarML] No url provided for installation {installation_name}")
+        if not api_token:
+            raise ValueError(
+                f"[HA-SolarML] No api_token provided for installation {installation_name}")
+        if not entity_id:
+            raise ValueError(
+                f"[HA-SolarML] No entity_id provided for installation {installation_name}")
 
         self.base_url = base_url.rstrip('/')
         self.api_token = api_token
@@ -126,10 +151,32 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
         logger.info(
             "Initialized HomeAssistant Solar Forecast ML provider: "
             "entity_id=%s, sensor_unit=%s, "
-            "unit_conversion_factor=%0.1f",
+            "unit_conversion_factor=%0.1f, cache_ttl=%0.1fh",
             entity_id, self.sensor_unit or 'auto',
-            self.unit_conversion_factor
+            self.unit_conversion_factor,
+            self.cache_list[installation_name].ttl_seconds / 3600
+            if installation_name in self.cache_list else 0.0
         )
+
+    def _installation_name(self) -> str:
+        """Name of the installation this provider was configured from
+
+        Mirrors the selection of the factory, so log lines and error messages
+        name the entry the connection details were taken from rather than
+        whatever happens to be first in the list (#451).
+        """
+        entries = [entry for entry in (self.pvinstallations or [])
+                   if isinstance(entry, dict)]
+        if not entries:
+            return '<unnamed>'
+        for entry in entries:
+            entry_type = entry.get('type')
+            if isinstance(entry_type, str) and entry_type.lower() == PROVIDER_NAME:
+                return entry.get('name', '<unnamed>')
+        for entry in entries:
+            if entry.get('entity_id'):
+                return entry.get('name', '<unnamed>')
+        return entries[0].get('name', '<unnamed>')
 
     def _check_sensor_unit(self) -> float:
         """Check sensor's unit_of_measurement and return conversion factor
@@ -408,7 +455,7 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
             RuntimeError: If no valid forecast data available
         """
         # Get raw data from cache (stored by baseclass)
-        raw_data = self.get_raw_data(self.pvinstallations[0]['name'])
+        raw_data = self.get_raw_data(self._installation_name())
 
         if not raw_data:
             logger.warning('No raw data available from cache')

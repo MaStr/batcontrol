@@ -17,6 +17,7 @@ Raises:
 """
 import logging
 
+from ..value_utils import get_config_value
 from .awattar import Awattar
 from .tibber import Tibber
 from .evcc import Evcc
@@ -64,8 +65,10 @@ class DynamicTariff:
                 timezone=timezone,
                 country=nf_cfg['country'],
                 operator=nf_cfg['operator'],
-                url=nf_cfg.get(
-                    'url', 'https://dyn-net.batcontrol.software/api/'),
+                url=get_config_value(
+                    nf_cfg, 'url',
+                    'https://dyn-net.batcontrol.software/api/',
+                    'dynamic_network_fees'),
                 delay_evaluation_by_seconds=delay_evaluation_by_seconds,
             )
 
@@ -110,12 +113,12 @@ class DynamicTariff:
                 selected_tariff.set_network_fees_fetcher(network_fees_fetcher)
 
         elif provider.lower() == 'tibber':
-            if 'apikey' not in config.keys():
+            token = get_config_value(config, 'api_token', None, 'utility')
+            if not token:
                 raise RuntimeError(
                     '[Dynamic Tariff] Tibber requires an API token. '
-                    'Please provide "apikey :YOURKEY" in your configuration file'
+                    'Please provide "api_token: YOURKEY" in your configuration file'
                 )
-            token = config.get('apikey')
             selected_tariff = Tibber(
                 timezone,
                 token,
@@ -125,7 +128,8 @@ class DynamicTariff:
             )
 
         elif provider.lower() == 'evcc':
-            if 'url' not in config.keys():
+            url = get_config_value(config, 'url', None, 'utility')
+            if not url:
                 raise RuntimeError(
                     '[Dynamic Tariff] evcc requires an URL. '
                     'Please provide "url" in your configuration file, '
@@ -133,14 +137,18 @@ class DynamicTariff:
                 )
             selected_tariff = Evcc(
                 timezone,
-                config.get('url'),
+                url,
                 min_time_between_api_calls,
                 target_resolution=target_resolution
             )
 
         elif provider.lower() == 'energyforecast' or provider.lower() == 'energyforecast_96':
-            required_fields = ['vat', 'markup', 'fees', 'apikey']
-            for field in required_fields:
+            token = get_config_value(config, 'api_token', None, 'utility')
+            if not token:
+                raise RuntimeError(
+                    '[DynTariff] Please include api_token in your configuration file'
+                )
+            for field in ('vat', 'markup', 'fees'):
                 if field not in config.keys():
                     raise RuntimeError(
                         f'[DynTariff] Please include {field} in your configuration file'
@@ -154,7 +162,6 @@ class DynamicTariff:
             vat = float(config.get('vat', 0))
             markup = float(config.get('markup', 0))
             fees = float(config.get('fees', 0))
-            token = config.get('apikey')
             market_zone = config.get('market_zone', 'DE')
             selected_tariff = Energyforecast(
                 timezone,
@@ -169,9 +176,10 @@ class DynamicTariff:
                 selected_tariff.set_network_fees_fetcher(network_fees_fetcher)
 
         elif provider.lower() == 'energyforecast_total_price':
-            if 'apikey' not in config:
+            token = get_config_value(config, 'api_token', None, 'utility')
+            if not token:
                 raise RuntimeError(
-                    '[DynTariff] Please include apikey in your configuration file'
+                    '[DynTariff] Please include api_token in your configuration file'
                 )
             for field in ('vat', 'fees', 'markup'):
                 if field in config:
@@ -185,7 +193,6 @@ class DynamicTariff:
                     '[DynTariff] energyforecast_total_price: dynamic_network_fees '
                     'is ignored -- the API already includes network fees in total_ct_kwh'
                 )
-            token = config.get('apikey')
             market_zone = config.get('market_zone', 'DE')
             selected_tariff = Energyforecast(
                 timezone,
