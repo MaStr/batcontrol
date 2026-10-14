@@ -4,6 +4,7 @@ import hashlib
 from packaging import version
 
 from batcontrol.inverter.fronius import hash_utf8, get_api_config, FroniusApiConfig
+from batcontrol.value_utils import mask_sensitive_headers
 
 
 class TestFroniusAuthentication(unittest.TestCase):
@@ -84,3 +85,45 @@ class TestFroniusAuthentication(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestAuthHeaderLogging(unittest.TestCase):
+    """The digest Authorization header must not be logged in full.
+
+    Code scanning alert py/clear-text-logging-sensitive-data: the header is
+    built from the inverter password (password -> a1 -> ha1 -> response) and
+    the auth debug logger used to receive it unchanged. The digest is
+    replayable for as long as the server nonce is valid.
+    """
+
+    def setUp(self):
+        self.password = 'testpass'
+        self.user = 'customer'
+        realm = 'Webinterface area'
+        ha1 = hash_utf8(f'{self.user}:{realm}:{self.password}', 'SHA256')
+        ha2 = hash_utf8('GET:/commands/Login', 'SHA256')
+        self.respdig = hash_utf8(f'{ha1}:nonce:00000001:cnonce:auth:{ha2}', 'SHA256')
+        self.header = (
+            f'Digest username="{self.user}", realm="{realm}", nonce="nonce", '
+            f'uri="/commands/Login", algorithm="SHA256", qop=auth, nc=00000001, '
+            f'cnonce="cnonce", response="{self.respdig}"'
+        )
+
+    def test_password_derived_digest_is_not_logged(self):
+        logged = mask_sensitive_headers({'Authorization': self.header})
+
+        self.assertNotIn(self.respdig, logged['Authorization'])
+        self.assertNotIn(self.password, logged['Authorization'])
+
+    def test_header_stays_recognisable(self):
+        logged = mask_sensitive_headers({'Authorization': self.header})
+
+        self.assertEqual(
+            logged['Authorization'], f'Dig...{self.header[-3:]}')
+
+    def test_non_sensitive_headers_are_kept(self):
+        headers = {'Authorization': self.header, 'Content-Type': 'application/json'}
+
+        logged = mask_sensitive_headers(headers)
+
+        self.assertEqual(logged['Content-Type'], 'application/json')

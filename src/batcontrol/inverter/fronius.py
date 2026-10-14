@@ -27,6 +27,7 @@ from dataclasses import dataclass
 import requests
 from packaging import version
 from cachetools import TTLCache
+from ..value_utils import mask_sensitive_headers
 from .baseclass import DEFAULT_MAX_SOC, DEFAULT_MIN_SOC, InverterBaseclass
 
 logger = logging.getLogger(__name__)
@@ -878,7 +879,7 @@ class FroniusWR(InverterBaseclass):
             headers['Authorization'] = self.get_auth_header(
                 method=method, path=fullpath)
             logger_auth.debug("Requesting %s , header: %s",
-                              fullpath, headers)
+                              fullpath, mask_sensitive_headers(headers))
 
         for i in range(3):
             # 3 retries if connection can't be established
@@ -904,7 +905,8 @@ class FroniusWR(InverterBaseclass):
 
         logger.error('Request failed without response.')
         raise RuntimeError(
-            f"\turl:{url}, \n\tparams:{params} \n\theaders {headers} \n"
+            f"\turl:{url}, \n\tparams:{params} \n"
+            f"\theaders {mask_sensitive_headers(headers)} \n"
             f"\tnonce {self.nonce} \n"
             f"\tpayload {payload}"
         )
