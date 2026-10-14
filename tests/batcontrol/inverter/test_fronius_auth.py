@@ -1,9 +1,13 @@
 """Tests for Fronius inverter authentication functionality."""
 import unittest
+from unittest.mock import Mock, patch
 import hashlib
 from packaging import version
 
-from batcontrol.inverter.fronius import hash_utf8, get_api_config, FroniusApiConfig
+from batcontrol.inverter.fronius import (
+    hash_utf8, get_api_config, FroniusApiConfig, FroniusWR
+)
+from batcontrol.value_utils import mask_sensitive_headers
 
 
 class TestFroniusAuthentication(unittest.TestCase):
@@ -84,3 +88,96 @@ class TestFroniusAuthentication(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestAuthHeaderLogging(unittest.TestCase):
+    """The digest Authorization header must not be logged in full.
+
+    Code scanning alert py/clear-text-logging-sensitive-data: the header is
+    built from the inverter password (password -> a1 -> ha1 -> response) and
+    the auth debug logger used to receive it unchanged. The digest is
+    replayable for as long as the server nonce is valid.
+    """
+
+    def setUp(self):
+        self.password = 'testpass'
+        self.user = 'customer'
+        realm = 'Webinterface area'
+        ha1 = hash_utf8(f'{self.user}:{realm}:{self.password}', 'SHA256')
+        ha2 = hash_utf8('GET:/commands/Login', 'SHA256')
+        self.respdig = hash_utf8(f'{ha1}:nonce:00000001:cnonce:auth:{ha2}', 'SHA256')
+        self.header = (
+            f'Digest username="{self.user}", realm="{realm}", nonce="nonce", '
+            f'uri="/commands/Login", algorithm="SHA256", qop=auth, nc=00000001, '
+            f'cnonce="cnonce", response="{self.respdig}"'
+        )
+
+    def test_password_derived_digest_is_not_logged(self):
+        logged = mask_sensitive_headers({'Authorization': self.header})
+
+        self.assertNotIn(self.respdig, logged['Authorization'])
+        self.assertNotIn(self.password, logged['Authorization'])
+
+    def test_header_stays_recognisable(self):
+        logged = mask_sensitive_headers({'Authorization': self.header})
+
+        self.assertEqual(
+            logged['Authorization'], f'Dig...{self.header[-3:]}')
+
+    def test_non_sensitive_headers_are_kept(self):
+        headers = {'Authorization': self.header, 'Content-Type': 'application/json'}
+
+        logged = mask_sensitive_headers(headers)
+
+        self.assertEqual(logged['Content-Type'], 'application/json')
+
+
+class TestSendRequestErrorMasksHeaders(unittest.TestCase):
+    """send_request() must not put the digest into its RuntimeError.
+
+    __send_one_http_request() assigns headers['Authorization'] on the dict it
+    was handed, so the caller's dict carries the password-derived digest by
+    the time send_request() reports a failing response. CodeQL did not flag
+    this second sink because the taint travels through the mutated dict.
+    """
+
+    def setUp(self):
+        self.digest = ('Digest username="customer", realm="Webinterface area", '
+                       'nonce="nonce", response="0123456789abcdef"')
+
+    def _run_failing_request(self, headers):
+        inverter = object.__new__(FroniusWR)
+        inverter.nonce = 'servernonce'
+        digest = self.digest
+
+        def fake_request(_self, path, method, payload, params, request_headers, auth):  # pylint: disable=unused-argument
+            # mirror the mutation done by the real method
+            request_headers['Authorization'] = digest
+            response = Mock()
+            response.status_code = 500
+            response.reason = 'Internal Server Error'
+            return response
+
+        with patch.object(FroniusWR, '_FroniusWR__send_one_http_request',
+                          fake_request):
+            with self.assertRaises(RuntimeError) as context:
+                inverter.send_request('/commands/Status', headers=headers,
+                                      auth=True)
+        return str(context.exception)
+
+    def test_digest_is_not_in_the_error_text(self):
+        message = self._run_failing_request({})
+
+        self.assertNotIn(self.digest, message)
+        self.assertNotIn('0123456789abcdef', message)
+
+    def test_header_stays_recognisable(self):
+        message = self._run_failing_request({})
+
+        self.assertIn(f'Dig...{self.digest[-3:]}', message)
+
+    def test_other_headers_are_still_reported(self):
+        message = self._run_failing_request({'Content-Type': 'application/json'})
+
+        self.assertIn('application/json', message)
+        self.assertIn('Internal Server Error', message)

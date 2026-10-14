@@ -9,7 +9,7 @@ import math
 import json
 import logging
 import requests
-from ..value_utils import get_config_value
+from ..value_utils import get_config_value, mask_sensitive_headers, redact_secrets
 from .baseclass import ForecastSolarBaseclass, ProviderError, RateLimitException
 
 
@@ -132,7 +132,7 @@ class FCSolar(ForecastSolarBaseclass):
                 logger.warning(
                     'Forecast solar API rate limit exceeded [%s]. '
                     'Retry after %d seconds at %s',
-                    response.text,
+                    redact_secrets(response.text, apikey),
                     retry_seconds,
                     retry_after_timestamp
                 )
@@ -140,19 +140,22 @@ class FCSolar(ForecastSolarBaseclass):
                 logger.warning(
                     'Forecast solar API rate limit exceeded [%s]. '
                     'No retry after information available, dumping headers',
-                    response.text
+                    redact_secrets(response.text, apikey)
                 )
-                for header, value in response.headers.items():
-                    logger.debug('Header: %s = %s', header, value)
+                for header, value in mask_sensitive_headers(
+                        response.headers).items():
+                    logger.debug('Header: %s = %s', header,
+                                 redact_secrets(value, apikey))
             raise RateLimitException(
                 'Forecast solar API rate limit exceeded')
 
         else:
+            safe_text = redact_secrets(response.text, apikey)
             logger.warning(
                 'Forecast solar API returned %s - %s',
-                response.status_code, response.text)
+                response.status_code, safe_text)
             raise ProviderError(
-                f'Forecast solar API returned {response.status_code} - {response.text}')
+                f'Forecast solar API returned {response.status_code} - {safe_text}')
 
 
 if __name__ == '__main__':

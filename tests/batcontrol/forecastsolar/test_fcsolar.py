@@ -9,7 +9,7 @@ import pytz
 import requests
 
 from batcontrol.fetcher.relaxed_caching import CacheMissError, RelaxedCaching
-from batcontrol.forecastsolar.baseclass import ProviderError
+from batcontrol.forecastsolar.baseclass import ProviderError, RateLimitException
 from batcontrol.forecastsolar.fcsolar import FCSolar
 
 
@@ -45,6 +45,95 @@ def test_request_error_is_wrapped_without_sensitive_details(instance, mocker):
     formatted_error = ''.join(traceback.format_exception(
         type(error_info.value), error_info.value, error_info.value.__traceback__))
     assert 'secret-key' not in formatted_error
+
+
+@pytest.fixture
+def instance_with_key():
+    """Provider with an API key - forecast.solar takes it as URL path segment."""
+    return FCSolar(
+        [{
+            'name': 'roof',
+            'lat': 52.17,
+            'lon': 21.25,
+            'declination': 30,
+            'azimuth': 34,
+            'kWp': 10.0,
+            'api_token': 'secret-key-1234567890',
+        }],
+        pytz.timezone('Europe/Warsaw'),
+        min_time_between_api_calls=900,
+    )
+
+
+def _response(mocker, status_code, text, headers=None):
+    """Build a minimal requests-like response."""
+    response = mocker.Mock()
+    response.status_code = status_code
+    response.text = text
+    response.headers = headers if headers is not None else {}
+    return response
+
+
+def test_rate_limit_log_does_not_contain_the_api_key(
+        instance_with_key, mocker, caplog):
+    """Code scanning py/clear-text-logging-sensitive-data: the API key is the
+    first path segment of the request URL, so an error body echoing the path
+    would put it into the log."""
+    echoed = ('{"message":{"code":429,"text":"rate limit",'
+              '"info":{"url":"/secret-key-1234567890/estimate"}}}')
+    mocker.patch(
+        'batcontrol.forecastsolar.fcsolar.requests.get',
+        return_value=_response(mocker, 429, echoed),
+    )
+
+    with caplog.at_level('DEBUG'):
+        with pytest.raises(RateLimitException):
+            instance_with_key.get_raw_data_from_provider('roof')
+
+    assert 'secret-key-1234567890' not in caplog.text
+    assert 'sec...890' in caplog.text
+    # the message itself stays readable
+    assert 'rate limit' in caplog.text
+
+
+def test_rate_limit_header_dump_does_not_contain_the_api_key(
+        instance_with_key, mocker, caplog):
+    """The header dump of the no-retry-after branch is logged at DEBUG."""
+    headers = {
+        'X-Echo-Path': '/secret-key-1234567890/estimate',
+        'Authorization': 'Bearer another-secret-value',
+        'Content-Type': 'application/json',
+    }
+    mocker.patch(
+        'batcontrol.forecastsolar.fcsolar.requests.get',
+        return_value=_response(mocker, 429, '{"message":"rate limit"}', headers),
+    )
+
+    with caplog.at_level('DEBUG'):
+        with pytest.raises(RateLimitException):
+            instance_with_key.get_raw_data_from_provider('roof')
+
+    assert 'secret-key-1234567890' not in caplog.text
+    assert 'another-secret-value' not in caplog.text
+    assert 'Content-Type' in caplog.text
+
+
+def test_error_response_does_not_leak_the_api_key(
+        instance_with_key, mocker, caplog):
+    """The non-200 branch logs the body and puts it into the ProviderError."""
+    echoed = 'Forbidden for /secret-key-1234567890/estimate'
+    mocker.patch(
+        'batcontrol.forecastsolar.fcsolar.requests.get',
+        return_value=_response(mocker, 403, echoed),
+    )
+
+    with caplog.at_level('WARNING'):
+        with pytest.raises(ProviderError) as error_info:
+            instance_with_key.get_raw_data_from_provider('roof')
+
+    assert 'secret-key-1234567890' not in str(error_info.value)
+    assert 'sec...890' in str(error_info.value)
+    assert 'secret-key-1234567890' not in caplog.text
 
 
 def test_refresh_keeps_cached_data_on_request_error(instance, mocker, caplog):

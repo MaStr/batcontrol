@@ -3,6 +3,9 @@ import pytest
 
 from batcontrol.value_utils import (
     get_config_value,
+    mask_secret,
+    mask_sensitive_headers,
+    redact_secrets,
     parse_bool_flag,
     parse_optional_ratio,
     parse_positive_number,
@@ -156,3 +159,123 @@ class TestGetConfigValue:
         with caplog.at_level('WARNING'):
             get_config_value({'api_token': 'x'}, 'api_token', None, 'utility')
         assert not [r for r in caplog.records if 'deprecated' in r.message]
+
+
+class TestMaskSecret:
+    """mask_secret() keeps a credential recognisable without logging it.
+
+    Code scanning alert py/clear-text-logging-sensitive-data: the Fronius
+    digest Authorization header is derived from the inverter password and was
+    logged in full by the auth debug logger.
+    """
+
+    def test_keeps_first_and_last_three_characters(self):
+        assert mask_secret('eyJhbGciOiJIUzI1NiJ9fQ') == 'eyJ...9fQ'
+
+    def test_recognisable_but_not_reusable(self):
+        token = 'A' * 40 + 'xyz'
+        masked = mask_secret(token)
+        assert masked.startswith('AAA')
+        assert masked.endswith('xyz')
+        assert token not in masked
+        assert len(masked) == 9
+
+    @pytest.mark.parametrize("secret", ['', None])
+    def test_unset_and_empty(self, secret):
+        assert mask_secret(secret) in ('<unset>', '<empty>')
+
+    @pytest.mark.parametrize("secret", ['a', 'ab', 'abc', 'abcdef'])
+    def test_short_secrets_are_masked_completely(self, secret):
+        """Keeping both ends of a short secret would give it away"""
+        masked = mask_secret(secret)
+        assert masked == '*' * len(secret)
+        assert secret not in masked
+
+    def test_keep_is_configurable(self):
+        assert mask_secret('0123456789', keep=2) == '01...89'
+
+    def test_non_string_values(self):
+        assert mask_secret(1234567890) == '123...890'
+
+
+class TestMaskSensitiveHeaders:
+    """Only credential headers are shortened, the rest stays readable"""
+
+    def test_authorization_is_masked(self):
+        digest = ('Digest username="customer", realm="Webinterface area", '
+                  'nonce="abc", response="0123456789abcdef"')
+
+        masked = mask_sensitive_headers({'Authorization': digest})
+
+        assert masked['Authorization'] == 'Dig...ef"'
+        assert 'response="0123456789abcdef"' not in masked['Authorization']
+
+    def test_other_headers_are_untouched(self):
+        headers = {'Content-Type': 'application/json', 'Accept': '*/*'}
+
+        assert mask_sensitive_headers(headers) == headers
+
+    @pytest.mark.parametrize("name", [
+        'Authorization', 'authorization', 'AUTHORIZATION',
+        'Proxy-Authorization', 'Cookie', 'Set-Cookie', 'X-Api-Key',
+        'api-key', 'X-Auth-Token', 'x-access-token',
+    ])
+    def test_sensitive_header_names(self, name):
+        masked = mask_sensitive_headers({name: 'secretvalue123'})
+        assert masked[name] == 'sec...123'
+
+    def test_original_mapping_is_not_modified(self):
+        headers = {'Authorization': 'secretvalue123'}
+
+        mask_sensitive_headers(headers)
+
+        assert headers['Authorization'] == 'secretvalue123'
+
+    @pytest.mark.parametrize("headers", [None, {}])
+    def test_empty_headers(self, headers):
+        assert mask_sensitive_headers(headers) == {}
+
+
+class TestRedactSecrets:
+    """redact_secrets() keeps a logged message readable but secret-free.
+
+    forecast.solar takes the API key as the first path segment of the request
+    URL, so an error body or header echoing that path would leak it
+    (code scanning py/clear-text-logging-sensitive-data).
+    """
+
+    def test_secret_is_replaced_by_its_masked_form(self):
+        text = 'Forbidden for /secret-key-1234567890/estimate'
+
+        result = redact_secrets(text, 'secret-key-1234567890')
+
+        assert result == 'Forbidden for /sec...890/estimate'
+
+    def test_message_stays_readable(self):
+        text = '{"message":{"code":429,"text":"rate limit exceeded"}}'
+
+        result = redact_secrets(text, 'secret-key-1234567890')
+
+        assert result == text
+
+    def test_every_occurrence_is_replaced(self):
+        result = redact_secrets('abcdefghij and abcdefghij', 'abcdefghij')
+
+        assert 'abcdefghij' not in result
+        assert result.count('abc...hij') == 2
+
+    def test_several_secrets(self):
+        result = redact_secrets(
+            'key=aaaaaaaaaa token=bbbbbbbbbb', 'aaaaaaaaaa', 'bbbbbbbbbb')
+
+        assert result == 'key=aaa...aaa token=bbb...bbb'
+
+    @pytest.mark.parametrize("secret", [None, ''])
+    def test_unset_secrets_are_ignored(self, secret):
+        assert redact_secrets('nothing to hide', secret) == 'nothing to hide'
+
+    def test_no_secret_given(self):
+        assert redact_secrets('nothing to hide') == 'nothing to hide'
+
+    def test_non_string_input(self):
+        assert redact_secrets(429, 'aaaaaaaaaa') == '429'

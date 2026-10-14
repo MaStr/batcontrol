@@ -28,6 +28,81 @@ def reset_alias_warnings() -> None:
     _warned_aliases.clear()
 
 
+# Header names whose value carries a credential and must never be logged
+# in full. Lower case, compared case-insensitively.
+SENSITIVE_HEADERS = frozenset({
+    'authorization',
+    'proxy-authorization',
+    'cookie',
+    'set-cookie',
+    'api-key',
+    'x-api-key',
+    'x-auth-token',
+    'x-access-token',
+})
+
+
+def mask_secret(value, keep: int = 3) -> str:
+    """Shorten a credential so it can be logged.
+
+    Keeps the first and last ``keep`` characters, which is enough to tell
+    two credentials apart or to recognise the configured one, without
+    putting the secret itself into the log. Values short enough for the
+    remainder to give the secret away are masked completely.
+
+    Args:
+        value: The credential, of any type
+        keep: Number of characters to keep at each end
+
+    Returns:
+        The shortened representation, e.g. 'eyJ...9fQ'
+    """
+    if value is None:
+        return '<unset>'
+    text = str(value)
+    if not text:
+        return '<empty>'
+    if len(text) <= keep * 2:
+        return '*' * len(text)
+    return f'{text[:keep]}...{text[-keep:]}'
+
+
+def mask_sensitive_headers(headers) -> dict:
+    """Copy an HTTP header mapping with every credential value shortened
+
+    Logging a request's headers is useful for debugging, but an
+    Authorization header holds a credential - for digest auth a hash of the
+    password, which is replayable while the nonce is valid. Only the header
+    values in SENSITIVE_HEADERS are shortened, so the remaining headers stay
+    readable.
+    """
+    if not headers:
+        return {}
+    return {
+        key: mask_secret(value) if str(key).lower() in SENSITIVE_HEADERS else value
+        for key, value in headers.items()
+    }
+
+
+def redact_secrets(text, *secrets, keep: int = 3) -> str:
+    """Replace every occurrence of a secret in ``text`` by its masked form
+
+    Needed wherever a response is logged that was fetched with a credential
+    in the request URL: forecast.solar takes the API key as the first path
+    segment, so an error body or header that echoes the request path would
+    put the key into the log. Replacing instead of truncating keeps the
+    message itself readable, which is the point of logging it.
+    """
+    result = str(text)
+    for secret in secrets:
+        if not secret:
+            continue
+        secret = str(secret)
+        if secret in result:
+            result = result.replace(secret, mask_secret(secret, keep))
+    return result
+
+
 def get_config_value(
         config: dict,
         key: str,
