@@ -1,9 +1,12 @@
 """Tests for Fronius inverter authentication functionality."""
 import unittest
+from unittest.mock import Mock, patch
 import hashlib
 from packaging import version
 
-from batcontrol.inverter.fronius import hash_utf8, get_api_config, FroniusApiConfig
+from batcontrol.inverter.fronius import (
+    hash_utf8, get_api_config, FroniusApiConfig, FroniusWR
+)
 from batcontrol.value_utils import mask_sensitive_headers
 
 
@@ -127,3 +130,54 @@ class TestAuthHeaderLogging(unittest.TestCase):
         logged = mask_sensitive_headers(headers)
 
         self.assertEqual(logged['Content-Type'], 'application/json')
+
+
+class TestSendRequestErrorMasksHeaders(unittest.TestCase):
+    """send_request() must not put the digest into its RuntimeError.
+
+    __send_one_http_request() assigns headers['Authorization'] on the dict it
+    was handed, so the caller's dict carries the password-derived digest by
+    the time send_request() reports a failing response. CodeQL did not flag
+    this second sink because the taint travels through the mutated dict.
+    """
+
+    def setUp(self):
+        self.digest = ('Digest username="customer", realm="Webinterface area", '
+                       'nonce="nonce", response="0123456789abcdef"')
+
+    def _run_failing_request(self, headers):
+        inverter = object.__new__(FroniusWR)
+        inverter.nonce = 'servernonce'
+        digest = self.digest
+
+        def fake_request(_self, path, method, payload, params, request_headers, auth):  # pylint: disable=unused-argument
+            # mirror the mutation done by the real method
+            request_headers['Authorization'] = digest
+            response = Mock()
+            response.status_code = 500
+            response.reason = 'Internal Server Error'
+            return response
+
+        with patch.object(FroniusWR, '_FroniusWR__send_one_http_request',
+                          fake_request):
+            with self.assertRaises(RuntimeError) as context:
+                inverter.send_request('/commands/Status', headers=headers,
+                                      auth=True)
+        return str(context.exception)
+
+    def test_digest_is_not_in_the_error_text(self):
+        message = self._run_failing_request({})
+
+        self.assertNotIn(self.digest, message)
+        self.assertNotIn('0123456789abcdef', message)
+
+    def test_header_stays_recognisable(self):
+        message = self._run_failing_request({})
+
+        self.assertIn(f'Dig...{self.digest[-3:]}', message)
+
+    def test_other_headers_are_still_reported(self):
+        message = self._run_failing_request({'Content-Type': 'application/json'})
+
+        self.assertIn('application/json', message)
+        self.assertIn('Internal Server Error', message)

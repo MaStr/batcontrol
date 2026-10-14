@@ -853,10 +853,14 @@ class FroniusWR(InverterBaseclass):
                 self.__retrieve_auth_from_response(response)
                 self.login()
             else:
+                # __send_one_http_request() sets headers['Authorization'] on
+                # the dict passed in, so by now it holds the digest derived
+                # from the inverter password.
                 raise RuntimeError(
                     f"[Inverter] Request {i} failed with {response.status_code}-"
                     f"{response.reason}. \n"
-                    f"\t path:{path}, \n\tparams:{params} \n\theaders {headers} \n"
+                    f"\t path:{path}, \n\tparams:{params} \n"
+                    f"\theaders {mask_sensitive_headers(headers)} \n"
                     f"\tnonce {self.nonce} \n"
                     f"\tpayload {payload}"
                 )
