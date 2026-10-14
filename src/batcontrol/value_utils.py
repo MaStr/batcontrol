@@ -84,6 +84,25 @@ def mask_sensitive_headers(headers) -> dict:
     }
 
 
+def redact_secrets(text, *secrets, keep: int = 3) -> str:
+    """Replace every occurrence of a secret in ``text`` by its masked form
+
+    Needed wherever a response is logged that was fetched with a credential
+    in the request URL: forecast.solar takes the API key as the first path
+    segment, so an error body or header that echoes the request path would
+    put the key into the log. Replacing instead of truncating keeps the
+    message itself readable, which is the point of logging it.
+    """
+    result = str(text)
+    for secret in secrets:
+        if not secret:
+            continue
+        secret = str(secret)
+        if secret in result:
+            result = result.replace(secret, mask_secret(secret, keep))
+    return result
+
+
 def get_config_value(
         config: dict,
         key: str,

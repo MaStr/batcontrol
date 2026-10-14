@@ -5,6 +5,7 @@ from batcontrol.value_utils import (
     get_config_value,
     mask_secret,
     mask_sensitive_headers,
+    redact_secrets,
     parse_bool_flag,
     parse_optional_ratio,
     parse_positive_number,
@@ -233,3 +234,48 @@ class TestMaskSensitiveHeaders:
     @pytest.mark.parametrize("headers", [None, {}])
     def test_empty_headers(self, headers):
         assert mask_sensitive_headers(headers) == {}
+
+
+class TestRedactSecrets:
+    """redact_secrets() keeps a logged message readable but secret-free.
+
+    forecast.solar takes the API key as the first path segment of the request
+    URL, so an error body or header echoing that path would leak it
+    (code scanning py/clear-text-logging-sensitive-data).
+    """
+
+    def test_secret_is_replaced_by_its_masked_form(self):
+        text = 'Forbidden for /secret-key-1234567890/estimate'
+
+        result = redact_secrets(text, 'secret-key-1234567890')
+
+        assert result == 'Forbidden for /sec...890/estimate'
+
+    def test_message_stays_readable(self):
+        text = '{"message":{"code":429,"text":"rate limit exceeded"}}'
+
+        result = redact_secrets(text, 'secret-key-1234567890')
+
+        assert result == text
+
+    def test_every_occurrence_is_replaced(self):
+        result = redact_secrets('abcdefghij and abcdefghij', 'abcdefghij')
+
+        assert 'abcdefghij' not in result
+        assert result.count('abc...hij') == 2
+
+    def test_several_secrets(self):
+        result = redact_secrets(
+            'key=aaaaaaaaaa token=bbbbbbbbbb', 'aaaaaaaaaa', 'bbbbbbbbbb')
+
+        assert result == 'key=aaa...aaa token=bbb...bbb'
+
+    @pytest.mark.parametrize("secret", [None, ''])
+    def test_unset_secrets_are_ignored(self, secret):
+        assert redact_secrets('nothing to hide', secret) == 'nothing to hide'
+
+    def test_no_secret_given(self):
+        assert redact_secrets('nothing to hide') == 'nothing to hide'
+
+    def test_non_string_input(self):
+        assert redact_secrets(429, 'aaaaaaaaaa') == '429'
