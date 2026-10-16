@@ -1,0 +1,51 @@
+name: Dashboard
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Test
+        working-directory: frontend
+        run: npm test
+
+      # Also runs scripts/check-offline.mjs: the build fails if the dashboard
+      # would load a font, stylesheet or script from the network. batcontrol
+      # runs in homes without internet egress and behind Home Assistant
+      # ingress, where an external asset never arrives.
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Verify the dashboard reaches the wheel
+        run: |
+          pipx run uv build --wheel --out-dir dist
+          python scripts/verify_wheel_dashboard.py dist/*.whl
