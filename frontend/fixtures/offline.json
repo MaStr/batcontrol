@@ -1,0 +1,10 @@
+{
+  "$extends": "default",
+  "status": {
+    "data": {
+      "last_evaluation": 1792083722544,
+      "next_evaluation": 1792083902544,
+      "online": false
+    }
+  }
+}

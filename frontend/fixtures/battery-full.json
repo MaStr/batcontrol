@@ -1,0 +1,15 @@
+{
+  "$extends": "default",
+  "battery": {
+    "data": {
+      "soc": 100.0,
+      "max_energy_capacity": 10000.0,
+      "stored_energy_capacity": 10000.0,
+      "stored_usable_energy_capacity": 9000.0,
+      "free_capacity": 0.0,
+      "soc_limits": {
+        "max_soc": 100.0
+      }
+    }
+  }
+}

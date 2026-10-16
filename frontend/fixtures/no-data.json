@@ -1,0 +1,72 @@
+{
+  "status": {
+    "ok": true,
+    "timestamp": 1792086425053,
+    "data": {
+      "mode": 10,
+      "mode_code": "allow_discharging",
+      "mode_label": "ALLOW DISCHARGE",
+      "control_source": "optimizer",
+      "charge_rate": 0.0,
+      "limit_battery_charge_rate": -1,
+      "api_override_active": false,
+      "discharge_blocked": false,
+      "grid_charge_locked": false,
+      "last_evaluation": 1792086422544,
+      "next_evaluation": 1792086602544,
+      "evaluation_interval_seconds": 180,
+      "online": true,
+      "mode_changed_at": 1792086422604
+    }
+  },
+  "battery": {
+    "ok": true,
+    "timestamp": 1792086425055,
+    "data": {
+      "soc": 65.0,
+      "max_energy_capacity": 9500.0,
+      "stored_energy_capacity": 6500.0,
+      "stored_usable_energy_capacity": 5500.0,
+      "reserved_energy_capacity": 0.0,
+      "free_capacity": 3000.0,
+      "always_allow_discharge_limit_percent": 90.0,
+      "max_charging_from_grid_limit_percent": 89.0,
+      "soc_limits": {
+        "min_soc": 10.0,
+        "max_soc": 95.0
+      }
+    }
+  },
+  "current": {
+    "ok": false,
+    "timestamp": 1792086425053,
+    "error": "no_data_yet",
+    "detail": "No completed control cycle yet. The first forecast is available after the first evaluation.",
+    "_status": 503
+  },
+  "version": {
+    "ok": true,
+    "timestamp": 1792086425059,
+    "data": {
+      "version": "0.10.0dev",
+      "git_sha": null,
+      "runtime_env": "source",
+      "interval_minutes": 60,
+      "timezone": "Europe/Berlin"
+    }
+  },
+  "forecast/price": {
+    "ok": false,
+    "timestamp": 1792086425053,
+    "error": "no_data_yet",
+    "detail": "No completed control cycle yet. The first forecast is available after the first evaluation.",
+    "_status": 503
+  },
+  "decision": {
+    "ok": false,
+    "timestamp": 1792086425053,
+    "error": "not_found",
+    "detail": "No decision recorded yet.",
+    "_status": 404
+  }
+}

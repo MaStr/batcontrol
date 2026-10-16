@@ -1,0 +1,36 @@
+{
+  "name": "batcontrol-dashboard",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Read-only web dashboard for batcontrol, built into the Python package",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build && node scripts/check-offline.mjs",
+    "check:offline": "node scripts/check-offline.mjs",
+    "preview": "vite preview --host",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src",
+    "dev:fixtures": "VITE_FIXTURE=${VITE_FIXTURE:-default} vite --host"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/vt323": "5.3.0",
+    "vue": "3.5.44"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.10",
+    "@vue/test-utils": "2.5.1",
+    "eslint": "9.39.5",
+    "eslint-plugin-vue": "10.11.1",
+    "jsdom": "26.1.0",
+    "swagger-ui-dist": "5.33.3",
+    "vite": "8.3.4",
+    "vitest": "4.1.11"
+  }
+}

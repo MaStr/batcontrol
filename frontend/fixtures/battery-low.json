@@ -1,0 +1,19 @@
+{
+  "$extends": "default",
+  "status": {
+    "data": {
+      "mode": -1,
+      "mode_code": "force_charge",
+      "mode_label": "FORCE CHARGE",
+      "charge_rate": 4200.0
+    }
+  },
+  "battery": {
+    "data": {
+      "soc": 3.0,
+      "stored_energy_capacity": 300.0,
+      "stored_usable_energy_capacity": 0.0,
+      "reserved_energy_capacity": 2500.0
+    }
+  }
+}
