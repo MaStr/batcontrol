@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="batcontrol">
+  <rect width="32" height="32" rx="3" fill="#030a05"/>
+  <!-- battery body -->
+  <rect x="6" y="9" width="17" height="14" rx="1.5" fill="none" stroke="#33ff66" stroke-width="2"/>
+  <!-- terminal -->
+  <rect x="24" y="13" width="3" height="6" rx="1" fill="#33ff66"/>
+  <!-- charge bolt -->
+  <path d="M16 11.5 11.5 17.5h3.2L13.8 21.5l5-6.4h-3.3z" fill="#33ff66"/>
+</svg>

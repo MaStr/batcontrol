@@ -1,0 +1,389 @@
+{
+  "status": {
+    "ok": true,
+    "timestamp": 1792086425053,
+    "data": {
+      "mode": 10,
+      "mode_code": "allow_discharging",
+      "mode_label": "ALLOW DISCHARGE",
+      "control_source": "optimizer",
+      "charge_rate": 0.0,
+      "limit_battery_charge_rate": -1,
+      "api_override_active": false,
+      "discharge_blocked": false,
+      "grid_charge_locked": false,
+      "last_evaluation": 1792086422544,
+      "next_evaluation": 1792086602544,
+      "evaluation_interval_seconds": 180,
+      "online": true,
+      "mode_changed_at": 1792086422604
+    }
+  },
+  "battery": {
+    "ok": true,
+    "timestamp": 1792086425055,
+    "data": {
+      "soc": 65.0,
+      "max_energy_capacity": 9500.0,
+      "stored_energy_capacity": 6500.0,
+      "stored_usable_energy_capacity": 5500.0,
+      "reserved_energy_capacity": 0.0,
+      "free_capacity": 3000.0,
+      "always_allow_discharge_limit_percent": 90.0,
+      "max_charging_from_grid_limit_percent": 89.0,
+      "soc_limits": {
+        "min_soc": 10.0,
+        "max_soc": 95.0
+      }
+    }
+  },
+  "current": {
+    "ok": true,
+    "timestamp": 1792086425057,
+    "data": {
+      "version": "0.10.0dev",
+      "price": {
+        "current": 0.3383,
+        "current_ts": 1792083600000,
+        "unit": "EUR/kWh",
+        "interval_minutes": 60,
+        "min_dynamic_price_difference": 0.05
+      },
+      "soc": 65.0,
+      "soc_limits": {
+        "min_soc": 10.0,
+        "max_soc": 95.0
+      }
+    }
+  },
+  "version": {
+    "ok": true,
+    "timestamp": 1792086425059,
+    "data": {
+      "version": "0.10.0dev",
+      "git_sha": null,
+      "runtime_env": "source",
+      "interval_minutes": 60,
+      "timezone": "Europe/Berlin"
+    }
+  },
+  "forecast/price": {
+    "ok": true,
+    "timestamp": 1792086425060,
+    "data": {
+      "run_time": 1792086422544,
+      "interval_minutes": 60,
+      "unit": "EUR/kWh",
+      "total_count": 24,
+      "returned_count": 24,
+      "offset": 0,
+      "has_more": false,
+      "next_offset": null,
+      "slots": [
+        {
+          "slot": 0,
+          "time_start": 1792083600000,
+          "time_end": 1792087200000,
+          "value": 0.3383,
+          "power_w": null
+        },
+        {
+          "slot": 1,
+          "time_start": 1792087200000,
+          "time_end": 1792090800000,
+          "value": 0.3017,
+          "power_w": null
+        },
+        {
+          "slot": 2,
+          "time_start": 1792090800000,
+          "time_end": 1792094400000,
+          "value": 0.2732,
+          "power_w": null
+        },
+        {
+          "slot": 3,
+          "time_start": 1792094400000,
+          "time_end": 1792098000000,
+          "value": 0.264,
+          "power_w": null
+        },
+        {
+          "slot": 4,
+          "time_start": 1792098000000,
+          "time_end": 1792101600000,
+          "value": 0.2515,
+          "power_w": null
+        },
+        {
+          "slot": 5,
+          "time_start": 1792101600000,
+          "time_end": 1792105200000,
+          "value": 0.2588,
+          "power_w": null
+        },
+        {
+          "slot": 6,
+          "time_start": 1792105200000,
+          "time_end": 1792108800000,
+          "value": 0.2492,
+          "power_w": null
+        },
+        {
+          "slot": 7,
+          "time_start": 1792108800000,
+          "time_end": 1792112400000,
+          "value": 0.2515,
+          "power_w": null
+        },
+        {
+          "slot": 8,
+          "time_start": 1792112400000,
+          "time_end": 1792116000000,
+          "value": 0.254,
+          "power_w": null
+        },
+        {
+          "slot": 9,
+          "time_start": 1792116000000,
+          "time_end": 1792119600000,
+          "value": 0.2537,
+          "power_w": null
+        },
+        {
+          "slot": 10,
+          "time_start": 1792119600000,
+          "time_end": 1792123200000,
+          "value": 0.2519,
+          "power_w": null
+        },
+        {
+          "slot": 11,
+          "time_start": 1792123200000,
+          "time_end": 1792126800000,
+          "value": 0.3003,
+          "power_w": null
+        },
+        {
+          "slot": 12,
+          "time_start": 1792126800000,
+          "time_end": 1792130400000,
+          "value": 0.3253,
+          "power_w": null
+        },
+        {
+          "slot": 13,
+          "time_start": 1792130400000,
+          "time_end": 1792134000000,
+          "value": 0.3421,
+          "power_w": null
+        },
+        {
+          "slot": 14,
+          "time_start": 1792134000000,
+          "time_end": 1792137600000,
+          "value": 0.3259,
+          "power_w": null
+        },
+        {
+          "slot": 15,
+          "time_start": 1792137600000,
+          "time_end": 1792141200000,
+          "value": 0.2914,
+          "power_w": null
+        },
+        {
+          "slot": 16,
+          "time_start": 1792141200000,
+          "time_end": 1792144800000,
+          "value": 0.2629,
+          "power_w": null
+        },
+        {
+          "slot": 17,
+          "time_start": 1792144800000,
+          "time_end": 1792148400000,
+          "value": 0.2263,
+          "power_w": null
+        },
+        {
+          "slot": 18,
+          "time_start": 1792148400000,
+          "time_end": 1792152000000,
+          "value": 0.2029,
+          "power_w": null
+        },
+        {
+          "slot": 19,
+          "time_start": 1792152000000,
+          "time_end": 1792155600000,
+          "value": 0.2132,
+          "power_w": null
+        },
+        {
+          "slot": 20,
+          "time_start": 1792155600000,
+          "time_end": 1792159200000,
+          "value": 0.2348,
+          "power_w": null
+        },
+        {
+          "slot": 21,
+          "time_start": 1792159200000,
+          "time_end": 1792162800000,
+          "value": 0.2664,
+          "power_w": null
+        },
+        {
+          "slot": 22,
+          "time_start": 1792162800000,
+          "time_end": 1792166400000,
+          "value": 0.3154,
+          "power_w": null
+        },
+        {
+          "slot": 23,
+          "time_start": 1792166400000,
+          "time_end": 1792170000000,
+          "value": 0.3299,
+          "power_w": null
+        }
+      ]
+    }
+  },
+  "decision": {
+    "ok": true,
+    "timestamp": 1792086425062,
+    "data": {
+      "decided_at": 1792086422604,
+      "trace": {
+        "timestamp": "2026-10-15T19:47:02.604569+02:00",
+        "decided_by": {
+          "decision": "discharge",
+          "outcome": "allowed",
+          "reason": "USABLE_ENERGY_EXCEEDS_RESERVE"
+        },
+        "why": "usable energy (5500 Wh) exceeds the 0 Wh reserved for upcoming more expensive hours",
+        "records": [
+          {
+            "decision": "discharge",
+            "outcome": "allowed",
+            "reason": "USABLE_ENERGY_EXCEEDS_RESERVE",
+            "why": "usable energy (5500 Wh) exceeds the 0 Wh reserved for upcoming more expensive hours",
+            "decisive": true,
+            "inputs": {
+              "current_price": 0.3383,
+              "min_dynamic_price_difference": 0.05,
+              "stored_usable_energy": 5500.0,
+              "reserved_energy": 0,
+              "evaluation_slots": 2,
+              "higher_price_slots": [],
+              "cheaper_price_slot": 2,
+              "cheaper_price": 0.2732,
+              "interval_minutes": 60
+            }
+          },
+          {
+            "decision": "mode",
+            "outcome": "allow_discharging",
+            "reason": "USABLE_ENERGY_EXCEEDS_RESERVE",
+            "why": "usable energy (5500 Wh) exceeds the 0 Wh reserved for upcoming more expensive hours",
+            "decisive": false,
+            "inputs": {
+              "current_price": 0.3383,
+              "min_dynamic_price_difference": 0.05,
+              "stored_usable_energy": 5500.0,
+              "reserved_energy": 0,
+              "evaluation_slots": 2,
+              "higher_price_slots": [],
+              "cheaper_price_slot": 2,
+              "cheaper_price": 0.2732,
+              "interval_minutes": 60,
+              "mode": 10,
+              "control_source": "optimizer",
+              "decided_by": "discharge",
+              "value": null
+            }
+          }
+        ]
+      },
+      "status_text": "Discharge Allowed - usable energy (5500 Wh) exceeds the 0 Wh reserved for upcoming more expensive hours",
+      "explanation": "usable energy (5500 Wh) exceeds the 0 Wh reserved for upcoming more expensive hours",
+      "decisive": {
+        "decision": "discharge",
+        "outcome": "allowed",
+        "reason": "USABLE_ENERGY_EXCEEDS_RESERVE",
+        "why": "usable energy (5500 Wh) exceeds the 0 Wh reserved for upcoming more expensive hours",
+        "decisive": true,
+        "inputs": {
+          "current_price": 0.3383,
+          "min_dynamic_price_difference": 0.05,
+          "stored_usable_energy": 5500.0,
+          "reserved_energy": 0,
+          "evaluation_slots": 2,
+          "higher_price_slots": [],
+          "cheaper_price_slot": 2,
+          "cheaper_price": 0.2732,
+          "interval_minutes": 60
+        }
+      },
+      "event": {
+        "timestamp": "2026-10-15T19:47:02.604569+02:00",
+        "decided_by": {
+          "decision": "discharge",
+          "outcome": "allowed",
+          "reason": "USABLE_ENERGY_EXCEEDS_RESERVE"
+        },
+        "why": "usable energy (5500 Wh) exceeds the 0 Wh reserved for upcoming more expensive hours",
+        "records": [
+          {
+            "decision": "discharge",
+            "outcome": "allowed",
+            "reason": "USABLE_ENERGY_EXCEEDS_RESERVE",
+            "why": "usable energy (5500 Wh) exceeds the 0 Wh reserved for upcoming more expensive hours",
+            "decisive": true,
+            "inputs": {
+              "current_price": 0.3383,
+              "min_dynamic_price_difference": 0.05,
+              "stored_usable_energy": 5500.0,
+              "reserved_energy": 0,
+              "evaluation_slots": 2,
+              "higher_price_slots": [],
+              "cheaper_price_slot": 2,
+              "cheaper_price": 0.2732,
+              "interval_minutes": 60
+            }
+          },
+          {
+            "decision": "mode",
+            "outcome": "allow_discharging",
+            "reason": "USABLE_ENERGY_EXCEEDS_RESERVE",
+            "why": "usable energy (5500 Wh) exceeds the 0 Wh reserved for upcoming more expensive hours",
+            "decisive": false,
+            "inputs": {
+              "current_price": 0.3383,
+              "min_dynamic_price_difference": 0.05,
+              "stored_usable_energy": 5500.0,
+              "reserved_energy": 0,
+              "evaluation_slots": 2,
+              "higher_price_slots": [],
+              "cheaper_price_slot": 2,
+              "cheaper_price": 0.2732,
+              "interval_minutes": 60,
+              "mode": 10,
+              "control_source": "optimizer",
+              "decided_by": "discharge",
+              "value": null
+            }
+          }
+        ],
+        "kind": "mode",
+        "previous_mode": null,
+        "mode": 10,
+        "control_source": "optimizer",
+        "value": null,
+        "previous_value": null
+      }
+    }
+  }
+}

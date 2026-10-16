@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#030a05" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <title>batcontrol</title>
+    <!--
+      No external font or stylesheet links on purpose: batcontrol runs in
+      homes without internet egress and behind Home Assistant ingress, where
+      a request to fonts.googleapis.com simply fails. The fonts are bundled
+      and imported from src/style.css.
+    -->
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
