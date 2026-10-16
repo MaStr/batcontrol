@@ -103,6 +103,9 @@ class DecisionJournal:  # pylint: disable=too-many-instance-attributes
         # commit. Values are compared against the last event, not the last
         # cycle, so a slow drift in small steps is detected as well.
         self._last_change: Optional[StatusChangeEvent] = None
+        # Last KIND_MODE event: value changes move _last_change but must not
+        # move "mode since".
+        self._last_mode_change: Optional[StatusChangeEvent] = None
         # Last event of any kind (including refresh), with the time it was
         # created: the reference for the next refresh.
         self._last_event: Optional[StatusChangeEvent] = None
@@ -189,6 +192,8 @@ class DecisionJournal:  # pylint: disable=too-many-instance-attributes
             )
             if kind != KIND_REFRESH:
                 self._last_change = event
+            if kind == KIND_MODE:
+                self._last_mode_change = event
             self._last_event = event
             self._last_event_time = now
             listeners = [listener for listener, wants_refresh
@@ -213,6 +218,11 @@ class DecisionJournal:  # pylint: disable=too-many-instance-attributes
         to "why is the inverter in its current state"."""
         with self._lock:
             return self._last_change
+
+    def last_mode_change(self) -> Optional[StatusChangeEvent]:
+        """The most recent mode change, ignoring value-only changes."""
+        with self._lock:
+            return self._last_mode_change
 
     def last_event(self) -> Optional[StatusChangeEvent]:
         """The most recent event including refresh events: the current

@@ -365,6 +365,16 @@ class TestRefreshEvents:
         assert [e.kind for e in status] == [KIND_MODE, KIND_VALUE]
         assert status[-1].previous_value == 1000
 
+    def test_value_change_does_not_move_the_mode_change(self):
+        """Regression: "mode since" must not reset on a charge rate change."""
+        journal, _clock, _status, _refresh = self._journal()
+        journal.commit(_trace(), -1, 'optimizer', 1000)
+        mode_change = journal.last_mode_change()
+        journal.commit(_trace(), -1, 'optimizer', 2000)
+
+        assert journal.last_status_change().kind == KIND_VALUE
+        assert journal.last_mode_change() is mode_change
+
     def test_last_event_includes_refresh(self):
         journal, clock, _status, _refresh = self._journal()
         journal.commit(_trace(), 10, 'optimizer')

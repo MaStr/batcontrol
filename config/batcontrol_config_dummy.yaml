@@ -170,6 +170,20 @@ mqtt:
   #   topic, NOT below 'topic'. Payload 1/true blocks grid charging, 0/false restores it.
 
 #--------------------------
+#  Read-only HTTP API, dashboard and MCP server
+#  https://mastr.github.io/batcontrol/integrations/rest-api/
+#--------------------------
+api:
+  enabled: false # REST API, dashboard and MCP server. Default: false
+  host: 127.0.0.1 # bind address; 0.0.0.0 exposes it to the network. Default: 127.0.0.1
+  port: 8080 # TCP port. Default: 8080
+  dashboard_enabled: true # serve the web dashboard at /. Default: true
+  docs_enabled: false # serve Swagger UI at /docs and the schema at /openapi.json. Default: false
+  mcp_enabled: false # serve the MCP server at /mcp. Default: false
+  # auth_token: "" # optional bearer token for /api/v1; empty = no authentication
+  # mcp_auth_token: "" # optional separate bearer token for /mcp; empty = inherits auth_token
+
+#--------------------------
 #  Forecast Solar
 #  https://mastr.github.io/batcontrol/configuration/solar-forecast/
 #  Providers: fcsolarapi (default), homeassistant-solar-forecast-ml, evcc, solcast

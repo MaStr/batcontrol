@@ -38,6 +38,17 @@ from .logic.decision_trace import (
     Decision, DecisionRecord, DecisionTrace, Outcome, Reason,
 )
 from .decision_journal import DecisionJournal
+from .web import config as web_config
+from .web.snapshot import ForecastSnapshot
+# Mode constants live in modes.py so the web API can import them without
+# pulling in core.py; re-exported here for backwards compatibility.
+from .modes import (                     # noqa: F401  pylint: disable=unused-import
+    MODE_ALLOW_DISCHARGING,
+    MODE_LIMIT_BATTERY_CHARGE_RATE,
+    MODE_AVOID_DISCHARGING,
+    MODE_FORCE_CHARGING,
+    MODE_NAMES,
+)
 
 from .dynamictariff import DynamicTariff as tariff_factory
 from .inverter import Inverter as inverter_factory
@@ -61,18 +72,6 @@ TIME_BETWEEN_EVALUATIONS = EVALUATIONS_EVERY_MINUTES * 60
 TIME_BETWEEN_UTILITY_API_CALLS = 900  # 15 Minutes
 MIN_FORECAST_HOURS = 1  # Minimum required forecast hours
 FORECAST_TOLERANCE = 3  # Acceptable tolerance for forecast hours
-
-MODE_ALLOW_DISCHARGING = 10
-MODE_LIMIT_BATTERY_CHARGE_RATE = 8  # Limit PV charge, allow discharge
-MODE_AVOID_DISCHARGING = 0
-MODE_FORCE_CHARGING = -1
-
-MODE_NAMES = {
-    MODE_ALLOW_DISCHARGING: Outcome.ALLOW_DISCHARGING,
-    MODE_LIMIT_BATTERY_CHARGE_RATE: Outcome.LIMIT_BATTERY_CHARGE_RATE,
-    MODE_AVOID_DISCHARGING: Outcome.AVOID_DISCHARGING,
-    MODE_FORCE_CHARGING: Outcome.FORCE_CHARGE,
-}
 
 CONTROL_SOURCE_API = 'api'
 CONTROL_SOURCE_OPTIMIZER = 'optimizer'
@@ -122,6 +121,7 @@ class Batcontrol:
         self._limit_battery_charge_rate = -1  # Dynamic battery charge rate limit (-1 = no limit)
         self._evcc_peak_shaving_disabled = False  # Tracks last evcc-disable state for log messages
         self.last_prices = None
+        self.last_min_dynamic_price_difference = None
         self.last_consumption = None
         self.last_production = None
         self.last_net_consumption = None
@@ -132,6 +132,11 @@ class Batcontrol:
         self.last_reserved_energy = -1
         self.last_max_capacity = -1
         self.last_stored_usable_energy = -1
+        # Inverter SoC limits in percent, cached per cycle for the web API:
+        # an InverterGroup derives them from every member's capacity, which
+        # can mean inverter traffic, so the web thread must not read them.
+        self.last_min_soc = -1
+        self.last_max_soc = -1
 
         self.discharge_blocked = False
         self.discharge_limit = 0
@@ -147,6 +152,13 @@ class Batcontrol:
         self.fetched_stored_usable_energy = False
 
         self.last_run_time = 0
+        # Interval between control cycles, exposed for the web API so it can
+        # report when the next evaluation is due.
+        self.evaluation_interval_seconds = TIME_BETWEEN_EVALUATIONS
+        # Immutable forecast snapshot of the last completed cycle, published
+        # as a single atomic attribute assignment for the web API to read.
+        # See web/snapshot.py for why this is not a lock.
+        self.forecast_snapshot = None
 
         self.last_logic_instance = None
 
@@ -488,6 +500,21 @@ class Batcontrol:
                 self.evcc_api.wait_ready()
                 logger.info('evcc Connection ready')
 
+        # Read-only web API, dashboard and MCP server. Started last, so a
+        # failure here cannot stop the control loop from coming up - which
+        # has to include parsing its configuration: a typo in an optional
+        # read-only accessory must not stop the battery being controlled.
+        self.web_server = None
+        try:
+            self.api_config = web_config.from_config(config)
+        except ValueError as exc:
+            logger.error(
+                'Invalid api configuration (%s). The API, dashboard and MCP'
+                ' server stay disabled; battery control continues.', exc)
+            self.api_config = web_config.ApiConfig()
+        if self.api_config.enabled:
+            self.__start_web_api()
+
         # Initialize scheduler thread
         self.scheduler = SchedulerThread()
         logger.info('Scheduler thread initialized')
@@ -520,6 +547,26 @@ class Batcontrol:
             self.fc_consumption.refresh_data()
         except Exception as e:
             logger.error("Error during initial data fetch: %s", e)
+
+    def __start_web_api(self) -> None:
+        """ Bring up the read-only web API, tolerating any failure.
+
+        The API is a reader. If it cannot start - missing dependency, port
+        already in use - batcontrol logs it and carries on controlling the
+        battery.
+        """
+        try:
+            # Imported here so an installation with the API disabled never
+            # imports FastAPI at all.
+            from .web.server import WebServer  # pylint: disable=import-outside-toplevel
+            self.web_server = WebServer(self, self.api_config)
+            if not self.web_server.start():
+                self.web_server = None
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            self.web_server = None
+            logger.error(
+                'Web API could not be started (%s). Battery control continues'
+                ' without it.', exc, exc_info=True)
 
     def refresh_all_providers(self) -> None:
         """ Force a refresh of all data providers (triggered by SIGHUP).
@@ -555,6 +602,13 @@ class Batcontrol:
             if self.mqtt_api is not None:
                 self.mqtt_api.shutdown()
                 del self.mqtt_api
+            # getattr, like the scheduler guard above: __init__ can raise
+            # before web_server is assigned, and shutdown() is still called.
+            # An AttributeError here would replace the real startup error in
+            # the log with a misleading one.
+            if getattr(self, 'web_server', None) is not None:
+                self.web_server.shutdown()
+                self.web_server = None
         except Exception as exc:
             logger.exception("Error during Batcontrol shutdown: %s", exc)
 
@@ -880,6 +934,8 @@ class Batcontrol:
 
         # for API
         self.set_reserved_energy(calc_output.reserved_energy)
+        self.last_min_dynamic_price_difference = \
+            calc_output.min_dynamic_price_difference
         if self.mqtt_api is not None:
             self.mqtt_api.publish_min_dynamic_price_diff(
                 calc_output.min_dynamic_price_difference)
@@ -1120,6 +1176,15 @@ class Batcontrol:
         self.last_consumption = consumption
         self.last_net_consumption = net_consumption
         self.last_prices = prices
+        # One atomic assignment, so a web request never mixes two cycles.
+        self.forecast_snapshot = ForecastSnapshot.build(
+            run_time=self.last_run_time,
+            interval_minutes=self.time_resolution,
+            prices=prices,
+            consumption=consumption,
+            production=production,
+            net_consumption=net_consumption,
+        )
         if self.mqtt_api is not None:
             self.mqtt_api.publish_production(production, self.last_run_time)
             self.mqtt_api.publish_consumption(consumption, self.last_run_time)
@@ -1268,14 +1333,25 @@ class Batcontrol:
     def refresh_static_values(self) -> None:
         """ Refresh static and some dynamic values for API.
             Collected data is stored, that it is not fetched again.
+
+            The values are refreshed regardless of which APIs are enabled.
+            They used to be fetched inside the MQTT branch below, which left
+            last_SOC on its -1 sentinel whenever MQTT was disabled - the
+            value is cached core state, not an MQTT detail, and the REST API
+            and the dashboard read the same cache.
         """
+        soc = self.get_SOC()
+        stored_energy = self.get_stored_energy()
+        always_allow_discharge_limit = self.get_always_allow_discharge_limit()
+        self.last_min_soc = getattr(self.inverter, 'min_soc', -1)
+        self.last_max_soc = getattr(self.inverter, 'max_soc', -1)
+
         if self.mqtt_api is not None:
-            self.mqtt_api.publish_SOC(self.get_SOC())
-            self.mqtt_api.publish_stored_energy_capacity(
-                self.get_stored_energy())
+            self.mqtt_api.publish_SOC(soc)
+            self.mqtt_api.publish_stored_energy_capacity(stored_energy)
             #
             self.mqtt_api.publish_always_allow_discharge_limit(
-                self.get_always_allow_discharge_limit())
+                always_allow_discharge_limit)
             self.mqtt_api.publish_max_charging_from_grid_limit(
                 self.max_charging_from_grid_limit)
             if self.min_grid_charge_soc is not None:
