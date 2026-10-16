@@ -6,9 +6,43 @@ This module provides functions to convert between different time resolutions
 """
 
 import logging
-from typing import Dict, Literal
+from typing import Dict, Iterator, Literal, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+def align_to_interval(timestamp: float, interval_minutes: int) -> float:
+    """Align an epoch timestamp down to the start of its interval.
+
+    Forecast slot 0 always starts at the beginning of the interval that
+    contains the given timestamp, so every consumer (MQTT, REST API, MCP,
+    dashboard) derives the same slot boundaries from the same run time.
+    """
+    interval_seconds = interval_minutes * 60
+    return timestamp - (timestamp % interval_seconds)
+
+
+def iter_slots(values: Sequence[float], timestamp: float,  # pylint: disable=too-many-arguments
+               interval_minutes: int, *, start: int = 0,
+               stop: Optional[int] = None
+               ) -> Iterator[Tuple[int, float, float, float, float]]:
+    """Yield (index, time_start, time_end, value, power) per forecast slot.
+
+    The one place that turns a forecast array into time slots, shared by the
+    MQTT forecast topics and the web API. Slot 0 starts at the interval that
+    contains `timestamp`; times are epoch seconds. `power` is the average
+    power over the slot for a Wh-per-slot value - equal to the value only at
+    60 minutes, four times it at 15. Units and rounding stay with the caller.
+    Only values[start:stop] is rendered.
+    """
+    interval_seconds = interval_minutes * 60
+    factor = 60 / interval_minutes
+    base = align_to_interval(timestamp, interval_minutes)
+    stop = len(values) if stop is None else min(stop, len(values))
+    for index in range(start, stop):
+        value = values[index]
+        yield (index, base + index * interval_seconds,
+               base + (index + 1) * interval_seconds, value, value * factor)
 
 
 def upsample_forecast(
