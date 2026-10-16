@@ -17,3 +17,24 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+  # Dashboard dependencies. package.json pins exact versions and .npmrc sets
+  # save-exact, so every bump arrives here as a reviewable pull request rather
+  # than drifting in on the next npm install.
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    groups:
+      # Split by what a bump actually affects, not to reduce noise:
+      #
+      # production dependencies end up inside the wheel, the Docker image and
+      # the Home Assistant add-on, and two of them carry license obligations
+      # that THIRD-PARTY-LICENSES.md tracks (the OFL fonts and Swagger UI's
+      # Apache-2.0 NOTICE). Those bumps need the license file re-checked and
+      # the dashboard looked at.
+      dashboard-runtime:
+        dependency-type: "production"
+      # build tooling never ships; a bump only has to keep "npm run build",
+      # the offline asset check and the tests green.
+      dashboard-build-tooling:
+        dependency-type: "development"
