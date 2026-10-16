@@ -16,6 +16,18 @@ uv run pylint src/batcontrol                    # target score >= 9.0 (10 if ach
 uv run autopep8 --in-place <file>               # PEP8 formatting
 ```
 
+Dashboard (`frontend/`, only needed when touching the web UI):
+
+```bash
+cd frontend && npm ci && npm run build   # -> src/batcontrol/web/static (package data)
+npm test                                 # vitest
+npm run dev                              # against a running batcontrol on :8080
+npm run dev:fixtures                     # against frozen fixtures, no backend needed
+VITE_FIXTURE=battery-full npm run dev:fixtures
+python scripts/dump_openapi.py           # docs/assets/openapi.json for the docs build
+python scripts/verify_wheel_dashboard.py dist/*.whl
+```
+
 ## Module Map
 
 ```
@@ -30,6 +42,15 @@ src/batcontrol/
   scheduler.py            # Main loop
   mqtt_api.py             # State publishing + runtime config overrides
   evcc_api.py             # evcc integration
+  modes.py                # Inverter mode constants (core re-exports them)
+  web/                    # Read-only HTTP API, dashboard and MCP server
+    snapshot.py           #   immutable per-cycle forecast snapshot
+    service.py            #   the single read path, shared by REST and MCP
+    models.py routes.py   #   Pydantic responses + GET-only routes
+    auth.py app.py        #   optional bearer token + application factory
+    server.py mcp.py      #   uvicorn thread + MCP tools
+    static/               #   built dashboard (npm output, package data)
+frontend/                 # Vue 3 dashboard sources, built into web/static
 config/batcontrol_config_dummy.yaml   # Every parameter, one-line comments; also the
                                       #   first-run template copied by entrypoint.sh
 tests/                    # pytest suite (mirrors package layout)
@@ -59,6 +80,13 @@ tmp/                      # Throwaway experiments — NEVER committed
   value change (listeners registered with `refresh=True` also on a reason change and every
   15 min). The MQTT "Decision" sensor (`mqtt_api.py`) is the first listener. See
   `docs/development/decision-trace.md` and `docs/features/decision-sensor.md`.
+- **Read-only web layer:** `web/` serves the REST API, the dashboard and the MCP server from one
+  port, all `GET`. Both transports read through `web/service.py` - one source of truth for field
+  names, units and rounding. The service reads only values the control loop has already cached
+  (`last_SOC`, `last_max_capacity`, ...), never the `get_*` accessors, because those fetch from
+  the inverter and would reset the loop's cache flags from a web thread. Forecasts come from one
+  frozen `ForecastSnapshot` the loop publishes per cycle, so a request can never mix two cycles.
+  Specs: `docs/development/mcp-spec.md`, `docs/development/dashboard-spec.md`.
 
 ## Change Checklist
 
@@ -91,6 +119,12 @@ tmp/                      # Throwaway experiments — NEVER committed
    `docs/development/decision-trace.md`. Skipping this makes the change invisible to the
    Decision sensor and to the journal's `add_listener()` endpoint — no error is raised, so this
    is easy to miss in review.
+7. New REST endpoint or MCP tool -> it is only done when all of these exist: the Pydantic model
+   with the **unit in every numeric field's description**, the matching MCP tool (or a note why
+   not), a test, the path added to the contract list in
+   `tests/batcontrol/web/test_openapi.py`, the entry in `docs/integrations/rest-api.md`, and -
+   if the dashboard uses it - the mapping in `frontend/src/lib/api.js`. The API is read-only:
+   adding a non-GET route fails `tests/batcontrol/web/test_readonly.py`, which is the point.
 
 ## Releasing
 
@@ -125,3 +159,21 @@ python -m batcontrol [--config PATH] [--one-shot]
   "Decision" sensor, decision journal listeners) — add new ones rather than renaming existing
   ones. A reason without an entry in `_REASON_EXPLANATIONS` still works (falls back to a
   readable version of the code itself) but should get one.
+- **Timestamps: the REST API and MCP use epoch milliseconds, MQTT uses epoch seconds.** The
+  decision trace keeps its ISO timestamp because it is the same object MQTT publishes; the API
+  adds `decided_at`/`mode_changed_at` in ms next to it.
+- **`value` is Wh per forecast slot, `power_w` is W.** At 15-minute resolution they differ by a
+  factor of four. Both carry the unit in their field description for that reason.
+- `/api/v1/config` is an explicit allow-list built from core attributes and must never read
+  `self.config` — that is what keeps inverter passwords and tariff tokens unreachable by
+  construction, not by filtering.
+- Dashboard assets are **built by npm and shipped as package data**. A source checkout without
+  Node has none and serves a hint page; that is normal, and the tests force both branches. The
+  release workflow builds them and `scripts/verify_wheel_dashboard.py` fails the release if they
+  are missing — the HA stable add-on installs nothing but that wheel.
+- **Nothing in the web layer may load from the network.** Fonts and Swagger UI are bundled,
+  because batcontrol runs in homes without internet egress and behind HA ingress.
+  `npm run build` fails on an external asset reference. An asset only ships if something imports
+  it — files that must ship verbatim (license texts) belong in `frontend/public/`.
+- Ingress and reverse proxies serve the dashboard under a path prefix, so Vite uses
+  `base: './'` and the API base URL comes from `document.baseURI`. Absolute asset paths break it.

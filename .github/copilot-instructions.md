@@ -32,6 +32,8 @@ This is a Python based repository providing an application for controlling batte
 - `config/`: Configuration files and templates
 - `scripts/`: Store tests to verfiy logic or stand-alone tests & helpers here.
 - `src/`: Batcontrol source code
+- `src/batcontrol/web/`: Read-only HTTP API, dashboard and MCP server
+- `frontend/`: Vue 3 dashboard sources, built by npm into `src/batcontrol/web/static/`
 - `tests/`: pytests tests for automatic testing
 - `tmp/`: Folder for test scripts, which will be never committed.
 - `docs/`: Documentation for technical documentation.
@@ -52,3 +54,18 @@ This is a Python based repository providing an application for controlling batte
    `logic/next.py`), must stay traceable: add or extend a `DecisionRecord` with a plain-language
    explanation (`logic/decision_trace.py`, `logic/decision_records.py`). This feeds the MQTT
    "Decision" sensor and the in-memory decision journal — see `docs/development/decision-trace.md`.
+10. The web layer (`src/batcontrol/web/`) is **read-only**: every route is a `GET` and a test
+    fails if a mutating one appears. Runtime overrides stay on the MQTT API. REST and MCP both
+    read through `web/service.py`, which reads the values the control loop has cached — never
+    the `get_*` accessors, which would talk to the inverter from a web thread.
+11. Units and time bases are part of the contract: the API uses **epoch milliseconds** (MQTT
+    uses seconds), `value` is **Wh per forecast slot** and `power_w` is **W** (a factor of four
+    apart at 15-minute resolution). Put the unit in every numeric field's description.
+12. `/api/v1/config` is an allow-list built from core attributes and must never read the
+    configuration dictionary — that is what keeps credentials unreachable by construction.
+13. Nothing in the dashboard may load from the network: batcontrol runs in homes without
+    internet egress and behind Home Assistant ingress. Fonts and Swagger UI are bundled, and
+    `npm run build` fails on an external asset reference.
+14. The dashboard ships inside the wheel as package data. A source checkout without Node has no
+    assets and serves a hint page — that is expected. The release workflow builds them and
+    `scripts/verify_wheel_dashboard.py` verifies the result.
