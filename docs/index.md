@@ -42,6 +42,9 @@ Batcontrol is an intelligent battery management system that optimizes your home 
 ### External Systems
 | Integration | Purpose | Documentation |
 |-------------|---------|---------------|
+| **Dashboard** | Built-in web UI: decision, state of charge, prices | [Dashboard](features/dashboard.md) |
+| **REST API** | Read-only HTTP API with OpenAPI documentation | [REST API](integrations/rest-api.md) |
+| **MCP** | Let an AI assistant answer questions about the battery | [MCP Server](integrations/mcp-server.md) |
 | **evcc** | Electric vehicle charging coordination | [evcc Connection](integrations/evcc-connection.md) |
 | **MQTT/Home Assistant** | Home automation integration | [MQTT API](integrations/mqtt-api.md) |
 | **MQTT Inverter** | Integrate any battery system via MQTT | [MQTT Inverter](integrations/mqtt-inverter.md) |

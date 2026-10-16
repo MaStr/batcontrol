@@ -9,6 +9,20 @@ Batcontrol controls your PV battery inverter based on dynamic electricity prices
 
 [Documentation](https://mastr.github.io/batcontrol/) — [Development Documentation](https://mastr.github.io/batcontrol-dev/) — [Home Assistant Add-on](https://github.com/MaStr/batcontrol_ha_addon)
 
+## Dashboard
+
+With the optional read-only API enabled, batcontrol serves a dashboard showing what it is doing
+and why — the current decision with its full trace, the state of charge, and the price forecast.
+It is served by batcontrol itself, needs no additional service, and appears as a sidebar panel in
+the Home Assistant add-on.
+
+[![batcontrol dashboard](https://mastr.github.io/batcontrol/assets/dashboard.png)](https://mastr.github.io/batcontrol/features/dashboard/)
+
+The same port serves a [REST API](https://mastr.github.io/batcontrol/integrations/rest-api/)
+with its own OpenAPI documentation and, optionally, an
+[MCP server](https://mastr.github.io/batcontrol/integrations/mcp-server/) so an AI assistant can
+answer questions about the battery. All of it is read-only: control stays with the MQTT API.
+
 ## Supported Systems
 
 **Inverters / batteries**
@@ -41,6 +55,18 @@ mkdir -p ./config ./logs
 
 docker run -d \
   --name batcontrol \
+  -v "$PWD/config:/app/config" \
+  -v "$PWD/logs:/app/logs" \
+  mastr950/batcontrol:latest
+```
+
+To also reach the dashboard, publish its port and set `api.enabled: true` with
+`api.host: 0.0.0.0` in the configuration:
+
+```sh
+docker run -d \
+  --name batcontrol \
+  -p 8080:8080 \
   -v "$PWD/config:/app/config" \
   -v "$PWD/logs:/app/logs" \
   mastr950/batcontrol:latest

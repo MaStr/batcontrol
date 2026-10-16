@@ -1,0 +1,45 @@
+# Keep the build context small and make the build reproducible: anything the
+# Dockerfile needs is copied explicitly.
+
+# Frontend: node_modules is hundreds of MB and the image builds its own.
+frontend/node_modules
+frontend/dist
+
+# A local dashboard build must not leak into the image - the frontend stage
+# produces it, and a stale local copy would be shadowed at best.
+src/batcontrol/web/static
+
+# Python build and test artefacts
+.venv
+venv
+build
+dist
+*.egg-info
+**/__pycache__
+*.py[cod]
+.pytest_cache
+.coverage
+coverage.xml
+.ruff_cache
+.mypy_cache
+
+# Repository and tooling
+.git
+.github
+.gitignore
+.vscode
+.idea
+.claude
+
+# Runtime and throwaway data
+logs/*
+!logs/.keep
+tmp
+*.log
+.env
+
+# Documentation and tests are not needed in the image
+docs
+site
+tests
+scripts

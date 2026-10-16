@@ -335,7 +335,6 @@ def _make_forecast_publish_stub(interval_minutes: int):
     api.interval_minutes = interval_minutes
     api.client = MagicMock()
     api.client.is_connected.return_value = True
-    api._energy_to_power = MqttApi._energy_to_power.__get__(api, MqttApi)
     api._create_forecast = MqttApi._create_forecast.__get__(api, MqttApi)
     api.publish_production = MqttApi.publish_production.__get__(api, MqttApi)
     api.publish_consumption = MqttApi.publish_consumption.__get__(api, MqttApi)
@@ -790,6 +789,32 @@ class TestPeakShavingPriceLimitApi:
             Batcontrol.api_set_peak_shaving_price_limit(bc, value)
             assert bc.peak_shaving_config is original
             bc.mqtt_api.publish_peak_shaving_price_limit.assert_not_called()
+
+
+# Byte-for-byte MQTT forecast payloads, recorded before the slot rendering was
+# shared with the web snapshot (interval_utils.iter_slots). Home Assistant
+# sensors parse these, so the refactoring must not change a single character:
+# key order, float timestamps and unrounded values included.
+_GOLDEN_FORECASTS = [
+    (15, 'batcontrol/FCST/production',
+     '{"data": [{"time_start": 1792083600.0, "value": 0.0, "time_end": 1792084500.0, "power_w": 0.0}, {"time_start": 1792084500.0, "value": 123.456, "time_end": 1792085400.0, "power_w": 493.824}, {"time_start": 1792085400.0, "value": 1500.25, "time_end": 1792086300.0, "power_w": 6001.0}]}'),
+    (15, 'batcontrol/FCST/prices',
+     '{"data": [{"time_start": 1792083600.0, "value": 0.30812345, "time_end": 1792084500.0}, {"time_start": 1792084500.0, "value": 0.25, "time_end": 1792085400.0}, {"time_start": 1792085400.0, "value": -0.01, "time_end": 1792086300.0}]}'),
+    (60, 'batcontrol/FCST/production',
+     '{"data": [{"time_start": 1792083600.0, "value": 0.0, "time_end": 1792087200.0, "power_w": 0.0}, {"time_start": 1792087200.0, "value": 123.456, "time_end": 1792090800.0, "power_w": 123.456}, {"time_start": 1792090800.0, "value": 1500.25, "time_end": 1792094400.0, "power_w": 1500.25}]}'),
+    (60, 'batcontrol/FCST/prices',
+     '{"data": [{"time_start": 1792083600.0, "value": 0.30812345, "time_end": 1792087200.0}, {"time_start": 1792087200.0, "value": 0.25, "time_end": 1792090800.0}, {"time_start": 1792090800.0, "value": -0.01, "time_end": 1792094400.0}]}'),
+]
+
+
+@pytest.mark.parametrize('interval, topic, payload', _GOLDEN_FORECASTS)
+def test_forecast_payload_is_unchanged(interval, topic, payload):
+    api = _make_forecast_publish_stub(interval)
+    timestamp = 1792083725.7  # deliberately not aligned to the slot grid
+    api.publish_production(np.array([0.0, 123.456, 1500.25]), timestamp)
+    api.publish_prices(np.array([0.30812345, 0.25, -0.01]), timestamp)
+    published = {c.args[0]: c.args[1] for c in api.client.publish.call_args_list}
+    assert published[topic] == payload
 
 
 def _make_solar_publish_stub():

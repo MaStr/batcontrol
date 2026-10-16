@@ -1,0 +1,44 @@
+{
+  "status": {
+    "ok": false,
+    "timestamp": 0,
+    "error": "unauthorized",
+    "detail": "Missing or invalid bearer token.",
+    "_status": 401
+  },
+  "battery": {
+    "ok": false,
+    "timestamp": 0,
+    "error": "unauthorized",
+    "detail": "Missing or invalid bearer token.",
+    "_status": 401
+  },
+  "current": {
+    "ok": false,
+    "timestamp": 0,
+    "error": "unauthorized",
+    "detail": "Missing or invalid bearer token.",
+    "_status": 401
+  },
+  "version": {
+    "ok": false,
+    "timestamp": 0,
+    "error": "unauthorized",
+    "detail": "Missing or invalid bearer token.",
+    "_status": 401
+  },
+  "forecast/price": {
+    "ok": false,
+    "timestamp": 0,
+    "error": "unauthorized",
+    "detail": "Missing or invalid bearer token.",
+    "_status": 401
+  },
+  "decision": {
+    "ok": false,
+    "timestamp": 0,
+    "error": "unauthorized",
+    "detail": "Missing or invalid bearer token.",
+    "_status": 401
+  }
+}

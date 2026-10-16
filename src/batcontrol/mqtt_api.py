@@ -79,6 +79,8 @@ from typing import Optional, TYPE_CHECKING
 import paho.mqtt.client as mqtt
 import numpy as np
 
+from .interval_utils import iter_slots
+
 if TYPE_CHECKING:
     from .decision_journal import StatusChangeEvent
 
@@ -310,15 +312,6 @@ class MqttApi:
                     production, timestamp, include_power=True))
             )
 
-    def _energy_to_power(self, energy_wh: np.ndarray) -> np.ndarray:
-        """ Convert Wh-per-interval energy values to average power in W.
-
-        Numerically this equals the Wh value only when the interval is
-        60 minutes; at 15-minute resolution the average power is 4x the
-        Wh-per-interval value.
-        """
-        return energy_wh * (60 / self.interval_minutes)
-
     def _create_forecast(
             self,
             forecast: np.ndarray,
@@ -331,22 +324,16 @@ class MqttApi:
         'value' is always Wh per interval; set include_power=True to also add
         a power_w field (average power in W) for energy-based forecasts.
         """
-        interval_seconds = self.interval_minutes * 60
-
-        # Align timestamp to the start of the current interval
-        now = timestamp - (timestamp % interval_seconds)
-
-        power = self._energy_to_power(forecast) if include_power else None
-
         data_list = []
-        for i, value in enumerate(forecast):
+        for _, time_start, time_end, value, power in iter_slots(
+                forecast, timestamp, self.interval_minutes):
             entry = {
-                'time_start': now + i * interval_seconds,
+                'time_start': time_start,
                 'value': value,
-                'time_end': now + (i + 1) * interval_seconds
+                'time_end': time_end
             }
             if include_power:
-                entry['power_w'] = power[i]
+                entry['power_w'] = power
             data_list.append(entry)
 
         data = {'data': data_list}

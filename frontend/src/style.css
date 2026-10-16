@@ -1,0 +1,122 @@
+/*
+ * Fonts are bundled with the application, never fetched from a CDN:
+ * batcontrol runs in homes without internet egress and behind Home Assistant
+ * ingress, where an external font request fails and leaves the UI in a
+ * fallback face. Only the latin subsets actually used are imported.
+ *
+ * IBM Plex Mono (c) 2017 IBM Corp. and VT323 (c) 2011 The VT323 Project
+ * Authors are licensed under the SIL Open Font License 1.1. The license texts
+ * live in public/licenses/ so the build copies them verbatim into the static
+ * assets - the OFL requires them to travel with the font files, and an
+ * unimported .txt under src/ would silently not be emitted at all.
+ */
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-600.css';
+@import '@fontsource/vt323/latin-400.css';
+
+:root {
+  --bg: #030a05;
+  --panel: #06140a;
+  --fg: #33ff66;
+  --fg-dim: #1f9e43;
+  --fg-faint: #0f4d22;
+  --fg-glow: rgba(51, 255, 102, 0.55);
+  --amber: #ffcc33;
+  --red: #ff5544;
+
+  /* defrag grid cells */
+  --cell-on: #39ff6e;
+  --cell-on-hi: #b6ffc9;
+  --cell-on-lo: #129638;
+  --cell-off: #0a2412;
+  --cell-off-hi: #17432a;
+  --cell-off-lo: #020804;
+
+  /* Explicit local fallbacks, so a font file that fails to load degrades to
+     another monospace face instead of breaking the layout. */
+  --font: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, 'Cascadia Mono', Consolas, monospace;
+  --font-big: 'VT323', 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+  text-shadow: 0 0 6px var(--fg-glow);
+  min-height: 100vh;
+}
+
+/* CRT scanlines + vignette */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.55) 100%);
+  z-index: 10;
+}
+
+.panel {
+  border: 1px solid var(--fg-dim);
+  background: var(--panel);
+  padding: 14px 16px 16px;
+  position: relative;
+  box-shadow: 0 0 18px rgba(51, 255, 102, 0.08) inset;
+}
+
+.panel > .panel-title {
+  position: absolute;
+  top: -0.8em;
+  left: 12px;
+  padding: 0 6px;
+  background: var(--bg);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.dim { color: var(--fg-dim); text-shadow: none; }
+.big { font-family: var(--font-big); line-height: 1; }
+
+.kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 14px;
+}
+.kv dt { color: var(--fg-dim); text-shadow: none; }
+.kv dd { margin: 0; text-align: right; }
+
+/* terminal-style >TOGGLE< button, inverted when hovered/active */
+.toggle {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--fg);
+  text-shadow: inherit;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.toggle:hover,
+.toggle:focus-visible,
+.toggle.active {
+  background: var(--fg);
+  color: var(--bg);
+  text-shadow: none;
+  outline: none;
+}
+
+@keyframes blink { 50% { opacity: 0.25; } }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; }
+}

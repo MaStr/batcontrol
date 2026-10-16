@@ -24,14 +24,16 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install documentation dependencies
-        run: pip install "mkdocs-material>=9.5,<10" "mkdocs-llmstxt>=0.5.0,<1.0"
-
-      - name: Install batcontrol (for documentation data generation)
-        run: pip install -e .
+      - name: Install batcontrol and documentation dependencies
+        run: pip install -e ".[docs]"
 
       - name: Generate peak shaving scenario data
         run: python scripts/generate_peak_shaving_csv.py
+
+      # The published API reference is rendered from the schema the code
+      # produces, so it cannot drift from the implementation.
+      - name: Generate the OpenAPI schema
+        run: python scripts/dump_openapi.py
 
       - name: Build documentation
         run: mkdocs build --strict

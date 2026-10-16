@@ -24,7 +24,22 @@ dependencies = [
     # added in websockets 13.0.
     "websockets>=13.0",
     "schedule>=1.2.0",
-    "pytz>=2024.2"
+    "pytz>=2024.2",
+    # Read-only web API, dashboard and MCP server (src/batcontrol/web).
+    # Regular dependencies on purpose: the Home Assistant stable add-on
+    # installs the plain release wheel, so an optional extra would silently
+    # ship an add-on without a dashboard.
+    "fastapi>=0.115",
+    # Plain uvicorn, not [standard]: uvloop/httptools/watchfiles are compiled
+    # extras that only matter for raw throughput and --reload, neither of
+    # which this uses. On a platform without a prebuilt wheel they would turn
+    # a pip install into a source build - the Dockerfile prefers piwheels
+    # precisely because armv7 users exist.
+    "uvicorn>=0.30",
+    # Upper bound on purpose: 2.x renamed FastMCP to MCPServer, and this code
+    # imports mcp.server.mcpserver directly. A 3.x may rename again, and the
+    # feature is off by default, so a silent break would surface late.
+    "mcp>=2.3,<3"
 ]
 
 # Config for the build system
@@ -34,6 +49,14 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["./src"]
+
+# The dashboard is built by npm into src/batcontrol/web/static and has to
+# travel inside the wheel: the Home Assistant stable add-on installs nothing
+# but that wheel. See docs/development/frontend-build.md.
+[tool.setuptools.package-data]
+# Includes the bundled fonts and their OFL license texts, which the build
+# emits into static/assets - see THIRD-PARTY-LICENSES.md.
+"batcontrol.web" = ["static/**/*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "batcontrol.__pkginfo__.__version__"}
@@ -59,10 +82,14 @@ test = [
     "pytest-cov>=4.0.0",
     "pytest-asyncio>=0.21.0",
     "pytest-mock>=3.0.0",
+    # fastapi.testclient needs httpx
+    "httpx>=0.27",
 ]
 docs = [
     "mkdocs-material>=9.5,<10",
     "mkdocs-llmstxt>=0.5.0,<1.0",
+    # Embeds the generated OpenAPI schema as Swagger UI in the API reference
+    "mkdocs-swagger-ui-tag>=0.8,<1.0",
 ]
 
 # Bump Version

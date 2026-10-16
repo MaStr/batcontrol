@@ -73,6 +73,46 @@ Then start the container:
 docker compose up -d
 ```
 
+### Dashboard and API
+
+batcontrol can serve a read-only [dashboard](../features/dashboard.md) and
+[HTTP API](../integrations/rest-api.md) on port 8080. It is off by default; to use it, set this
+in `batcontrol_config.yaml`:
+
+```yaml
+api:
+  enabled: true
+  host: 0.0.0.0   # 127.0.0.1 would be unreachable from outside the container
+  port: 8080
+```
+
+and publish the port:
+
+```sh
+docker run -d \
+  --name batcontrol \
+  -p 8080:8080 \
+  -v /path/to/config:/app/config \
+  -v /path/to/logs:/app/logs \
+  mastr950/batcontrol:latest
+```
+
+```yaml
+services:
+  batcontrol:
+    image: mastr950/batcontrol:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+    restart: unless-stopped
+```
+
+The dashboard is then at `http://<host>:8080/`. The interactive API documentation at
+`http://<host>:8080/docs` is off by default; enable it with `api.docs_enabled: true`. A published port has no authentication of its own — set
+`api.auth_token` or keep it on a trusted network.
+
 ### Timezone
 
 By default the container uses UTC. Set the `TZ` environment variable to match your local time zone, which affects log timestamps and time-based scheduling.
