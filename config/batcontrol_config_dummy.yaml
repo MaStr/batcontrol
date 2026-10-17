@@ -210,7 +210,7 @@ pvinstallations:
 #  https://mastr.github.io/batcontrol/configuration/consumption-forecast/
 #--------------------------
 consumption_forecast:
-  type: csv # csv or homeassistant-api
+  type: csv # csv, homeassistant-api or evcc-home
   csv:
     annual_consumption: 4500 # kWh per year, scales the load profile
     load_profile: load_profile.csv # file inside the config folder
@@ -224,6 +224,13 @@ consumption_forecast:
   #   history_weights: [1, 1, 1] # weight per period, 1-10
   #   cache_ttl_hours: 48.0
   #   multiplier: 1.0 # forecast adjustment, >1.0 increases
+
+  # evcc_home: # consumption history of the evcc group 'home', needs evcc >= 0.311.0
+  #   url: http://evcc:7070 # evcc base URL, http(s) without /api
+  #   history_days: [-7, -14, -21] # days to look back, Default: [-7, -14, -21]
+  #   history_weights: [1, 1, 1] # weight per period, 1-10, Default: [1, 1, 1]
+  #   cache_ttl_hours: 48.0 # hours, Default: 48.0
+  #   multiplier: 1.0 # forecast adjustment, >1.0 increases, Default: 1.0
 
 #--------------------------
 #  evcc connection - locks the battery while the car is charging

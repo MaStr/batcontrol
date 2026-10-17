@@ -4,10 +4,11 @@ Batcontrol uses consumption forecasting to predict your household's energy usage
 
 ## Available Forecast Providers
 
-Batcontrol supports two methods for consumption forecasting:
+Batcontrol supports three methods for consumption forecasting:
 
 1. **CSV** - Static load profile based on typical consumption patterns
 2. **HomeAssistant API** - (Since 0.5.4) Dynamic forecast based on your actual historical consumption data
+3. **evcc-home** - Dynamic forecast based on the household consumption recorded by evcc
 
 ---
 
@@ -313,6 +314,112 @@ This is more efficient than the REST API for frequent data fetches.
 
 ---
 
+## 3. evcc-Home Forecast
+
+The `evcc-home` method builds the same kind of **dynamic consumption forecast** as the HomeAssistant
+method, but reads the history from [evcc](https://evcc.io/). It uses only the evcc group `home`.
+
+!!! warning "Experimental evcc API"
+    The evcc endpoint `/api/history/energy` is marked as **experimental** by evcc. evcc gives no
+    compatibility guarantee, so a future evcc release may change or remove it.
+
+### How It Works
+
+1. **One request** per refresh: `GET <url>/api/history/energy` with the fixed parameters
+   `group=home`, `aggregate=15m`, `format=json` and `from`/`to` (RFC3339) spanning all needed history periods
+2. **Converts** the energy of each 15-minute slot from kWh to Wh
+3. **Sums the quarter-hours to full hours.** Only hours with all 4 slots count, an incomplete hour is treated as a gap
+4. **Profile building** is identical to the HomeAssistant method: the same hours of the configured
+   `history_days` are averaged with `history_weights`, multiplied by `multiplier` and cached for
+   `cache_ttl_hours`
+
+Because evcc delivers the whole range in one response, there is one HTTP request instead of one
+request per hour and history day.
+
+### Prerequisites
+
+- evcc **0.311.0 or newer**. The endpoint exists since 0.305.0, but the filter `group=` is available
+  from 0.311.0 on. This was derived from the evcc release tags and source code and is
+  **not verified on a running evcc instance**.
+- The evcc database must be enabled and reachable from batcontrol over HTTP.
+- History exists **only from the time evcc started recording** it (earliest evcc 0.305.0). Right after
+  the switch the forecast has fewer history days than configured, see [Troubleshooting](#troubleshooting).
+
+### Configuration
+
+```yaml
+consumption_forecast:
+  type: evcc-home
+  evcc_home:
+    url: http://evcc.local:7070        # evcc base URL, http(s) without /api
+    history_days: "-7;-14;-21"         # Days to look back (negative values)
+    history_weights: "1;1;1"           # Weight for each history period (1-10)
+    cache_ttl_hours: 48.0              # Cache duration in hours
+    multiplier: 1.0                    # Forecast adjustment multiplier
+```
+
+Like for HomeAssistant, the parameters can also be set flat in `consumption_forecast` (without the
+`evcc_home` block), which is what the Home Assistant add-on uses:
+
+```yaml
+consumption_forecast:
+  type: evcc-home
+  url: http://evcc.local:7070
+```
+
+### Configuration Parameters
+
+#### Required Parameters
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `url` | evcc base URL. Must be `http://` or `https://`, without `/api`. A trailing `/` or `/api` is removed. `ws://` and `wss://` (as used for HomeAssistant) are rejected. | `http://evcc.local:7070` |
+
+#### Optional Parameters
+
+These are the same parameters as for the HomeAssistant method and behave identically.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `history_days` | `"-7;-14;-21"` | List of day offsets to fetch historical data. Negative values = days in the past. |
+| `history_weights` | `"1;1;1"` | Weight for each history period (1-10). Must match length of `history_days`. |
+| `cache_ttl_hours` | `48.0` | How long to cache computed statistics (in hours) |
+| `multiplier` | `1.0` | Global multiplier for all forecast values. Use `1.1` for +10%, `0.9` for -10% |
+
+`sensor_unit`, `api_token` and `entity_id` do not exist for `evcc-home`: evcc always delivers kWh,
+which batcontrol converts to Wh, and the endpoint needs no entity.
+
+#### Fixed values
+
+| Value | Setting |
+|-------|---------|
+| Request timeout | 30 seconds |
+| Authentication | none. In the evcc source `/api/history/energy` is not behind the login. A reverse proxy with its own authentication is not supported. |
+| evcc group | `home` only. Other groups (loadpoints, consumers, meters) and combinations are not supported. |
+
+More information: [evcc REST API - Energy history](https://docs.evcc.io/integrations/rest-api/operations/getenergyhistory)
+
+### What the group `home` contains
+
+According to the evcc source code (`core/site.go`) the home consumption is calculated as
+`grid + pv + battery - charge power of all loadpoints`. It therefore **does not contain the
+consumption of loadpoints**, e.g. a wallbox or a heat pump configured as loadpoint. Both are missing
+in the forecast. This was read from the source code and not verified on a running instance.
+
+### Time Zones and Daylight Saving Time
+
+- evcc aggregates in the **local time of the evcc server**. For a Docker container this is often UTC.
+  Batcontrol assumes that the offset between the evcc time zone and the batcontrol time zone is a
+  whole number of hours. Otherwise the hours do not match.
+- In autumn the repeated hour at the end of daylight saving time is merged by evcc into one
+  slot with the energy of two hours. Batcontrol skips these slots, so this hour is a gap in the history.
+- In spring the skipped hour simply has no data, which is also a gap.
+
+Gaps are handled like for HomeAssistant: a history day without data for an hour is left out of the
+weighted average. If no history day has data for an hour, the forecast ends before that hour.
+
+---
+
 ## Testing Your Configuration
 
 ### Test Script
@@ -447,26 +554,58 @@ multiplier: 1000  # Convert kWh to Wh (if sensor reports in kWh)
 
 **Note:** Batcontrol expects all consumption values in Wh (Watt-hours) internally.
 
+### evcc-home Method
+
+Errors are reported as a single log line, not as a stack trace.
+
+**Problem:** "HTTP 404" / endpoint not found
+
+**Solution:** The evcc version is too old or the `url` is wrong. Use evcc 0.311.0 or newer and check that
+`<url>/api/history/energy` is reachable from batcontrol.
+
+**Problem:** "HTTP 400" / "database offline"
+
+**Solution:** evcc runs without its database. Enable the evcc database, history is only recorded with it.
+
+**Problem:** No series with group `home` / empty response
+
+**Solution:**
+- evcc has not recorded any data yet, wait until evcc has collected at least the first hours
+- Check that the evcc version records the group `home` (0.311.0 or newer)
+
+**Problem:** Forecast shorter than expected or not available
+
+**Solution:** The history starts when evcc began recording. Reduce `history_days` (e.g. `"-1;-2;-3"`) until
+enough history exists, or use the CSV method meanwhile.
+
+**Problem:** Timeout or "Connection refused"
+
+**Solution:** The request timeout is 30 seconds. Verify `url`, that evcc is running, and the network and firewall between batcontrol and evcc.
+
+**Problem:** "ws:// is not supported" / invalid URL
+
+**Solution:** `evcc-home` needs an `http://` or `https://` address, for example `http://evcc.local:7070`. This differs from the HomeAssistant method.
+
 ---
 
-## Comparison: CSV vs. HomeAssistant API
+## Comparison: CSV vs. HomeAssistant API vs. evcc-home
 
-| Feature | CSV | HomeAssistant API |
-|---------|-----|-------------------|
-| **Accuracy** | Generic patterns | Based on your actual usage |
-| **Setup Complexity** | Simple | Moderate (requires HA setup) |
-| **Maintenance** | Manual updates needed | Automatic learning |
-| **Dependencies** | None | HomeAssistant + Long-term stats |
-| **Flexibility** | Low (static profile) | High (adapts to changes) |
-| **Performance** | Fast (local file) | Cached (WebSocket API) |
-| **Best For** | Testing, consistent usage | Real-world scenarios |
+| Feature | CSV | HomeAssistant API | evcc-home |
+|---------|-----|-------------------|-----------|
+| **Accuracy** | Generic patterns | Based on your actual usage | Based on your actual usage (without loadpoints) |
+| **Setup Complexity** | Simple | Moderate (requires HA setup) | Simple (evcc with database, `url`) |
+| **Maintenance** | Manual updates needed | Automatic learning | Automatic learning |
+| **Dependencies** | None | HomeAssistant + Long-term stats | evcc 0.311.0+ (experimental API) |
+| **Flexibility** | Low (static profile) | High (adapts to changes) | High (adapts to changes) |
+| **Performance** | Fast (local file) | Cached (WebSocket API) | Cached (one HTTP request) |
+| **Best For** | Testing, consistent usage | Real-world scenarios | Setups with evcc and no HomeAssistant sensor |
 
 ---
 
 ## Recommendations
 
 - **Start with CSV** for initial testing and setup
-- **Switch to HomeAssistant API** once you have historical data for accurate forecasting
+- **Switch to HomeAssistant API or evcc-home** once you have historical data for accurate forecasting
 - Use **recent history weighting** (e.g., `[3, 2, 1]`) for more responsive forecasts
 - Set `cache_ttl_hours` to `24-48` hours for good balance between accuracy and API load
 - Use **multiplier** for temporary adjustments rather than changing configuration frequently
@@ -564,6 +703,19 @@ consumption_forecast:
     multiplier: 1.0
 ```
 
+### Example 5: evcc-home
+
+```yaml
+consumption_forecast:
+  type: evcc-home
+  evcc_home:
+    url: http://evcc.local:7070
+    history_days: "-7;-14;-21"
+    history_weights: "3;2;1"  # Recent week has most influence
+    cache_ttl_hours: 48.0
+    multiplier: 1.0
+```
+
 ---
 
 ## Related Documentation
@@ -572,3 +724,4 @@ consumption_forecast:
 - [How Batcontrol Works](../getting-started/how-batcontrol-works.md)
 - [MQTT API](../integrations/mqtt-api.md)
 - [Solar Forecast](solar-forecast.md)
+- [evcc Integration](../integrations/evcc-connection.md)

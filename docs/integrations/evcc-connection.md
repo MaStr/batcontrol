@@ -2,6 +2,10 @@
 
 Batcontrol can integrate with [evcc (Electric Vehicle Charging Controller)](https://evcc.io/) to intelligently manage battery usage during electric vehicle charging. This integration helps prevent unnecessary battery discharge while your EV is charging, optimizing your overall energy management.
 
+!!! tip "evcc as consumption source"
+    evcc can also provide the historical household consumption for the consumption forecast
+    (`type: evcc-home`). See [Consumption Forecast](../configuration/consumption-forecast.md).
+
 ## How It Works
 
 When evcc is charging your electric vehicle, batcontrol can automatically:
