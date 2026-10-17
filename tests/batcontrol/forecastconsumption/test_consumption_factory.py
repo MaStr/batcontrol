@@ -7,6 +7,9 @@ from src.batcontrol.forecastconsumption.consumption import (
     Consumption,
     _create_homeassistant_forecast
 )
+from src.batcontrol.forecastconsumption.forecast_evcc_home import (
+    ForecastConsumptionEvccHome
+)
 from src.batcontrol.forecastconsumption.forecast_homeassistant import (
     ForecastConsumptionHomeAssistant
 )
@@ -300,3 +303,116 @@ class TestConfigKeyNames:
 
         with pytest.raises(ValueError, match='api_token'):
             _create_homeassistant_forecast(timezone, config)
+
+
+class TestEvccHomeFactory:
+    """Test cases for the evcc-home consumption forecast type"""
+
+    def test_create_with_block(self, timezone):
+        config = {
+            'type': 'evcc-home',
+            'evcc_home': {
+                'url': 'http://evcc.local:7070',
+                'history_days': '-1;-2',
+                'history_weights': '2;1',
+                'cache_ttl_hours': 12.0,
+                'multiplier': 1.2,
+            }
+        }
+
+        forecaster = Consumption.create_consumption(
+            timezone, config, target_resolution=15)
+
+        assert isinstance(forecaster, ForecastConsumptionEvccHome)
+        assert forecaster.base_url == 'http://evcc.local:7070'
+        assert forecaster.history_days == [-1, -2]
+        assert forecaster.history_weights == [2, 1]
+        assert forecaster.cache_ttl_hours == 12.0
+        assert forecaster.multiplier == 1.2
+        assert forecaster.target_resolution == 15
+
+    def test_create_flat_with_defaults(self, timezone):
+        config = {'type': 'evcc-home', 'url': 'http://evcc.local:7070/'}
+
+        forecaster = Consumption.create_consumption(timezone, config)
+
+        assert isinstance(forecaster, ForecastConsumptionEvccHome)
+        assert forecaster.base_url == 'http://evcc.local:7070'
+        assert forecaster.history_days == [-7, -14, -21]
+        assert forecaster.history_weights == [1, 1, 1]
+        assert forecaster.cache_ttl_hours == 48.0
+        assert forecaster.multiplier == 1.0
+        assert forecaster.target_resolution == 60
+
+    def test_type_is_case_insensitive(self, timezone):
+        config = {'type': 'EVCC-Home', 'url': 'http://evcc:7070'}
+        assert isinstance(
+            Consumption.create_consumption(timezone, config),
+            ForecastConsumptionEvccHome)
+
+    def test_lists_are_accepted(self, timezone):
+        config = {
+            'type': 'evcc-home',
+            'evcc_home': {'url': 'http://evcc:7070',
+                          'history_days': [-3, -6],
+                          'history_weights': [3, 1]}
+        }
+        forecaster = Consumption.create_consumption(timezone, config)
+        assert forecaster.history_days == [-3, -6]
+        assert forecaster.history_weights == [3, 1]
+
+    @pytest.mark.parametrize('url', [None, ''])
+    def test_missing_or_empty_url(self, timezone, url):
+        for config in (
+                {'type': 'evcc-home', 'evcc_home': {'url': url}},
+                {'type': 'evcc-home', 'url': url},
+                {'type': 'evcc-home'}):
+            with pytest.raises(ValueError, match="evcc-home.*'url'"):
+                Consumption.create_consumption(timezone, config)
+
+    def test_homeassistant_fields_are_ignored(self, timezone):
+        config = {
+            'type': 'evcc-home',
+            'api_token': 'token',
+            'entity_id': 'sensor.test',
+            'sensor_unit': 'kWh',
+        }
+        with pytest.raises(ValueError, match="'url'"):
+            Consumption.create_consumption(timezone, config)
+
+        config['evcc_home'] = {'url': 'http://evcc:7070'}
+        forecaster = Consumption.create_consumption(timezone, config)
+        assert not hasattr(forecaster, 'entity_id')
+        assert not hasattr(forecaster, 'api_token')
+
+    def test_homeassistant_websocket_url_is_rejected(self, timezone):
+        config = {'type': 'evcc-home', 'url': 'ws://homeassistant:8123'}
+        with pytest.raises(ValueError, match='http'):
+            Consumption.create_consumption(timezone, config)
+
+    def test_unknown_type_names_evcc_home(self, timezone):
+        with pytest.raises(ValueError, match='evcc-home'):
+            Consumption.create_consumption(timezone, {'type': 'nope'})
+
+    @patch.object(ForecastConsumptionHomeAssistant, '_check_sensor_unit',
+                  return_value=1.0)
+    def test_homeassistant_config_is_unchanged(self, mock_check, timezone):
+        """The shared history parsing behaves as before for HomeAssistant"""
+        config = {
+            'type': 'homeassistant-api',
+            'url': 'ws://localhost:8123',
+            'api_token': 'token',
+            'entity_id': 'sensor.test',
+            'history_days': '-1; -2;-3',
+            'history_weights': '3;2;1',
+            'cache_ttl_hours': 6.0,
+            'multiplier': 0.9,
+        }
+
+        forecaster = Consumption.create_consumption(timezone, config)
+
+        assert isinstance(forecaster, ForecastConsumptionHomeAssistant)
+        assert forecaster.history_days == [-1, -2, -3]
+        assert forecaster.history_weights == [3, 2, 1]
+        assert forecaster.cache_ttl_hours == 6.0
+        assert forecaster.multiplier == 0.9
