@@ -92,6 +92,9 @@ def main() -> int:
         logging.getLogger(
             "batcontrol.forecastconsumption.forecast_homeassistant.communication"
         ).setLevel(logging.INFO)
+        logging.getLogger(
+            "batcontrol.forecastconsumption.history_baseclass.details"
+        ).setLevel(logging.INFO)
 
     bc = Batcontrol(config)
 

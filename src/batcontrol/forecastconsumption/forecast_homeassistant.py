@@ -5,23 +5,22 @@ It fetches historical consumption data for configured time periods and calculate
 statistics for each hour to predict future consumption.
 """
 
+import contextlib
 import datetime
 import json
 import logging
-import threading
 from typing import Dict, List, Optional, Tuple
 
-import numpy as np
-from cachetools import TTLCache
 from websockets.asyncio.client import connect
 
 from ..async_utils import managed_event_loop, run_coroutine
-from .baseclass import ForecastConsumptionBaseclass
+from .history_baseclass import (  # pylint: disable=unused-import
+    MAX_FORECAST_HOURS,
+    ForecastConsumptionHistoryBaseclass,
+)
 
 logger = logging.getLogger(__name__)
 logger.info('Loading module')
-
-MAX_FORECAST_HOURS = 48
 
 
 logger_ha_details = logging.getLogger(
@@ -31,7 +30,7 @@ logger_ha_communication = logging.getLogger(
 
 
 # pylint: disable=too-many-instance-attributes
-class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
+class ForecastConsumptionHomeAssistant(ForecastConsumptionHistoryBaseclass):
     """Forecasts consumption based on historical data from HomeAssistant API
 
     This class fetches historical consumption data from HomeAssistant for specified
@@ -81,32 +80,22 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
                         Default: auto (auto-detect)
             target_resolution: Target resolution in minutes (15 or 60)
         """
-        # Initialize baseclass with 60-minute native resolution
         super().__init__(
             timezone,
-            target_resolution=target_resolution,
-            native_resolution=60)
+            history_days=history_days,
+            history_weights=history_weights,
+            cache_ttl_hours=cache_ttl_hours,
+            multiplier=multiplier,
+            target_resolution=target_resolution)
 
         self.base_url = base_url.rstrip('/')
         self.api_token = api_token
         self.entity_id = entity_id
 
-        # Default to last 7, 14, 21 days with equal weights
-        self.history_days = history_days if history_days else [-7, -14, -21]
-        self.history_weights = history_weights if history_weights else [
-            1, 1, 1]
-        self.multiplier = multiplier
-
-        # Validate configuration
-        if len(self.history_days) != len(self.history_weights):
-            raise ValueError(
-                f"Length of history_days ({len(self.history_days)}) must match "
-                f"history_weights ({len(self.history_weights)})"
-            )
-
-        for weight in self.history_weights:
-            if not 1 <= weight <= 10:
-                raise ValueError(f"History weights must be between 1 and 10, got {weight}")
+        # Connection state, only set while _history_session is open
+        self._ws_loop = None
+        self._ws_connection = None
+        self._ws_message_id = 1
 
         # Validate sensor_unit parameter
         if sensor_unit is not None:
@@ -122,16 +111,6 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
                 f"Invalid sensor_unit '{sensor_unit}'. "
                 f"Allowed values: 'auto', 'Wh', 'kWh'"
             )
-
-        # Initialize cache with TTL
-        # Cache key format: "weekday_hour" (e.g., "0_14" for Monday 14:00)
-        # Cache stores consumption value in Wh for each hour slot
-        # maxsize: 168 = 7 days * 24 hours (one week of hourly data)
-        self.cache_ttl_hours = cache_ttl_hours
-        cache_ttl_seconds = int(cache_ttl_hours * 3600)
-        self.consumption_cache: TTLCache = TTLCache(
-            maxsize=168, ttl=cache_ttl_seconds)
-        self._cache_lock = threading.Lock()
 
         # Query sensor to determine unit and set conversion factor (if not explicitly configured)
         if self.sensor_unit and self.sensor_unit != 'auto':
@@ -244,7 +223,8 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
                 logger.debug("Unit is Wh, no conversion needed")
                 return 1.0
             if unit == "kWh":
-                logger.info("Unit is kWh, will multiply values by 1000 to convert to Wh")
+                logger.info(
+                    "Unit is kWh, will multiply values by 1000 to convert to Wh")
                 return 1000.0
 
             raise ValueError(
@@ -253,18 +233,6 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
 
         finally:
             await self._websocket_disconnect(websocket)
-
-    def _get_cache_key(self, weekday: int, hour: int) -> str:
-        """Generate cache key from weekday and hour
-
-        Args:
-            weekday: Day of week (0=Monday, 6=Sunday)
-            hour: Hour of day (0-23)
-
-        Returns:
-            Cache key in format "weekday_hour" (e.g., "0_14" for Monday 14:00)
-        """
-        return f"{weekday}_{hour}"
 
     async def _websocket_connect(self):
         """Connect to HomeAssistant WebSocket API and authenticate
@@ -567,304 +535,42 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
             self._fetch_hourly_statistics_async(start_time, end_time)
         )
 
-    def _update_cache_with_statistics(
-        self,
-        now: datetime.datetime,
-        history_periods: Dict[int, float]
-    ) -> int:
-        """Calculate weighted statistics and update cache
+    @contextlib.contextmanager
+    def _history_session(self, earliest_start, latest_end):
+        """Open one WebSocket connection for all slot requests of a refresh
 
-        Args:
-            now: Current timestamp (full hour) used as reference for hour offsets
-            history_periods: Dict mapping hour offset to consumption value in Wh
-
-        Returns:
-            Number of cache entries updated
+        The loop is reused for every request on that connection and closed
+        when the block exits.
         """
-        # Calculate weighted average for each hour and store in cache
-        with self._cache_lock:
-            logger.debug(
-                "Updating cache with calculated statistics for %d periods",
-                len(history_periods)
-            )
-            updated_count = 0
-            for hour_offset, consumption in history_periods.items():
-                future_time = now + datetime.timedelta(hours=hour_offset)
-                weekday = future_time.weekday()
-                hour = future_time.hour
-                cache_key = self._get_cache_key(weekday, hour)
-
-                # Apply multiplier
-                adjusted_consumption = consumption * self.multiplier
-
-                # Update cache
-                self.consumption_cache[cache_key] = adjusted_consumption
-                updated_count += 1
-
-                logger.debug(
-                    "Updated cache: key=%s (weekday=%d, hour=%d), "
-                    "consumption=%.2f Wh (adjusted: %.2f Wh)",
-                    cache_key, weekday, hour, consumption, adjusted_consumption
-                )
-
-        logger.info("Updated %d cache entries", updated_count)
-        return updated_count
-
-    def _get_reference_slots(self) -> Dict[int, int]:
-        """Returns a dict, which is a mapping against
-                  self.history_days and self.history_weights
-        """
-        reference_slots = {}
-        for idx, day_offset in enumerate(self.history_days):
-            reference_slots[day_offset] = self.history_weights[idx]
-        return reference_slots
-
-    # pylint: disable=too-many-locals,too-many-branches
-    def _collect_history_periods(
-        self,
-        loop,
-        missing_periods,
-        now: datetime.datetime,
-        reference_slots: Dict[int, int],
-        history_periods: Dict[int, float]
-    ) -> None:
-        """Fetch history data for all missing hour slots over one connection.
-
-        Opens a single WebSocket connection, queries every missing hour slot
-        for every configured history day, and writes the weighted result into
-        history_periods.
-
-        Args:
-            loop: Event loop used to drive the coroutines. Owned by the caller.
-            missing_periods: Hour offsets that are not cached yet.
-            now: Reference timestamp, aligned to a full hour.
-            reference_slots: Mapping of history day offset to weight.
-            history_periods: Output dict, filled with hour offset to Wh.
-        """
-        websocket = None
-
-        try:
-            websocket, message_id = loop.run_until_complete(
-                self._websocket_connect())
-            logger_ha_communication.debug(
-                "WebSocket connected for bulk data fetch")
-
-            for fetch_hour in missing_periods:
-                # start time is now + fetch_hour
-                basis_start_time = now + datetime.timedelta(hours=fetch_hour)
-                basis_end_time = basis_start_time + datetime.timedelta(hours=1)
-
-                # Now fetch each history_days as offset on basis_start +
-                # endtime
-                logger_ha_details.debug(
-                    "Fetching history data for hour offset %d (basis time %s)",
-                    fetch_hour,
-                    basis_start_time)
-                slot_results = {}
-                for history_day in reference_slots:
-                    start_time = basis_start_time + datetime.timedelta(
-                        days=history_day
-                    )
-                    end_time = basis_end_time + datetime.timedelta(
-                        days=history_day
-                    )
-
-                    try:
-                        hourly_data = loop.run_until_complete(
-                            self._fetch_hourly_statistics_async(
-                                start_time, end_time, websocket, message_id
-                            )
-                        )
-                        message_id += 1  # Increment for next request
-
-                        if hourly_data > -1:
-                            logger_ha_details.debug(
-                                "Fetched history data for %d days offset: %s",
-                                history_day, hourly_data)
-                            slot_results[history_day] = hourly_data
-                        else:
-                            logger_ha_details.warning(
-                                "No data fetched for hour offset %d with day offset %d",
-                                fetch_hour,
-                                history_day)
-                    except (RuntimeError, ValueError) as e:
-                        logger.error(
-                            "Failed to fetch statistics for %d days offset: %s", history_day, e)
-                        # Continue with other periods even if one fails
-                        continue
-
-                # Now calculate weighted statistics for this hour slot
-                if slot_results:
-                    weight_sum = 0
-                    summary_results = 0
-                    for history_day in self.history_days:
-                        if history_day in slot_results:
-                            weight_sum += reference_slots[history_day]
-                            summary_results += (
-                                slot_results[history_day] *
-                                reference_slots[history_day]
-                            )
-
-                    if weight_sum > 0:
-                        # Store with actual hour offset as key
-                        history_periods[fetch_hour] = summary_results / weight_sum
-
-                else:
-                    # No data fetched for this hour
-                    # Stop processing further
-                    logger.warning(
-                        "No statistics data fetched for hour offset %d, ending collect",
-                        fetch_hour)
-                    break
-
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.error("Error during bulk data fetch: %s", e)
-        finally:
-            # Disconnect websocket
-            if websocket is not None:
-                loop.run_until_complete(self._websocket_disconnect(websocket))
-
-    def refresh_data_with_limit(self, hours: int) -> None:
-        """Refresh historical data with specified hour limit
-
-        Args:
-            hours: Number of hours to refresh (typically up to 48)
-        """
-        logger.info("Refreshing consumption forecast data from HomeAssistant")
-
-        now = datetime.datetime.now(tz=self.timezone)
-
-        # always have the next 48 hours in the forecast
-        # Create a list of cache_keys to ensure they are present
-        cache_keys = [
-            self._get_cache_key(
-                (now + datetime.timedelta(hours=h)).weekday(),
-                (now + datetime.timedelta(hours=h)).hour
-            )
-            for h in range(hours)
-        ]
-
-        # Create a list of missing history data periods
-        missing_periods = []
-        for h in range(hours):
-            if cache_keys[h] not in self.consumption_cache:
-                missing_periods.append(h)
-
-        if missing_periods:
-            logger.info(
-                "Collecting data for missing hours: %s",
-                missing_periods)
-        else:
-            logger.debug(
-                "All forecast hours present in cache, no refresh needed")
-            return
-
-        # now as full hour
-        now = now.replace(minute=0, second=0, microsecond=0)
-
-        reference_slots = self._get_reference_slots()
-        history_periods = {}  # Dict mapping hour offset to consumption value
-
-        # Connect to WebSocket once for all requests. The loop is reused for
-        # every request on that connection and closed when the block exits.
         with managed_event_loop() as loop:
-            self._collect_history_periods(
-                loop, missing_periods, now, reference_slots, history_periods
+            websocket = None
+            try:
+                websocket, message_id = loop.run_until_complete(
+                    self._websocket_connect())
+                logger_ha_communication.debug(
+                    "WebSocket connected for bulk data fetch")
+                self._ws_loop = loop
+                self._ws_connection = websocket
+                self._ws_message_id = message_id
+                yield
+            finally:
+                self._ws_loop = None
+                self._ws_connection = None
+                if websocket is not None:
+                    loop.run_until_complete(
+                        self._websocket_disconnect(websocket))
+
+    def _fetch_slot_value(
+        self,
+        start_time: datetime.datetime,
+        end_time: datetime.datetime
+    ) -> float:
+        """Fetch one hour over the connection opened by _history_session"""
+        hourly_data = self._ws_loop.run_until_complete(
+            self._fetch_hourly_statistics_async(
+                start_time, end_time,
+                self._ws_connection, self._ws_message_id
             )
-
-        if not history_periods:
-            logger.error(
-                "No statistics data could be fetched, forecast unavailable")
-            return
-
-        # Update cache using dict with hour offsets as keys
-        updated_count = self._update_cache_with_statistics(now, history_periods)
-
-        logger.info(
-            "Successfully updated consumption forecast cache with %d hour slots",
-            updated_count)
-
-    # pylint: disable=too-many-locals,too-many-branches,too-many-statements
-
-    def refresh_data(self) -> None:
-        """Refresh historical data and update cache
-
-        Fetches hourly statistics from HomeAssistant for configured time periods,
-        calculates weighted averages, and updates the cache.
-        """
-        self.refresh_data_with_limit(MAX_FORECAST_HOURS)
-
-    def _get_forecast_native(self, hours: int) -> Dict[int, float]:
-        """Get hour-aligned forecast at native (60-minute) resolution.
-
-        Args:
-            hours: Number of hours to forecast
-
-        Returns:
-            Dict mapping hour index to energy value (Wh per hour)
-            Index 0 = start of current hour
-        """
-        if hours > MAX_FORECAST_HOURS:
-            logger.warning(
-                "Requested %d forecast hours, limiting to %d hours",
-                hours, MAX_FORECAST_HOURS)
-            hours = MAX_FORECAST_HOURS
-
-        # Check if cache has all required keys for the forecast hours
-        # Calculate now inside the lock to avoid race conditions around hour
-        # boundaries
-        missing_keys = False
-        with self._cache_lock:
-            now = datetime.datetime.now(tz=self.timezone)
-            # Align to start of current hour
-            now_aligned = now.replace(minute=0, second=0, microsecond=0)
-            for h in range(hours):
-                future_time = now_aligned + datetime.timedelta(hours=h)
-                cache_key = self._get_cache_key(
-                    future_time.weekday(), future_time.hour)
-                if cache_key not in self.consumption_cache:
-                    missing_keys = True
-                    break
-
-        if missing_keys:
-            logger.info(
-                "Cache missing required keys, refreshing consumption forecast data")
-            self.refresh_data_with_limit(hours)
-
-        # Generate hour-aligned forecast for requested hours
-        prediction = {}
-
-        for h in range(hours):
-            future_time = now_aligned + datetime.timedelta(hours=h)
-            weekday = future_time.weekday()
-            hour = future_time.hour
-            cache_key = self._get_cache_key(weekday, hour)
-
-            # Get consumption from cache
-            with self._cache_lock:
-                consumption = self.consumption_cache.get(cache_key)
-
-            if consumption is not None:
-                prediction[h] = consumption
-            else:
-                logger_ha_details.warning(
-                    "No cached data for %s (weekday=%d, hour=%d)",
-                    cache_key, weekday, hour
-                )
-                # Break here.
-                # Cache miss - we will handle missing keys later
-                break
-
-        if prediction:
-            logger.debug(
-                "Generated %d hour forecast (hour-aligned): avg=%.1f Wh, min=%.1f Wh, max=%.1f Wh",
-                hours,
-                np.mean(list(prediction.values())),
-                min(prediction.values()),
-                max(prediction.values())
-            )
-        else:
-            logger.error("Generated empty forecast")
-            raise RuntimeError("No consumption forecast data available")
-
-        return prediction
+        )
+        self._ws_message_id += 1  # Increment for next request
+        return hourly_data
