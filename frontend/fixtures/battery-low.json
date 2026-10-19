@@ -13,7 +13,8 @@
       "soc": 3.0,
       "stored_energy_capacity": 300.0,
       "stored_usable_energy_capacity": 0.0,
-      "reserved_energy_capacity": 2500.0
+      "reserved_energy_capacity": 2500.0,
+      "reserved_energy_capacity_effective": 2500.0
     }
   }
 }

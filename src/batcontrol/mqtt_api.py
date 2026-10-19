@@ -20,9 +20,12 @@ The following topics are published:
 - /charge_rate: charge rate in W
 - /limit_battery_charge_rate: dynamic battery charge rate limit in W
 - /max_energy_capacity: maximum capacity of battery in Wh
+- /gross_energy_capacity: capacity of battery in Wh without the max SOC reduction
 - /stored_energy_capacity: energy stored in battery in Wh
 - /stored_usable_energy_capacity: energy stored in battery in Wh and usable (min SOC considered)
 - /reserved_energy_capacity: estimated energy reserved for discharge in Wh
+- /reserved_energy_capacity_effective: reserved energy in Wh capped to what the
+  battery can hold back (between min SOC and always_allow_discharge_limit)
 - /SOC: state of charge in %
 - /min_price_difference : minimum price difference in EUR
 - /discharge_blocked        : bool  # Discharge is blocked by other sources
@@ -423,6 +426,17 @@ class MqttApi:
                 f'{reserved_energy:.1f}'
             )
 
+    def publish_reserved_energy_capacity_effective(
+            self, reserved_energy: float) -> None:
+        """ Publish the reserved energy capped to the battery in Wh to MQTT
+            /reserved_energy_capacity_effective
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/reserved_energy_capacity_effective',
+                f'{reserved_energy:.1f}'
+            )
+
     def publish_always_allow_discharge_limit_capacity(
             self, discharge_limit: float) -> None:
         """ Publish the always discharge limit in Wh to MQTT
@@ -538,6 +552,16 @@ class MqttApi:
             self.client.publish(
                 self.base_topic + '/max_energy_capacity',
                 f'{max_capacity:.1f}'
+            )
+
+    def publish_gross_energy_capacity(self, gross_capacity: float) -> None:
+        """ Publish the capacity without the max SOC reduction to MQTT
+            /gross_energy_capacity
+        """
+        if self.client.is_connected():
+            self.client.publish(
+                self.base_topic + '/gross_energy_capacity',
+                f'{gross_capacity:.1f}'
             )
 
     def publish_evaluation_intervall(self, intervall: int) -> None:
@@ -996,6 +1020,25 @@ class MqttApi:
             "Wh",
             self.base_topic +
             "/reserved_energy_capacity")
+
+        self.publish_mqtt_discovery_message(
+            "Reserved Energy Capacity Effective",
+            "batcontrol_reserved_energy_capacity_effective",
+            "sensor",
+            "energy",
+            "Wh",
+            self.base_topic +
+            "/reserved_energy_capacity_effective")
+
+        self.publish_mqtt_discovery_message(
+            "Gross Energy Capacity",
+            "batcontrol_gross_energy_capacity",
+            "sensor",
+            "energy",
+            "Wh",
+            self.base_topic +
+            "/gross_energy_capacity",
+            entity_category="diagnostic")
 
         self.publish_mqtt_discovery_message(
             "Stored Usable Energy Capacity",

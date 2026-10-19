@@ -78,9 +78,5 @@ class Dummy(InverterBaseclass):
         # Dummy inverter doesn't support MQTT for simplicity
         logger.debug('Dummy inverter: MQTT activation ignored (not supported)')
 
-    def refresh_api_values(self):
-        # No-op for dummy inverter - no values to refresh
-        logger.debug('Dummy inverter: refresh_api_values called (no action needed)')
-
     def shutdown(self):
         logger.info('Dummy inverter: Shutdown called (no action needed)')

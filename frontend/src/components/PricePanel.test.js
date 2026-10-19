@@ -16,6 +16,25 @@ function slots({ intervalMinutes = 15, hours = 24 } = {}) {
   }))
 }
 
+/** MIN/MAX/SPREAD the way api.js maps them from /price/status. */
+function stats(list) {
+  let min = list[0]
+  let max = list[0]
+  for (const s of list) {
+    if (s.price < min.price) min = s
+    if (s.price > max.price) max = s
+  }
+  return { min, max, spread: max.price - min.price }
+}
+
+function props(options = {}, extra = {}) {
+  const list = slots(options)
+  return {
+    p: { current: 0.3, intervalMinutes: options.intervalMinutes ?? 15, minDynamicDiff: 0.05,
+         slots: list, stats: stats(list), ...extra },
+  }
+}
+
 function spark(wrapper) {
   return wrapper.find('.spark').text()
 }
@@ -27,9 +46,7 @@ describe('PricePanel sparkline', () => {
     // means sit strictly inside those extremes, so the lowest and highest
     // glyphs were never reached and the curve understated the spread
     // printed right beside it.
-    const wrapper = mount(PricePanel, {
-      props: { p: { current: 0.3, intervalMinutes: 15, minDynamicDiff: 0.05, slots: slots() } },
-    })
+    const wrapper = mount(PricePanel, { props: props() })
     const drawn = spark(wrapper)
     expect(drawn).toContain(BARS[0])
     expect(drawn).toContain(BARS[BARS.length - 1])
@@ -37,24 +54,33 @@ describe('PricePanel sparkline', () => {
 
   it('draws one bar per hour at either resolution', () => {
     for (const intervalMinutes of [15, 60]) {
-      const wrapper = mount(PricePanel, {
-        props: { p: { current: 0.3, intervalMinutes, minDynamicDiff: 0.05,
-                      slots: slots({ intervalMinutes }) } },
-      })
+      const wrapper = mount(PricePanel, { props: props({ intervalMinutes }) })
       expect(spark(wrapper)).toHaveLength(24)
     }
   })
 
-  it('reports min and max from the slots, not from the hourly means', () => {
-    const wrapper = mount(PricePanel, {
-      props: { p: { current: 0.3, intervalMinutes: 15, minDynamicDiff: 0.05, slots: slots() } },
-    })
+  it('reports min and max per slot, not from the hourly means', () => {
+    const wrapper = mount(PricePanel, { props: props() })
     expect(wrapper.text()).toContain('0.050')
+  })
+
+  it('prints the statistics the API computed', () => {
+    const wrapper = mount(PricePanel, {
+      props: props({}, { stats: {
+        min: { start: Date.UTC(2026, 0, 1), price: 0.123 },
+        max: { start: Date.UTC(2026, 0, 1), price: 0.456 },
+        spread: 0.333,
+      } }),
+    })
+    expect(wrapper.text()).toContain('0.123')
+    expect(wrapper.text()).toContain('0.456')
+    expect(wrapper.text()).toContain('0.333')
   })
 
   it('says so instead of drawing nothing when there is no forecast', () => {
     const wrapper = mount(PricePanel, {
-      props: { p: { current: null, intervalMinutes: 60, minDynamicDiff: null, slots: [] } },
+      props: { p: { current: null, intervalMinutes: 60, minDynamicDiff: null, slots: [],
+                    stats: null } },
     })
     expect(wrapper.text()).toContain('no price forecast yet')
   })

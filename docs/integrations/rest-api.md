@@ -65,7 +65,7 @@ An error keeps the shape and carries a code instead of data:
 |---|---|---|
 | `no_data_yet` | 503 | batcontrol has not completed its first control cycle |
 | `forecast_expired` | 503 | every slot of the last forecast has passed - control cycles keep failing (e.g. the tariff provider is down) |
-| `not_found` | 404 | unknown forecast series, or an empty decision journal |
+| `not_found` | 404 | unknown forecast series or inverter id, or an empty decision journal |
 | `unauthorized` | 401 | `api.auth_token` is set and the bearer token was missing or wrong |
 
 ## Endpoints
@@ -75,16 +75,60 @@ An error keeps the shape and carries a code instead of data:
 | `GET /api/v1/health` | liveness, age of the last cycle, whether data exists yet |
 | `GET /api/v1/version` | version, build, runtime, forecast interval, timezone |
 | `GET /api/v1/status` | mode, control source, charge rate, overrides, next evaluation |
-| `GET /api/v1/battery` | SoC, capacities, reserved energy, SoC limits |
+| `GET /api/v1/battery` | SoC, capacities, reserved energy (raw and capped to the battery), SoC limits |
 | `GET /api/v1/current` | current price together with the SoC |
+| `GET /api/v1/price/status` | price statistics for the next 24 hours: current price and its rank, cheapest and most expensive slot, average, spread |
 | `GET /api/v1/forecast` | all four forecast series on one slot grid |
 | `GET /api/v1/forecast/{series}` | `price`, `consumption`, `production` or `net_consumption` |
+| `GET /api/v1/solar` | solar surplus indicators derived from the forecast (see [forecast metrics](forecast-metrics.md)) |
 | `GET /api/v1/decision` | the latest decision trace and its plain-language explanation |
 | `GET /api/v1/decision/history` | recent decisions from the in-memory journal |
-| `GET /api/v1/config` | the runtime parameters behind the decisions |
+| `GET /api/v1/peak-shaving` | what [peak shaving](../features/peak-shaving.md) did in the last cycle: active or suspended by evcc, resulting PV charge limit, outcome of its rules |
+| `GET /api/v1/inverters` | the inverters by id |
+| `GET /api/v1/inverter/{inverter_id}` | the values of one inverter, as read in the last control cycle |
+| `GET /api/v1/config` | the runtime parameters behind the decisions, and which of them are overridden at runtime |
 
 Forecast endpoints accept `limit` and `offset` and report `total_count`, `has_more` and
 `next_offset`, so a long horizon can be paged.
+
+### Price status
+
+`/price/status` covers the **next 24 hours from the current slot**, independent of how far the
+optimizer looks ahead. Every value is per slot at the configured resolution (`interval_minutes`):
+`min` is the cheapest slot, so there is no separate "cheapest window". `rank` is the position of
+the current price in the window, 1 being the cheapest; equal prices share a rank. When the
+tariff provider's prices end before the 24 hours do, `complete` is `false` and `slot_count` says
+how many slots the statistics cover.
+
+### Runtime overrides in `/config`
+
+The fields of `/config` always show the value **in effect**. Several of them can change at
+runtime - via MQTT, through evcc, by the grid charge lock (which sets
+`max_charging_from_grid_limit` to 0) or by the control loop itself (it lowers
+`max_charging_from_grid_limit` below `always_allow_discharge_limit`). `overrides` lists every
+parameter whose effective value differs from the configuration file:
+
+```json
+"overrides": {
+  "peak_shaving.enabled": { "configured": true, "effective": false }
+}
+```
+
+It is empty when nothing is overridden. A temporary suspension of peak shaving by evcc is not a
+parameter change and shows in `/peak-shaving` (`suspended_by`) instead.
+
+### Inverters
+
+With several inverters every other endpoint reports them as **one** battery. `/inverters`
+lists their ids; `/inverter/{id}` returns the values of a single one - the same values the MQTT
+API publishes under `inverters/<id>/`. Each inverter reads them once per control cycle and keeps
+them, so a request never queries the inverter. Backend specific values (e.g. `em_mode` and
+`em_power` of a Fronius GEN24) are in `extra`.
+
+### MQTT and REST
+
+Every value batcontrol publishes on MQTT is also available here. The mapping is listed in the
+[dashboard specification](../development/dashboard-spec.md#mqtt-and-rest).
 
 With `docs_enabled: true` a running instance serves its own interactive documentation at `/docs`
 (Swagger UI) and the raw schema at `/openapi.json`. Both are **off by default**: an installation
@@ -99,6 +143,9 @@ UI that works offline beats two that need the network.
 # What is it doing, and why?
 curl -s localhost:8080/api/v1/status | jq '.data.mode_label'
 curl -s localhost:8080/api/v1/decision | jq -r '.data.status_text'
+
+# Cheapest slot of the next 24 hours
+curl -s localhost:8080/api/v1/price/status | jq '.data.min'
 
 # The next six price slots
 curl -s 'localhost:8080/api/v1/forecast/price?limit=6' \

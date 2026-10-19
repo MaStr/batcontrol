@@ -9,7 +9,9 @@
       "free_capacity": 0.0,
       "soc_limits": {
         "max_soc": 100.0
-      }
+      },
+      "gross_energy_capacity": 10000.0,
+      "always_allow_discharge_limit_capacity": 9000.0
     }
   }
 }

@@ -168,8 +168,8 @@ class TestProductionOffset:
 
         batcontrol.run()
 
-        assert batcontrol.last_production[1] == pytest.approx(1000.0)
-        assert batcontrol.last_production[2] == pytest.approx(1500.0)
+        assert batcontrol.forecast_snapshot.production[1] == pytest.approx(1000.0)
+        assert batcontrol.forecast_snapshot.production[2] == pytest.approx(1500.0)
 
     def test_production_offset_api_set_valid(self, batcontrol_with_patched_factories):
         """Test setting production offset via API with a valid mid-range value"""

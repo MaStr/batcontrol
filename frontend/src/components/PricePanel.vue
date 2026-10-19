@@ -9,18 +9,13 @@ const BARS = '▁▂▃▄▅▆▇█'
 const HOURS = 24
 
 const stats = computed(() => {
-  // Only the next 24 h: MIN/MAX/SPREAD are labelled "24h" and the sparkline
-  // has 24 characters. The forecast horizon itself can be longer.
+  // MIN/MAX/SPREAD over the next 24 h come from the API (/price/status). The
+  // sparkline is presentation and stays here: 24 characters for the next
+  // 24 h, the forecast horizon itself can be longer.
   const perHour = Math.max(1, Math.round(60 / (props.p.intervalMinutes || 60)))
   const slots = (props.p.slots || []).slice(0, HOURS * perHour)
-  if (!slots.length) return null
-
-  let min = slots[0]
-  let max = slots[0]
-  for (const s of slots) {
-    if (s.price < min.price) min = s
-    if (s.price > max.price) max = s
-  }
+  const status = props.p.stats
+  if (!slots.length || !status) return null
 
   // Hourly means, so the sparkline reads the same at 15- and 60-minute
   // resolution instead of being four times as wide in one of them.
@@ -40,7 +35,7 @@ const stats = computed(() => {
   const spark = hours
     .map((v) => BARS[Math.round(((v - lowestHour) / range) * (BARS.length - 1))])
     .join('')
-  return { min, max, spread: max.price - min.price, spark }
+  return { min: status.min, max: status.max, spread: status.spread, spark }
 })
 </script>
 

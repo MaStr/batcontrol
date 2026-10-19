@@ -2,7 +2,8 @@
 
 `ForecastMetrics` is a stateless module that derives three battery indicators
 from the production/consumption forecast arrays and the current battery state.
-These indicators are published via MQTT and are intended to drive downstream
+These indicators are published via MQTT and the REST API (`GET /api/v1/solar`,
+MCP tool `batcontrol_get_solar`) and are intended to drive downstream
 automation decisions such as "should I run the heat pump now or save the battery
 for tomorrow's solar charge?"
 
@@ -120,7 +121,8 @@ is fine. If it is near zero, defer to the next solar window.
 
 All values are published after each evaluation cycle (together with the
 inverter control decision). See [MQTT API](mqtt-api.md) for the full topic
-reference and configuration options.
+reference and configuration options. The same values are available without
+MQTT from the [REST API](rest-api.md) at `GET /api/v1/solar`.
 
 ### Home Assistant Auto-Discovery
 

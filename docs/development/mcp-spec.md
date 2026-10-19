@@ -79,12 +79,17 @@ list, and `get_status` from an unknown server is a worse prompt than `batcontrol
 | Tool | Answers | Paged |
 |---|---|---|
 | `batcontrol_get_status` | Which mode is active, who set it, when the next evaluation is due | - |
-| `batcontrol_get_battery` | SoC, capacities, reserved energy, SoC limits | - |
+| `batcontrol_get_battery` | SoC, capacities, reserved energy (raw and capped), SoC limits | - |
 | `batcontrol_get_current` | Current price together with SoC, in one call | - |
+| `batcontrol_get_price_status` | Cheapest/most expensive slot, rank, average and spread over the next 24 h | - |
 | `batcontrol_get_price_forecast` | Price per slot in EUR/kWh | yes |
 | `batcontrol_get_solar_forecast` | Expected PV production in Wh per slot | yes |
 | `batcontrol_get_consumption_forecast` | Expected consumption in Wh per slot | yes |
 | `batcontrol_get_net_consumption_forecast` | Consumption minus production; negative = surplus | yes |
+| `batcontrol_get_solar` | Solar surplus indicators derived from the forecast | - |
+| `batcontrol_get_peak_shaving` | Whether peak shaving ran, evcc suspension, resulting PV limit | - |
+| `batcontrol_list_inverters` | The inverters by id | - |
+| `batcontrol_get_inverter` | The values of one inverter | - |
 | `batcontrol_get_decision` | Why the current mode was chosen, with the decisive rule | - |
 | `batcontrol_list_decisions` | Recent decisions from the journal | yes |
 | `batcontrol_get_config` | The thresholds a decision has to be read against | - |

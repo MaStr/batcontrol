@@ -41,6 +41,7 @@ src/batcontrol/
   fetcher/                # HTTP caching helper
   scheduler.py            # Main loop
   mqtt_api.py             # State publishing + runtime config overrides
+  runtime_state.py        # Frozen per-cycle state groups shared by MQTT and the web API
   evcc_api.py             # evcc integration
   modes.py                # Inverter mode constants (core re-exports them)
   web/                    # Read-only HTTP API, dashboard and MCP server
@@ -82,10 +83,16 @@ tmp/                      # Throwaway experiments — NEVER committed
   `docs/development/decision-trace.md` and `docs/features/decision-sensor.md`.
 - **Read-only web layer:** `web/` serves the REST API, the dashboard and the MCP server from one
   port, all `GET`. Both transports read through `web/service.py` - one source of truth for field
-  names, units and rounding. The service reads only values the control loop has already cached
-  (`last_SOC`, `last_max_capacity`, ...), never the `get_*` accessors, because those fetch from
-  the inverter and would reset the loop's cache flags from a web thread. Forecasts come from one
-  frozen `ForecastSnapshot` the loop publishes per cycle, so a request can never mix two cycles.
+  names, units and rounding. The service reads only values the control loop has already cached,
+  never the `get_*` accessors, because those fetch from the inverter and would reset the loop's
+  cache flags from a web thread. Forecasts come from one frozen `ForecastSnapshot` the loop
+  publishes per cycle, so a request can never mix two cycles. The other per-cycle values live in
+  frozen dataclasses in `runtime_state.py` (`BatteryState`, `CalculationResult`, `SolarMetrics`,
+  `PeakShavingState`, `ConfiguredParameters`), replaced by one assignment each; per-inverter
+  values are cached by each inverter as `api_values` (`inverter/api_values.py`). MQTT publishes
+  from the same objects - a value computed for one transport only is a bug: every MQTT value has
+  a REST counterpart (table in `dashboard-spec.md`). Anything a second client would have to
+  re-implement belongs in the service layer or the core, not in the dashboard.
   Specs: `docs/development/mcp-spec.md`, `docs/development/dashboard-spec.md`.
 
 ## Change Checklist

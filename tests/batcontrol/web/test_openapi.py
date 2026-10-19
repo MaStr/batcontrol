@@ -11,6 +11,11 @@ EXPECTED_PATHS = {
     '/api/v1/status',
     '/api/v1/battery',
     '/api/v1/current',
+    '/api/v1/price/status',
+    '/api/v1/solar',
+    '/api/v1/peak-shaving',
+    '/api/v1/inverters',
+    '/api/v1/inverter/{inverter_id}',
     '/api/v1/forecast',
     '/api/v1/forecast/{series}',
     '/api/v1/decision',
@@ -18,7 +23,8 @@ EXPECTED_PATHS = {
     '/api/v1/config',
 }
 
-EXPECTED_TAGS = {'meta', 'status', 'forecast', 'decision', 'config'}
+EXPECTED_TAGS = {'meta', 'status', 'price', 'forecast', 'decision',
+                 'inverter', 'config'}
 
 
 def schema(client):
@@ -57,7 +63,9 @@ def test_every_response_is_enveloped(client):
 def test_units_are_documented_on_numeric_fields(client):
     """A bare numeric field without a unit has confused consumers before."""
     components = schema(client)['components']['schemas']
-    for model in ('ForecastSlot', 'Battery', 'CurrentPrice'):
+    for model in ('ForecastSlot', 'Battery', 'CurrentPrice', 'PricePoint',
+                  'PriceStatus', 'SolarMetrics', 'PeakShavingStatus',
+                  'Inverter', 'ConfigOverride'):
         for field, spec in components[model]['properties'].items():
             assert spec.get('description'), f'{model}.{field} is undocumented'
 

@@ -11,9 +11,10 @@ from `/api/v1/...` (see [REST API](../integrations/rest-api.md)).
 | Endpoint | Used for |
 |---|---|
 | `GET /api/v1/status` | mode, control source, charge rate, last/next evaluation, online state |
-| `GET /api/v1/battery` | SoC, capacities, reserved energy, SoC limits |
+| `GET /api/v1/battery` | SoC, gross capacity, reserved energy (raw and capped), SoC limits |
 | `GET /api/v1/current` | current price, price unit, interval width, version |
-| `GET /api/v1/forecast/price` | 24 h price forecast for the sparkline and MIN/MAX/SPREAD |
+| `GET /api/v1/price/status` | MIN/MAX/SPREAD over the next 24 h |
+| `GET /api/v1/forecast/price` | 24 h price forecast for the sparkline |
 | `GET /api/v1/decision` | decision text, reason, full trace |
 | `GET /api/v1/version` | version for the release link in the header |
 
@@ -23,6 +24,26 @@ of four. The dashboard uses it when it needs more than the price.
 
 Polling follows `next_evaluation` from `/api/v1/status` rather than a hard-coded interval, so the
 header countdown matches the real control cycle.
+
+### What the API computes and what the dashboard computes
+
+**Anything a second client would have to re-implement belongs in the service layer; pure
+presentation stays in the component.** A Home Assistant card, an MCP assistant or a script
+should not have to rebuild the 24 h price window, the gross capacity or the reservation cap to
+get the same numbers the dashboard shows - and two implementations of one rule drift apart.
+
+So the API delivers:
+
+- MIN/MAX/SPREAD/average/rank over the next 24 h (`/price/status`),
+- the gross capacity (`gross_energy_capacity`), instead of each client scaling
+  `max_energy_capacity` back up by `max_soc`,
+- the reservation capped to the battery (`reserved_energy_capacity_effective`).
+
+Values MQTT needs as well are computed in the core (`runtime_state.py`) and published to both;
+values only the API needs (the price statistics) are computed in `web/service.py`.
+
+The dashboard keeps what is presentation: the sparkline's hourly means and glyphs, the box
+states of the SOC grid, the percent widths derived from the API's energies, formatting.
 
 ### Response shape
 
@@ -129,8 +150,10 @@ States, combinable:
 | `always_discharge` | `p > always_allow_discharge_limit_percent` | same states in purple (`#c77dff`, dark `#1d0b2b`), by overriding the `--cell-*` variables on `.cell.discharge` |
 | `free` | otherwise | dark |
 
-`reservedCapped = min(reserved_energy, capacity * (min(MAX_SOC, always_allow_discharge) - MIN_SOC))`.
-The reservation can exceed the battery, hence the cap. Every box the reservation reaches is
+`reservedCapped` is `reserved_energy_capacity_effective` from `/api/v1/battery`:
+`min(reserved_energy, capacity * (min(MAX_SOC, always_allow_discharge) - MIN_SOC))`, computed by
+the core (`runtime_state.cap_reserved_energy`). The reservation can exceed the battery, hence the
+cap; `capacity` is `gross_energy_capacity`. Every box the reservation reaches is
 hatched, including the blinking current one. Nothing above `always_allow_discharge` is ever
 hatched - discharging is always permitted there.
 
@@ -147,8 +170,8 @@ Below that, as text: RESERVED (raw value, plus
 - Current price large, in EUR/kWh, from `/api/v1/current`.
 - Sparkline over the next 24 h from hourly means, drawn with the block characters
   `_,.-~=#` equivalents (`U+2581` to `U+2588`), axis labels now / +12h / +24h.
-- MIN 24h and MAX 24h each with their time, **SPREAD 24h = max - min** (computed in the
-  frontend), and **GRID_CHARGE delta = `min_dynamic_price_difference`**.
+- MIN 24h and MAX 24h each with their time and **SPREAD 24h = max - min**, all from
+  `/api/v1/price/status`, and **GRID_CHARGE delta = `min_dynamic_price_difference`**.
 
 ## Look: green-screen terminal
 
@@ -177,6 +200,58 @@ Below that, as text: RESERVED (raw value, plus
   `api.mcp_auth_token`, which protects only `/mcp`.
 - `GET /api/v1/health` is never authenticated, so a container health check works without the
   token. The dashboard itself takes `online` from `/status`.
+
+## MQTT and REST
+
+Every value batcontrol publishes on MQTT has a counterpart in the REST API (and through it in
+MCP). Ratios that MQTT publishes twice - as `0..1` and as percent - appear once in each REST
+place: as percent in `/battery`, as ratio in `/config`. Timestamps are epoch seconds on MQTT and
+epoch milliseconds in REST.
+
+| MQTT topic | REST |
+|---|---|
+| `status` | `/health` (`stale`), `/status` (`online`) |
+| `mode` | `/status` `mode` |
+| `charge_rate` | `/status` `charge_rate` |
+| `limit_battery_charge_rate` | `/status` `limit_battery_charge_rate` |
+| `control_source` | `/status` `control_source` |
+| `api_override_active` | `/status` `api_override_active` |
+| `discharge_blocked` | `/status` `discharge_blocked` |
+| `grid_charge_locked` | `/status` `grid_charge_locked` |
+| `evaluation_intervall` | `/status` `evaluation_interval_seconds` |
+| `last_evaluation` | `/status` `last_evaluation` |
+| `decision`, `decision/attributes` | `/decision` `status_text`, `event` |
+| `SOC` | `/battery` `soc` |
+| `max_energy_capacity` | `/battery` `max_energy_capacity` |
+| `gross_energy_capacity` | `/battery` `gross_energy_capacity` |
+| `stored_energy_capacity` | `/battery` `stored_energy_capacity` |
+| `stored_usable_energy_capacity` | `/battery` `stored_usable_energy_capacity` |
+| `reserved_energy_capacity` | `/battery` `reserved_energy_capacity` |
+| `reserved_energy_capacity_effective` | `/battery` `reserved_energy_capacity_effective` |
+| `always_allow_discharge_limit_capacity` | `/battery` `always_allow_discharge_limit_capacity` |
+| `always_allow_discharge_limit`, `..._percent` | `/config` `battery_control.always_allow_discharge_limit`, `/battery` `always_allow_discharge_limit_percent` |
+| `max_charging_from_grid_limit`, `..._percent` | `/config` `battery_control.max_charging_from_grid_limit`, `/battery` `max_charging_from_grid_limit_percent` |
+| `min_grid_charge_soc`, `..._percent` | `/config` `battery_control.min_grid_charge_soc` |
+| `effective_min_grid_charge_soc`, `..._percent` | `/battery` `effective_min_grid_charge_soc_percent` |
+| `min_price_difference` | `/config` `battery_control.min_price_difference` |
+| `min_price_difference_rel` | `/config` `battery_control.min_price_difference_rel` |
+| `min_dynamic_price_difference` | `/current` and `/price/status` `min_dynamic_price_difference` |
+| `production_offset` | `/config` `battery_control.production_offset_percent` |
+| `solar_active` | `/solar` `solar_active` |
+| `solar_surplus_wh` | `/solar` `solar_surplus_wh` |
+| `pv_start_battery_wh` | `/solar` `pv_start_battery_wh` |
+| `forecast_min_battery_wh` | `/solar` `forecast_min_battery_wh` |
+| `peak_shaving/enabled` | `/config` `peak_shaving.enabled`, `/peak-shaving` `enabled` |
+| `peak_shaving/allow_full_battery_after` | `/config` `peak_shaving.allow_full_battery_after` |
+| `peak_shaving/price_limit` | `/config` `peak_shaving.price_limit` (null instead of MQTT's -1) |
+| `peak_shaving/charge_limit` | `/peak-shaving` `charge_limit_w` |
+| `FCST/prices`, `FCST/production`, `FCST/consumption`, `FCST/net_consumption` | `/forecast`, `/forecast/{series}` |
+| `inverters/<id>/SOC`, `stored_energy`, `stored_usable_energy`, `free_capacity`, `max_capacity` | `/inverter/{id}` |
+| `inverters/<id>/capacity`, `min_soc`, `max_soc`, `max_grid_charge_rate`, `max_pv_charge_rate` (Fronius) | `/inverter/{id}` |
+| `inverters/<id>/em_mode`, `em_power` (Fronius) | `/inverter/{id}` `extra` |
+
+Not mapped on purpose: the Home Assistant discovery messages (`homeassistant/...`) are MQTT
+plumbing, not values, and the `*/set` topics are inputs - the REST API is read-only.
 
 ## Out of scope
 

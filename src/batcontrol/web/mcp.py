@@ -43,7 +43,8 @@ from .. import __pkginfo__
 from .auth import bearer_guard
 from .models import (
     Battery, Configuration, Current, Decision, DecisionHistory,
-    ForecastSeries, Status, Version,
+    ForecastSeries, Inverter, InverterList, PeakShavingStatus, PriceStatus,
+    SolarMetrics, Status, Version,
 )
 from .service import (
     HISTORY_MAX, WINDOW_MAX, BatcontrolService, NoDataAvailable, NotFound,
@@ -97,6 +98,10 @@ SlotOffset = Annotated[int, Field(
     description='Slot index to start at. Pass the next_offset of the previous'
                 ' response to page through the horizon.',
     examples=[0, 24])]
+InverterId = Annotated[int, Field(
+    ge=0,
+    description='Inverter id as listed by batcontrol_list_inverters.',
+    examples=[0])]
 HistoryLimit = Annotated[int, Field(
     ge=1, le=HISTORY_MAX,
     description='Maximum number of decision traces to return, newest last.',
@@ -196,10 +201,12 @@ def build_server(service: BatcontrolService):  # pylint: disable=too-many-locals
 
         All energies are Wh. `stored_usable_energy_capacity` is what may
         actually be discharged (above the inverter's min_soc);
-        `reserved_energy_capacity` is what batcontrol holds back for upcoming
-        expensive hours and can exceed the battery capacity. A null value
-        means not read yet, never zero. The values are the ones cached by the
-        last control cycle: this tool does not query the inverter.
+        `reserved_energy_capacity` is what batcontrol wants to hold back for
+        upcoming expensive hours and can exceed the battery capacity -
+        `reserved_energy_capacity_effective` is the part the battery can
+        actually hold back. A null value means not read yet, never zero. The
+        values are the ones cached by the last control cycle: this tool does
+        not query the inverter.
         """
         return _call(Battery, service.battery)
 
@@ -214,15 +221,33 @@ def build_server(service: BatcontrolService):  # pylint: disable=too-many-locals
         return _call(Current, service.current)
 
     @tool
+    def batcontrol_get_price_status() -> ToolResult[PriceStatus]:
+        """Get price statistics for the next 24 hours in EUR/kWh.
+
+        The current price with its rank (1 = cheapest slot of the window),
+        the cheapest and the most expensive slot with their start times,
+        the average and the spread. This answers "is it cheap right now",
+        "when is the cheapest time today" and "how big is the spread" in one
+        small call - prefer it over paging through the price forecast.
+
+        All values are per forecast slot (interval_minutes long). The window
+        is 24 hours from now; `complete` is false when the tariff provider's
+        prices end earlier.
+        """
+        return _call(PriceStatus, service.price_status)
+
+    @tool
     def batcontrol_get_price_forecast(
             limit: SlotLimit = None,
             offset: SlotOffset = 0) -> ToolResult[ForecastSeries]:
         """Get the electricity price forecast in EUR/kWh per slot.
 
-        Slot 0 is the current price. Use this for "is it cheap right now",
-        "when is the cheapest window" and "what is the spread today". The
-        horizon depends on the tariff provider, typically to the end of
-        tomorrow once the next day's prices are published.
+        Slot 0 is the current price. For "is it cheap right now", "when is
+        the cheapest time" or "what is the spread" call
+        batcontrol_get_price_status instead - it answers those in one small
+        call. Use this tool when the individual slots matter. The horizon
+        depends on the tariff provider, typically to the end of tomorrow
+        once the next day's prices are published.
 
         Defaults to the next 24 hours. Returns at most `limit` slots from
         `offset`; check has_more and next_offset to page through the rest.
@@ -274,6 +299,55 @@ def build_server(service: BatcontrolService):  # pylint: disable=too-many-locals
         `offset`; check has_more and next_offset to page through the rest.
         """
         return _forecast('net_consumption', limit, offset)
+
+    @tool
+    def batcontrol_get_solar() -> ToolResult[SolarMetrics]:
+        """Get solar surplus indicators derived from the forecast.
+
+        `solar_active` says whether the panels are expected to produce in the
+        current slot. `solar_surplus_wh` is the solar energy in Wh that will
+        not fit into the battery - above 0 it is worth starting a large
+        consumer. `pv_start_battery_wh` is the usable battery energy left
+        when solar takes over the household again, `forecast_min_battery_wh`
+        the lowest usable energy over the whole horizon (0 = the battery is
+        expected to run empty). Forecast-based, not measured.
+        """
+        return _call(SolarMetrics, service.solar)
+
+    @tool
+    def batcontrol_get_peak_shaving() -> ToolResult[PeakShavingStatus]:
+        """Get what peak shaving did in the last control cycle.
+
+        Peak shaving limits PV charging of the battery so it is not full
+        before midday and can absorb the production peak. Returns whether it
+        is switched on now, whether it ran (evcc suspends it while a car
+        charges), the resulting PV charge limit in W (-1 = none) and the
+        outcome and reason code of its rules. The thresholds are in
+        batcontrol_get_config.
+        """
+        return _call(PeakShavingStatus, service.peak_shaving)
+
+    @tool
+    def batcontrol_list_inverters() -> ToolResult[InverterList]:
+        """List the inverters batcontrol controls, by id.
+
+        With several inverters every other tool reports them as one
+        combined battery. Use an id from here with batcontrol_get_inverter
+        to look at a single one.
+        """
+        return _call(InverterList, service.inverters)
+
+    @tool
+    def batcontrol_get_inverter(
+            inverter_id: InverterId) -> ToolResult[Inverter]:
+        """Get the values of one inverter from the last control cycle.
+
+        SoC in percent, capacities and stored energy in Wh, rate limits in
+        W, plus backend specific values in `extra`. The values were read by
+        batcontrol during its last cycle; this tool does not query the
+        inverter.
+        """
+        return _call(Inverter, service.inverter, inverter_id)
 
     @tool
     def batcontrol_get_decision() -> ToolResult[Decision]:

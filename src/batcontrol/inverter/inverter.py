@@ -163,6 +163,7 @@ class Inverter:
         else:
             raise RuntimeError(f'[Inverter] Unknown inverter type {config["type"]}')
 
+        inverter.inverter_type = config['type'].lower()
         if inverter_num is None:
             inverter.inverter_num = Inverter.num_inverters
             Inverter.num_inverters += 1

@@ -34,6 +34,13 @@
     "detail": "Missing or invalid bearer token.",
     "_status": 401
   },
+  "price/status": {
+    "ok": false,
+    "timestamp": 0,
+    "error": "unauthorized",
+    "detail": "Missing or invalid bearer token.",
+    "_status": 401
+  },
   "decision": {
     "ok": false,
     "timestamp": 0,

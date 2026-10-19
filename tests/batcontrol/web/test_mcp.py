@@ -13,10 +13,15 @@ EXPECTED_TOOLS = {
     'batcontrol_get_status',
     'batcontrol_get_battery',
     'batcontrol_get_current',
+    'batcontrol_get_price_status',
     'batcontrol_get_price_forecast',
     'batcontrol_get_solar_forecast',
     'batcontrol_get_consumption_forecast',
     'batcontrol_get_net_consumption_forecast',
+    'batcontrol_get_solar',
+    'batcontrol_get_peak_shaving',
+    'batcontrol_list_inverters',
+    'batcontrol_get_inverter',
     'batcontrol_get_decision',
     'batcontrol_list_decisions',
     'batcontrol_get_config',
@@ -319,3 +324,29 @@ def test_a_failing_mcp_lifespan_does_not_take_rest_down(fake_bc, monkeypatch, ca
                         base_url='http://127.0.0.1') as client:
             assert client.get('/api/v1/health').status_code == 200
     assert 'session manager broke' in caplog.text
+
+
+def test_price_status_tool_returns_the_statistics(server):
+    result = call(server, 'batcontrol_get_price_status')
+    assert result['available'] is True
+    assert result['data']['min']['value'] == 0.201
+    assert result['data']['rank'] == 3
+
+
+def test_solar_and_peak_shaving_tools_answer(server):
+    assert call(server, 'batcontrol_get_solar')['data']['solar_active'] is False
+    assert call(server, 'batcontrol_get_peak_shaving')['data'][
+        'charge_limit_w'] == -1
+
+
+def test_inverter_tools(server):
+    listing = call(server, 'batcontrol_list_inverters')['data']
+    inverter_id = listing['inverters'][0]['id']
+    result = call(server, 'batcontrol_get_inverter', inverter_id=inverter_id)
+    assert result['data']['soc'] == 87.4
+
+
+def test_unknown_inverter_is_reported_not_raised(server):
+    result = call(server, 'batcontrol_get_inverter', inverter_id=9)
+    assert result['available'] is False
+    assert 'inverters' in result['reason']

@@ -143,6 +143,12 @@ def _make_publish_stub():
     api.publish_grid_charge_locked = (
         MqttApi.publish_grid_charge_locked.__get__(api, MqttApi)
     )
+    api.publish_gross_energy_capacity = (
+        MqttApi.publish_gross_energy_capacity.__get__(api, MqttApi)
+    )
+    api.publish_reserved_energy_capacity_effective = (
+        MqttApi.publish_reserved_energy_capacity_effective.__get__(api, MqttApi)
+    )
     return api
 
 
@@ -316,6 +322,22 @@ class TestPublishedState:
             call('batcontrol/effective_min_grid_charge_soc', '0.79'),
         ]
 
+    def test_publish_gross_energy_capacity_in_wh(self):
+        api = _make_publish_stub()
+
+        api.publish_gross_energy_capacity(10000)
+
+        api.client.publish.assert_called_once_with(
+            'batcontrol/gross_energy_capacity', '10000.0')
+
+    def test_publish_reserved_energy_capacity_effective_in_wh(self):
+        api = _make_publish_stub()
+
+        api.publish_reserved_energy_capacity_effective(8000.04)
+
+        api.client.publish.assert_called_once_with(
+            'batcontrol/reserved_energy_capacity_effective', '8000.0')
+
     def test_publish_grid_charge_locked_uses_lowercase_boolean(self):
         api = _make_publish_stub()
 
@@ -443,6 +465,20 @@ class TestDiscoveryMessages:
             and call.kwargs['initial_value'] == -1
             for call in api.publish_mqtt_discovery_message.call_args_list
         )
+
+    def test_discovery_includes_the_new_battery_sensors(self):
+        api = _make_discovery_stub()
+
+        api.send_mqtt_discovery_messages()
+
+        sensors = {
+            call.args[1]: call.args[5]
+            for call in api.publish_mqtt_discovery_message.call_args_list
+        }
+        assert sensors['batcontrol_gross_energy_capacity'] == (
+            'batcontrol/gross_energy_capacity')
+        assert sensors['batcontrol_reserved_energy_capacity_effective'] == (
+            'batcontrol/reserved_energy_capacity_effective')
 
     def test_discovery_includes_api_override_active_binary_sensor(self):
         api = _make_discovery_stub()

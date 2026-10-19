@@ -144,10 +144,12 @@ Batcontrol publishes data to the following topic structure (assuming base topic 
 
 ### Battery Information
 - `house/batcontrol/SOC` - State of Charge in % (two decimal places, e.g., `69.00`)
-- `house/batcontrol/max_energy_capacity` - Maximum battery capacity in Wh
+- `house/batcontrol/max_energy_capacity` - Maximum battery capacity in Wh (reduced by max SOC)
+- `house/batcontrol/gross_energy_capacity` - Battery capacity in Wh without the max SOC reduction; SOC percentages refer to this value
 - `house/batcontrol/stored_energy_capacity` - Energy stored in battery in Wh
 - `house/batcontrol/stored_usable_energy_capacity` - Usable energy stored in battery in Wh (considering min SOC)
-- `house/batcontrol/reserved_energy_capacity` - Energy reserved for discharge in Wh
+- `house/batcontrol/reserved_energy_capacity` - Energy reserved for discharge in Wh. This is the raw demand for upcoming expensive hours and can exceed the battery
+- `house/batcontrol/reserved_energy_capacity_effective` - The reserved energy in Wh capped to what the battery can hold back: between min SOC and the lower of max SOC and `always_allow_discharge_limit`
 
 ### Solar Surplus Information
 
