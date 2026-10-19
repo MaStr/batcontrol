@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="batcontrol">
+  <!--
+    Source of the home screen icons (apple-touch-icon.png, icon-192.png,
+    icon-512.png). The drawing stays inside the central 80% circle, so the
+    512px PNG also serves as Android's maskable icon. Re-render with:
+      rsvg-convert -w 180 -h 180 icon.svg -o apple-touch-icon.png
+      rsvg-convert -w 192 -h 192 icon.svg -o icon-192.png
+      rsvg-convert -w 512 -h 512 icon.svg -o icon-512.png
+  -->
+  <defs>
+    <g id="wing">
+      <path d="M202 222C186 172 140 138 50 150Q100 196 80 268Q124 246 132 300Q168 272 202 304Z" fill="#33ff66"/>
+      <!-- finger bones -->
+      <path d="M146 176 54 152M146 176 84 262M146 176 134 294" stroke="#030a05" stroke-width="7" stroke-linecap="round"/>
+    </g>
+  </defs>
+  <rect width="512" height="512" fill="#030a05"/>
+  <use href="#wing"/>
+  <use href="#wing" transform="translate(512 0) scale(-1 1)"/>
+  <!-- battery body -->
+  <rect x="202" y="168" width="108" height="196" rx="14" fill="#030a05" stroke="#33ff66" stroke-width="16"/>
+  <!-- terminal -->
+  <rect x="230" y="140" width="52" height="24" rx="6" fill="#33ff66"/>
+  <!-- charge bolt -->
+  <path d="M262 214 224 276H252L244 322 288 258H260Z" fill="#33ff66"/>
+</svg>

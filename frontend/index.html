@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#030a05" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <!--
+      Home screen icons: iOS ignores the SVG favicon and the manifest icons
+      and would otherwise show a letter. The manifest is fetched with
+      credentials because Home Assistant ingress only answers with the
+      session cookie.
+    -->
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" crossorigin="use-credentials" />
+    <meta name="apple-mobile-web-app-title" content="batcontrol" />
     <title>batcontrol</title>
     <!--
       No external font or stylesheet links on purpose: batcontrol runs in
