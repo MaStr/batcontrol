@@ -202,11 +202,29 @@ def test_net_consumption_keeps_the_surplus_sign(fake_bc):
     assert slots[2]['value'] == -500.0
 
 
+def test_forecast_window_is_24_hours_of_slots(fake_bc):
+    """A fixed slot count would mean 12 h at 15-minute resolution."""
+    fake_bc.time_resolution = 15
+    service = BatcontrolService(fake_bc)
+    assert service.window_slots() == 96
+    fake_bc.time_resolution = 60
+    assert service.window_slots() == 24
+
+
 def test_forecast_all_returns_every_series(fake_bc):
     forecast = BatcontrolService(fake_bc).forecast_all()
     for key in ('price', 'consumption', 'production', 'net_consumption'):
         assert len(forecast[key]) == 4
     assert forecast['interval_minutes'] == 60
+
+
+def test_forecast_all_shares_one_slot_grid(fake_bc):
+    forecast = BatcontrolService(fake_bc).forecast_all()
+    grids = {
+        tuple(slot['time_start'] for slot in forecast[series])
+        for series in ('price', 'consumption', 'production', 'net_consumption')
+    }
+    assert len(grids) == 1
 
 
 def test_decision_requires_a_recorded_trace(fake_bc):

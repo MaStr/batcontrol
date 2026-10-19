@@ -128,8 +128,8 @@ tmp/                      # Throwaway experiments — NEVER committed
    is easy to miss in review.
 7. New REST endpoint or MCP tool -> it is only done when all of these exist: the Pydantic model
    with the **unit in every numeric field's description**, the matching MCP tool (or a note why
-   not), a test, the path added to the contract list in
-   `tests/batcontrol/web/test_openapi.py`, the entry in `docs/integrations/rest-api.md`, and -
+   not), a test, the path added to the contract list `API_PATHS` in
+   `tests/batcontrol/web/conftest.py`, the entry in `docs/integrations/rest-api.md`, and -
    if the dashboard uses it - the mapping in `frontend/src/lib/api.js`. The API is read-only:
    adding a non-GET route fails `tests/batcontrol/web/test_readonly.py`, which is the point.
 

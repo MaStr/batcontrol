@@ -42,45 +42,45 @@ def client_for(fake_bc, **options):
                       base_url='http://127.0.0.1')
 
 
-def test_index_is_served_at_the_root(fake_bc, built):
-    del built
+@pytest.mark.usefixtures('built')
+def test_index_is_served_at_the_root(fake_bc):
     with client_for(fake_bc) as client:
         response = client.get('/')
     assert response.status_code == 200
     assert 'batcontrol' in response.text
 
 
-def test_hashed_assets_are_served(fake_bc, built):
-    del built
+@pytest.mark.usefixtures('built')
+def test_hashed_assets_are_served(fake_bc):
     with client_for(fake_bc) as client:
         assert client.get('/assets/index-abc123.js').status_code == 200
 
 
-def test_font_licenses_are_reachable(fake_bc, built):
+@pytest.mark.usefixtures('built')
+def test_font_licenses_are_reachable(fake_bc):
     """The OFL requires the license text to travel with the fonts."""
-    del built
     with client_for(fake_bc) as client:
         assert client.get('/licenses/LICENSE-OFL-VT323.txt').status_code == 200
 
 
-def test_the_api_keeps_precedence_over_the_dashboard(fake_bc, built):
+@pytest.mark.usefixtures('built')
+def test_the_api_keeps_precedence_over_the_dashboard(fake_bc):
     """The dashboard is mounted at /, so this is not self-evident."""
-    del built
     with client_for(fake_bc) as client:
         assert client.get('/api/v1/health').json()['ok'] is True
         assert client.get('/openapi.json').status_code == 200
         assert client.get('/docs').status_code == 200
 
 
-def test_path_traversal_is_refused(fake_bc, built):
-    del built
+@pytest.mark.usefixtures('built')
+def test_path_traversal_is_refused(fake_bc):
     with client_for(fake_bc) as client:
         response = client.get('/../../pyproject.toml')
     assert response.status_code in (400, 404)
 
 
-def test_a_missing_build_serves_a_hint_not_a_stack_trace(fake_bc, unbuilt, caplog):
-    del unbuilt
+@pytest.mark.usefixtures('unbuilt')
+def test_a_missing_build_serves_a_hint_not_a_stack_trace(fake_bc, caplog):
     with caplog.at_level('WARNING'):
         with client_for(fake_bc) as client:
             response = client.get('/')
@@ -89,70 +89,58 @@ def test_a_missing_build_serves_a_hint_not_a_stack_trace(fake_bc, unbuilt, caplo
     assert 'npm' in caplog.text
 
 
-def test_the_api_works_without_a_build(fake_bc, unbuilt):
-    del unbuilt
+@pytest.mark.usefixtures('unbuilt')
+def test_the_api_works_without_a_build(fake_bc):
     with client_for(fake_bc) as client:
         assert client.get('/api/v1/health').status_code == 200
 
 
-def test_the_dashboard_can_be_switched_off(fake_bc, built):
-    del built
+@pytest.mark.usefixtures('built')
+def test_the_dashboard_can_be_switched_off(fake_bc):
     with client_for(fake_bc, dashboard_enabled=False) as client:
         assert client.get('/').status_code == 404
         assert client.get('/api/v1/health').status_code == 200
 
 
-def test_docs_work_without_the_dashboard(fake_bc, built):
+@pytest.mark.usefixtures('built')
+def test_docs_work_without_the_dashboard(fake_bc):
     """Regression: the Swagger bundle was only served by the dashboard
     mount, so /docs rendered blank with dashboard_enabled: false."""
-    del built
     with client_for(fake_bc, dashboard_enabled=False) as client:
         assert client.get('/swagger/swagger-ui-bundle.js').status_code == 200
         assert client.get('/swagger/swagger-ui.css').status_code == 200
         assert client.get('/').status_code == 404
 
 
-def test_docs_use_the_bundled_swagger_ui(fake_bc, built):
+@pytest.mark.usefixtures('built')
+def test_docs_load_the_bundled_swagger_ui_relatively(fake_bc):
     """FastAPI points /docs at a CDN by default.
 
     On a Home Assistant box without internet egress that leaves the API
-    documentation blank, which is the same reason the fonts are bundled.
+    documentation blank, which is the same reason the fonts are bundled. The
+    asset URLs have to be relative, because under ingress the page lives at
+    /api/hassio_ingress/<token>/docs.
     """
-    del built
     with client_for(fake_bc) as client:
         page = client.get('/docs').text
-    assert 'swagger/swagger-ui-bundle.js' in page
+    assert 'src="swagger/swagger-ui-bundle.js"' in page
     assert 'swagger/swagger-ui.css' in page
-
-
-def test_docs_make_no_external_request(fake_bc, built):
-    del built
-    with client_for(fake_bc) as client:
-        page = client.get('/docs').text
+    assert 'src="/swagger/' not in page
     for host in ('cdn.jsdelivr.net', 'unpkg.com', 'fastapi.tiangolo.com'):
         assert host not in page, f'/docs still loads from {host}'
 
 
-def test_docs_asset_urls_are_relative_for_ingress(fake_bc, built):
-    """Under ingress the page lives at /api/hassio_ingress/<token>/docs."""
-    del built
-    with client_for(fake_bc) as client:
-        page = client.get('/docs').text
-    assert 'src="swagger/' in page
-    assert 'src="/swagger/' not in page
-
-
-def test_docs_fall_back_to_the_cdn_without_a_build(fake_bc, unbuilt):
+@pytest.mark.usefixtures('unbuilt')
+def test_docs_fall_back_to_the_cdn_without_a_build(fake_bc):
     """A source checkout without npm still gets working docs - with internet."""
-    del unbuilt
     with client_for(fake_bc) as client:
         response = client.get('/docs')
     assert response.status_code == 200
     assert 'swagger-ui' in response.text
 
 
-def test_redoc_is_not_served(fake_bc, built):
+@pytest.mark.usefixtures('built')
+def test_redoc_is_not_served(fake_bc):
     """One documentation UI that works offline beats two that need a CDN."""
-    del built
     with client_for(fake_bc) as client:
         assert client.get('/redoc').status_code in (404, 405)
