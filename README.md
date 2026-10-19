@@ -1,3 +1,5 @@
+<img src="frontend/public/icon.svg" alt="batcontrol logo" width="128" align="right">
+
 # batcontrol
 
 Batcontrol controls your PV battery inverter based on dynamic electricity prices, solar production forecasts, and consumption patterns. When grid electricity is cheap and solar output is insufficient, it charges the battery from the grid. When prices are high, it holds the stored energy and avoids unnecessary discharge.
