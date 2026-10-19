@@ -9,7 +9,7 @@
 # a multi-arch build runs npm once, natively, instead of once per target
 # architecture under QEMU emulation. The output is static files, which are
 # architecture independent.
-FROM --platform=$BUILDPLATFORM node:24-alpine AS frontend
+FROM --platform=$BUILDPLATFORM node:26-alpine AS frontend
 
 # Same directory layout as the repository, so vite's outDir
 # (../src/batcontrol/web/static) resolves the same way it does locally.
