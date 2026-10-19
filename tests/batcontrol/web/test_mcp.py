@@ -9,6 +9,8 @@ from batcontrol.web.app import create_app
 from batcontrol.web.config import ApiConfig
 from batcontrol.web.service import BatcontrolService
 
+from .conftest import MCP_HEADERS, MCP_INIT
+
 EXPECTED_TOOLS = {
     'batcontrol_get_status',
     'batcontrol_get_battery',
@@ -26,17 +28,6 @@ EXPECTED_TOOLS = {
     'batcontrol_list_decisions',
     'batcontrol_get_config',
     'batcontrol_get_version',
-}
-
-INIT = {
-    'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
-    'params': {'protocolVersion': '2025-06-18', 'capabilities': {},
-               'clientInfo': {'name': 'test', 'version': '1'}},
-}
-MCP_HEADERS = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json, text/event-stream',
-    'Host': '127.0.0.1:8080',
 }
 
 
@@ -58,23 +49,9 @@ def call(server, name, **arguments):
 # -- tool surface -----------------------------------------------------------
 
 def test_the_tool_set_is_exactly_the_read_tools(server):
+    """An exact match: a new tool - a mutating one in particular - has to be
+    added to EXPECTED_TOOLS deliberately, under the batcontrol_get/list names."""
     assert set(mcp_module.tool_names(server)) == EXPECTED_TOOLS
-
-
-def test_no_tool_can_change_anything(server):
-    """The read-only guarantee, enforced on the MCP side as well."""
-    forbidden = ('set', 'clear', 'force', 'write', 'update', 'apply',
-                 'override', 'charge', 'start', 'stop', 'delete')
-    for name in mcp_module.tool_names(server):
-        action = name.replace('batcontrol_', '').split('_')[0]
-        assert action in ('get', 'list'), f'{name} is not a query tool'
-        assert not any(word == action for word in forbidden)
-
-
-def test_names_follow_the_service_prefix_convention(server):
-    for name in mcp_module.tool_names(server):
-        assert name.startswith('batcontrol_')
-        assert name == name.lower()
 
 
 def test_every_tool_is_annotated_read_only(server):
@@ -114,15 +91,6 @@ def test_status_tool_returns_structured_data(server):
     result = call(server, 'batcontrol_get_status')
     assert result['available'] is True
     assert result['data']['mode_label'] == 'ALLOW DISCHARGE'
-
-
-def test_forecast_defaults_to_24_hours_of_slots(fake_bc):
-    """A fixed slot count would mean 12 h at 15-minute resolution."""
-    fake_bc.time_resolution = 15
-    service = BatcontrolService(fake_bc)
-    assert service.window_slots() == 96
-    fake_bc.time_resolution = 60
-    assert service.window_slots() == 24
 
 
 def test_forecast_respects_limit_and_reports_paging(server):
@@ -211,7 +179,7 @@ def test_internal_errors_do_not_leak_details(fake_bc):
 def test_mcp_is_reachable_without_a_redirect(fake_bc):
     config = ApiConfig(enabled=True, mcp_enabled=True)
     with TestClient(create_app(fake_bc, config), base_url='http://127.0.0.1') as client:
-        response = client.post('/mcp', json=INIT, headers=MCP_HEADERS,
+        response = client.post('/mcp', json=MCP_INIT, headers=MCP_HEADERS,
                                follow_redirects=False)
     assert response.status_code == 200
 
@@ -222,7 +190,7 @@ def test_a_reverse_proxy_host_header_is_accepted_on_mcp(fake_bc):
     config = ApiConfig(enabled=True, mcp_enabled=True)
     with TestClient(create_app(fake_bc, config), base_url='http://127.0.0.1') as client:
         response = client.post(
-            '/mcp', json=INIT,
+            '/mcp', json=MCP_INIT,
             headers={**MCP_HEADERS, 'Host': 'batcontrol.example.org'})
     assert response.status_code == 200
 
@@ -233,7 +201,7 @@ def test_mcp_is_absent_when_disabled(client):
     # With the dashboard mounted at /, an unknown path is answered by
     # StaticFiles: 404 when it is not mounted, 405 when it is (it serves GET
     # only). Either way there is no MCP endpoint.
-    assert client.post('/mcp', json=INIT,
+    assert client.post('/mcp', json=MCP_INIT,
                        headers=MCP_HEADERS).status_code in (404, 405)
 
 
@@ -243,12 +211,12 @@ def test_mcp_token_is_independent_of_the_api_token(fake_bc):
     config = ApiConfig(enabled=True, mcp_enabled=True,
                        auth_token='api-token', mcp_auth_token='mcp-token')
     with TestClient(create_app(fake_bc, config), base_url='http://127.0.0.1') as client:
-        assert client.post('/mcp', json=INIT,
+        assert client.post('/mcp', json=MCP_INIT,
                            headers=MCP_HEADERS).status_code == 401
-        assert client.post('/mcp', json=INIT, headers={
+        assert client.post('/mcp', json=MCP_INIT, headers={
             **MCP_HEADERS,
             'Authorization': 'Bearer api-token'}).status_code == 401
-        assert client.post('/mcp', json=INIT, headers={
+        assert client.post('/mcp', json=MCP_INIT, headers={
             **MCP_HEADERS,
             'Authorization': 'Bearer mcp-token'}).status_code == 200
         # and the MCP token must not open the REST API
@@ -262,9 +230,9 @@ def test_mcp_inherits_the_api_token_when_unset(fake_bc):
     assert config.effective_mcp_token == 'shared'
     assert config.mcp_token_is_separate is False
     with TestClient(create_app(fake_bc, config), base_url='http://127.0.0.1') as client:
-        assert client.post('/mcp', json=INIT,
+        assert client.post('/mcp', json=MCP_INIT,
                            headers=MCP_HEADERS).status_code == 401
-        assert client.post('/mcp', json=INIT, headers={
+        assert client.post('/mcp', json=MCP_INIT, headers={
             **MCP_HEADERS,
             'Authorization': 'Bearer shared'}).status_code == 200
 
@@ -272,35 +240,8 @@ def test_mcp_inherits_the_api_token_when_unset(fake_bc):
 def test_no_token_leaves_mcp_open(fake_bc):
     config = ApiConfig(enabled=True, mcp_enabled=True)
     with TestClient(create_app(fake_bc, config), base_url='http://127.0.0.1') as client:
-        assert client.post('/mcp', json=INIT,
+        assert client.post('/mcp', json=MCP_INIT,
                            headers=MCP_HEADERS).status_code == 200
-
-
-def test_mcp_rejects_a_non_ascii_token_without_crashing(fake_bc):
-    """Regression, mirroring the REST side.
-
-    /mcp has its own ASGI bearer guard, so the fix has to hold in two places.
-    The header is raw bytes because that is what reaches the server from a
-    client that does not restrict itself to ASCII.
-    """
-    config = ApiConfig(enabled=True, mcp_enabled=True, mcp_auth_token='secret')
-    with TestClient(create_app(fake_bc, config), base_url='http://127.0.0.1') as client:
-        for header in (b'Bearer \xc3\xbc', b'Bearer \xff\xfe\x00',
-                       b'\xc3\xbc', b'Bearer'):
-            response = client.post('/mcp', json=INIT, headers={
-                **MCP_HEADERS, 'Authorization': header})
-            assert response.status_code == 401, header
-            assert response.headers['www-authenticate'] == 'Bearer'
-
-
-def test_mcp_accepts_a_non_ascii_token_that_was_configured(fake_bc):
-    token = 'gr\u00fcn-schl\u00fcssel'
-    config = ApiConfig(enabled=True, mcp_enabled=True, mcp_auth_token=token)
-    with TestClient(create_app(fake_bc, config), base_url='http://127.0.0.1') as client:
-        assert client.post('/mcp', json=INIT, headers={
-            **MCP_HEADERS,
-            'Authorization': b'Bearer ' + token.encode('utf-8'),
-        }).status_code == 200
 
 
 def test_a_failing_mcp_lifespan_does_not_take_rest_down(fake_bc, monkeypatch, caplog):

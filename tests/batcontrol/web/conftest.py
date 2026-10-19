@@ -25,6 +25,41 @@ from batcontrol.runtime_state import (
 )
 from batcontrol.web.snapshot import ForecastSnapshot
 
+# The REST surface, kept once: the documented path template, mapped to a
+# concrete URL that answers with the fixtures below. test_openapi compares
+# the keys with the schema, so a new endpoint has to be added here - and is
+# then covered by the auth, envelope and secret sweeps automatically.
+API_PATHS = {
+    '/api/v1/health': '/api/v1/health',
+    '/api/v1/version': '/api/v1/version',
+    '/api/v1/status': '/api/v1/status',
+    '/api/v1/battery': '/api/v1/battery',
+    '/api/v1/current': '/api/v1/current',
+    '/api/v1/price/status': '/api/v1/price/status',
+    '/api/v1/solar': '/api/v1/solar',
+    '/api/v1/peak-shaving': '/api/v1/peak-shaving',
+    '/api/v1/inverters': '/api/v1/inverters',
+    '/api/v1/inverter/{inverter_id}': '/api/v1/inverter/0',
+    '/api/v1/forecast': '/api/v1/forecast',
+    '/api/v1/forecast/{series}': '/api/v1/forecast/price',
+    '/api/v1/decision': '/api/v1/decision',
+    '/api/v1/decision/history': '/api/v1/decision/history',
+    '/api/v1/config': '/api/v1/config',
+}
+
+# A minimal MCP handshake, for the tests that go through the HTTP transport.
+MCP_INIT = {
+    'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
+    'params': {'protocolVersion': '2025-06-18', 'capabilities': {},
+               'clientInfo': {'name': 'test', 'version': '1'}},
+}
+MCP_HEADERS = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json, text/event-stream',
+    'Host': '127.0.0.1:8080',
+}
+
+
 def recent_run_time() -> float:
     """A fresh run time, as the control loop would record it.
 

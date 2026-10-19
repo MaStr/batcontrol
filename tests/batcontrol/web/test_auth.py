@@ -3,19 +3,19 @@
 The token is opt-in. With it configured, every endpoint but /health requires
 it; without it, nothing is protected and no dependency is installed at all.
 """
+import contextlib
+
 import pytest
 from fastapi.testclient import TestClient
 
 from batcontrol.web.app import create_app
 from batcontrol.web.config import ApiConfig
 
+from .conftest import API_PATHS, MCP_HEADERS, MCP_INIT
+
 TOKEN = 'a-very-secret-token'
 
-PROTECTED = [
-    '/api/v1/version', '/api/v1/status', '/api/v1/battery',
-    '/api/v1/current', '/api/v1/forecast', '/api/v1/forecast/price',
-    '/api/v1/decision', '/api/v1/decision/history', '/api/v1/config',
-]
+PROTECTED = [url for url in API_PATHS.values() if url != '/api/v1/health']
 
 
 @pytest.fixture(name='secured')
@@ -100,31 +100,56 @@ NON_ASCII = (
     b'Bearer \xe2\x9c\x93',                   # check mark
     b'Bearer \xf0\x9f\x94\x92',               # lock emoji
     b'Bearer \xff\xfe\x00',                   # not valid UTF-8 at all
+    b'\xc3\xbc',                             # no scheme at all
 )
 
 
+@pytest.fixture(name='guarded', params=['rest', 'mcp'])
+def fixture_guarded(request, fake_bc):
+    """Opens an app whose REST API or MCP endpoint requires `token`.
+
+    /mcp has its own ASGI bearer guard, so every token check has to hold in
+    two places. Returns a function that sends one authenticated request.
+    """
+    with contextlib.ExitStack() as stack:
+        def open_with(token):
+            if request.param == 'rest':
+                config = ApiConfig(enabled=True, auth_token=token)
+            else:
+                config = ApiConfig(enabled=True, mcp_enabled=True,
+                                   mcp_auth_token=token)
+            client = stack.enter_context(TestClient(
+                create_app(fake_bc, config), base_url='http://127.0.0.1'))
+
+            def send(header=None):
+                headers = {} if header is None else {'Authorization': header}
+                if request.param == 'rest':
+                    return client.get('/api/v1/status', headers=headers)
+                return client.post('/mcp', json=MCP_INIT,
+                                   headers={**MCP_HEADERS, **headers})
+            return send
+        yield open_with
+
+
 @pytest.mark.parametrize('header', NON_ASCII)
-def test_a_non_ascii_token_is_rejected_not_crashed(secured, header):
+def test_a_non_ascii_token_is_rejected_not_crashed(guarded, header):
     """Regression: secrets.compare_digest raises on non-ASCII strings.
 
     Comparing the presented token as a str turned a bearer token with an
     umlaut in it into a 500 with a traceback instead of a plain 401. It failed
     closed either way, but an authentication check must reject, not crash.
     """
-    response = secured.get('/api/v1/status', headers={'Authorization': header})
+    response = guarded(TOKEN)(header)
     assert response.status_code == 401
     assert response.headers['www-authenticate'] == 'Bearer'
 
 
-def test_a_non_ascii_token_can_be_configured_and_used(fake_bc):
+def test_a_non_ascii_token_can_be_configured_and_used(guarded):
     """And if someone does configure one, it has to actually work."""
     token = 'gr\u00fcn-schl\u00fcssel-\u2713'
-    config = ApiConfig(enabled=True, auth_token=token)
-    with TestClient(create_app(fake_bc, config), base_url='http://127.0.0.1') as client:
-        assert client.get('/api/v1/status').status_code == 401
-        assert client.get('/api/v1/status', headers={
-            'Authorization': b'Bearer ' + token.encode('utf-8'),
-        }).status_code == 200
+    send = guarded(token)
+    assert send().status_code == 401
+    assert send(b'Bearer ' + token.encode('utf-8')).status_code == 200
 
 
 def test_token_matching_is_byte_exact():
