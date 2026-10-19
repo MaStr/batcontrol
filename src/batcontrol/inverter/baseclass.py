@@ -1,4 +1,8 @@
 """ Parent Class for implementing common functions for all inverters """
+import time
+from typing import Any, Dict, Optional
+
+from .api_values import InverterValues
 from .inverter_interface import InverterInterface
 
 DEFAULT_MIN_SOC = 5
@@ -21,6 +25,10 @@ class InverterBaseclass(InverterInterface):
         self.mqtt_api = None
         self.capacity = -1
         self.inverter_num = 0
+        # Backend name from the config, set by the factory.
+        self.inverter_type = config.get('type')
+        # Values of the last refresh_api_values(), None until the first one.
+        self.api_values: Optional[InverterValues] = None
         # Rate limits of THIS inverter in W. They are what lets InverterGroup
         # split a group-wide rate without pushing a single inverter outside its
         # own working range. The factory overwrites them from the config.
@@ -92,14 +100,46 @@ class InverterBaseclass(InverterInterface):
         return f'inverters/{self.inverter_num}/'
 
     def refresh_api_values(self):
+        """ Read this inverter's values once, keep them and publish them.
+
+        The values are kept in api_values for the web API, which must never
+        read the inverter from a request. MQTT publishes the same object.
+        """
+        values = self.read_api_values()
+        self.api_values = values
         if self.mqtt_api:
-            topic = self.get_mqtt_inverter_topic()
-            self.mqtt_api.generic_publish(topic + 'SOC', self.get_SOC())
-            self.mqtt_api.generic_publish(topic + 'stored_energy', self.get_stored_energy())
-            self.mqtt_api.generic_publish(
-                topic + 'stored_usable_energy', self.get_stored_usable_energy())
-            self.mqtt_api.generic_publish(topic + 'free_capacity', self.get_free_capacity())
-            self.mqtt_api.generic_publish(topic + 'max_capacity', self.get_max_capacity())
+            self.publish_api_values(values)
+
+    def read_api_values(self) -> InverterValues:
+        """ Read SoC and capacity and derive everything else from them. """
+        return InverterValues.from_reading(
+            soc=self.get_SOC(),
+            capacity=self.get_capacity(),
+            min_soc=self.min_soc,
+            max_soc=self.max_soc,
+            inverter_id=self.inverter_num,
+            inverter_type=self.inverter_type,
+            read_at=time.time(),
+            max_grid_charge_rate=getattr(self, 'max_grid_charge_rate', None),
+            max_pv_charge_rate=self.max_pv_charge_rate,
+            min_pv_charge_rate=self.min_pv_charge_rate,
+            min_charge_rate=self.min_charge_rate,
+            extra=self.api_extra_values(),
+        )
+
+    def api_extra_values(self) -> Dict[str, Any]:
+        """ Backend specific values for api_values.extra. None by default. """
+        return {}
+
+    def publish_api_values(self, values: InverterValues):
+        """ Publish the common per-inverter topics. """
+        topic = self.get_mqtt_inverter_topic()
+        self.mqtt_api.generic_publish(topic + 'SOC', values.soc)
+        self.mqtt_api.generic_publish(topic + 'stored_energy', values.stored_energy)
+        self.mqtt_api.generic_publish(
+            topic + 'stored_usable_energy', values.stored_usable_energy)
+        self.mqtt_api.generic_publish(topic + 'free_capacity', values.free_capacity)
+        self.mqtt_api.generic_publish(topic + 'max_capacity', values.max_capacity)
 
     def publish_inverter_discovery_messages(self):
         """Publish Home Assistant MQTT Auto Discovery messages for common inverter sensors"""

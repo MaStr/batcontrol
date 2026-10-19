@@ -25,12 +25,16 @@
     "data": {
       "soc": 65.0,
       "max_energy_capacity": 9500.0,
+      "gross_energy_capacity": 10000.0,
       "stored_energy_capacity": 6500.0,
       "stored_usable_energy_capacity": 5500.0,
-      "reserved_energy_capacity": 0.0,
+      "reserved_energy_capacity": null,
+      "reserved_energy_capacity_effective": null,
       "free_capacity": 3000.0,
+      "always_allow_discharge_limit_capacity": 8550.0,
       "always_allow_discharge_limit_percent": 90.0,
       "max_charging_from_grid_limit_percent": 89.0,
+      "effective_min_grid_charge_soc_percent": null,
       "soc_limits": {
         "min_soc": 10.0,
         "max_soc": 95.0
@@ -56,6 +60,13 @@
     }
   },
   "forecast/price": {
+    "ok": false,
+    "timestamp": 1792086425053,
+    "error": "no_data_yet",
+    "detail": "No completed control cycle yet. The first forecast is available after the first evaluation.",
+    "_status": 503
+  },
+  "price/status": {
     "ok": false,
     "timestamp": 1792086425053,
     "error": "no_data_yet",

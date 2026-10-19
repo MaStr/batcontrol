@@ -18,6 +18,7 @@ function view(fixture) {
     battery: payload('battery'),
     current: payload('current'),
     price: payload('forecast/price'),
+    priceStatus: payload('price/status'),
     decision: payload('decision'),
     version: payload('version'),
   })
@@ -48,13 +49,15 @@ describe('normalize', () => {
     expect(v.maxSoc).toBe(defaultFixture.battery.data.soc_limits.max_soc)
   })
 
-  it('treats max_energy_capacity as already reduced by max_soc', () => {
-    // Regression: the API value is max_soc/100 * gross. Treating it as the
-    // gross capacity applied max_soc twice (8.08 instead of 8.5 kWh usable).
+  it('uses the gross capacity, not max_energy_capacity', () => {
+    // Regression: max_energy_capacity is max_soc/100 * gross. Treating it as
+    // the gross capacity applied max_soc twice (8.08 instead of 8.5 kWh
+    // usable). The API now reports the gross capacity itself.
     const v = view(defaultFixture)
     const { max_soc: maxSoc, min_soc: minSoc } = defaultFixture.battery.data.soc_limits
     const gross = (defaultFixture.battery.data.max_energy_capacity * 100) / maxSoc
     expect(maxSoc).toBeLessThan(100)
+    expect(defaultFixture.battery.data.gross_energy_capacity).toBeCloseTo(gross, 6)
     expect(v.capacity).toBeCloseTo(gross, 6)
     expect(v.usableCapacity).toBeCloseTo((gross * (maxSoc - minSoc)) / 100, 6)
     // stored_energy_capacity is soc * gross, so the two must agree
@@ -120,12 +123,37 @@ describe('normalize', () => {
   })
 
   describe('a reservation larger than the battery', () => {
-    it('caps it at always_allow_discharge', () => {
+    it('takes the cap at always_allow_discharge from the API', () => {
       const v = view(overFixture)
       expect(v.reserved).toBeGreaterThan(v.capacity)
       expect(v.reservedCapped).toBeLessThan(v.reserved)
       const ceiling = (v.capacity * (Math.min(v.maxSoc, v.allowDischargeSoc) - v.minSoc)) / 100
       expect(v.reservedCapped).toBeCloseTo(ceiling, 6)
+      expect(v.reservedCapped).toBe(
+        overFixture.battery.data.reserved_energy_capacity_effective)
+    })
+  })
+
+  describe('the price statistics', () => {
+    it('come from /price/status', () => {
+      const v = view(defaultFixture)
+      const status = defaultFixture['price/status'].data
+      expect(v.price.stats.min).toEqual({ start: status.min.time_start, price: status.min.value })
+      expect(v.price.stats.max).toEqual({ start: status.max.time_start, price: status.max.value })
+      expect(v.price.stats.spread).toBe(status.spread)
+    })
+
+    it('agree with the forecast the fixture was taken from', () => {
+      // The fixture's status is derived from its own forecast; if the two
+      // drift apart, the dashboard renders a MIN that is not in the curve.
+      const v = view(defaultFixture)
+      const day = v.price.slots.slice(0, 24).map((s) => s.price)
+      expect(v.price.stats.min.price).toBe(Math.min(...day))
+      expect(v.price.stats.max.price).toBe(Math.max(...day))
+    })
+
+    it('are absent before the first cycle', () => {
+      expect(view(noDataFixture).price.stats).toBeNull()
     })
   })
 

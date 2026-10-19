@@ -14,10 +14,15 @@ import numpy as np
 import pytest
 
 from batcontrol.decision_journal import DecisionJournal
+from batcontrol.inverter.api_values import InverterValues
 from batcontrol.logic.decision_trace import (
     Decision, DecisionRecord, DecisionTrace, Outcome, Reason,
 )
 from batcontrol.modes import MODE_ALLOW_DISCHARGING, MODE_NAMES
+from batcontrol.runtime_state import (
+    BatteryState, CalculationResult, ConfiguredParameters, PeakShavingState,
+    SolarMetrics,
+)
 from batcontrol.web.snapshot import ForecastSnapshot
 
 def recent_run_time() -> float:
@@ -32,11 +37,22 @@ def recent_run_time() -> float:
 
 
 class FakeInverter:
-    """Only the SoC limits are read by the API."""
+    """The SoC limits and the cached per-inverter values are read by the API."""
 
-    def __init__(self, min_soc=7.0, max_soc=100.0):
+    def __init__(self, min_soc=7.0, max_soc=100.0, inverter_num=0,
+                 with_values=True):
         self.min_soc = min_soc
         self.max_soc = max_soc
+        self.inverter_num = inverter_num
+        self.inverter_type = 'dummy'
+        self.api_values = None
+        if with_values:
+            self.api_values = InverterValues.from_reading(
+                soc=87.4, capacity=11000.0, min_soc=min_soc, max_soc=max_soc,
+                inverter_id=inverter_num, inverter_type='dummy',
+                read_at=recent_run_time(), max_grid_charge_rate=5000,
+                max_pv_charge_rate=0, min_pv_charge_rate=0,
+                min_charge_rate=500)
 
 
 class FakeGeneralLogic:
@@ -75,12 +91,6 @@ class FakeBatcontrol:  # pylint: disable=too-many-instance-attributes
         self.discharge_blocked = False
         self._grid_charge_locked = False
 
-        self.last_SOC = 87.4
-        self.last_max_capacity = 11000.0
-        self.last_stored_energy = 9614.0
-        self.last_stored_usable_energy = 8844.0
-        self.last_reserved_energy = 1500.0
-        self.last_free_capacity = 1386.0
 
         self.min_price_difference = 0.05
         self.min_price_difference_rel = 0.10
@@ -91,13 +101,45 @@ class FakeBatcontrol:  # pylint: disable=too-many-instance-attributes
         self.batconfig = {'type': 'default'}
 
         self.inverter = FakeInverter()
-        self.last_min_soc = self.inverter.min_soc
-        self.last_max_soc = self.inverter.max_soc
         self.general_logic = FakeGeneralLogic()
         self.peak_shaving_config = FakePeakShavingConfig()
         self.decision_journal = DecisionJournal()
 
-        self.last_min_dynamic_price_difference = 0.0612 if with_data else None
+        self.battery_state = BatteryState(
+            soc=87.4,
+            max_capacity=11000.0,
+            stored_energy=9614.0,
+            stored_usable_energy=8844.0,
+            free_capacity=1386.0,
+            min_soc=self.inverter.min_soc,
+            max_soc=self.inverter.max_soc,
+            always_allow_discharge_limit_capacity=9900.0,
+        )
+        self.configured_parameters = ConfiguredParameters(
+            min_price_difference=0.05,
+            min_price_difference_rel=0.10,
+            always_allow_discharge_limit=0.9,
+            max_charging_from_grid_limit=0.89,
+            production_offset_percent=1.0,
+            peak_shaving_enabled=False,
+            peak_shaving_allow_full_battery_after=14,
+            peak_shaving_price_limit=0.05,
+        )
+        self.calculation_result = None
+        self.solar_metrics = None
+        self.peak_shaving_state = None
+        if with_data:
+            self.calculation_result = CalculationResult(
+                reserved_energy=1500.0,
+                reserved_energy_effective=1500.0,
+                min_dynamic_price_difference=0.0612,
+            )
+            self.solar_metrics = SolarMetrics(
+                solar_active=False, solar_surplus_wh=1210.0,
+                pv_start_battery_wh=7944.0, forecast_min_battery_wh=7944.0)
+            self.peak_shaving_state = PeakShavingState(
+                enabled=False, active=False, suspended_by=None,
+                charge_limit_w=-1)
         self.forecast_snapshot = None
         if with_data:
             self.forecast_snapshot = ForecastSnapshot.build(

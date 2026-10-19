@@ -63,17 +63,23 @@ All read-only, all reporting values from the last completed control cycle.
 | `batcontrol_get_status` | Which mode is active, who set it, when the next evaluation is due |
 | `batcontrol_get_battery` | SoC, capacities, reserved energy, SoC limits |
 | `batcontrol_get_current` | Current price together with the SoC |
+| `batcontrol_get_price_status` | Cheapest and most expensive slot, rank of the current price, average and spread over the next 24 hours |
 | `batcontrol_get_price_forecast` | Price per slot in EUR/kWh |
 | `batcontrol_get_solar_forecast` | Expected PV production in Wh per slot |
 | `batcontrol_get_consumption_forecast` | Expected household consumption in Wh per slot |
 | `batcontrol_get_net_consumption_forecast` | Consumption minus production; negative is surplus |
+| `batcontrol_get_solar` | Whether there is solar surplus, and how low the battery gets until PV takes over |
+| `batcontrol_get_peak_shaving` | Whether peak shaving ran, was suspended by evcc, and which PV charge limit it set |
+| `batcontrol_list_inverters` | The inverters by id |
+| `batcontrol_get_inverter` | The values of one inverter |
 | `batcontrol_get_decision` | Why the current mode was chosen, with the decisive rule |
 | `batcontrol_list_decisions` | Recent decisions from the in-memory journal |
 | `batcontrol_get_config` | The thresholds a decision has to be read against |
 | `batcontrol_get_version` | Version, runtime, forecast interval, timezone |
 
 Forecast tools default to the next **24 hours** and page for more, so an assistant is not handed
-several hundred slots it has to pay for.
+several hundred slots it has to pay for. For "when is it cheapest" questions
+`batcontrol_get_price_status` answers in one small call without any paging.
 
 ## What it cannot tell you
 

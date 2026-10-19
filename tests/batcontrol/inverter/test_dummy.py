@@ -57,6 +57,8 @@ class TestDummyInverter:
         # Should not crash even with None
         dummy.activate_mqtt(None)
         dummy.refresh_api_values()
+        # The values are kept for the web API even without MQTT
+        assert dummy.api_values.soc == 65.0
 
     def test_dummy_shutdown(self):
         """Test that shutdown doesn't crash"""

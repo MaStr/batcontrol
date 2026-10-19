@@ -447,18 +447,6 @@ class MqttInverter(InverterBaseclass):
 
         return soc_value
 
-    def refresh_api_values(self):
-        """
-        Publish current values to batcontrol's MQTT API.
-
-        This is separate from the inverter MQTT topics - it publishes to
-        batcontrol's own MQTT topic structure for monitoring/visualization.
-        """
-        # Parent class handles standard MQTT publishing
-        if self.mqtt_api:
-            # Call parent to publish standard metrics
-            super().refresh_api_values()
-
     def publish_inverter_discovery_messages(self):
         """Publish Home Assistant MQTT Auto Discovery messages for MQTT inverter sensors"""
         # First publish common inverter sensors

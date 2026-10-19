@@ -70,6 +70,15 @@ The rule switches themselves (`time_active`, `price_active`, `solar_cap_active`)
 
 Runtime changes are temporary and are not written back to the configuration file.
 
+### Runtime state in the REST API
+
+`GET /api/v1/peak-shaving` (MCP: `batcontrol_get_peak_shaving`) reports what peak shaving did in
+the last control cycle: whether it is switched on now, whether it ran or was suspended by evcc
+(`suspended_by`), the resulting PV charge limit in W (`charge_limit_w`, -1 = none) and the
+outcome and reason code of the peak shaving rule and of the solar (feed-in) rule. A value
+switched via MQTT also shows in `GET /api/v1/config` under `overrides`, next to the configured
+value. See [REST API](../integrations/rest-api.md).
+
 ## The `allow_full_battery_after` Target Hour
 
 This parameter controls when the battery is **allowed** to be 100% full:

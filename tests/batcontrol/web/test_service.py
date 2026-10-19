@@ -6,10 +6,14 @@ import time
 import pytest
 
 from batcontrol.decision_journal import DecisionJournal
+from batcontrol.runtime_state import (
+    BatteryState, CalculationResult, PeakShavingState,
+)
 
 from batcontrol.web.service import (
     BatcontrolService, NoDataAvailable, NotFound,
 )
+from batcontrol.web.snapshot import ForecastSnapshot
 
 
 def test_health_answers_before_the_first_cycle(empty_bc):
@@ -137,12 +141,14 @@ def test_battery_reports_capacities_and_limits(fake_bc):
 
 def test_unread_inverter_values_are_unknown_not_negative(fake_bc):
     """The core initialises its caches to -1 until the inverter was read."""
-    fake_bc.last_SOC = -1
-    fake_bc.last_max_capacity = -1
-    fake_bc.last_min_soc = -1
+    fake_bc.battery_state = BatteryState()
+    fake_bc.calculation_result = None
     battery = BatcontrolService(fake_bc).battery()
     assert battery['soc'] is None
     assert battery['max_energy_capacity'] is None
+    assert battery['gross_energy_capacity'] is None
+    assert battery['reserved_energy_capacity'] is None
+    assert battery['reserved_energy_capacity_effective'] is None
     assert battery['soc_limits']['min_soc'] is None
 
 
@@ -284,3 +290,188 @@ def test_decision_separates_the_latest_trace_from_the_last_change(fake_bc):
     assert decision['event_at'] is not None
     # both ages are exposed, so a consumer can tell them apart
     assert 'records' in decision['trace']
+
+
+# -- new surface: battery extensions, price status, solar, peak shaving,
+# -- inverters, config overrides
+
+
+def test_battery_reports_the_values_that_used_to_be_mqtt_only(fake_bc):
+    fake_bc.battery_state = fake_bc.battery_state.update(max_soc=95.0)
+    fake_bc.calculation_result = CalculationResult(
+        reserved_energy=20000.0, reserved_energy_effective=9152.6,
+        min_dynamic_price_difference=0.05,
+        effective_min_grid_charge_soc=0.35)
+    battery = BatcontrolService(fake_bc).battery()
+    # 11000 Wh up to max_soc 95 % -> gross capacity scaled back up
+    assert battery['gross_energy_capacity'] == pytest.approx(11578.9, abs=0.1)
+    assert battery['reserved_energy_capacity'] == 20000.0
+    assert battery['reserved_energy_capacity_effective'] == 9152.6
+    assert battery['always_allow_discharge_limit_capacity'] == 9900.0
+    assert battery['effective_min_grid_charge_soc_percent'] == 35.0
+
+
+def test_effective_min_grid_charge_soc_is_null_when_unset(fake_bc):
+    assert BatcontrolService(fake_bc).battery()[
+        'effective_min_grid_charge_soc_percent'] is None
+
+
+def test_price_status_summarises_the_window(fake_bc):
+    status = BatcontrolService(fake_bc).price_status()
+    # prices of the fixture: 0.308, 0.254, 0.201, 0.350 (60-minute slots)
+    assert status['current']['value'] == 0.308
+    assert status['current']['slot'] == 0
+    assert status['rank'] == 3
+    assert status['min']['value'] == 0.201
+    assert status['min']['slot'] == 2
+    assert status['max']['value'] == 0.350
+    assert status['max']['slot'] == 3
+    assert status['spread'] == pytest.approx(0.149)
+    assert status['average'] == pytest.approx(0.2783, abs=1e-4)
+    assert status['min_dynamic_price_difference'] == 0.0612
+    assert status['interval_minutes'] == 60
+
+
+def test_price_status_reports_a_short_horizon(fake_bc):
+    """Four hourly slots do not fill the 24 h window."""
+    status = BatcontrolService(fake_bc).price_status()
+    assert status['slot_count'] == 4
+    assert status['complete'] is False
+    assert status['window_end'] - status['window_start'] == 4 * 3600 * 1000
+    assert status['min']['time_end'] - status['min']['time_start'] == 3600 * 1000
+
+
+def test_price_status_window_is_24_hours_at_15_minutes(fake_bc):
+    """The window is 24 h whatever the optimizer horizon is: 96 slots."""
+    prices = [0.30] * 200
+    prices[100] = 0.01  # beyond 24 h, must not count
+    prices[10] = 0.10
+    fake_bc.time_resolution = 15
+    fake_bc.forecast_snapshot = ForecastSnapshot.build(
+        run_time=time.time(), interval_minutes=15, prices=prices)
+    status = BatcontrolService(fake_bc).price_status()
+    assert status['slot_count'] == 96
+    assert status['complete'] is True
+    assert status['min']['slot'] == 10
+    assert status['min']['value'] == 0.10
+
+
+def test_price_status_ranks_ties_together(fake_bc):
+    fake_bc.forecast_snapshot = ForecastSnapshot.build(
+        run_time=time.time(), interval_minutes=60,
+        prices=[0.20, 0.20, 0.30])
+    status = BatcontrolService(fake_bc).price_status()
+    assert status['rank'] == 1
+    assert status['min']['slot'] == 0  # earliest on a tie
+
+
+def test_price_status_requires_a_cycle(empty_bc):
+    with pytest.raises(NoDataAvailable):
+        BatcontrolService(empty_bc).price_status()
+
+
+def test_solar_reports_the_forecast_metrics(fake_bc):
+    solar = BatcontrolService(fake_bc).solar()
+    assert solar == {
+        'solar_active': False,
+        'solar_surplus_wh': 1210.0,
+        'pv_start_battery_wh': 7944.0,
+        'forecast_min_battery_wh': 7944.0,
+    }
+
+
+def test_solar_requires_a_logic_run(empty_bc):
+    with pytest.raises(NoDataAvailable):
+        BatcontrolService(empty_bc).solar()
+
+
+def test_peak_shaving_reports_the_cycle_outcome(fake_bc):
+    fake_bc.peak_shaving_config.enabled = True
+    fake_bc.peak_shaving_state = PeakShavingState(
+        enabled=True, active=True, suspended_by=None, charge_limit_w=1200,
+        outcome='limit_set', reason='PV_CHARGE_LIMITED')
+    state = BatcontrolService(fake_bc).peak_shaving()
+    assert state['enabled'] is True
+    assert state['active'] is True
+    assert state['charge_limit_w'] == 1200
+    assert state['outcome'] == 'limit_set'
+    assert state['reason'] == 'PV_CHARGE_LIMITED'
+
+
+def test_peak_shaving_enabled_follows_a_runtime_switch(fake_bc):
+    """MQTT can switch it off between two cycles - the switch is live."""
+    fake_bc.peak_shaving_state = PeakShavingState(
+        enabled=True, active=True, suspended_by=None, charge_limit_w=1200)
+    fake_bc.peak_shaving_config.enabled = False
+    assert BatcontrolService(fake_bc).peak_shaving()['enabled'] is False
+
+
+def test_peak_shaving_reports_an_evcc_suspension(fake_bc):
+    fake_bc.peak_shaving_state = PeakShavingState(
+        enabled=True, active=False, suspended_by='EVCC_CHARGING',
+        charge_limit_w=-1)
+    state = BatcontrolService(fake_bc).peak_shaving()
+    assert state['active'] is False
+    assert state['suspended_by'] == 'EVCC_CHARGING'
+
+
+def test_inverters_lists_the_ids(fake_bc):
+    assert BatcontrolService(fake_bc).inverters() == {
+        'count': 1, 'inverters': [{'id': 0, 'type': 'dummy'}]}
+
+
+def test_inverter_reports_the_cached_values(fake_bc):
+    inverter = BatcontrolService(fake_bc).inverter(0)
+    assert inverter['id'] == 0
+    assert inverter['soc'] == 87.4
+    assert inverter['capacity'] == 11000.0
+    assert inverter['max_grid_charge_rate'] == 5000
+    assert inverter['read_at'] is not None
+    assert inverter['extra'] == {}
+
+
+def test_unknown_inverter_is_not_found(fake_bc):
+    with pytest.raises(NotFound):
+        BatcontrolService(fake_bc).inverter(7)
+
+
+def test_inverter_before_its_first_read_is_no_data(fake_bc):
+    fake_bc.inverter.api_values = None
+    with pytest.raises(NoDataAvailable):
+        BatcontrolService(fake_bc).inverter(0)
+
+
+def test_inverter_endpoints_never_call_inverter_methods(fake_bc):
+    """Only cached attributes may be read - no getter, no traffic."""
+    inverter = fake_bc.inverter
+
+    class _AttributesOnly:
+        def __getattr__(self, name):
+            if name in ('inverter_num', 'inverter_type', 'api_values'):
+                return getattr(inverter, name)
+            raise AssertionError(f'the API must not read inverter.{name}')
+    fake_bc.inverter = _AttributesOnly()
+    service = BatcontrolService(fake_bc)
+    service.inverters()
+    service.inverter(0)
+
+
+def test_config_has_no_overrides_as_configured(fake_bc):
+    assert BatcontrolService(fake_bc).configuration()['overrides'] == {}
+
+
+def test_config_lists_runtime_overrides(fake_bc):
+    """Peak shaving on in the config, switched off via MQTT, for example."""
+    fake_bc.configured_parameters = dataclasses.replace(
+        fake_bc.configured_parameters, peak_shaving_enabled=True)
+    fake_bc.peak_shaving_config.enabled = False
+    fake_bc.max_charging_from_grid_limit = 0.0  # grid charge lock
+    config = BatcontrolService(fake_bc).configuration()
+    # the existing fields keep showing the effective value
+    assert config['peak_shaving']['enabled'] is False
+    assert config['battery_control']['max_charging_from_grid_limit'] == 0.0
+    assert config['overrides'] == {
+        'peak_shaving.enabled': {'configured': True, 'effective': False},
+        'battery_control.max_charging_from_grid_limit': {
+            'configured': 0.89, 'effective': 0.0},
+    }

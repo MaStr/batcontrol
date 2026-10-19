@@ -1165,26 +1165,25 @@ class FroniusWR(InverterBaseclass):
 
         self.publish_inverter_discovery_messages()
 
-    def refresh_api_values(self):
+    def api_extra_values(self) -> dict:
+        """ Energy management settings, see __init__. """
+        return {'em_mode': self.em_mode, 'em_power': self.em_power}
+
+    def publish_api_values(self, values):
         """ Publishes all values to mqtt."""
-        if self.mqtt_api:
-            # Call parent to publish standard metrics
-            super().refresh_api_values()
-            # Publish Fronius-specific values
-            self.mqtt_api.generic_publish(self.get_mqtt_inverter_topic(
-            ) + 'max_grid_charge_rate', self.max_grid_charge_rate)
-            self.mqtt_api.generic_publish(self.get_mqtt_inverter_topic(
-            ) + 'max_pv_charge_rate', self.max_pv_charge_rate)
-            self.mqtt_api.generic_publish(
-                self.get_mqtt_inverter_topic() + 'min_soc', self.min_soc)
-            self.mqtt_api.generic_publish(
-                self.get_mqtt_inverter_topic() + 'max_soc', self.max_soc)
-            self.mqtt_api.generic_publish(
-                self.get_mqtt_inverter_topic() + 'capacity', self.get_capacity())
-            self.mqtt_api.generic_publish(
-                self.get_mqtt_inverter_topic() + 'em_mode', self.em_mode)
-            self.mqtt_api.generic_publish(
-                self.get_mqtt_inverter_topic() + 'em_power', self.em_power)
+        # Common metrics first
+        super().publish_api_values(values)
+        # Fronius-specific values
+        topic = self.get_mqtt_inverter_topic()
+        self.mqtt_api.generic_publish(
+            topic + 'max_grid_charge_rate', values.max_grid_charge_rate)
+        self.mqtt_api.generic_publish(
+            topic + 'max_pv_charge_rate', values.max_pv_charge_rate)
+        self.mqtt_api.generic_publish(topic + 'min_soc', values.min_soc)
+        self.mqtt_api.generic_publish(topic + 'max_soc', values.max_soc)
+        self.mqtt_api.generic_publish(topic + 'capacity', values.capacity)
+        self.mqtt_api.generic_publish(topic + 'em_mode', values.extra['em_mode'])
+        self.mqtt_api.generic_publish(topic + 'em_power', values.extra['em_power'])
 
     def publish_inverter_discovery_messages(self):
         """Publish Home Assistant MQTT Auto Discovery messages for Fronius-specific sensors"""

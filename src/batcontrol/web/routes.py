@@ -16,7 +16,8 @@ from fastapi import APIRouter, Path, Query, Request
 
 from .models import (
     Battery, Configuration, Current, Decision, DecisionHistory,
-    Envelope, ForecastBundle, ForecastSeries, Health, Status, Version,
+    Envelope, ForecastBundle, ForecastSeries, Health, Inverter, InverterList,
+    PeakShavingStatus, PriceStatus, SolarMetrics, Status, Version,
 )
 from .service import HISTORY_MAX, WINDOW_MAX, BatcontrolService
 
@@ -24,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 TAG_META = 'meta'
 TAG_STATUS = 'status'
+TAG_PRICE = 'price'
+TAG_INVERTER = 'inverter'
 TAG_FORECAST = 'forecast'
 TAG_DECISION = 'decision'
 TAG_CONFIG = 'config'
@@ -135,6 +138,23 @@ def get_current(request: Request) -> Dict[str, Any]:
 
 
 @router.get(
+    '/price/status',
+    response_model=Envelope[PriceStatus],
+    tags=[TAG_PRICE],
+    summary='Price statistics for the next 24 hours',
+    description='Current price with its rank, cheapest and most expensive'
+                ' slot, average and spread over the next 24 hours, per slot at'
+                ' the configured resolution. The window is independent of the'
+                ' optimizer horizon and cut short where the forecast ends'
+                ' (complete=false). Returns 503 until the first control cycle'
+                ' has completed.',
+)
+def get_price_status(request: Request) -> Dict[str, Any]:
+    """ Price statistics over the next 24 hours. """
+    return envelope(service(request).price_status())
+
+
+@router.get(
     '/forecast',
     response_model=Envelope[ForecastBundle],
     tags=[TAG_FORECAST],
@@ -175,6 +195,71 @@ def get_forecast_series(
     """ A single forecast series. """
     return envelope(
         service(request).forecast(series, limit=limit, offset=offset))
+
+
+@router.get(
+    '/solar',
+    response_model=Envelope[SolarMetrics],
+    tags=[TAG_FORECAST],
+    summary='Solar surplus indicators',
+    description='Whether solar is producing, the expected surplus that does'
+                ' not fit into the battery, and how low the battery gets until'
+                ' and across the next solar window - derived from the'
+                ' forecast in the last control cycle. Returns 503 until the'
+                ' logic has run once.',
+)
+def get_solar(request: Request) -> Dict[str, Any]:
+    """ Surplus indicators from the last control cycle. """
+    return envelope(service(request).solar())
+
+
+@router.get(
+    '/peak-shaving',
+    response_model=Envelope[PeakShavingStatus],
+    tags=[TAG_DECISION],
+    summary='Peak shaving runtime state',
+    description='Whether peak shaving ran in the last cycle, whether evcc'
+                ' suspended it, the resulting PV charge limit and the outcome'
+                ' of its rules. The parameters are in /config. Returns 503'
+                ' until the logic has run once.',
+)
+def get_peak_shaving(request: Request) -> Dict[str, Any]:
+    """ What peak shaving decided in the last cycle. """
+    return envelope(service(request).peak_shaving())
+
+
+@router.get(
+    '/inverters',
+    response_model=Envelope[InverterList],
+    tags=[TAG_INVERTER],
+    summary='Inverters by id',
+    description='The inverters batcontrol controls. With several inverters'
+                ' the other endpoints report them as one battery; use the ids'
+                ' here with /inverter/{inverter_id} for a single one.',
+)
+def get_inverters(request: Request) -> Dict[str, Any]:
+    """ The ids of all inverters. """
+    return envelope(service(request).inverters())
+
+
+@router.get(
+    '/inverter/{inverter_id}',
+    response_model=Envelope[Inverter],
+    tags=[TAG_INVERTER],
+    summary='Values of one inverter',
+    description='The values the inverter reported in the last control cycle,'
+                ' cached by the inverter itself - reading this endpoint never'
+                ' queries the inverter. Returns 404 for an unknown id and 503'
+                ' before the first read.',
+)
+def get_inverter(
+        request: Request,
+        inverter_id: int = Path(
+            ..., ge=0, description='Inverter id from /inverters.',
+            examples=[0]),
+) -> Dict[str, Any]:
+    """ One inverter's cached values. """
+    return envelope(service(request).inverter(inverter_id))
 
 
 @router.get(

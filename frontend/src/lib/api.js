@@ -102,6 +102,18 @@ function priceSlots(forecast) {
   return forecast.slots.map((slot) => ({ start: slot.time_start, price: slot.value }))
 }
 
+/** One price point of /price/status as { start, price }. */
+const pricePoint = (point) => ({ start: point.time_start, price: point.value })
+
+/**
+ * MIN/MAX/SPREAD over the next 24 h, computed by the API (/price/status) -
+ * every client would otherwise have to re-implement the window.
+ */
+function priceStats(status) {
+  if (!status) return null
+  return { min: pricePoint(status.min), max: pricePoint(status.max), spread: status.spread }
+}
+
 /**
  * Build the view model from the API responses.
  *
@@ -110,29 +122,21 @@ function priceSlots(forecast) {
  * 0 % and 100 %, a reservation larger than the battery, no cycle yet) are
  * hard to produce on a live system.
  */
-export function normalize({ status, battery, current, price, decision, version }) {
+export function normalize({ status, battery, current, price, priceStatus, decision, version }) {
   // Left null when the inverter has not been read yet: the grid draws an
   // unknown limit differently from a limit of zero.
   const minSoc = battery.soc_limits?.min_soc ?? null
   const maxSoc = battery.soc_limits?.max_soc ?? null
-  // max_energy_capacity is already reduced by max_soc (the inverter's
-  // get_max_capacity()), but every formula below works on percent of the
-  // gross capacity - scale it back up, or max_soc is applied twice.
-  const maxCapacity = battery.max_energy_capacity ?? 0
-  const capacity = maxSoc > 0 ? (maxCapacity * 100) / maxSoc : maxCapacity
+  // Every formula below works on percent of the gross capacity, which the
+  // API reports directly (max_energy_capacity is already reduced by max_soc).
+  const capacity = battery.gross_energy_capacity ?? 0
   const minSocOr0 = minSoc ?? 0
   const maxSocOr100 = maxSoc ?? 100
   const allowDischargeSoc = battery.always_allow_discharge_limit_percent
   const reserved = battery.reserved_energy_capacity ?? 0
-
-  // Nothing is held back above always_allow_discharge, so that is the upper
-  // bound for a reservation; the API reports the raw demand, which can exceed
-  // the battery.
-  const reserveTopSoc = Math.min(maxSocOr100, allowDischargeSoc ?? maxSocOr100)
-  const reservedCapped = Math.min(
-    reserved,
-    (capacity * Math.max(0, reserveTopSoc - minSocOr0)) / 100,
-  )
+  // The API reports the raw demand, which can exceed the battery, and the
+  // part the battery can actually hold back - capped at always_allow_discharge.
+  const reservedCapped = battery.reserved_energy_capacity_effective ?? 0
 
   const mode = String(status.mode ?? '')
 
@@ -175,6 +179,7 @@ export function normalize({ status, battery, current, price, decision, version }
       intervalMinutes: current?.price?.interval_minutes ?? 60,
       minDynamicDiff: current?.price?.min_dynamic_price_difference ?? null,
       slots: priceSlots(price),
+      stats: priceStats(priceStatus),
     },
   }
 }
@@ -187,7 +192,7 @@ export function normalize({ status, battery, current, price, decision, version }
  * dashboard from re-fetching a 24 h forecast to learn the current mode.
  *
  * status and battery are required - without them there is nothing to draw.
- * current, price and decision are optional, because they are unavailable in
+ * current, price, price status and decision are optional, because they are unavailable in
  * legitimate states: before the first control cycle, or with an empty
  * decision journal after a restart.
  */
@@ -200,13 +205,14 @@ export async function fetchAll() {
     throw new UnauthorizedError(
       'The token contains characters a browser cannot send in a header.')
   }
-  const [status, battery, version, current, price, decision] = await Promise.all([
+  const [status, battery, version, current, price, priceStatus, decision] = await Promise.all([
     get('status'),
     get('battery'),
     getOptional('version'),
     getOptional('current'),
     getOptional('forecast/price'),
+    getOptional('price/status'),
     getOptional('decision'),
   ])
-  return normalize({ status, battery, current, price, decision, version })
+  return normalize({ status, battery, current, price, priceStatus, decision, version })
 }

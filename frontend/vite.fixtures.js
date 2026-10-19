@@ -32,6 +32,8 @@ const TIME_FIELDS = [
   'run_time',
   'time_start',
   'time_end',
+  'window_start',
+  'window_end',
 ]
 
 /**

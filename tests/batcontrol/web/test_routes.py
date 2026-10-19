@@ -136,8 +136,64 @@ def test_no_response_contains_a_secret_looking_key(client, fake_bc):
         '/api/v1/health', '/api/v1/version', '/api/v1/status',
         '/api/v1/battery', '/api/v1/current', '/api/v1/forecast',
         '/api/v1/decision', '/api/v1/decision/history', '/api/v1/config',
+        '/api/v1/price/status', '/api/v1/solar', '/api/v1/peak-shaving',
+        '/api/v1/inverters', '/api/v1/inverter/0',
     ]
     for path in paths:
         body = client.get(path).text.lower()
         for needle in forbidden:
             assert needle not in body, f'{path} mentions {needle!r}'
+
+
+def test_price_status(client):
+    payload = data(client.get('/api/v1/price/status'))
+    assert payload['current']['value'] == 0.308
+    assert payload['min']['value'] == 0.201
+    assert payload['unit'] == 'EUR/kWh'
+
+
+def test_solar(client):
+    payload = data(client.get('/api/v1/solar'))
+    assert payload['solar_surplus_wh'] == 1210.0
+
+
+def test_peak_shaving(client):
+    payload = data(client.get('/api/v1/peak-shaving'))
+    assert payload['enabled'] is False
+    assert payload['charge_limit_w'] == -1
+
+
+@pytest.mark.parametrize('path', [
+    '/api/v1/price/status', '/api/v1/solar', '/api/v1/peak-shaving'])
+def test_cycle_endpoints_before_the_first_cycle_are_503(empty_bc, path):
+    with TestClient(create_app(empty_bc), base_url='http://127.0.0.1') as client:
+        assert client.get(path).status_code == 503
+
+
+def test_inverters_and_one_inverter(client):
+    listing = data(client.get('/api/v1/inverters'))
+    assert listing['count'] == 1
+    inverter_id = listing['inverters'][0]['id']
+    payload = data(client.get(f'/api/v1/inverter/{inverter_id}'))
+    assert payload['id'] == inverter_id
+    assert payload['stored_energy'] == pytest.approx(9614.0)
+
+
+def test_unknown_inverter_is_a_404(client):
+    response = client.get('/api/v1/inverter/5')
+    assert response.status_code == 404
+    assert '/inverters' in response.json()['detail']
+
+
+def test_inverter_id_must_be_a_number(client):
+    assert client.get('/api/v1/inverter/abc').status_code == 422
+
+
+def test_battery_carries_the_capped_reservation(client):
+    payload = data(client.get('/api/v1/battery'))
+    assert payload['reserved_energy_capacity_effective'] == 1500.0
+    assert payload['gross_energy_capacity'] == 11000.0
+
+
+def test_config_carries_overrides(client):
+    assert data(client.get('/api/v1/config'))['overrides'] == {}

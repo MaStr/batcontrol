@@ -58,6 +58,10 @@ from .forecastsolar import ForecastSolar as solar_factory
 
 from .forecastconsumption import Consumption as consumption_factory
 from .forecast_metrics import ForecastMetrics
+from .runtime_state import (
+    BatteryState, CalculationResult, ConfiguredParameters, PeakShavingState,
+    SolarMetrics, as_number, cap_reserved_energy,
+)
 from .value_utils import (
     parse_bool_flag,
     parse_optional_ratio,
@@ -120,26 +124,16 @@ class Batcontrol:
         self.last_charge_rate = 0
         self._limit_battery_charge_rate = -1  # Dynamic battery charge rate limit (-1 = no limit)
         self._evcc_peak_shaving_disabled = False  # Tracks last evcc-disable state for log messages
-        self.last_prices = None
-        self.last_min_dynamic_price_difference = None
-        self.last_consumption = None
-        self.last_production = None
-        self.last_net_consumption = None
-
-        self.last_SOC = -1              # pylint: disable=invalid-name
-        self.last_free_capacity = -1
-        self.last_stored_energy = -1
-        self.last_reserved_energy = -1
-        self.last_max_capacity = -1
-        self.last_stored_usable_energy = -1
-        # Inverter SoC limits in percent, cached per cycle for the web API:
-        # an InverterGroup derives them from every member's capacity, which
-        # can mean inverter traffic, so the web thread must not read them.
-        self.last_min_soc = -1
-        self.last_max_soc = -1
+        # Runtime state for MQTT and the web API, one frozen object per topic
+        # (see runtime_state.py). The battery values are cached per cycle:
+        # the web thread must never read them from the inverter.
+        self.battery_state = BatteryState()
+        self.calculation_result: Optional[CalculationResult] = None
+        self.solar_metrics: Optional[SolarMetrics] = None
+        self.peak_shaving_state: Optional[PeakShavingState] = None
+        self.configured_parameters: Optional[ConfiguredParameters] = None
 
         self.discharge_blocked = False
-        self.discharge_limit = 0
 
         # External (e.g. HEMS/grid operator, section 14a EnWG) grid-charge lock
         self._grid_charge_locked = False
@@ -399,6 +393,7 @@ class Batcontrol:
             max_capacity=self.inverter.get_max_capacity(),
             min_charge_energy=self.batconfig.get('min_recharge_amount', 100.0)
         )
+        self.configured_parameters = self.__capture_configured_parameters()
 
         self.mqtt_api = None
         if config.get('mqtt', None) is not None:
@@ -668,6 +663,25 @@ class Batcontrol:
         )
         self.dynamic_tariff.refresh_data(force=True)
 
+    def __capture_configured_parameters(self) -> ConfiguredParameters:
+        """ Snapshot of the runtime-adjustable parameters as configured.
+
+        Taken once at startup, before MQTT, evcc or the grid charge lock can
+        change anything, so the API can report which values are overridden.
+        """
+        return ConfiguredParameters(
+            min_price_difference=self.min_price_difference,
+            min_price_difference_rel=self.min_price_difference_rel,
+            always_allow_discharge_limit=(
+                self.general_logic.get_always_allow_discharge_limit()),
+            max_charging_from_grid_limit=self.max_charging_from_grid_limit,
+            production_offset_percent=self.production_offset_percent,
+            peak_shaving_enabled=self.peak_shaving_config.enabled,
+            peak_shaving_allow_full_battery_after=(
+                self.peak_shaving_config.allow_full_battery_after),
+            peak_shaving_price_limit=self.peak_shaving_config.price_limit,
+        )
+
     def reset_forecast_error(self):
         """ Reset the forecast error timer """
         self.time_at_forecast_error = -1
@@ -875,6 +889,7 @@ class Batcontrol:
         # runs peak shaving unnecessarily. Initialized unconditionally to avoid
         # an UnboundLocalError if peak shaving is disabled in config.
         evcc_disable_peak_shaving = False
+        evcc_reason = None
         decision_trace = self.__new_trace()
         if peak_shaving_config_enabled:
             if self.evcc_api is not None:
@@ -932,31 +947,9 @@ class Batcontrol:
         calc_output = this_logic_run.get_calculation_output()
         inverter_settings = this_logic_run.get_inverter_control_settings()
 
-        # for API
-        self.set_reserved_energy(calc_output.reserved_energy)
-        self.last_min_dynamic_price_difference = \
-            calc_output.min_dynamic_price_difference
-        if self.mqtt_api is not None:
-            self.mqtt_api.publish_min_dynamic_price_diff(
-                calc_output.min_dynamic_price_difference)
-            solar_active, surplus_wh = ForecastMetrics.solar_active_and_surplus(
-                production, consumption, calc_input.free_capacity
-            )
-            self.mqtt_api.publish_solar_active(solar_active)
-            self.mqtt_api.publish_solar_surplus(surplus_wh)
-            pv_start_wh = ForecastMetrics.pv_start_battery(
-                net_consumption,
-                calc_input.stored_usable_energy, calc_input.free_capacity
-            )
-            self.mqtt_api.publish_pv_start_battery(pv_start_wh)
-            forecast_min_wh = ForecastMetrics.forecast_min_battery(
-                net_consumption,
-                calc_input.stored_usable_energy, calc_input.free_capacity
-            )
-            self.mqtt_api.publish_forecast_min_battery(forecast_min_wh)
-            if calc_output.effective_min_grid_charge_soc is not None:
-                self.mqtt_api.publish_effective_min_grid_charge_soc(
-                    calc_output.effective_min_grid_charge_soc)
+        self.__store_calculation_result(calc_output)
+        self.__store_solar_metrics(
+            production, consumption, net_consumption, calc_input)
 
         if self.discharge_blocked and not \
                 self.general_logic.is_discharge_always_allowed_soc(self.get_SOC()):
@@ -969,10 +962,10 @@ class Batcontrol:
                     Reason.EXTERNAL_DISCHARGE_BLOCK, decisive=True)
             inverter_settings.allow_discharge = False
 
-        # Publish peak shaving charge limit (after evcc guard may have cleared it)
-        if self.mqtt_api is not None and peak_shaving_config_enabled:
-            self.mqtt_api.publish_peak_shaving_charge_limit(
-                inverter_settings.limit_battery_charge_rate)
+        # Peak shaving charge limit (after evcc guard may have cleared it)
+        self.__store_peak_shaving_state(
+            peak_shaving_config_enabled, evcc_reason, decision_trace,
+            inverter_settings.limit_battery_charge_rate)
 
         with self.__decision_scope(decision_trace):
             if inverter_settings.allow_discharge:
@@ -985,6 +978,82 @@ class Batcontrol:
                 self.force_charge(inverter_settings.charge_rate)
             else:
                 self.avoid_discharging()
+
+    def __store_calculation_result(self, calc_output) -> None:
+        """ Keep the logic's per-cycle results and publish them. """
+        reserved_effective = cap_reserved_energy(
+            calc_output.reserved_energy, self.battery_state,
+            self.general_logic.get_always_allow_discharge_limit())
+        self.calculation_result = CalculationResult(
+            reserved_energy=calc_output.reserved_energy,
+            reserved_energy_effective=reserved_effective,
+            min_dynamic_price_difference=(
+                calc_output.min_dynamic_price_difference),
+            effective_min_grid_charge_soc=(
+                calc_output.effective_min_grid_charge_soc),
+        )
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_reserved_energy_capacity(
+                calc_output.reserved_energy)
+            self.mqtt_api.publish_reserved_energy_capacity_effective(
+                reserved_effective)
+            self.mqtt_api.publish_min_dynamic_price_diff(
+                calc_output.min_dynamic_price_difference)
+            if calc_output.effective_min_grid_charge_soc is not None:
+                self.mqtt_api.publish_effective_min_grid_charge_soc(
+                    calc_output.effective_min_grid_charge_soc)
+
+    def __store_solar_metrics(self, production, consumption,
+                              net_consumption, calc_input) -> None:
+        """ Derive the forecast indicators and publish them. """
+        solar_active, surplus_wh = ForecastMetrics.solar_active_and_surplus(
+            production, consumption, calc_input.free_capacity
+        )
+        metrics = SolarMetrics(
+            solar_active=bool(solar_active),
+            solar_surplus_wh=float(surplus_wh),
+            pv_start_battery_wh=float(ForecastMetrics.pv_start_battery(
+                net_consumption,
+                calc_input.stored_usable_energy, calc_input.free_capacity
+            )),
+            forecast_min_battery_wh=float(ForecastMetrics.forecast_min_battery(
+                net_consumption,
+                calc_input.stored_usable_energy, calc_input.free_capacity
+            )),
+        )
+        self.solar_metrics = metrics
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_solar_active(metrics.solar_active)
+            self.mqtt_api.publish_solar_surplus(metrics.solar_surplus_wh)
+            self.mqtt_api.publish_pv_start_battery(metrics.pv_start_battery_wh)
+            self.mqtt_api.publish_forecast_min_battery(
+                metrics.forecast_min_battery_wh)
+
+    def __store_peak_shaving_state(self, config_enabled: bool,
+                                   suspended_by: Optional[str],
+                                   trace: DecisionTrace,
+                                   charge_limit: int) -> None:
+        """ Keep what peak shaving did this cycle and publish the limit. """
+        def last_record(decision):
+            for record in reversed(trace.records):
+                if record.decision == decision:
+                    return record
+            return None
+
+        peak_record = last_record(Decision.PEAK_SHAVING)
+        solar_record = last_record(Decision.SOLAR_LIMIT)
+        self.peak_shaving_state = PeakShavingState(
+            enabled=bool(config_enabled),
+            active=bool(config_enabled) and suspended_by is None,
+            suspended_by=suspended_by if config_enabled else None,
+            charge_limit_w=int(charge_limit) if config_enabled else -1,
+            outcome=peak_record.outcome if peak_record else None,
+            reason=peak_record.reason if peak_record else None,
+            solar_limit_outcome=solar_record.outcome if solar_record else None,
+            solar_limit_reason=solar_record.reason if solar_record else None,
+        )
+        if self.mqtt_api is not None and config_enabled:
+            self.mqtt_api.publish_peak_shaving_charge_limit(charge_limit)
 
     def __set_charge_rate(self, charge_rate: int):
         """ Set charge rate and publish to mqtt """
@@ -1172,10 +1241,6 @@ class Batcontrol:
             net_consumption,
             prices):
         """ Save data for API """
-        self.last_production = production
-        self.last_consumption = consumption
-        self.last_net_consumption = net_consumption
-        self.last_prices = prices
         # One atomic assignment, so a web request never mixes two cycles.
         self.forecast_snapshot = ForecastSnapshot.build(
             run_time=self.last_run_time,
@@ -1203,20 +1268,23 @@ class Batcontrol:
     def get_SOC(self) -> float:  # pylint: disable=invalid-name
         """ Returns the SOC in % (0-100) , collects data from inverter """
         if not self.fetched_soc:
-            self.last_SOC = self.inverter.get_SOC()
-            # self.last_SOC = self.get_stored_energy() / self.get_max_capacity() * 100
+            self.battery_state = self.battery_state.update(
+                soc=self.inverter.get_SOC())
             self.fetched_soc = True
-        return self.last_SOC
+        return self.battery_state.soc
 
     def get_max_capacity(self) -> float:
         """ Returns capacity Wh of all batteries reduced by MAX_SOC """
         if not self.fetched_max_capacity:
-            self.last_max_capacity = self.inverter.get_max_capacity()
+            self.battery_state = self.battery_state.update(
+                max_capacity=self.inverter.get_max_capacity())
             self.fetched_max_capacity = True
             if self.mqtt_api is not None:
                 self.mqtt_api.publish_max_energy_capacity(
-                    self.last_max_capacity)
-        return self.last_max_capacity
+                    self.battery_state.max_capacity)
+                self.mqtt_api.publish_gross_energy_capacity(
+                    self.battery_state.gross_capacity)
+        return self.battery_state.max_capacity
 
     def get_stored_energy(self) -> float:
         """ Returns the stored eneregy in the battery in kWh without
@@ -1224,7 +1292,7 @@ class Batcontrol:
         if not self.fetched_stored_energy:
             self.set_stored_energy(self.inverter.get_stored_energy())
             self.fetched_stored_energy = True
-        return self.last_stored_energy
+        return self.battery_state.stored_energy
 
     def get_stored_usable_energy(self) -> float:
         """ Returns the stored eneregy in the battery in kWh with considering
@@ -1233,26 +1301,24 @@ class Batcontrol:
             self.set_stored_usable_energy(
                 self.inverter.get_stored_usable_energy())
             self.fetched_stored_usable_energy = True
-        return self.last_stored_usable_energy
+        return self.battery_state.stored_usable_energy
 
     def get_free_capacity(self) -> float:
         """ Returns the free capacity in Wh that is usable for (dis)charging """
-        self.last_free_capacity = self.inverter.get_free_capacity()
-        return self.last_free_capacity
-
-    def set_reserved_energy(self, reserved_energy) -> None:
-        """ Set the reserved energy in Wh """
-        self.last_reserved_energy = reserved_energy
-        if self.mqtt_api is not None:
-            self.mqtt_api.publish_reserved_energy_capacity(reserved_energy)
+        self.battery_state = self.battery_state.update(
+            free_capacity=self.inverter.get_free_capacity())
+        return self.battery_state.free_capacity
 
     def get_reserved_energy(self) -> float:
         """ Returns the reserved energy in Wh from last calculation """
-        return self.last_reserved_energy
+        if self.calculation_result is None:
+            return -1
+        return self.calculation_result.reserved_energy
 
     def set_stored_energy(self, stored_energy) -> None:
         """ Set the stored energy in Wh """
-        self.last_stored_energy = stored_energy
+        self.battery_state = self.battery_state.update(
+            stored_energy=stored_energy)
         if self.mqtt_api is not None:
             self.mqtt_api.publish_stored_energy_capacity(stored_energy)
 
@@ -1261,7 +1327,8 @@ class Batcontrol:
             This is the energy that can be used for discharging. This takes
             account of MIN_SOC and MAX_SOC.
         """
-        self.last_stored_usable_energy = stored_usable_energy
+        self.battery_state = self.battery_state.update(
+            stored_usable_energy=stored_usable_energy)
         if self.mqtt_api is not None:
             self.mqtt_api.publish_stored_usable_energy_capacity(
                 stored_usable_energy)
@@ -1270,7 +1337,8 @@ class Batcontrol:
         """ Sets the always_allow_discharge_limit and publishes it to the API.
             This is the value in Wh.
         """
-        self.discharge_limit = discharge_limit
+        self.battery_state = self.battery_state.update(
+            always_allow_discharge_limit_capacity=discharge_limit)
         if self.mqtt_api is not None:
             self.mqtt_api.publish_always_allow_discharge_limit_capacity(
                 discharge_limit)
@@ -1336,15 +1404,26 @@ class Batcontrol:
 
             The values are refreshed regardless of which APIs are enabled.
             They used to be fetched inside the MQTT branch below, which left
-            last_SOC on its -1 sentinel whenever MQTT was disabled - the
+            the SoC on its -1 sentinel whenever MQTT was disabled - the
             value is cached core state, not an MQTT detail, and the REST API
             and the dashboard read the same cache.
         """
         soc = self.get_SOC()
         stored_energy = self.get_stored_energy()
         always_allow_discharge_limit = self.get_always_allow_discharge_limit()
-        self.last_min_soc = getattr(self.inverter, 'min_soc', -1)
-        self.last_max_soc = getattr(self.inverter, 'max_soc', -1)
+        # Inverter SoC limits in percent, cached here for the web API: an
+        # InverterGroup derives them from every member's capacity, which can
+        # mean inverter traffic, so the web thread must not read them.
+        self.battery_state = self.battery_state.update(
+            min_soc=as_number(getattr(self.inverter, 'min_soc', None)),
+            max_soc=as_number(getattr(self.inverter, 'max_soc', None)))
+
+        # Per-inverter values (InverterBaseclass.refresh_api_values): every
+        # inverter caches them for the web API and publishes them to MQTT.
+        # Skipped when nobody reads them, because it reads the inverters.
+        if (self.mqtt_api is not None
+                or getattr(self, 'web_server', None) is not None):
+            self.inverter.refresh_api_values()
 
         if self.mqtt_api is not None:
             self.mqtt_api.publish_SOC(soc)
@@ -1390,8 +1469,6 @@ class Batcontrol:
                 self.peak_shaving_config.allow_full_battery_after)
             self.mqtt_api.publish_peak_shaving_price_limit(
                 self.peak_shaving_config.price_limit)
-            # Trigger Inverter
-            self.inverter.refresh_api_values()
 
     @_tolerate_inverter_outage
     def api_set_mode(self, mode: int):

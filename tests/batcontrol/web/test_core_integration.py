@@ -69,7 +69,7 @@ def test_api_is_disabled_without_an_api_block(config, inverter):
 def test_refresh_populates_the_soc_cache_without_mqtt(config, inverter):
     """Regression: the SoC was only fetched inside the MQTT branch.
 
-    With MQTT disabled last_SOC stayed on its -1 sentinel forever, so the
+    With MQTT disabled the SoC stayed on its -1 sentinel forever, so the
     REST API and the dashboard reported soc: null on a perfectly healthy
     system. The cached values are core state, not an MQTT detail.
     """
@@ -77,12 +77,12 @@ def test_refresh_populates_the_soc_cache_without_mqtt(config, inverter):
     batcontrol = Batcontrol(config)
     try:
         assert batcontrol.mqtt_api is None
-        assert batcontrol.last_SOC == -1  # sentinel before the first refresh
+        assert batcontrol.battery_state.soc == -1  # sentinel before the first refresh
 
         batcontrol.refresh_static_values()
 
-        assert batcontrol.last_SOC == 63.5
-        assert batcontrol.last_stored_energy == 6350
+        assert batcontrol.battery_state.soc == 63.5
+        assert batcontrol.battery_state.stored_energy == 6350
         battery = BatcontrolService(batcontrol).battery()
         assert battery['soc'] == 63.5
         # cached by the core, never read from the inverter by the web thread
