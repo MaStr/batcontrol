@@ -26,7 +26,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build Stage
-FROM python:3.14-alpine AS builder
+FROM python:3.15-alpine AS builder
 
 # Install uv for fast, reliable Python packaging
 COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
@@ -48,7 +48,7 @@ COPY --from=frontend /build/src/batcontrol/web/static ./src/batcontrol/web/stati
 RUN uv build --wheel --out-dir /wheels
 
 # Stage 3: Build the final image
-FROM python:3.14-alpine
+FROM python:3.15-alpine
 
 ARG VERSION
 ARG GIT_SHA
