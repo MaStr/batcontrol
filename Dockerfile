@@ -78,7 +78,7 @@ ENV BATCONTROL_RUNTIME_ENV="docker"
 ENV TZ=UTC
 
 # Create the app directory and copy the app files
-RUN mkdir -p /app /app/logs /app/config
+RUN mkdir -p /app /app/logs /app/config /app/data
 WORKDIR /app
 
 COPY config/load_profile_default.csv ./config/load_profile.csv
@@ -91,7 +91,7 @@ COPY config ./config_template
 # Set the scripts as executable
 RUN chmod +x entrypoint.sh
 
-VOLUME ["/app/logs", "/app/config"]
+VOLUME ["/app/logs", "/app/config", "/app/data"]
 
 # Read-only API, dashboard and MCP server. Only reachable when api.enabled is
 # set in the configuration, and the bind address has to be 0.0.0.0 for a

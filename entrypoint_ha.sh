@@ -42,4 +42,4 @@ fi
 ln -sf $LOG_FILE /app/logs/batcontrol.log
 
 # Start batcontrol.py
-exec python -m batcontrol
+exec python -m batcontrol --data-dir /data/data "$@"

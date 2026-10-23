@@ -243,11 +243,11 @@ class TestTimeResolutionString:
     @patch('batcontrol.core.inverter_factory.create_inverter')
     @patch('batcontrol.core.solar_factory.create_solar_provider')
     @patch('batcontrol.core.consumption_factory.create_consumption')
-    def test_forecast_cache_directory_is_forwarded_to_solar_factory(
+    def test_shared_data_directory_is_forwarded_to_provider_factories(
         self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
         base_mock_config, tmp_path
     ):
-        """The CLI-selected state directory reaches the solar provider."""
+        """Solar and tariff caches share one explicit application data root."""
         mock_inverter = MagicMock()
         mock_inverter.get_max_capacity = MagicMock(return_value=10000)
         mock_inverter_factory.return_value = mock_inverter
@@ -257,12 +257,16 @@ class TestTimeResolutionString:
 
         Batcontrol(
             base_mock_config,
-            forecast_cache_directory=tmp_path,
+            data_directory=tmp_path,
         )
 
         assert (
             mock_solar.call_args.kwargs['persistent_cache_directory']
-            == tmp_path
+            == tmp_path / 'cache' / 'solar'
+        )
+        assert (
+            mock_tariff.call_args.kwargs['persistent_cache_directory']
+            == tmp_path / 'cache' / 'tariff'
         )
 
     @pytest.mark.parametrize('resolution_str', ['60', '15'])

@@ -15,6 +15,7 @@ from ..interval_utils import upsample_forecast, downsample_to_hourly
 
 logger = logging.getLogger(__name__)
 
+
 def _persistence_paths(pvinstallations: list, directory) -> dict:
     """Map installation names to safe persistent cache paths."""
     root = Path(directory)
@@ -159,7 +160,8 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
                     self.next_update_ts = now + self.min_time_between_updates
                     self.schedule_next_refresh()
                 except (ConnectionError, TimeoutError, ProviderError) as e:
-                    logger.error('Error getting raw solar forecast data: %s', e)
+                    logger.error('Error getting raw solar forecast data (%s)',
+                                 type(e).__name__)
                     logger.warning('Using cached raw solar forecast data')
 
     def get_forecast(self) -> dict[int, float]:

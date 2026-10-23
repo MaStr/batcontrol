@@ -1,6 +1,7 @@
 """ Factory for solar forecast providers """
 
 import logging
+from pathlib import Path
 from typing import Optional
 
 from ..value_utils import get_config_value, parse_positive_number
@@ -44,6 +45,11 @@ class ForecastSolar:
             ValueError: If configuration is invalid for the provider
         """
         provider = None
+        cache_options = {}
+        if persistent_cache_directory is not None:
+            cache_options['persistent_cache_directory'] = (
+                Path(persistent_cache_directory) / requested_provider.lower()
+            )
         if requested_provider.lower() == 'fcsolarapi':
             provider = FCSolar(
                 config,
@@ -51,21 +57,22 @@ class ForecastSolar:
                 min_time_between_api_calls,
                 api_delay,
                 target_resolution,
-                persistent_cache_directory=persistent_cache_directory,
+                **cache_options,
             )
         elif requested_provider.lower() == 'evcc-solar':
             provider = EvccSolar(config, timezone, min_time_between_api_calls,
-                                 api_delay, target_resolution)
+                                 api_delay, target_resolution, **cache_options)
         elif requested_provider.lower() == 'solcast':
             provider = Solcast(config, timezone, min_time_between_api_calls,
-                               api_delay, target_resolution)
+                               api_delay, target_resolution, **cache_options)
         elif requested_provider.lower() == HA_ML_PROVIDER:
             provider = _create_homeassistant_ml_provider(
                 config,
                 timezone,
                 min_time_between_api_calls,
                 api_delay,
-                target_resolution
+                target_resolution,
+                **cache_options,
             )
         else:
             raise RuntimeError(f'[ForecastSolar] Unknown provider {requested_provider}')
@@ -77,7 +84,8 @@ def _create_homeassistant_ml_provider(
         timezone,
         min_time_between_api_calls,
         api_delay,
-        target_resolution: int) -> ForecastSolarInterface:
+        target_resolution: int,
+        persistent_cache_directory=None) -> ForecastSolarInterface:
     """Build the HomeAssistant Solar Forecast ML provider from pvinstallations
 
     Picks the installation entry that belongs to this provider, reads its
@@ -128,6 +136,8 @@ def _create_homeassistant_ml_provider(
     }
     if cache_ttl_hours is not None:
         kwargs['cache_ttl_hours'] = cache_ttl_hours
+    if persistent_cache_directory is not None:
+        kwargs['persistent_cache_directory'] = persistent_cache_directory
 
     return ForecastSolarHomeAssistantML(**kwargs)
 
