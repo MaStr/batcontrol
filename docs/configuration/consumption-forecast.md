@@ -92,6 +92,58 @@ docker kill --signal=HUP batcontrol   # Docker container
 
 If no load profile is specified, batcontrol uses `default_load_profile.csv` as a fallback.
 
+### Creating a Load Profile from a Fronius Solar.web Export
+
+If your inverter reports to Fronius Solar.web, you can turn your own consumption history into a
+load profile. Open the **[Load Profile Generator](../assets/load-profile-generator.html)**, select
+your export and download the finished `load_profile.csv`. The whole calculation runs in your
+browser, the file is not uploaded anywhere.
+
+**Export from Solar.web**
+
+1. Open your system in Solar.web and go to the analysis / history view.
+2. Choose the **detailed** view (5 minute resolution) and select the consumption
+   ("Energy balance / Consumption", column `Verbrauch`).
+3. Optional: add the Fronius Wattpilot energy (columns `Energie Wattpilot`).
+4. Export as Excel file (`.xlsx`). Use **at least 12 months**, so every season is covered.
+   Longer exports are fine and need a few seconds to calculate.
+
+Only `.xlsx` is supported. The resolution must be one hour or finer.
+
+**What the generator does**
+
+- Sums the 5 minute values to hours and averages them per month, weekday and hour. This is the
+  `month,weekday,hour,energy` format described above (2016 rows, energy in Wh per hour).
+- Treats hours without data as gaps and fills them with the average of the same weekday and hour
+  from other months. Hours with a few missing samples are scaled up. Gaps are never counted as zero.
+- **Wallbox (optional switch):** subtracts the selected columns (detected automatically for
+  `Energie Wattpilot`, other energy columns can be ticked manually) from the consumption.
+  The assumption is that the car is charged in the cheapest hours anyway, so it should not
+  inflate the base load forecast. Switch it off if the wallbox is part of your regular load.
+- **Smoothing (optional switch):** at the moment the wallbox switches on or off, the total
+  and the wallbox value often do not match for one interval. Those intervals are replaced
+  with the average of their neighbours. Threshold (default 1200 W) and window (default 2
+  intervals) can be changed.
+
+**Checking the result**
+
+The page shows plausibility checks next to the profile: covered period, months without
+data, share of filled gaps, wallbox share, spikes and whether the yearly value is within the
+usual range of a household. A heat map of the average week and a monthly chart help to spot
+errors at a glance (for example a night-time peak caused by a wrongly selected column).
+
+**Yearly consumption**
+
+The page calculates the yearly consumption of the profile with the same formula batcontrol
+uses for scaling. Treat this number as a lower bound and **round it up generously** before
+entering it as `annual_consumption`: the page suggests the calculated value plus 5 %, rounded
+up to the next 100 kWh. Consumers you plan to add (heat pump, electric car) have to be added
+on top. A forecast that is a little too high is usually cheaper than one that is too low, because
+batcontrol then keeps a reserve for the expensive hours.
+
+Copy `load_profile.csv` into your `config/` folder, set `annual_consumption` and send
+`SIGHUP` (see above) or restart batcontrol.
+
 ---
 
 ## 2. HomeAssistant API-Based Forecast
