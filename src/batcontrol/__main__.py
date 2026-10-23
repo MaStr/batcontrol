@@ -4,6 +4,7 @@ import argparse
 import datetime
 import logging
 from pathlib import Path
+import shutil
 import signal
 import sys
 import threading
@@ -21,9 +22,12 @@ LOGFILE_ENABLED_DEFAULT = True
 LOGFILE = "logs/batcontrol.log"
 
 
-def get_forecast_cache_directory(config_file):
-    """Return the restart-cache directory associated with a config file."""
-    return Path(config_file).resolve().parent / "forecast_cache"
+def clear_persisted_cache(data_directory):
+    """Remove only provider cache files before any provider loads them."""
+    try:
+        shutil.rmtree(Path(data_directory) / 'cache')
+    except FileNotFoundError:
+        pass
 
 
 def parse_arguments():
@@ -41,6 +45,14 @@ def parse_arguments():
         '--config', '-c',
         default=CONFIGFILE,
         help=f'Path to configuration file (default: {CONFIGFILE})'
+    )
+    parser.add_argument(
+        '--data-dir', type=Path, default=Path('data'),
+        help='Shared application data directory (default: ./data)',
+    )
+    parser.add_argument(
+        '--clear-cache', action='store_true',
+        help='Delete persisted provider caches before starting normally',
     )
     return parser.parse_args()
 
@@ -101,10 +113,15 @@ def main() -> int:
             "batcontrol.forecastconsumption.forecast_homeassistant.communication"
         ).setLevel(logging.INFO)
 
-    bc = Batcontrol(
-        config,
-        forecast_cache_directory=get_forecast_cache_directory(args.config),
-    )
+    if args.clear_cache:
+        try:
+            clear_persisted_cache(args.data_dir)
+        except OSError:
+            logger.error('Could not clear provider cache; startup aborted')
+            return 1
+        logger.info('Cleared persisted provider caches')
+
+    bc = Batcontrol(config, data_directory=args.data_dir)
 
     # SIGHUP (kill -HUP <pid>) requests a refresh of all providers. The
     # handler only logs and sets a flag; the refresh happens at the start of
@@ -165,6 +182,7 @@ def main() -> int:
         bc.shutdown()
         del bc
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

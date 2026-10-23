@@ -287,7 +287,7 @@ class TestUnknownProvider:
 
 @patch("batcontrol.forecastsolar.solar.FCSolar")
 def test_fcsolar_receives_persistent_cache_directory(mock_fcsolar, tmp_path):
-    """Only forecast.solar receives the restart-cache directory."""
+    """The selected provider gets its own cache namespace."""
     installations = [{"name": "roof"}]
     timezone = pytz.timezone("Europe/Warsaw")
 
@@ -305,5 +305,5 @@ def test_fcsolar_receives_persistent_cache_directory(mock_fcsolar, tmp_path):
         900,
         0,
         60,
-        persistent_cache_directory=tmp_path,
+        persistent_cache_directory=tmp_path / 'fcsolarapi',
     )

@@ -51,7 +51,7 @@ class EvccSolar(ForecastSolarBaseclass):
     """
 
     def __init__(self, pvinstallations, timezone, min_time_between_api_calls,
-                 api_delay, target_resolution=60):
+                 api_delay, target_resolution=60, persistent_cache_directory=None):
         """
         Initialize the EvccSolar instance.
 
@@ -62,10 +62,12 @@ class EvccSolar(ForecastSolarBaseclass):
             min_time_between_API_calls (int): Minimum time between API calls in seconds
             api_delay (int): Delay in seconds for API evaluation
             target_resolution (int): Target resolution in minutes (15 or 60)
+            persistent_cache_directory: Optional directory for restart-safe raw data.
         """
         super().__init__(pvinstallations, timezone, min_time_between_api_calls, api_delay,
                          target_resolution=target_resolution,
-                         native_resolution=15)  # evcc provides 15-minute data
+                         native_resolution=15,
+                         persistent_cache_directory=persistent_cache_directory)
 
         # Extract URL from pvinstallations config
         if not pvinstallations or not isinstance(pvinstallations, list):
@@ -123,7 +125,8 @@ class EvccSolar(ForecastSolarBaseclass):
 
                 # Calculate relative 15-minute interval from start of current hour
                 diff = timestamp - current_hour_start
-                rel_interval_15min = int(diff.total_seconds() / 900)  # 900 seconds = 15 minutes
+                # 900 seconds = 15 minutes
+                rel_interval_15min = int(diff.total_seconds() / 900)
 
                 if rel_interval_15min >= 0:
                     value = item.get('value', 0)

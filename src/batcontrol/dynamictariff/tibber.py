@@ -31,7 +31,8 @@ class Tibber(DynamicTariffBaseclass):
             token,
             min_time_between_API_calls=0,
             delay_evaluation_by_seconds=0,
-            target_resolution: int = 60):
+            target_resolution: int = 60,
+            persistence_path=None):
         # Tibber API supports both resolutions, so we fetch at target resolution
         # to avoid unnecessary conversion
         if target_resolution == 15:
@@ -46,7 +47,8 @@ class Tibber(DynamicTariffBaseclass):
             min_time_between_API_calls,
             delay_evaluation_by_seconds,
             target_resolution=target_resolution,
-            native_resolution=native_resolution
+            native_resolution=native_resolution,
+            persistence_path=persistence_path,
         )
         self.access_token = token
         self.url = "https://api.tibber.com/v1-beta/gql"

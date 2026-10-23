@@ -60,7 +60,8 @@ class Energyforecast(DynamicTariffBaseclass):
 
     def __init__(self, timezone, token, min_time_between_API_calls=0,
                  delay_evaluation_by_seconds=0, target_resolution: int = 60,
-                 market_zone: str = 'DE', use_total_price: bool = False):
+                 market_zone: str = 'DE', use_total_price: bool = False,
+                 persistence_path=None):
         """ Initialize Energyforecast class with parameters """
         # Enforce provider-specific minimum refresh interval.
         effective_interval = max(min_time_between_API_calls, _PROVIDER_MIN_INTERVAL)
@@ -71,7 +72,8 @@ class Energyforecast(DynamicTariffBaseclass):
             effective_interval,
             delay_evaluation_by_seconds,
             target_resolution=target_resolution,
-            native_resolution=15
+            native_resolution=15,
+            persistence_path=persistence_path,
         )
         self.url = 'https://www.energyforecast.de/api/v2/forecast'
         self.token = token

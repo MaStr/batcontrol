@@ -198,6 +198,9 @@ lib
 
 site/
 
+# Local application state and private provider responses.
+/data/
+
 # Peak shaving scenario datasets for the documentation.
 # Generated from scripts/data/peak_shaving_example_day.{csv,yaml} by
 # scripts/generate_peak_shaving_csv.py during the documentation build.

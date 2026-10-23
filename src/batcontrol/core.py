@@ -15,6 +15,7 @@ import time
 import os
 import logging
 import platform
+from pathlib import Path
 import functools
 import contextlib
 import threading
@@ -114,7 +115,7 @@ class Batcontrol:
     """ Main class for Batcontrol, handles the logic and control of the battery system """
     general_logic = None  # type: CommonLogic
 
-    def __init__(self, configdict: dict, forecast_cache_directory=None):
+    def __init__(self, configdict: dict, data_directory=None):
         # For API
         self.api_overwrite = False
         # -1 = charge from grid, 0 = avoid discharge,
@@ -221,7 +222,11 @@ class Batcontrol:
             TIME_BETWEEN_UTILITY_API_CALLS,
             DELAY_EVALUATION_BY_SECONDS,
             target_resolution=self.time_resolution,
-            nf_cfg=config.get('dynamic_network_fees', {})
+            nf_cfg=config.get('dynamic_network_fees', {}),
+            persistent_cache_directory=(
+                Path(data_directory) / 'cache' / 'tariff'
+                if data_directory is not None else None
+            ),
         )
 
         self.inverter = inverter_factory.create_inverters(
@@ -254,7 +259,10 @@ class Batcontrol:
             requested_provider=config.get(
                 'solar_forecast_provider', 'fcsolarapi'),
             target_resolution=self.time_resolution,
-            persistent_cache_directory=forecast_cache_directory,
+            persistent_cache_directory=(
+                Path(data_directory) / 'cache' / 'solar'
+                if data_directory is not None else None
+            ),
         )
 
         self.fc_consumption = consumption_factory.create_consumption(

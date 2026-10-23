@@ -68,6 +68,7 @@ class TariffZones(DynamicTariffBaseclass):
             zone_2_hours=None,
             tariff_zone_3: float = None,
             zone_3_hours=None,
+            persistence_path=None,
     ):
         super().__init__(
             timezone,
@@ -75,6 +76,7 @@ class TariffZones(DynamicTariffBaseclass):
             delay_evaluation_by_seconds,
             target_resolution=target_resolution,
             native_resolution=60,
+            persistence_path=persistence_path,
         )
 
         self._tariff_zone_1 = None

@@ -9,6 +9,12 @@ Currently following data providers are available:
 
 You can chose one and need to adjust the configuration.
 
+API tariff providers persist their latest raw response under the shared
+`cache/tariff/` directory. After a restart, a failed refresh can use that response
+until its original 12-hour TTL expires. Static tariff zones are still rebuilt
+from the current configuration. See [Application data and provider caches](../getting-started/installation.md#application-data-and-provider-caches)
+for data paths and `--clear-cache`.
+
 !!! info "Key names"
     The credential is `api_token` and the endpoint is `url`, consistently across all
     configuration sections. The older spellings `apikey`, `apitoken` and `base_url` are still
