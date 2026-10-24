@@ -11,8 +11,11 @@ Behaviour:
   (core.run) skips the control cycle and retries on the next scheduled run, so
   the loop interval is the natural backoff and no decision is made on stale
   data.
-- If the inverter stays unreachable past the tolerance window, the failure is
-  escalated to InverterOutageError, which terminates batcontrol.
+- Unresolved failures share a monotonic outage clock. Only recovery of failed
+  operations clears it; unrelated successful calls cannot hide an outage.
+  Successful mode commands supersede earlier failed mode commands.
+- If failures persist past the tolerance window, they are escalated to
+  InverterOutageError, which terminates batcontrol.
 - shutdown() and refresh_api_values() are best-effort: they never abort a cycle.
 """
 
@@ -38,6 +41,13 @@ _COMMAND_METHODS = frozenset({
 _BEST_EFFORT_METHODS = frozenset({'refresh_api_values', 'shutdown'})
 
 
+def _remaining_failures(failed_methods, successful_method):
+    """Resolve one operation, or supersede failed modes with an accepted mode."""
+    recovered = (_COMMAND_METHODS if successful_method in _COMMAND_METHODS
+                 else {successful_method})
+    return failed_methods - recovered
+
+
 class ResilientInverterWrapper:
     """Delegates to an inverter, turning communication failures into signals."""
 
@@ -45,7 +55,8 @@ class ResilientInverterWrapper:
         self._inverter = inverter
         self._outage_tolerance = outage_tolerance_seconds
         self._initialized = False           # True after first successful set_mode_*
-        self._outage_start = None            # timestamp of the first failure
+        self._outage_start = None            # monotonic time of the first failure
+        self._failed_methods = frozenset()
 
     @property
     def wrapped_inverter(self):
@@ -77,10 +88,12 @@ class ResilientInverterWrapper:
                     return None
                 self._on_failure(name, e)  # always raises
                 return None  # unreachable, keeps linters happy
-            if self._outage_start is not None:
+            self._failed_methods = _remaining_failures(
+                self._failed_methods, name)
+            if self._outage_start is not None and not self._failed_methods:
                 logger.info(
                     "Inverter connection restored after %.1f min outage",
-                    (time.time() - self._outage_start) / 60)
+                    (time.monotonic() - self._outage_start) / 60)
                 self._outage_start = None
             if is_command and not self._initialized:
                 logger.info("Inverter initialization complete (first set_mode succeeded)")
@@ -96,7 +109,8 @@ class ResilientInverterWrapper:
                 "Inverter failure before initialization (config error?): %s", error)
             raise
 
-        now = time.time()
+        now = time.monotonic()
+        self._failed_methods = self._failed_methods | {name}
         if self._outage_start is None:
             self._outage_start = now
         outage = now - self._outage_start
