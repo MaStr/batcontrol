@@ -125,6 +125,121 @@ def test_transport_reconnects_once_and_retries_write_after_connection_loss():
     assert mock_client.connect.call_count == 2
 
 
+def test_client_reports_remote_eof_as_connection_error():
+    client = ModbusTCPClient("192.0.2.1")
+    client._sock = MagicMock()
+    client._sock.recv.side_effect = [b"par", b""]
+
+    with pytest.raises(ConnectionError, match="Connection closed by remote"):
+        client._recv_exact(7)
+
+
+def test_disconnected_client_reports_connection_error():
+    client = ModbusTCPClient("192.0.2.1")
+
+    with pytest.raises(ConnectionError, match="not connected"):
+        client.read_holding_registers(40345, 24)
+
+
+@pytest.mark.parametrize("error", [TimeoutError(), OSError(113, "No route to host")])
+def test_client_closes_socket_when_connect_fails(error):
+    sock = MagicMock()
+    sock.connect.side_effect = error
+    client = ModbusTCPClient("192.0.2.1")
+
+    with patch("batcontrol.inverter.fronius_modbus.tcp_transport.socket.socket",
+               return_value=sock):
+        with pytest.raises(type(error)):
+            client.connect()
+
+    sock.close.assert_called_once_with()
+    assert client._sock is None
+
+
+@pytest.mark.parametrize("operation", ["read", "write"])
+def test_transport_reconnect_failure_is_bounded(operation):
+    client = MagicMock()
+    with patch("batcontrol.inverter.fronius_modbus.tcp_transport.ModbusTCPClient",
+               return_value=client):
+        transport = FroniusModbusTcpTransport("192.0.2.1")
+    client.read_holding_registers.side_effect = TimeoutError()
+    client.write_register.side_effect = TimeoutError()
+    client.connect.side_effect = OSError(113, "No route to host")
+
+    with pytest.raises(OSError, match="No route to host"):
+        if operation == "read":
+            transport.read_registers(40345, 24)
+        else:
+            transport.write_registers([RegisterWrite(40360, 1)])
+
+    assert client.connect.call_count == 2  # startup plus one reconnect
+    method = (client.read_holding_registers if operation == "read"
+              else client.write_register)
+    assert method.call_count == 1
+
+
+@pytest.mark.parametrize("operation", ["read", "write"])
+def test_transport_closes_connection_after_retry_also_fails(operation):
+    client = MagicMock()
+    with patch("batcontrol.inverter.fronius_modbus.tcp_transport.ModbusTCPClient",
+               return_value=client):
+        transport = FroniusModbusTcpTransport("192.0.2.1")
+    client.read_holding_registers.side_effect = TimeoutError()
+    client.write_register.side_effect = TimeoutError()
+
+    with pytest.raises(TimeoutError):
+        if operation == "read":
+            transport.read_registers(40345, 24)
+        else:
+            transport.write_registers([RegisterWrite(40360, 1)])
+
+    assert client.connect.call_count == 2
+    assert client.close.call_count == 2
+    method = (client.read_holding_registers if operation == "read"
+              else client.write_register)
+    assert method.call_count == 2
+
+
+def test_real_client_reconnects_on_next_operation_after_two_timeouts():
+    failed_sockets = [MagicMock(), MagicMock()]
+    for sock in failed_sockets:
+        sock.recv.side_effect = TimeoutError()
+    recovered_socket = MagicMock()
+    # Two failed requests used transaction IDs 1 and 2; the next is 3.
+    recovered_socket.recv.side_effect = [
+        struct.pack(">HHHB", 3, 0, 5, 1), b"\x03\x02\x00\x2a",
+    ]
+    with patch("batcontrol.inverter.fronius_modbus.tcp_transport.socket.socket",
+               side_effect=[*failed_sockets, recovered_socket]):
+        transport = FroniusModbusTcpTransport("192.0.2.1")
+        with pytest.raises(TimeoutError):
+            transport.read_registers(40345, 1)
+        assert transport.client._sock is None
+
+        result = transport.read_registers(40345, 1)
+
+    assert result == RegisterRead(start_register=40345, values=[42])
+    for sock in failed_sockets:
+        sock.recv.assert_called_once_with(7)
+        sock.close.assert_called_once_with()
+    recovered_socket.connect.assert_called_once_with(("192.0.2.1", 502))
+
+
+def test_transport_does_not_reconnect_for_protocol_errors():
+    client = MagicMock()
+    with patch("batcontrol.inverter.fronius_modbus.tcp_transport.ModbusTCPClient",
+               return_value=client):
+        transport = FroniusModbusTcpTransport("192.0.2.1")
+    client.read_holding_registers.side_effect = RuntimeError(
+        "Modbus exception: 11")
+
+    with pytest.raises(RuntimeError, match="Modbus exception: 11"):
+        transport.read_registers(40345, 24)
+
+    client.connect.assert_called_once_with()
+    client.read_holding_registers.assert_called_once_with(40345, 24)
+
+
 def test_transport_rejects_empty_write_batch():
     mock_client = MagicMock()
 
