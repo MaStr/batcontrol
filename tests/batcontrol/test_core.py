@@ -635,6 +635,50 @@ class TestCoreRunDispatch:
 
         return Batcontrol(mock_config), fake_logic
 
+    def test_run_reduces_horizon_to_short_consumption_forecast(
+            self, mock_config, mocker):
+        """A consumption forecast shorter than prices/production shortens
+        the horizon instead of raising (regression: HA consumption is
+        limited to 48h while prices and production reach further)."""
+        bc, fake_logic = self._make_batcontrol_for_grid_charge_target(
+            mock_config,
+            mocker,
+            prices={i: 0.3 for i in range(10)},
+            production={i: 0 for i in range(10)},
+            consumption={0: 500, 1: 500, 2: 500},
+        )
+        handle_error = mocker.patch.object(bc, 'handle_forecast_error')
+
+        try:
+            bc.run()
+
+            handle_error.assert_not_called()
+            bc.fc_consumption.get_forecast.assert_called_once_with(10)
+            calc_input = fake_logic.calculate.call_args.args[0]
+            assert len(calc_input.consumption) == 3
+            assert len(calc_input.prices) == 3
+        finally:
+            bc.shutdown()
+
+    def test_run_treats_empty_consumption_forecast_as_error(
+            self, mock_config, mocker):
+        bc, fake_logic = self._make_batcontrol_for_grid_charge_target(
+            mock_config,
+            mocker,
+            prices={i: 0.3 for i in range(6)},
+            production={i: 0 for i in range(6)},
+            consumption={},
+        )
+        handle_error = mocker.patch.object(bc, 'handle_forecast_error')
+
+        try:
+            bc.run()
+
+            handle_error.assert_called_once()
+            fake_logic.calculate.assert_not_called()
+        finally:
+            bc.shutdown()
+
     def test_run_passes_grid_charge_target_config_to_logic(
             self, mock_config, mocker):
         mock_config['battery_control'].update({
