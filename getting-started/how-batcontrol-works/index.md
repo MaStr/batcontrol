@@ -68,7 +68,7 @@ Based on the forecasts and current battery state, batcontrol puts your inverter 
 
 ### Mode 8: LIMIT BATTERY CHARGE RATE (Peak Shaving)
 
-- **Requires**: version 0.8.0+ , Logic type `next` must be selected in `battery_control.type`
+- **Requires**: version 0.8.0+ , `peak_shaving.enabled: true`
 - **When**: Peak shaving is enabled, PV is producing, and the battery should not fill up too quickly
 - **Behavior**:
 - Battery **discharge is allowed** (handles household demand normally)

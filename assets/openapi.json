@@ -1,0 +1,2568 @@
+{
+  "components": {
+    "schemas": {
+      "Battery": {
+        "description": "Battery state and the limits the dashboard's SOC grid needs.\n\nEvery energy value is in Wh and may be null while the inverter has not\nbeen read yet - null means unknown, never zero.",
+        "properties": {
+          "always_allow_discharge_limit_capacity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "always_allow_discharge_limit as energy in Wh: max_energy_capacity * limit.",
+            "title": "Always Allow Discharge Limit Capacity"
+          },
+          "always_allow_discharge_limit_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Above this SoC discharging is always allowed, percent.",
+            "title": "Always Allow Discharge Limit Percent"
+          },
+          "effective_min_grid_charge_soc_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Minimum grid charge target the logic applied in the last cycle, percent. Null when min_grid_charge_soc is not configured.",
+            "title": "Effective Min Grid Charge Soc Percent"
+          },
+          "free_capacity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Capacity in Wh still free for charging.",
+            "title": "Free Capacity"
+          },
+          "gross_energy_capacity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Battery capacity in Wh without the max_soc reduction. SoC percentages refer to this value.",
+            "title": "Gross Energy Capacity"
+          },
+          "max_charging_from_grid_limit_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Grid charging stops at this SoC, percent.",
+            "title": "Max Charging From Grid Limit Percent"
+          },
+          "max_energy_capacity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Battery capacity in Wh up to max_soc, i.e. gross capacity * max_soc / 100 (not reduced by min_soc).",
+            "title": "Max Energy Capacity"
+          },
+          "reserved_energy_capacity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Energy in Wh the logic wants to hold back for upcoming expensive hours. This is the raw demand and can exceed the battery capacity; see reserved_energy_capacity_effective.",
+            "title": "Reserved Energy Capacity"
+          },
+          "reserved_energy_capacity_effective": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "reserved_energy_capacity in Wh capped to what the battery can hold back: between min_soc and the lower of max_soc and always_allow_discharge_limit.",
+            "title": "Reserved Energy Capacity Effective"
+          },
+          "soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "State of charge in percent (0-100).",
+            "title": "Soc"
+          },
+          "soc_limits": {
+            "$ref": "#/components/schemas/SocLimits",
+            "description": "Inverter SoC window."
+          },
+          "stored_energy_capacity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Energy stored in the battery in Wh.",
+            "title": "Stored Energy Capacity"
+          },
+          "stored_usable_energy_capacity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stored energy in Wh that may actually be discharged, i.e. above the inverter min_soc.",
+            "title": "Stored Usable Energy Capacity"
+          }
+        },
+        "required": [
+          "soc_limits"
+        ],
+        "title": "Battery",
+        "type": "object"
+      },
+      "BatteryControlConfig": {
+        "description": "The parameters that drive the price decision. ",
+        "properties": {
+          "always_allow_discharge_limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SoC ratio (0-1) above which discharging is always allowed.",
+            "title": "Always Allow Discharge Limit"
+          },
+          "max_charging_from_grid_limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SoC ratio (0-1) up to which grid charging is allowed.",
+            "title": "Max Charging From Grid Limit"
+          },
+          "min_grid_charge_soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional SoC ratio (0-1) to preserve before expensive slots.",
+            "title": "Min Grid Charge Soc"
+          },
+          "min_price_difference": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absolute price delta in EUR/kWh to justify charging.",
+            "title": "Min Price Difference"
+          },
+          "min_price_difference_rel": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Relative price delta as a factor (0.10 = 10 %).",
+            "title": "Min Price Difference Rel"
+          },
+          "preserve_min_grid_charge_soc": {
+            "description": "Whether min_grid_charge_soc counts as reserved energy.",
+            "title": "Preserve Min Grid Charge Soc",
+            "type": "boolean"
+          },
+          "production_offset_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Factor applied to the solar forecast (1.0 = unchanged).",
+            "title": "Production Offset Percent"
+          },
+          "type": {
+            "description": "Logic type: default (or its alias next).",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "preserve_min_grid_charge_soc"
+        ],
+        "title": "BatteryControlConfig",
+        "type": "object"
+      },
+      "ConfigOverride": {
+        "description": "A parameter whose runtime value differs from the configuration. ",
+        "properties": {
+          "configured": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Value from the configuration file, in the unit of the field it refers to.",
+            "title": "Configured"
+          },
+          "effective": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Value in effect now, same unit.",
+            "title": "Effective"
+          }
+        },
+        "title": "ConfigOverride",
+        "type": "object"
+      },
+      "Configuration": {
+        "description": "Runtime parameters that explain batcontrol's behaviour.\n\nBuilt from an explicit allow-list of runtime values. No credential can\nappear here: the endpoint does not read the configuration file at all.",
+        "properties": {
+          "battery_control": {
+            "$ref": "#/components/schemas/BatteryControlConfig",
+            "description": "Price decision parameters."
+          },
+          "evaluation_interval_seconds": {
+            "description": "Nominal seconds between two control cycles.",
+            "title": "Evaluation Interval Seconds",
+            "type": "integer"
+          },
+          "interval_minutes": {
+            "description": "Forecast slot width, 15 or 60.",
+            "title": "Interval Minutes",
+            "type": "integer"
+          },
+          "overrides": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ConfigOverride"
+            },
+            "description": "Parameters changed at runtime (MQTT, evcc, grid charge lock, or the loop lowering max_charging_from_grid_limit below always_allow_discharge_limit), keyed by \"<section>.<field>\". The fields above always show the effective value; empty when nothing is overridden.",
+            "title": "Overrides",
+            "type": "object"
+          },
+          "peak_shaving": {
+            "$ref": "#/components/schemas/PeakShavingConfigModel",
+            "description": "Peak shaving configuration."
+          },
+          "timezone": {
+            "description": "Configured local timezone.",
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "interval_minutes",
+          "timezone",
+          "evaluation_interval_seconds",
+          "battery_control",
+          "peak_shaving"
+        ],
+        "title": "Configuration",
+        "type": "object"
+      },
+      "Current": {
+        "description": "Everything the dashboard header and price block need in one call. ",
+        "properties": {
+          "price": {
+            "$ref": "#/components/schemas/CurrentPrice",
+            "description": "Current price situation."
+          },
+          "soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "State of charge, percent.",
+            "title": "Soc"
+          },
+          "soc_limits": {
+            "$ref": "#/components/schemas/SocLimits",
+            "description": "Inverter SoC window."
+          },
+          "version": {
+            "description": "batcontrol version.",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "price",
+          "soc_limits"
+        ],
+        "title": "Current",
+        "type": "object"
+      },
+      "CurrentPrice": {
+        "description": "The price situation right now. ",
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Price of the current slot in EUR/kWh. Taken from the price forecast, so it is always populated regardless of which decision path ran.",
+            "title": "Current"
+          },
+          "current_ts": {
+            "description": "Start of the current price slot, epoch ms.",
+            "title": "Current Ts",
+            "type": "integer"
+          },
+          "interval_minutes": {
+            "description": "Slot width in minutes: 15 or 60.",
+            "title": "Interval Minutes",
+            "type": "integer"
+          },
+          "min_dynamic_price_difference": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Price delta in EUR/kWh that a future slot has to beat before batcontrol charges from the grid for it.",
+            "title": "Min Dynamic Price Difference"
+          },
+          "unit": {
+            "description": "Always EUR/kWh.",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_ts",
+          "unit",
+          "interval_minutes"
+        ],
+        "title": "CurrentPrice",
+        "type": "object"
+      },
+      "Decision": {
+        "description": "The latest decision and the trace that explains it.\n\n`trace`, `decisive` and `event` are passed through from the decision\njournal. Their inner shape is documented in\ndocs/development/decision-trace.md and deliberately not pinned down here,\nbecause the inputs of a record differ per reason code.",
+        "properties": {
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When this decision was taken, epoch ms.",
+            "title": "Decided At"
+          },
+          "decisive": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The record that determined the outcome.",
+            "title": "Decisive"
+          },
+          "event": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last status *change*, including the mode transition. This is not the latest evaluation: it only moves when the mode or value changes, or every 15 minutes. Render the records from `trace`, not from here.",
+            "title": "Event"
+          },
+          "event_at": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When that status change happened, epoch ms. Compare it with decided_at to see how much older it is.",
+            "title": "Event At"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Plain language \"why\" of the decisive step.",
+            "title": "Explanation"
+          },
+          "status_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resulting mode plus a plain language reason, the same text the Home Assistant Decision sensor shows.",
+            "title": "Status Text"
+          },
+          "trace": {
+            "additionalProperties": true,
+            "description": "The full trace: timestamp, decided_by and records. Its own timestamp is ISO 8601, because the trace is the same object the MQTT Decision sensor publishes.",
+            "title": "Trace",
+            "type": "object"
+          }
+        },
+        "required": [
+          "trace"
+        ],
+        "title": "Decision",
+        "type": "object"
+      },
+      "DecisionHistory": {
+        "description": "A window into the in-memory decision journal. ",
+        "properties": {
+          "count": {
+            "description": "Number of traces returned.",
+            "title": "Count",
+            "type": "integer"
+          },
+          "limit": {
+            "description": "Requested maximum.",
+            "title": "Limit",
+            "type": "integer"
+          },
+          "traces": {
+            "description": "Traces, oldest first.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Traces",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "limit",
+          "traces"
+        ],
+        "title": "DecisionHistory",
+        "type": "object"
+      },
+      "Envelope_Battery_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Battery",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[Battery]",
+        "type": "object"
+      },
+      "Envelope_Configuration_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Configuration",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[Configuration]",
+        "type": "object"
+      },
+      "Envelope_Current_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Current",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[Current]",
+        "type": "object"
+      },
+      "Envelope_DecisionHistory_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DecisionHistory",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[DecisionHistory]",
+        "type": "object"
+      },
+      "Envelope_Decision_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Decision",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[Decision]",
+        "type": "object"
+      },
+      "Envelope_ForecastBundle_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ForecastBundle",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[ForecastBundle]",
+        "type": "object"
+      },
+      "Envelope_ForecastSeries_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ForecastSeries",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[ForecastSeries]",
+        "type": "object"
+      },
+      "Envelope_Health_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Health",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[Health]",
+        "type": "object"
+      },
+      "Envelope_InverterList_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/InverterList",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[InverterList]",
+        "type": "object"
+      },
+      "Envelope_Inverter_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Inverter",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[Inverter]",
+        "type": "object"
+      },
+      "Envelope_PeakShavingStatus_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PeakShavingStatus",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[PeakShavingStatus]",
+        "type": "object"
+      },
+      "Envelope_PriceStatus_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PriceStatus",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[PriceStatus]",
+        "type": "object"
+      },
+      "Envelope_SolarMetrics_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SolarMetrics",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[SolarMetrics]",
+        "type": "object"
+      },
+      "Envelope_Status_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Status",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[Status]",
+        "type": "object"
+      },
+      "Envelope_Version_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Version",
+            "description": "The payload."
+          },
+          "ok": {
+            "default": true,
+            "description": "False only in an error response.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "timestamp": {
+            "description": "Server time when the response was built, epoch ms.",
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "data"
+        ],
+        "title": "Envelope[Version]",
+        "type": "object"
+      },
+      "ForecastBundle": {
+        "description": "All four series of one control cycle, for a single poll. ",
+        "properties": {
+          "consumption": {
+            "description": "Forecast household consumption in Wh per slot.",
+            "items": {
+              "$ref": "#/components/schemas/ForecastSlot"
+            },
+            "title": "Consumption",
+            "type": "array"
+          },
+          "has_more": {
+            "description": "True when further slots exist beyond this window.",
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "interval_minutes": {
+            "description": "Slot width in minutes.",
+            "title": "Interval Minutes",
+            "type": "integer"
+          },
+          "net_consumption": {
+            "description": "Consumption minus production in Wh per slot. Negative means surplus solar energy.",
+            "items": {
+              "$ref": "#/components/schemas/ForecastSlot"
+            },
+            "title": "Net Consumption",
+            "type": "array"
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Offset to request next, or null when the horizon ends here.",
+            "title": "Next Offset"
+          },
+          "offset": {
+            "description": "Slot index this window starts at, 0 being the current slot.",
+            "title": "Offset",
+            "type": "integer"
+          },
+          "price": {
+            "description": "Electricity price per slot in EUR/kWh.",
+            "items": {
+              "$ref": "#/components/schemas/ForecastSlot"
+            },
+            "title": "Price",
+            "type": "array"
+          },
+          "production": {
+            "description": "Forecast solar production in Wh per slot.",
+            "items": {
+              "$ref": "#/components/schemas/ForecastSlot"
+            },
+            "title": "Production",
+            "type": "array"
+          },
+          "returned_count": {
+            "description": "Number of slots in this response.",
+            "title": "Returned Count",
+            "type": "integer"
+          },
+          "run_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Control cycle this forecast belongs to, epoch ms.",
+            "title": "Run Time"
+          },
+          "total_count": {
+            "description": "Number of slots from the current slot to the end of the forecast horizon.",
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "interval_minutes",
+          "total_count",
+          "returned_count",
+          "offset",
+          "has_more",
+          "price",
+          "consumption",
+          "production",
+          "net_consumption"
+        ],
+        "title": "ForecastBundle",
+        "type": "object"
+      },
+      "ForecastSeries": {
+        "description": "One forecast series, windowed by limit/offset. ",
+        "properties": {
+          "has_more": {
+            "description": "True when further slots exist beyond this window.",
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "interval_minutes": {
+            "description": "Slot width in minutes.",
+            "title": "Interval Minutes",
+            "type": "integer"
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Offset to request next, or null when the horizon ends here.",
+            "title": "Next Offset"
+          },
+          "offset": {
+            "description": "Slot index this window starts at, 0 being the current slot.",
+            "title": "Offset",
+            "type": "integer"
+          },
+          "returned_count": {
+            "description": "Number of slots in this response.",
+            "title": "Returned Count",
+            "type": "integer"
+          },
+          "run_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Control cycle this forecast belongs to, epoch ms.",
+            "title": "Run Time"
+          },
+          "slots": {
+            "description": "The slots, in order.",
+            "items": {
+              "$ref": "#/components/schemas/ForecastSlot"
+            },
+            "title": "Slots",
+            "type": "array"
+          },
+          "total_count": {
+            "description": "Number of slots from the current slot to the end of the forecast horizon.",
+            "title": "Total Count",
+            "type": "integer"
+          },
+          "unit": {
+            "description": "EUR/kWh or Wh.",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "interval_minutes",
+          "total_count",
+          "returned_count",
+          "offset",
+          "has_more",
+          "unit",
+          "slots"
+        ],
+        "title": "ForecastSeries",
+        "type": "object"
+      },
+      "ForecastSlot": {
+        "description": "One forecast interval. ",
+        "properties": {
+          "power_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average power over the slot in W. Energy series only. At 15-minute resolution this is four times the Wh value, not the same number.",
+            "title": "Power W"
+          },
+          "slot": {
+            "description": "Index, 0 being the interval that contains the current time.",
+            "title": "Slot",
+            "type": "integer"
+          },
+          "time_end": {
+            "description": "Slot end, epoch ms.",
+            "title": "Time End",
+            "type": "integer"
+          },
+          "time_start": {
+            "description": "Slot start, epoch ms.",
+            "title": "Time Start",
+            "type": "integer"
+          },
+          "value": {
+            "description": "The series value: EUR/kWh for prices, Wh per slot for energy series.",
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "slot",
+          "time_start",
+          "time_end",
+          "value"
+        ],
+        "title": "ForecastSlot",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "Health": {
+        "description": "Liveness of the batcontrol process and its control loop. ",
+        "properties": {
+          "cycle_age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Seconds since the last control cycle.",
+            "title": "Cycle Age Seconds"
+          },
+          "evaluation_interval_seconds": {
+            "description": "Nominal seconds between two control cycles.",
+            "title": "Evaluation Interval Seconds",
+            "type": "integer"
+          },
+          "has_data": {
+            "description": "True once the first control cycle has produced forecasts.",
+            "title": "Has Data",
+            "type": "boolean"
+          },
+          "last_evaluation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Start of the last control cycle, epoch ms.",
+            "title": "Last Evaluation"
+          },
+          "stale": {
+            "description": "True when the data must not be presented as current: the control loop has missed several cycles, or its forecast has not been refreshed for as long (for example while the tariff provider fails), or no cycle has completed since startup.",
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "status": {
+            "description": "Always \"ok\" when reachable.",
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "description": "batcontrol version.",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "has_data",
+          "evaluation_interval_seconds",
+          "stale"
+        ],
+        "title": "Health",
+        "type": "object"
+      },
+      "Inverter": {
+        "description": "Values of one inverter, read once in the last control cycle.\n\nEnergies in Wh, rates in W, SoC in percent.",
+        "properties": {
+          "capacity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Gross battery capacity in Wh.",
+            "title": "Capacity"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "description": "Backend specific values, e.g. em_mode and em_power (W) of a Fronius inverter.",
+            "title": "Extra",
+            "type": "object"
+          },
+          "free_capacity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Capacity in Wh still free up to max_soc.",
+            "title": "Free Capacity"
+          },
+          "id": {
+            "description": "Inverter id.",
+            "title": "Id",
+            "type": "integer"
+          },
+          "max_capacity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Capacity up to max_soc in Wh.",
+            "title": "Max Capacity"
+          },
+          "max_grid_charge_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Maximum grid charge rate in W.",
+            "title": "Max Grid Charge Rate"
+          },
+          "max_pv_charge_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Maximum PV charge rate in W, 0 means no limit.",
+            "title": "Max Pv Charge Rate"
+          },
+          "max_soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Highest SoC this inverter charges to, percent.",
+            "title": "Max Soc"
+          },
+          "min_charge_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Minimum grid charge rate in W.",
+            "title": "Min Charge Rate"
+          },
+          "min_pv_charge_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Minimum PV charge rate in W, 0 means no minimum.",
+            "title": "Min Pv Charge Rate"
+          },
+          "min_soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lowest SoC this inverter discharges to, percent.",
+            "title": "Min Soc"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the values were read, epoch ms.",
+            "title": "Read At"
+          },
+          "soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "State of charge, percent.",
+            "title": "Soc"
+          },
+          "stored_energy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stored energy in Wh.",
+            "title": "Stored Energy"
+          },
+          "stored_usable_energy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stored energy above min_soc in Wh.",
+            "title": "Stored Usable Energy"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Backend type from the configuration.",
+            "title": "Type"
+          },
+          "usable_capacity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Capacity between min_soc and max_soc in Wh.",
+            "title": "Usable Capacity"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "Inverter",
+        "type": "object"
+      },
+      "InverterList": {
+        "description": "The inverters behind batcontrol. ",
+        "properties": {
+          "count": {
+            "description": "Number of inverters.",
+            "title": "Count",
+            "type": "integer"
+          },
+          "inverters": {
+            "description": "Inverters by id.",
+            "items": {
+              "$ref": "#/components/schemas/InverterRef"
+            },
+            "title": "Inverters",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "inverters"
+        ],
+        "title": "InverterList",
+        "type": "object"
+      },
+      "InverterRef": {
+        "description": "One inverter in the list. ",
+        "properties": {
+          "id": {
+            "description": "Inverter id, the N of /inverter/{N} and of the inverters/N/ MQTT topics.",
+            "title": "Id",
+            "type": "integer"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Backend type from the configuration.",
+            "title": "Type"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "InverterRef",
+        "type": "object"
+      },
+      "PeakShavingConfigModel": {
+        "description": "Peak shaving switches and thresholds. ",
+        "properties": {
+          "allow_full_battery_after": {
+            "description": "Hour (0-23) the battery should be full by.",
+            "title": "Allow Full Battery After",
+            "type": "integer"
+          },
+          "enabled": {
+            "description": "Whether peak shaving runs at all.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "feed_in_limit_w": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Grid feed-in power limit in W, 0 = off.",
+            "title": "Feed In Limit W"
+          },
+          "price_active": {
+            "description": "Cheap-price rule active.",
+            "title": "Price Active",
+            "type": "boolean"
+          },
+          "price_limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cheap-slot threshold in EUR/kWh, -1 disables the rule.",
+            "title": "Price Limit"
+          },
+          "solar_cap_active": {
+            "description": "Feed-in limit rule active.",
+            "title": "Solar Cap Active",
+            "type": "boolean"
+          },
+          "time_active": {
+            "description": "Target-time rule active.",
+            "title": "Time Active",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "time_active",
+          "price_active",
+          "solar_cap_active",
+          "allow_full_battery_after"
+        ],
+        "title": "PeakShavingConfigModel",
+        "type": "object"
+      },
+      "PeakShavingStatus": {
+        "description": "What peak shaving decided in the last cycle.\n\nThe parameters are in /config; this is the runtime outcome. The reason\ncodes are the ones of the decision trace.",
+        "properties": {
+          "active": {
+            "description": "True when peak shaving was evaluated in the last cycle: enabled and not suspended.",
+            "title": "Active",
+            "type": "boolean"
+          },
+          "charge_limit_w": {
+            "description": "Resulting PV charge limit in W after all rules and the evcc guard. -1 means no limit.",
+            "title": "Charge Limit W",
+            "type": "integer"
+          },
+          "enabled": {
+            "description": "The switch as it is now, including a runtime change via MQTT.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Outcome of the peak shaving rule, e.g. limit_set, not_needed or skipped.",
+            "title": "Outcome"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reason code of that outcome.",
+            "title": "Reason"
+          },
+          "solar_limit_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Outcome of the feed-in (solar cap) rule, configured as part of peak shaving.",
+            "title": "Solar Limit Outcome"
+          },
+          "solar_limit_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reason code of that outcome.",
+            "title": "Solar Limit Reason"
+          },
+          "suspended_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reason code when evcc suspended peak shaving for the cycle (EVCC_CHARGING, EVCC_EV_EXPECTS_PV_SURPLUS).",
+            "title": "Suspended By"
+          }
+        },
+        "required": [
+          "enabled",
+          "active",
+          "charge_limit_w"
+        ],
+        "title": "PeakShavingStatus",
+        "type": "object"
+      },
+      "PricePoint": {
+        "description": "One price slot. ",
+        "properties": {
+          "slot": {
+            "description": "Index, 0 being the slot that contains the current time.",
+            "title": "Slot",
+            "type": "integer"
+          },
+          "time_end": {
+            "description": "Slot end, epoch ms.",
+            "title": "Time End",
+            "type": "integer"
+          },
+          "time_start": {
+            "description": "Slot start, epoch ms.",
+            "title": "Time Start",
+            "type": "integer"
+          },
+          "value": {
+            "description": "Price in EUR/kWh.",
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "slot",
+          "time_start",
+          "time_end",
+          "value"
+        ],
+        "title": "PricePoint",
+        "type": "object"
+      },
+      "PriceStatus": {
+        "description": "Price statistics over the next 24 hours.\n\nThe window starts at the current slot and spans 24 hours, independent of\nthe horizon the optimizer works on. All values are per slot at the\nconfigured resolution (interval_minutes).",
+        "properties": {
+          "average": {
+            "description": "Mean slot price over the window in EUR/kWh.",
+            "title": "Average",
+            "type": "number"
+          },
+          "complete": {
+            "description": "False when the price forecast ends before the window does, so the statistics cover less than 24 hours.",
+            "title": "Complete",
+            "type": "boolean"
+          },
+          "current": {
+            "$ref": "#/components/schemas/PricePoint",
+            "description": "The current slot."
+          },
+          "interval_minutes": {
+            "description": "Slot width in minutes: 15 or 60.",
+            "title": "Interval Minutes",
+            "type": "integer"
+          },
+          "max": {
+            "$ref": "#/components/schemas/PricePoint",
+            "description": "Most expensive slot in the window, EUR/kWh. The earliest one on a tie."
+          },
+          "min": {
+            "$ref": "#/components/schemas/PricePoint",
+            "description": "Cheapest slot in the window, EUR/kWh. The earliest one on a tie."
+          },
+          "min_dynamic_price_difference": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Price delta in EUR/kWh that a future slot has to beat before batcontrol charges from the grid for it. Null before the logic has run.",
+            "title": "Min Dynamic Price Difference"
+          },
+          "rank": {
+            "description": "Rank of the current price in the window, 1 being the cheapest slot. Equal prices share a rank.",
+            "title": "Rank",
+            "type": "integer"
+          },
+          "run_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Control cycle the prices belong to, epoch ms.",
+            "title": "Run Time"
+          },
+          "slot_count": {
+            "description": "Number of slots in the window.",
+            "title": "Slot Count",
+            "type": "integer"
+          },
+          "spread": {
+            "description": "max minus min in EUR/kWh.",
+            "title": "Spread",
+            "type": "number"
+          },
+          "unit": {
+            "description": "Always EUR/kWh.",
+            "title": "Unit",
+            "type": "string"
+          },
+          "window_end": {
+            "description": "End of the last slot in the window, epoch ms.",
+            "title": "Window End",
+            "type": "integer"
+          },
+          "window_hours": {
+            "description": "Nominal window length in hours.",
+            "title": "Window Hours",
+            "type": "integer"
+          },
+          "window_start": {
+            "description": "Start of the window (the current slot), epoch ms.",
+            "title": "Window Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "interval_minutes",
+          "unit",
+          "window_hours",
+          "window_start",
+          "window_end",
+          "slot_count",
+          "complete",
+          "current",
+          "rank",
+          "min",
+          "max",
+          "average",
+          "spread"
+        ],
+        "title": "PriceStatus",
+        "type": "object"
+      },
+      "SocLimits": {
+        "description": "The inverter's own SoC window. ",
+        "properties": {
+          "max_soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Highest SoC the inverter will charge to, percent.",
+            "title": "Max Soc"
+          },
+          "min_soc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lowest SoC the inverter will discharge to, percent.",
+            "title": "Min Soc"
+          }
+        },
+        "title": "SocLimits",
+        "type": "object"
+      },
+      "SolarMetrics": {
+        "description": "Surplus indicators derived from the forecast in the last cycle.\n\nEnergies are Wh. \"Above min_soc\" means usable energy, not the stored\ntotal.",
+        "properties": {
+          "forecast_min_battery_wh": {
+            "description": "Lowest usable battery energy in Wh (above min_soc) over the forecast horizon. 0 means a shortage is expected.",
+            "title": "Forecast Min Battery Wh",
+            "type": "number"
+          },
+          "pv_start_battery_wh": {
+            "description": "Usable battery energy in Wh (above min_soc) at the slot where production first exceeds consumption. 0 means the battery runs empty before that.",
+            "title": "Pv Start Battery Wh",
+            "type": "number"
+          },
+          "solar_active": {
+            "description": "True when the current slot has solar production.",
+            "title": "Solar Active",
+            "type": "boolean"
+          },
+          "solar_surplus_wh": {
+            "description": "Expected solar energy in Wh that does not fit into the battery - while producing, in the current production window; otherwise in the next one, after the battery has bridged the time until it starts. Above 0 means there is surplus to use.",
+            "title": "Solar Surplus Wh",
+            "type": "number"
+          }
+        },
+        "required": [
+          "solar_active",
+          "solar_surplus_wh",
+          "pv_start_battery_wh",
+          "forecast_min_battery_wh"
+        ],
+        "title": "SolarMetrics",
+        "type": "object"
+      },
+      "Status": {
+        "description": "What batcontrol is doing right now. ",
+        "properties": {
+          "api_override_active": {
+            "description": "True while an external override holds the mode.",
+            "title": "Api Override Active",
+            "type": "boolean"
+          },
+          "charge_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Forced grid charge rate in W, 0 when not charging.",
+            "title": "Charge Rate"
+          },
+          "control_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who set the current mode: optimizer, api or evcc.",
+            "title": "Control Source"
+          },
+          "discharge_blocked": {
+            "description": "True while an external consumer (evcc) blocks discharging.",
+            "title": "Discharge Blocked",
+            "type": "boolean"
+          },
+          "evaluation_interval_seconds": {
+            "description": "Nominal seconds between two control cycles.",
+            "title": "Evaluation Interval Seconds",
+            "type": "integer"
+          },
+          "grid_charge_locked": {
+            "description": "True while grid charging is locked externally (HEMS or grid operator, section 14a EnWG).",
+            "title": "Grid Charge Locked",
+            "type": "boolean"
+          },
+          "last_evaluation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Start of the last control cycle, epoch ms.",
+            "title": "Last Evaluation"
+          },
+          "limit_battery_charge_rate": {
+            "description": "Dynamic PV charge rate limit in W. -1 means no limit.",
+            "title": "Limit Battery Charge Rate",
+            "type": "integer"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Inverter mode: -1 force charge from grid, 0 avoid discharge, 8 limit PV charge rate, 10 allow discharge. None before the first decision.",
+            "title": "Mode"
+          },
+          "mode_changed_at": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the mode last actually changed, epoch ms. Not the last refresh, so a UI can show \"since HH:MM\". Null until the first change after a restart.",
+            "title": "Mode Changed At"
+          },
+          "mode_code": {
+            "description": "Machine readable mode, same vocabulary as the decision trace (e.g. allow_discharging).",
+            "title": "Mode Code",
+            "type": "string"
+          },
+          "mode_label": {
+            "description": "Display label, e.g. \"ALLOW DISCHARGE\".",
+            "title": "Mode Label",
+            "type": "string"
+          },
+          "next_evaluation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the next cycle is due, epoch ms. Poll against this instead of a fixed interval.",
+            "title": "Next Evaluation"
+          },
+          "online": {
+            "description": "False when the data is stale: the control loop or its forecast has not been refreshed for several cycles. Same rule as /health stale.",
+            "title": "Online",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mode_code",
+          "mode_label",
+          "limit_battery_charge_rate",
+          "api_override_active",
+          "discharge_blocked",
+          "grid_charge_locked",
+          "evaluation_interval_seconds",
+          "online"
+        ],
+        "title": "Status",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "Version": {
+        "description": "Version and runtime identification. ",
+        "properties": {
+          "git_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Git commit of the build, if the image provides it.",
+            "title": "Git Sha"
+          },
+          "interval_minutes": {
+            "description": "Forecast slot width in minutes: 15 or 60.",
+            "title": "Interval Minutes",
+            "type": "integer"
+          },
+          "runtime_env": {
+            "description": "Where batcontrol runs: docker, home_assistant_addon-ng, or source.",
+            "title": "Runtime Env",
+            "type": "string"
+          },
+          "timezone": {
+            "description": "Configured local timezone.",
+            "title": "Timezone",
+            "type": "string"
+          },
+          "version": {
+            "description": "batcontrol version.",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "runtime_env",
+          "interval_minutes",
+          "timezone"
+        ],
+        "title": "Version",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "\nRead-only access to a running batcontrol instance: control state, battery,\nprice/solar/consumption forecasts and the decision trace that explains why\nbatcontrol chose the current inverter mode.\n\n**This API never changes anything.** Every endpoint is a GET. Runtime\noverrides stay on the MQTT API.\n\nConventions:\n\n* Timestamps are epoch **milliseconds** (the MQTT API uses seconds).\n* Energy is **Wh per forecast slot**; energy series also carry `power_w`, the\n  average power over the slot. At 15-minute resolution those differ by a\n  factor of four.\n* Prices are EUR/kWh with 4 decimals.\n* Forecast slot 0 is the interval containing the current time. Slots that\n  have passed since the last control cycle are not returned.\n",
+    "summary": "Read-only API of a running batcontrol instance",
+    "title": "batcontrol",
+    "version": "0.10.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/battery": {
+      "get": {
+        "description": "State of charge, capacities and the SoC limits. Values are the ones cached by the last control cycle - reading this endpoint never queries the inverter.",
+        "operationId": "get_battery_api_v1_battery_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_Battery_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Battery state and limits",
+        "tags": [
+          "status"
+        ]
+      }
+    },
+    "/api/v1/config": {
+      "get": {
+        "description": "The parameters that explain batcontrol's behaviour. This is an explicit allow-list of runtime values, not a dump of the configuration file: inverter passwords, tariff tokens and MQTT credentials are not reachable from here.",
+        "operationId": "get_config_api_v1_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_Configuration_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Runtime parameters",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/api/v1/current": {
+      "get": {
+        "description": "Convenience endpoint for dashboards: the current price is always populated, independent of which decision path ran. Returns 503 until the first control cycle has completed.",
+        "operationId": "get_current_api_v1_current_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_Current_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Current price and SoC in one call",
+        "tags": [
+          "status"
+        ]
+      }
+    },
+    "/api/v1/decision": {
+      "get": {
+        "description": "The latest decision trace with its decisive step and a plain language explanation. The record shapes are documented in the decision trace developer docs.",
+        "operationId": "get_decision_api_v1_decision_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_Decision_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Why batcontrol chose the current mode",
+        "tags": [
+          "decision"
+        ]
+      }
+    },
+    "/api/v1/decision/history": {
+      "get": {
+        "description": "Traces from the in-memory journal, oldest first. The journal is not persisted: it starts empty after a restart.",
+        "operationId": "get_decision_history_api_v1_decision_history_get",
+        "parameters": [
+          {
+            "description": "Maximum number of traces to return.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Maximum number of traces to return.",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_DecisionHistory_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recent decisions",
+        "tags": [
+          "decision"
+        ]
+      }
+    },
+    "/api/v1/forecast": {
+      "get": {
+        "description": "Price, consumption, production and net consumption in one response, so a dashboard needs a single request. All series share the same slot grid.",
+        "operationId": "get_forecast_api_v1_forecast_get",
+        "parameters": [
+          {
+            "description": "Maximum number of slots to return. Omit for the whole horizon.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 672,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Maximum number of slots to return. Omit for the whole horizon.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "Slot index to start at, for paging through the horizon.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Slot index to start at, for paging through the horizon.",
+              "maximum": 672,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_ForecastBundle_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "All forecast series of the last cycle",
+        "tags": [
+          "forecast"
+        ]
+      }
+    },
+    "/api/v1/forecast/{series}": {
+      "get": {
+        "description": "`price` is EUR/kWh per slot. `consumption`, `production` and `net_consumption` are Wh per slot and additionally carry `power_w`, the average power over the slot. Negative net_consumption means surplus solar energy.",
+        "operationId": "get_forecast_series_api_v1_forecast__series__get",
+        "parameters": [
+          {
+            "description": "price, consumption, production or net_consumption",
+            "in": "path",
+            "name": "series",
+            "required": true,
+            "schema": {
+              "description": "price, consumption, production or net_consumption",
+              "examples": [
+                "price"
+              ],
+              "title": "Series",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum number of slots to return. Omit for the whole horizon.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 672,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Maximum number of slots to return. Omit for the whole horizon.",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "Slot index to start at, for paging through the horizon.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Slot index to start at, for paging through the horizon.",
+              "maximum": 672,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_ForecastSeries_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One forecast series",
+        "tags": [
+          "forecast"
+        ]
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "description": "Answers even before the first control cycle has completed, so it is usable as a container health check. This is the only endpoint that stays reachable without a token when api.auth_token is configured.",
+        "operationId": "get_health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_Health_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness of the control loop",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/v1/inverter/{inverter_id}": {
+      "get": {
+        "description": "The values the inverter reported in the last control cycle, cached by the inverter itself - reading this endpoint never queries the inverter. Returns 404 for an unknown id and 503 before the first read.",
+        "operationId": "get_inverter_api_v1_inverter__inverter_id__get",
+        "parameters": [
+          {
+            "description": "Inverter id from /inverters.",
+            "in": "path",
+            "name": "inverter_id",
+            "required": true,
+            "schema": {
+              "description": "Inverter id from /inverters.",
+              "examples": [
+                0
+              ],
+              "minimum": 0,
+              "title": "Inverter Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_Inverter_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Values of one inverter",
+        "tags": [
+          "inverter"
+        ]
+      }
+    },
+    "/api/v1/inverters": {
+      "get": {
+        "description": "The inverters batcontrol controls. With several inverters the other endpoints report them as one battery; use the ids here with /inverter/{inverter_id} for a single one.",
+        "operationId": "get_inverters_api_v1_inverters_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_InverterList_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Inverters by id",
+        "tags": [
+          "inverter"
+        ]
+      }
+    },
+    "/api/v1/peak-shaving": {
+      "get": {
+        "description": "Whether peak shaving ran in the last cycle, whether evcc suspended it, the resulting PV charge limit and the outcome of its rules. The parameters are in /config. Returns 503 until the logic has run once.",
+        "operationId": "get_peak_shaving_api_v1_peak_shaving_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_PeakShavingStatus_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Peak shaving runtime state",
+        "tags": [
+          "decision"
+        ]
+      }
+    },
+    "/api/v1/price/status": {
+      "get": {
+        "description": "Current price with its rank, cheapest and most expensive slot, average and spread over the next 24 hours, per slot at the configured resolution. The window is independent of the optimizer horizon and cut short where the forecast ends (complete=false). Returns 503 until the first control cycle has completed.",
+        "operationId": "get_price_status_api_v1_price_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_PriceStatus_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Price statistics for the next 24 hours",
+        "tags": [
+          "price"
+        ]
+      }
+    },
+    "/api/v1/solar": {
+      "get": {
+        "description": "Whether solar is producing, the expected surplus that does not fit into the battery, and how low the battery gets until and across the next solar window - derived from the forecast in the last control cycle. Returns 503 until the logic has run once.",
+        "operationId": "get_solar_api_v1_solar_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_SolarMetrics_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Solar surplus indicators",
+        "tags": [
+          "forecast"
+        ]
+      }
+    },
+    "/api/v1/status": {
+      "get": {
+        "description": "The inverter mode batcontrol has set, who set it, and when the next evaluation is due.",
+        "operationId": "get_status_api_v1_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_Status_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Current control state",
+        "tags": [
+          "status"
+        ]
+      }
+    },
+    "/api/v1/version": {
+      "get": {
+        "description": "Version, build and runtime environment.",
+        "operationId": "get_version_api_v1_version_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope_Version_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Version and runtime identification",
+        "tags": [
+          "meta"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "Version, health and runtime information.",
+      "name": "meta"
+    },
+    {
+      "description": "What batcontrol is doing right now.",
+      "name": "status"
+    },
+    {
+      "description": "Price, solar and consumption forecasts.",
+      "name": "forecast"
+    },
+    {
+      "description": "Why batcontrol decided what it did.",
+      "name": "decision"
+    },
+    {
+      "description": "Runtime parameters. Never credentials.",
+      "name": "config"
+    }
+  ]
+}

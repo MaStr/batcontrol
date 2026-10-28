@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://mastr.github.io/batcontrol/integrations/mqtt-api/">
       
       
-        <link rel="prev" href="../../features/price-difference-calculation/">
+        <link rel="prev" href="../mcp-server/">
       
       
         <link rel="next" href="../forecast-metrics/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -790,6 +790,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/decision-sensor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Understanding the Decision Sensor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -850,6 +906,62 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rest-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -1500,6 +1612,146 @@
     
   
     Solar Feed-in Limit Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/decision-trace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decision Trace and Journal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/dashboard-spec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard Specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/frontend-build/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Frontend Build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/mcp-spec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Server Specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/mcp-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Evaluation
   
 
     
@@ -2204,15 +2456,19 @@ are not affected.</p>
 <li><code>house/batcontrol/discharge_blocked</code> - Whether discharge is blocked (<code>true</code>/<code>false</code>)</li>
 <li><code>house/batcontrol/api_override_active</code> - Whether a temporary external/API override is active (<code>true</code>/<code>false</code>)</li>
 <li><code>house/batcontrol/control_source</code> - Source that last selected the current control state (<code>api</code> or <code>optimizer</code>)</li>
+<li><code>house/batcontrol/decision</code> - Current mode with its value and a plain-language explanation as text, e.g. <code>Charge from Grid 2133 W - usable energy (900 Wh) is below the 2500 Wh reserved for upcoming expensive hours, so 1600 Wh is charged from the grid</code> (retained). The content changes on a status change only (a new mode, or a change of the charge rate / PV limit of the current mode by 25 % or more) and is republished every evaluation like the mode. Shown as the <strong>Decision</strong> sensor in Home Assistant -- see <a href="../../features/decision-sensor/">Understanding the Decision Sensor</a> for what it means, and <a href="../../development/decision-trace/#journal-and-status-change-listeners">Decision Trace</a> for how it is produced</li>
+<li><code>house/batcontrol/decision/attributes</code> - JSON with the decision trace of that status change (retained): <code>kind</code> (<code>mode</code> or <code>value</code>), <code>mode</code>, <code>previous_mode</code>, <code>value</code>, <code>previous_value</code>, <code>control_source</code>, <code>decided_by</code>, <code>why</code> (the same explanation as the state, for the step that decided) and the evaluated <code>records</code>, see <a href="../../development/decision-trace/">Decision Trace</a> for the full field reference. Used as attributes of the <strong>Decision</strong> sensor</li>
 <li><code>house/batcontrol/grid_charge_locked</code> - Whether an external (HEMS/grid operator) request is currently blocking charging from the grid (<code>true</code>/<code>false</code>), see <a href="#grid-charge-lock-external-hemsgrid-operator-signal">Grid Charge Lock</a></li>
 </ul>
 <h3 id="battery-information">Battery Information<a class="headerlink" href="#battery-information" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>house/batcontrol/SOC</code> - State of Charge in % (two decimal places, e.g., <code>69.00</code>)</li>
-<li><code>house/batcontrol/max_energy_capacity</code> - Maximum battery capacity in Wh</li>
+<li><code>house/batcontrol/max_energy_capacity</code> - Maximum battery capacity in Wh (reduced by max SOC)</li>
+<li><code>house/batcontrol/gross_energy_capacity</code> - Battery capacity in Wh without the max SOC reduction; SOC percentages refer to this value</li>
 <li><code>house/batcontrol/stored_energy_capacity</code> - Energy stored in battery in Wh</li>
 <li><code>house/batcontrol/stored_usable_energy_capacity</code> - Usable energy stored in battery in Wh (considering min SOC)</li>
-<li><code>house/batcontrol/reserved_energy_capacity</code> - Energy reserved for discharge in Wh</li>
+<li><code>house/batcontrol/reserved_energy_capacity</code> - Energy reserved for discharge in Wh. This is the raw demand for upcoming expensive hours and can exceed the battery</li>
+<li><code>house/batcontrol/reserved_energy_capacity_effective</code> - The reserved energy in Wh capped to what the battery can hold back: between min SOC and the lower of max SOC and <code>always_allow_discharge_limit</code></li>
 </ul>
 <h3 id="solar-surplus-information">Solar Surplus Information<a class="headerlink" href="#solar-surplus-information" title="Permanent link">&para;</a></h3>
 <p>See <a href="../forecast-metrics/">Forecast Metrics</a> for a detailed explanation of these values and how to use them for flexible load control.</p>
@@ -2239,7 +2495,6 @@ are not affected.</p>
 <p>See <a href="../../features/peak-shaving/">Peak Shaving</a> for details:</p>
 <ul>
 <li><code>house/batcontrol/peak_shaving/enabled</code> - Whether peak shaving is enabled (<code>true</code>/<code>false</code>)</li>
-<li><code>house/batcontrol/peak_shaving/mode</code> - Active mode (<code>time</code>, <code>price</code>, or <code>combined</code>)</li>
 <li><code>house/batcontrol/peak_shaving/allow_full_battery_after</code> - Target hour (0-23)</li>
 <li><code>house/batcontrol/peak_shaving/charge_limit</code> - Current charge limit in W (<code>-1</code> = inactive / no limit)</li>
 <li><code>house/batcontrol/peak_shaving/price_limit</code> - Price threshold in EUR/kWh</li>
@@ -2293,7 +2548,6 @@ see the Forecast Data Format section below.</p>
 <h3 id="peak-shaving_1">Peak Shaving<a class="headerlink" href="#peak-shaving_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>house/batcontrol/peak_shaving/enabled/set</code> - Enable or disable peak shaving (<code>true</code>/<code>false</code>)</li>
-<li><code>house/batcontrol/peak_shaving/mode/set</code> - Set mode (<code>time</code>, <code>price</code>, or <code>combined</code>)</li>
 <li><code>house/batcontrol/peak_shaving/allow_full_battery_after/set</code> - Set target hour (0-23)</li>
 <li><code>house/batcontrol/peak_shaving/price_limit/set</code> - Set price threshold in EUR/kWh (<code>-1</code> disables the price component)</li>
 </ul>
@@ -2440,7 +2694,7 @@ see the Forecast Data Format section below.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../../features/price-difference-calculation/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Price Difference Calculation">
+          <a href="../mcp-server/" class="md-footer__link md-footer__link--prev" aria-label="Previous: MCP Server">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2450,7 +2704,7 @@ see the Forecast Data Format section below.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Price Difference Calculation
+                MCP Server
               </div>
             </div>
           </a>
@@ -2500,10 +2754,10 @@ see the Forecast Data Format section below.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../assets/js/vendor/chart.umd.js"></script>
       

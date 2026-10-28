@@ -2471,11 +2471,11 @@ ______________________________________________________________________
 - [ ] Awattar (Germany/Austria)
 - [ ] Tibber (Nordic countries, Germany, Netherlands)
 - [ ] evcc integration
-- [ ] Other: ***\_******\_***\_
+- [ ] Other: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 - **Q**: What is your tariff's price update frequency?
 - [ ] Hourly (most common)
 - [ ] 15-minute intervals
-- [ ] Other: ***\_******\_***\_
+- [ ] Other: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
 ### 3. Hardware & Environment
 
@@ -2483,11 +2483,11 @@ ______________________________________________________________________
 - [ ] Raspberry Pi 3 or older
 - [ ] Raspberry Pi 4/5
 - [ ] Server (x86)
-- [ ] Docker container on: ***\_******\_***\_
+- [ ] Docker container on: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 - **Q**: What are your hardware specs?
-- CPU: ***\_******\_***\_
-- RAM: ***\_******\_***\_
-- Storage: ***\_******\_***\_
+- CPU: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+- RAM: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+- Storage: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
 ### 4. Testing Capability
 
@@ -2518,10 +2518,10 @@ ______________________________________________________________________
 - [ ] Want more responsive battery control
 - [ ] Proactive optimization
 - [ ] Regulatory requirement
-- [ ] Other: ***\_******\_***\_
+- [ ] Other: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 - **Q**: Is this critical or nice-to-have?
 - [ ] Critical - needed within: \_\_\_\_\_ weeks
-- [ ] Important - target date: ***\_******\_***\_
+- [ ] Important - target date: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 - [ ] Nice-to-have - no rush
 
 ### 7. Backward Compatibility
@@ -2545,8 +2545,8 @@ ______________________________________________________________________
 
 - **Q**: Are there other users you know who need 15-min intervals?
 - Number: \_\_\_\_\_
-- Countries: ***\_******\_***\_
-- Use cases: ***\_******\_***\_
+- Countries: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+- Use cases: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
 ### 10. Future Features
 
@@ -2555,7 +2555,7 @@ ______________________________________________________________________
 - [ ] Adaptive interval selection (auto-switch based on conditions)
 - [ ] Machine learning for consumption forecasting
 - [ ] Better solar interpolation (weather-aware)
-- [ ] Other: ***\_******\_***\_
+- [ ] Other: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
 **Please provide answers in the GitHub issue or discussion thread.**
 

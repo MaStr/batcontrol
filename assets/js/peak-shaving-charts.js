@@ -227,6 +227,15 @@
     });
   }
 
+  // Error text carries the scenario name and err.message - set it as text,
+  // never as HTML.
+  function showError(container, text) {
+    var p = document.createElement('p');
+    p.className = 'ps-error';
+    p.textContent = text;
+    container.replaceChildren(p);
+  }
+
   function renderChart(container) {
     var scenario = container.getAttribute('data-scenario');
     if (!scenario) { return; }
@@ -238,8 +247,8 @@
       charts.push({ chart: buildChart(canvas, rows), rows: rows,
                     canvas: canvas, container: container });
     }).catch(function (err) {
-      container.innerHTML = '<p class="ps-error">Could not load scenario "' +
-        scenario + '": ' + err.message + '</p>';
+      showError(container,
+        'Could not load scenario "' + scenario + '": ' + err.message);
     });
   }
 
@@ -260,8 +269,7 @@
       container.innerHTML = '<table>' + head + '<tbody>' + body +
         '</tbody></table>';
     }).catch(function (err) {
-      container.innerHTML = '<p class="ps-error">Could not load summary: ' +
-        err.message + '</p>';
+      showError(container, 'Could not load summary: ' + err.message);
     });
   }
 

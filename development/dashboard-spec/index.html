@@ -1,0 +1,2340 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Optimize your electricity costs by re-charging your PV battery when electricity is cheap and there is not enough solar power available.">
+      
+      
+      
+        <link rel="canonical" href="https://mastr.github.io/batcontrol/development/dashboard-spec/">
+      
+      
+        <link rel="prev" href="../decision-trace/">
+      
+      
+        <link rel="next" href="../frontend-build/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Dashboard Specification - Batcontrol Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/css/peak-shaving-charts.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#dashboard-specification" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Batcontrol Documentation" class="md-header__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Batcontrol Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Dashboard Specification
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Batcontrol Documentation" class="md-nav__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    Batcontrol Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/how-batcontrol-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Batcontrol Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/batcontrol-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Main Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/inverter-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/multiple-inverters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiple Inverters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/dynamic-tariff-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Tariff Provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/solar-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/consumption-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Consumption Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/battery-control-expert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Battery Control Expert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving-scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving Scenarios
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/price-difference-calculation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Price Difference Calculation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/decision-sensor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Understanding the Decision Sensor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/rest-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mcp-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mqtt-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/forecast-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forecast Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mqtt-inverter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/evcc-connection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    evcc Connection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../15-min-transform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15-Minute Interval Transformation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../solar-limit-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Feed-in Limit Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../decision-trace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decision Trace and Journal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard Specification
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard Specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#data-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data source
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Data source">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-the-api-computes-and-what-the-dashboard-computes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the API computes and what the dashboard computes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response shape
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forecast-slots-and-paging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forecast slots and paging
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blocks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blocks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Blocks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DECISION
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#soc-grid-windows-9x-defragmentation-look" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SOC grid (Windows 9x defragmentation look)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#price" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PRICE
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#look-green-screen-terminal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Look: green-screen terminal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-and-offline-behaviour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error and offline behaviour
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt-and-rest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT and REST
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#out-of-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-ideas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open ideas
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../frontend-build/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Frontend Build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-spec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Server Specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#data-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data source
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Data source">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-the-api-computes-and-what-the-dashboard-computes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the API computes and what the dashboard computes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response shape
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forecast-slots-and-paging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forecast slots and paging
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blocks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blocks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Blocks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DECISION
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#soc-grid-windows-9x-defragmentation-look" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SOC grid (Windows 9x defragmentation look)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#price" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PRICE
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#look-green-screen-terminal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Look: green-screen terminal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-and-offline-behaviour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error and offline behaviour
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mqtt-and-rest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MQTT and REST
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#out-of-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-ideas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open ideas
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/MaStr/batcontrol/edit/main/docs/development/dashboard-spec.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="dashboard-specification">Dashboard Specification<a class="headerlink" href="#dashboard-specification" title="Permanent link">&para;</a></h1>
+<p>This is the design contract for the batcontrol web dashboard: a single-page Vue 3 application
+(Vite, SFC, <code>&lt;script setup&gt;</code>) served by the built-in read-only HTTP API.</p>
+<p>The dashboard is a <strong>reader</strong>. It polls, it renders, it never writes. Everything it needs comes
+from <code>/api/v1/...</code> (see <a href="../../integrations/rest-api/">REST API</a>).</p>
+<h2 id="data-source">Data source<a class="headerlink" href="#data-source" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Used for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /api/v1/status</code></td>
+<td>mode, control source, charge rate, last/next evaluation, online state</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/battery</code></td>
+<td>SoC, gross capacity, reserved energy (raw and capped), SoC limits</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/current</code></td>
+<td>current price, price unit, interval width, version</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/price/status</code></td>
+<td>MIN/MAX/SPREAD over the next 24 h</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/forecast/price</code></td>
+<td>24 h price forecast for the sparkline</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/decision</code></td>
+<td>decision text, reason, full trace</td>
+</tr>
+<tr>
+<td><code>GET /api/v1/version</code></td>
+<td>version for the release link in the header</td>
+</tr>
+</tbody>
+</table>
+<p><code>GET /api/v1/forecast</code> returns all four series (price, consumption, production,
+net_consumption) on one slot grid, so the dashboard can fetch everything in one request instead
+of four. The dashboard uses it when it needs more than the price.</p>
+<p>Polling follows <code>next_evaluation</code> from <code>/api/v1/status</code> rather than a hard-coded interval, so the
+header countdown matches the real control cycle.</p>
+<h3 id="what-the-api-computes-and-what-the-dashboard-computes">What the API computes and what the dashboard computes<a class="headerlink" href="#what-the-api-computes-and-what-the-dashboard-computes" title="Permanent link">&para;</a></h3>
+<p><strong>Anything a second client would have to re-implement belongs in the service layer; pure
+presentation stays in the component.</strong> A Home Assistant card, an MCP assistant or a script
+should not have to rebuild the 24 h price window, the gross capacity or the reservation cap to
+get the same numbers the dashboard shows - and two implementations of one rule drift apart.</p>
+<p>So the API delivers:</p>
+<ul>
+<li>MIN/MAX/SPREAD/average/rank over the next 24 h (<code>/price/status</code>),</li>
+<li>the gross capacity (<code>gross_energy_capacity</code>), instead of each client scaling
+  <code>max_energy_capacity</code> back up by <code>max_soc</code>,</li>
+<li>the reservation capped to the battery (<code>reserved_energy_capacity_effective</code>).</li>
+</ul>
+<p>Values MQTT needs as well are computed in the core (<code>runtime_state.py</code>) and published to both;
+values only the API needs (the price statistics) are computed in <code>web/service.py</code>.</p>
+<p>The dashboard keeps what is presentation: the sparkline's hourly means and glyphs, the box
+states of the SOC grid, the percent widths derived from the API's energies, formatting.</p>
+<h3 id="response-shape">Response shape<a class="headerlink" href="#response-shape" title="Permanent link">&para;</a></h3>
+<p>Every endpoint answers in the same envelope:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="w"> </span><span class="nt">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">"timestamp"</span><span class="p">:</span><span class="w"> </span><span class="mi">1792065332218</span><span class="p">,</span><span class="w"> </span><span class="nt">"data"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<p>An error keeps the envelope's shape but carries a code instead of data:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="w"> </span><span class="nt">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="nt">"timestamp"</span><span class="p">:</span><span class="w"> </span><span class="mi">1792065332218</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"no_data_yet"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"detail"</span><span class="p">:</span><span class="w"> </span><span class="s2">"No completed control cycle yet. ..."</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<p>The codes the dashboard has to handle: <code>no_data_yet</code> (503, before the first control cycle),
+<code>not_found</code> (404, e.g. an empty decision journal), and a 422 for an invalid query parameter.</p>
+<h3 id="forecast-slots-and-paging">Forecast slots and paging<a class="headerlink" href="#forecast-slots-and-paging" title="Permanent link">&para;</a></h3>
+<p>A forecast series carries its slots plus <code>total_count</code>, <code>returned_count</code>, <code>offset</code>, <code>has_more</code>
+and <code>next_offset</code>. The dashboard omits <code>limit</code> and takes the whole horizon - it draws a 24 h
+sparkline and needs the data anyway. The paging exists for the MCP tools, which default to 24 h
+to keep an assistant's context small; see the <a href="../mcp-spec/">MCP specification</a>.</p>
+<p>Each slot is <code>{slot, time_start, time_end, value, power_w?}</code>. <code>value</code> is EUR/kWh for prices and
+<strong>Wh per slot</strong> for energy series; <code>power_w</code> is the average power over the slot and only
+appears on energy series. At 15-minute resolution those two numbers differ by a factor of four,
+so the dashboard must pick deliberately: Wh for energy totals, <code>power_w</code> for anything labelled W.</p>
+<p>All values arrive <strong>typed</strong>: numbers are numbers, timestamps are epoch milliseconds. The entire
+mapping from API payload to view model happens in <code>src/lib/api.js -&gt; normalize()</code>. Components
+never read raw JSON.</p>
+<p>In development, Vite proxies <code>/api</code> to the batcontrol instance (<code>VITE_BACKEND_URL</code>, default
+<code>http://127.0.0.1:8080</code>), so the browser sees no CORS or private-network prompts.</p>
+<h2 id="modes">Modes<a class="headerlink" href="#modes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>mode</th>
+<th>Label</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-1</code></td>
+<td>FORCE CHARGE</td>
+<td>highlighted in amber</td>
+</tr>
+<tr>
+<td><code>0</code></td>
+<td>AVOID DISCHARGE</td>
+<td></td>
+</tr>
+<tr>
+<td><code>8</code></td>
+<td>LIMIT CHARGE RATE</td>
+<td></td>
+</tr>
+<tr>
+<td><code>10</code></td>
+<td>ALLOW DISCHARGE</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>Labels come from the API, not from a table in the frontend.</p>
+<h2 id="layout">Layout<a class="headerlink" href="#layout" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Mobile</strong> (&lt; 820 px), stacked: <strong>DECISION</strong> -&gt; <strong>SOC grid</strong> -&gt; <strong>PRICE</strong>.</li>
+<li><strong>Desktop</strong>: SOC grid on the left, DECISION on the right with PRICE below it.</li>
+<li><strong>Header</strong>: <code>BATCONTROL</code> followed by the version, dimmed like the eval line, linking to
+  <code>https://github.com/MaStr/batcontrol/releases/tag/&lt;version&gt;</code> in a new tab
+  (<code>target="_blank" rel="noopener"</code>; the tag carries no <code>v</code>, the link text shows <code>v&lt;version&gt;</code>).
+  Then online state, time of the last evaluation, control source, charge rate in W, and the
+  countdown to the next poll.</li>
+</ul>
+<h2 id="blocks">Blocks<a class="headerlink" href="#blocks" title="Permanent link">&para;</a></h2>
+<h3 id="decision">DECISION<a class="headerlink" href="#decision" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>since HH:MM - X min ago</code> derived from the decision timestamp, ticking every second.</li>
+<li>The decision text as a terminal line <code>&gt; ...</code> with a blinking cursor, below it
+  <code>[decided_by.reason]</code>, and right-aligned the button <strong><code>&gt;TRACE&lt;</code></strong> (inverted on hover/active).</li>
+<li><code>&gt;TRACE&lt;</code> expands the readable trace (<code>DecisionTrace.vue</code>, scrollable up to <code>max-height: 60vh</code>):</li>
+<li>Header: timestamp, kind, control source, <code>mode old -&gt; new</code> (with mode label),
+    <code>value old -&gt; new</code>.</li>
+<li>One step per record: <code>#n decision -&gt; outcome [REASON]</code>. The decisive one is marked
+    <code>&lt;- DECISIVE</code> with a bright left border, followed by <code>why</code> and the <code>inputs</code> as a key/value
+    list.</li>
+<li>Values are formatted for humans:<ul>
+<li>Slot lists (integer arrays such as <code>higher_price_slots</code>) collapse to a clickable
+  <code>&gt;329 SLOTS&lt;</code>. Expanding prints one line per slot with its from-to time
+  (<code>2 Thu 15:00-15:15</code>). Slot 0 is the interval containing the decision timestamp, each
+  slot is <code>interval_minutes</code> long.</li>
+<li>Single slot values (<code>*_slot</code>, <code>recharge_window_end</code>) get their time in brackets.</li>
+<li><code>*price*</code> as EUR, <code>*energy*</code> and <code>demand</code> as rounded Wh, <code>charge_rate</code> and <code>value</code> as W,
+  modes with their label.</li>
+</ul>
+</li>
+<li>All <code>&gt;...&lt;</code> buttons share the global <code>.toggle</code> class.</li>
+<li>Bottom row: the <strong>mode</strong> label large on the left (with its own <code>since ...</code>), the <strong>SoC</strong> in
+  percent large on the right.</li>
+</ul>
+<h3 id="soc-grid-windows-9x-defragmentation-look">SOC grid (Windows 9x defragmentation look)<a class="headerlink" href="#soc-grid-windows-9x-defragmentation-look" title="Permanent link">&para;</a></h3>
+<ul>
+<li>10x10 boxes for <strong>0-99</strong>, one per percent. <strong>Box 0 sits bottom left</strong>, box 10 is leftmost in
+  the second row from the bottom, box 99 is top right. Axis labels (00, 10 ... 90) run down the
+  left side.</li>
+<li>At 100 % every box is lit and none blinks. All boxes being lit from 99.1 % upwards is
+  intentional: battery balancing takes the step from 99 to 100 % almost immediately anyway.</li>
+<li>Boxes carry a 3D bevel (light top/left, dark bottom/right) inside an inset frame, in green
+  instead of the original blue.</li>
+</ul>
+<p>States, combinable:</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Rule</th>
+<th>Rendering</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>charged</code></td>
+<td><code>p &lt; ceil(soc)</code></td>
+<td>bright glowing green</td>
+</tr>
+<tr>
+<td><code>current</code></td>
+<td>box <code>ceil(soc)</code></td>
+<td>blinks (87.0 % -&gt; 87, 87.1 % -&gt; 88)</td>
+</tr>
+<tr>
+<td><code>locked</code></td>
+<td><code>p &lt;= MIN_SOC</code>, or <code>MAX_SOC &lt; 100</code> and <code>p &gt; MAX_SOC</code></td>
+<td>dot in the centre; may still glow</td>
+</tr>
+<tr>
+<td><code>reserved</code></td>
+<td><code>MIN_SOC &lt; p</code> and <code>p - 1 &lt; MIN_SOC + reservedCapped / capacity * 100</code></td>
+<td>diagonal hatching; bright stripes when charged, dark stripes when empty</td>
+</tr>
+<tr>
+<td><code>always_discharge</code></td>
+<td><code>p &gt; always_allow_discharge_limit_percent</code></td>
+<td>same states in purple (<code>#c77dff</code>, dark <code>#1d0b2b</code>), by overriding the <code>--cell-*</code> variables on <code>.cell.discharge</code></td>
+</tr>
+<tr>
+<td><code>free</code></td>
+<td>otherwise</td>
+<td>dark</td>
+</tr>
+</tbody>
+</table>
+<p><code>reservedCapped</code> is <code>reserved_energy_capacity_effective</code> from <code>/api/v1/battery</code>:
+<code>min(reserved_energy, capacity * (min(MAX_SOC, always_allow_discharge) - MIN_SOC))</code>, computed by
+the core (<code>runtime_state.cap_reserved_energy</code>). The reservation can exceed the battery, hence the
+cap; <code>capacity</code> is <code>gross_energy_capacity</code>. Every box the reservation reaches is
+hatched, including the blinking current one. Nothing above <code>always_allow_discharge</code> is ever
+hatched - discharging is always permitted there.</p>
+<p>Legend below the grid, with exactly these names: charged, free, locked (&lt;= MIN / &gt; MAX),
+reserved (bright and dark variant), always_discharge, current.</p>
+<p>Below that, as text: RESERVED (raw value, plus
+<code>-&gt; max. x kWh up to always_allow_discharge %</code> when capped), USABLE
+(<code>stored_usable / capacity * (MAX - MIN)</code>), STORED, LIMITS, ALWAYS ALLOW DISCHARGE
+(<code>above 84 %</code>).</p>
+<h3 id="price">PRICE<a class="headerlink" href="#price" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Current price large, in EUR/kWh, from <code>/api/v1/current</code>.</li>
+<li>Sparkline over the next 24 h from hourly means, drawn with the block characters
+  <code>_,.-~=#</code> equivalents (<code>U+2581</code> to <code>U+2588</code>), axis labels now / +12h / +24h.</li>
+<li>MIN 24h and MAX 24h each with their time and <strong>SPREAD 24h = max - min</strong>, all from
+  <code>/api/v1/price/status</code>, and <strong>GRID_CHARGE delta = <code>min_dynamic_price_difference</code></strong>.</li>
+</ul>
+<h2 id="look-green-screen-terminal">Look: green-screen terminal<a class="headerlink" href="#look-green-screen-terminal" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Background near-black green <code>#030a05</code>, phosphor green <code>#33ff66</code> with a <code>text-shadow</code> glow,
+  dimmed <code>#1f9e43</code>. Amber <code>#ffcc33</code> for FORCE CHARGE, red for errors.</li>
+<li>Fonts: IBM Plex Mono for text, VT323 for the large numbers. Both are <strong>bundled with the
+  application</strong>, never loaded from a CDN: batcontrol runs in homes without internet egress and
+  behind Home Assistant ingress, so an external font request would simply fail and leave the UI
+  in a fallback face. Both are licensed under the SIL Open Font License 1.1; their license texts
+  ship next to the font files and are served at <code>licenses/</code> (see
+  <a href="https://github.com/MaStr/batcontrol/blob/main/THIRD-PARTY-LICENSES.md">THIRD-PARTY-LICENSES.md</a>). The CSS declares an explicit local fallback stack so a
+  missing font file degrades instead of breaking the layout.</li>
+<li>CRT scanlines and a vignette as a <code>body::after</code> overlay.</li>
+<li>Panels have a 1 px green border with the title sitting in the top border (<code>-- SOC --</code>).</li>
+<li><strong>UI is English throughout.</strong> Decimal point, 24-hour clock (<code>en-GB</code>), relative times as
+  <code>5 min ago</code>. Animations only while <code>prefers-reduced-motion</code> permits them.</li>
+<li>The defrag bevel applies <strong>only</strong> to the grid. Everything else stays flat terminal.</li>
+</ul>
+<h2 id="error-and-offline-behaviour">Error and offline behaviour<a class="headerlink" href="#error-and-offline-behaviour" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Keep the last known data visible but dimmed, with a clear banner naming the problem.</li>
+<li>Before the first control cycle has completed the API answers 503; the dashboard says so
+  instead of rendering zeros.</li>
+<li>With <code>api.auth_token</code> configured, the dashboard asks for the token once on a 401, keeps it in
+  <code>sessionStorage</code>, and re-asks when it stops working. It never needs the separate
+  <code>api.mcp_auth_token</code>, which protects only <code>/mcp</code>.</li>
+<li><code>GET /api/v1/health</code> is never authenticated, so a container health check works without the
+  token. The dashboard itself takes <code>online</code> from <code>/status</code>.</li>
+</ul>
+<h2 id="mqtt-and-rest">MQTT and REST<a class="headerlink" href="#mqtt-and-rest" title="Permanent link">&para;</a></h2>
+<p>Every value batcontrol publishes on MQTT has a counterpart in the REST API (and through it in
+MCP). Ratios that MQTT publishes twice - as <code>0..1</code> and as percent - appear once in each REST
+place: as percent in <code>/battery</code>, as ratio in <code>/config</code>. Timestamps are epoch seconds on MQTT and
+epoch milliseconds in REST.</p>
+<table>
+<thead>
+<tr>
+<th>MQTT topic</th>
+<th>REST</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>status</code></td>
+<td><code>/health</code> (<code>stale</code>), <code>/status</code> (<code>online</code>)</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>/status</code> <code>mode</code></td>
+</tr>
+<tr>
+<td><code>charge_rate</code></td>
+<td><code>/status</code> <code>charge_rate</code></td>
+</tr>
+<tr>
+<td><code>limit_battery_charge_rate</code></td>
+<td><code>/status</code> <code>limit_battery_charge_rate</code></td>
+</tr>
+<tr>
+<td><code>control_source</code></td>
+<td><code>/status</code> <code>control_source</code></td>
+</tr>
+<tr>
+<td><code>api_override_active</code></td>
+<td><code>/status</code> <code>api_override_active</code></td>
+</tr>
+<tr>
+<td><code>discharge_blocked</code></td>
+<td><code>/status</code> <code>discharge_blocked</code></td>
+</tr>
+<tr>
+<td><code>grid_charge_locked</code></td>
+<td><code>/status</code> <code>grid_charge_locked</code></td>
+</tr>
+<tr>
+<td><code>evaluation_intervall</code></td>
+<td><code>/status</code> <code>evaluation_interval_seconds</code></td>
+</tr>
+<tr>
+<td><code>last_evaluation</code></td>
+<td><code>/status</code> <code>last_evaluation</code></td>
+</tr>
+<tr>
+<td><code>decision</code>, <code>decision/attributes</code></td>
+<td><code>/decision</code> <code>status_text</code>, <code>event</code></td>
+</tr>
+<tr>
+<td><code>SOC</code></td>
+<td><code>/battery</code> <code>soc</code></td>
+</tr>
+<tr>
+<td><code>max_energy_capacity</code></td>
+<td><code>/battery</code> <code>max_energy_capacity</code></td>
+</tr>
+<tr>
+<td><code>gross_energy_capacity</code></td>
+<td><code>/battery</code> <code>gross_energy_capacity</code></td>
+</tr>
+<tr>
+<td><code>stored_energy_capacity</code></td>
+<td><code>/battery</code> <code>stored_energy_capacity</code></td>
+</tr>
+<tr>
+<td><code>stored_usable_energy_capacity</code></td>
+<td><code>/battery</code> <code>stored_usable_energy_capacity</code></td>
+</tr>
+<tr>
+<td><code>reserved_energy_capacity</code></td>
+<td><code>/battery</code> <code>reserved_energy_capacity</code></td>
+</tr>
+<tr>
+<td><code>reserved_energy_capacity_effective</code></td>
+<td><code>/battery</code> <code>reserved_energy_capacity_effective</code></td>
+</tr>
+<tr>
+<td><code>always_allow_discharge_limit_capacity</code></td>
+<td><code>/battery</code> <code>always_allow_discharge_limit_capacity</code></td>
+</tr>
+<tr>
+<td><code>always_allow_discharge_limit</code>, <code>..._percent</code></td>
+<td><code>/config</code> <code>battery_control.always_allow_discharge_limit</code>, <code>/battery</code> <code>always_allow_discharge_limit_percent</code></td>
+</tr>
+<tr>
+<td><code>max_charging_from_grid_limit</code>, <code>..._percent</code></td>
+<td><code>/config</code> <code>battery_control.max_charging_from_grid_limit</code>, <code>/battery</code> <code>max_charging_from_grid_limit_percent</code></td>
+</tr>
+<tr>
+<td><code>min_grid_charge_soc</code>, <code>..._percent</code></td>
+<td><code>/config</code> <code>battery_control.min_grid_charge_soc</code></td>
+</tr>
+<tr>
+<td><code>effective_min_grid_charge_soc</code>, <code>..._percent</code></td>
+<td><code>/battery</code> <code>effective_min_grid_charge_soc_percent</code></td>
+</tr>
+<tr>
+<td><code>min_price_difference</code></td>
+<td><code>/config</code> <code>battery_control.min_price_difference</code></td>
+</tr>
+<tr>
+<td><code>min_price_difference_rel</code></td>
+<td><code>/config</code> <code>battery_control.min_price_difference_rel</code></td>
+</tr>
+<tr>
+<td><code>min_dynamic_price_difference</code></td>
+<td><code>/current</code> and <code>/price/status</code> <code>min_dynamic_price_difference</code></td>
+</tr>
+<tr>
+<td><code>production_offset</code></td>
+<td><code>/config</code> <code>battery_control.production_offset_percent</code></td>
+</tr>
+<tr>
+<td><code>solar_active</code></td>
+<td><code>/solar</code> <code>solar_active</code></td>
+</tr>
+<tr>
+<td><code>solar_surplus_wh</code></td>
+<td><code>/solar</code> <code>solar_surplus_wh</code></td>
+</tr>
+<tr>
+<td><code>pv_start_battery_wh</code></td>
+<td><code>/solar</code> <code>pv_start_battery_wh</code></td>
+</tr>
+<tr>
+<td><code>forecast_min_battery_wh</code></td>
+<td><code>/solar</code> <code>forecast_min_battery_wh</code></td>
+</tr>
+<tr>
+<td><code>peak_shaving/enabled</code></td>
+<td><code>/config</code> <code>peak_shaving.enabled</code>, <code>/peak-shaving</code> <code>enabled</code></td>
+</tr>
+<tr>
+<td><code>peak_shaving/allow_full_battery_after</code></td>
+<td><code>/config</code> <code>peak_shaving.allow_full_battery_after</code></td>
+</tr>
+<tr>
+<td><code>peak_shaving/price_limit</code></td>
+<td><code>/config</code> <code>peak_shaving.price_limit</code> (null instead of MQTT's -1)</td>
+</tr>
+<tr>
+<td><code>peak_shaving/charge_limit</code></td>
+<td><code>/peak-shaving</code> <code>charge_limit_w</code></td>
+</tr>
+<tr>
+<td><code>FCST/prices</code>, <code>FCST/production</code>, <code>FCST/consumption</code>, <code>FCST/net_consumption</code></td>
+<td><code>/forecast</code>, <code>/forecast/{series}</code></td>
+</tr>
+<tr>
+<td><code>inverters/&lt;id&gt;/SOC</code>, <code>stored_energy</code>, <code>stored_usable_energy</code>, <code>free_capacity</code>, <code>max_capacity</code></td>
+<td><code>/inverter/{id}</code></td>
+</tr>
+<tr>
+<td><code>inverters/&lt;id&gt;/capacity</code>, <code>min_soc</code>, <code>max_soc</code>, <code>max_grid_charge_rate</code>, <code>max_pv_charge_rate</code> (Fronius)</td>
+<td><code>/inverter/{id}</code></td>
+</tr>
+<tr>
+<td><code>inverters/&lt;id&gt;/em_mode</code>, <code>em_power</code> (Fronius)</td>
+<td><code>/inverter/{id}</code> <code>extra</code></td>
+</tr>
+</tbody>
+</table>
+<p>Not mapped on purpose: the Home Assistant discovery messages (<code>homeassistant/...</code>) are MQTT
+plumbing, not values, and the <code>*/set</code> topics are inputs - the REST API is read-only.</p>
+<h2 id="out-of-scope">Out of scope<a class="headerlink" href="#out-of-scope" title="Permanent link">&para;</a></h2>
+<p>The dashboard is a reader, like the API it is built on. It has no controls that change
+batcontrol's behaviour - no mode buttons, no charge-rate slider, no config form. Overrides stay
+on the MQTT API, where Home Assistant can gate them behind its own automations and
+permissions. A screen that only displays cannot misfire at peak price.</p>
+<h2 id="open-ideas">Open ideas<a class="headerlink" href="#open-ideas" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>max_charging_from_grid_limit_percent</code> as an additional marker in the grid.</li>
+<li>A compact history view over the decision journal.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../decision-trace/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Decision Trace and Journal">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Decision Trace and Journal
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../frontend-build/" class="md-footer__link md-footer__link--next" aria-label="Next: Frontend Build">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Frontend Build
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+        <script src="../../assets/js/vendor/chart.umd.js"></script>
+      
+        <script src="../../assets/js/peak-shaving-charts.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,6 +1,6 @@
 # Forecast Metrics
 
-`ForecastMetrics` is a stateless module that derives three battery indicators from the production/consumption forecast arrays and the current battery state. These indicators are published via MQTT and are intended to drive downstream automation decisions such as "should I run the heat pump now or save the battery for tomorrow's solar charge?"
+`ForecastMetrics` is a stateless module that derives three battery indicators from the production/consumption forecast arrays and the current battery state. These indicators are published via MQTT and the REST API (`GET /api/v1/solar`, MCP tool `batcontrol_get_solar`) and are intended to drive downstream automation decisions such as "should I run the heat pump now or save the battery for tomorrow's solar charge?"
 
 All three values are updated once per evaluation cycle (every 3 minutes by default). They are based on the same forecast window that the main optimizer uses, so their horizon is `min(max available price hours, max available solar hours)`.
 
@@ -78,7 +78,7 @@ ______________________________________________________________________
 | `{base}/pv_start_battery_wh`     | Wh   | No       | Battery level at next net-charging crossover       |
 | `{base}/forecast_min_battery_wh` | Wh   | No       | Minimum battery level over entire forecast horizon |
 
-All values are published after each evaluation cycle (together with the inverter control decision). See [MQTT API](https://mastr.github.io/batcontrol/integrations/mqtt-api/index.md) for the full topic reference and configuration options.
+All values are published after each evaluation cycle (together with the inverter control decision). See [MQTT API](https://mastr.github.io/batcontrol/integrations/mqtt-api/index.md) for the full topic reference and configuration options. The same values are available without MQTT from the [REST API](https://mastr.github.io/batcontrol/integrations/rest-api/index.md) at `GET /api/v1/solar`.
 
 ### Home Assistant Auto-Discovery
 

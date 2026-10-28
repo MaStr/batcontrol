@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -672,6 +672,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -974,6 +985,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/decision-sensor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Understanding the Decision Sensor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1032,6 +1099,62 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/rest-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mcp-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -1260,6 +1383,146 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/decision-trace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decision Trace and Journal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/dashboard-spec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard Specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/frontend-build/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Frontend Build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/mcp-spec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Server Specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/mcp-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1330,6 +1593,17 @@
     <span class="md-ellipsis">
       
         Optional Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
       
     </span>
   </a>
@@ -1481,7 +1755,15 @@ pvinstallations:
     kWp: 6.030
 </code></pre></div>
 The <strong>name</strong> must be a unique value.</p>
-<p>If a solar forecast provider is not available, batcontrol is running on cached values. It stops working if less then 12 hours of forecast are available. That should be enough to overcome outages.</p>
+<p>If a solar forecast provider is unavailable, batcontrol continues with cached values.
+By default, entries are usable while their age is strictly less than 12 hours.
+At 12 hours they expire and the existing no-data behavior applies. The HA solar
+provider also honors its existing <code>cache_ttl_hours</code> setting.</p>
+<p>All solar providers save the latest raw response for each installation under the
+shared application's <code>cache/solar/</code> directory, with a separate namespace for each
+provider. Restart retains the original fetch timestamp and does not extend the
+TTL. See <a href="../../getting-started/installation/#application-data-and-provider-caches">Application data and provider caches</a>
+for deployment paths, persistence guarantees, and <code>--clear-cache</code>.</p>
 <h2 id="forecastsolar-default">Forecast.Solar (Default)<a class="headerlink" href="#forecastsolar-default" title="Permanent link">&para;</a></h2>
 <p><a href="https://forecast.solar/">Forecast Solar</a> allows a limited amount of free requests with no subscription or account. </p>
 <p>The minimum configuration block is:</p>
@@ -1528,26 +1810,60 @@ Use the evcc based sensor, which might be additionally enabled in the SolarML Ad
 <div class="highlight"><pre><span></span><code><span class="nt">solar_forecast_provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">homeassistant-solar-forecast-ml</span>
 <span class="nt">pvinstallations</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HA Solar ML Forecast</span>
-<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws://homeassistant.local:8123</span><span class="w">  </span><span class="c1"># Your HomeAssistant URL</span>
+<span class="w">    </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws://homeassistant.local:8123</span><span class="w">       </span><span class="c1"># Your HomeAssistant URL</span>
 <span class="w">    </span><span class="nt">api_token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">eyJ...</span><span class="w">                        </span><span class="c1"># Long-lived access token from HA Profile</span>
 <span class="w">    </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor.solar_forecast_ml_evcc_solar_prognose</span><span class="w">  </span><span class="c1"># Forecast sensor entity</span>
 </code></pre></div>
-<p>If you're running batcontrol in a HomeAssistant addon, use <code>ws://homeassistant:8123</code> as the base_url. For standalone installations, use your HomeAssistant IP or hostname.</p>
+<p>If you're running batcontrol in a HomeAssistant addon, use <code>ws://homeassistant:8123</code> as the url. For standalone installations, use your HomeAssistant IP or hostname.</p>
+<div class="admonition note">
+<p class="admonition-title">List only the entries of the provider you selected</p>
+<p>This provider uses a single <code>pvinstallations</code> entry: the one with a matching <code>type:</code>, or
+the one carrying <code>entity_id</code>. Entries of <em>other</em> providers have to be removed, because
+<code>fcsolarapi</code> and <code>solcast</code> read every entry in the list and fail on an entry that does not
+carry their keys. With several entries and no way to tell which one is meant, batcontrol
+stops at startup and asks you to add <code>type: homeassistant-solar-forecast-ml</code>.</p>
+</div>
+<div class="admonition info">
+<p class="admonition-title">Key names</p>
+<p>The credential is <code>api_token</code> and the endpoint is <code>url</code>, consistently across all
+configuration sections. The older spellings <code>base_url</code>, <code>apikey</code> and <code>apitoken</code> are still
+read, but log a deprecation warning at startup. The Home Assistant add-on offers only
+<code>url</code> and <code>api_token</code> from version 0.10.0 on - rename them there in the same step as the
+update.</p>
+</div>
 <h3 id="optional-parameters">Optional Parameters<a class="headerlink" href="#optional-parameters" title="Permanent link">&para;</a></h3>
 <p>You can customize the behavior with additional parameters:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">pvinstallations</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HA Solar ML Forecast</span>
-<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws://homeassistant:8123</span>
+<span class="w">    </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ws://homeassistant:8123</span>
 <span class="w">    </span><span class="nt">api_token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">eyJ...</span>
 <span class="w">    </span><span class="nt">entity_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sensor.solar_forecast_ml_prognose_nachste_stunde</span>
 <span class="w">    </span><span class="nt">sensor_unit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span><span class="w">  </span><span class="c1"># Options: 'auto' (default, auto-detect), 'Wh', or 'kWh'</span>
-<span class="w">    </span><span class="nt">cache_ttl_hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">24.0</span><span class="w">  </span><span class="c1"># Cache duration in hours (default: 24.0)</span>
+<span class="w">    </span><span class="nt">cache_ttl_hours</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">24.0</span><span class="w">  </span><span class="c1"># Cache duration in hours (default: 12.0)</span>
 </code></pre></div>
 <p>The <code>sensor_unit</code> parameter:
 - <code>auto</code> (default): Automatically detects the unit from the sensor
 - <code>Wh</code>: If you know your sensor reports in Wh
 - <code>kWh</code>: If you know your sensor reports in kWh</p>
 <p>Setting the explicit unit (<code>Wh</code> or <code>kWh</code>) can speed up startup by skipping auto-detection.</p>
+<p>The <code>cache_ttl_hours</code> parameter controls how long an already fetched forecast stays usable as a
+fallback when HomeAssistant cannot be reached (default: 12 hours). It does not control how often
+batcontrol asks for a new forecast — that is the refresh interval of the provider.</p>
+<h3 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h3>
+<p><strong>Problem:</strong> batcontrol stops at startup with
+<code>Auth message incorrectly formatted: expected str at 'access_token'. Got None</code></p>
+<p><strong>Solution:</strong> the access token never reached the provider. Check that</p>
+<ul>
+<li>the token is configured as <code>api_token</code> — <code>apikey</code> is the key name of the fcsolarapi and
+  Solcast providers and was a common mix-up (<a href="https://github.com/MaStr/batcontrol/issues/451">issue #451</a>)</li>
+<li>the token sits in the same <code>pvinstallations</code> entry as <code>entity_id</code> and <code>url</code></li>
+<li>the entry belongs to the selected provider (see the note above about <code>type:</code>)</li>
+</ul>
+<p>Since batcontrol 0.10.0 a missing token is reported as a configuration error naming the key,
+before any connection to HomeAssistant is attempted.</p>
+<p><strong>Problem:</strong> <code>No "url" configured for installation &lt;name&gt;, falling back to ws://homeassistant.local:8123</code></p>
+<p><strong>Solution:</strong> your URL is not in the entry batcontrol selected. Use the key <code>url</code> (or the
+deprecated <code>base_url</code>) in the entry that also holds <code>entity_id</code>.</p>
 <h2 id="solcast">Solcast<a class="headerlink" href="#solcast" title="Permanent link">&para;</a></h2>
 <p><a href="https://solcast.com/">Solcast</a> provides satellite-based solar forecasts in native 30-minute resolution. batcontrol interpolates the values to 15-minute intervals (linear power interpolation) or aggregates them to hourly values, depending on your <code>time_resolution_minutes</code> setting.</p>
 <p>Solcast delivers three estimates per 30-minute period: a most-likely value (50 % percentile), a pessimistic one (10 %, more clouds) and an optimistic one (90 %, fewer clouds). By default batcontrol uses the most-likely value.</p>
@@ -1557,7 +1873,7 @@ Use the evcc based sensor, which might be additionally enabled in the SolarML Ad
 <li>Register at <a href="https://solcast.com/free-rooftop-solar-forecasting">solcast.com</a> and choose the free <strong>Home User</strong> (hobbyist) plan.</li>
 <li>In the Solcast toolkit, create a <strong>Rooftop Site</strong>. Enter your location (latitude/longitude), panel tilt, azimuth and capacity (kWp) there — the site geometry lives in your Solcast account, <strong>not</strong> in the batcontrol configuration.</li>
 <li>Copy the site's <strong>resource id</strong> (shown in the site details, format <code>xxxx-xxxx-xxxx-xxxx</code>).</li>
-<li>Copy your <strong>API key</strong> from the Solcast account settings.</li>
+<li>Copy your <strong>API key</strong> from the Solcast account settings (configured as <code>api_token</code>).</li>
 </ol>
 <p>The free account is limited to <strong>one location with up to two rooftop sites</strong> (e.g. an east/west split) and <strong>10 API requests per day</strong>.</p>
 <h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
@@ -1566,24 +1882,24 @@ Use the evcc based sensor, which might be additionally enabled in the SolarML Ad
 <span class="nt">pvinstallations</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Haus</span><span class="w"> </span><span class="c1">#name</span>
 <span class="w">    </span><span class="nt">resource_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xxxx-xxxx-xxxx-xxxx</span><span class="w">  </span><span class="c1"># from your Solcast rooftop site</span>
-<span class="w">    </span><span class="nt">apikey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-solcast-api-key</span><span class="w">      </span><span class="c1"># from your Solcast account settings</span>
+<span class="w">    </span><span class="nt">api_token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-solcast-api-key</span><span class="w">   </span><span class="c1"># from your Solcast account settings</span>
 </code></pre></div>
 <p>For two rooftop sites (e.g. east/west arrays) use one entry per site. The API key is the same for both, each site has its own resource id:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">solar_forecast_provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">solcast</span>
 <span class="nt">pvinstallations</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Dach Ost</span>
 <span class="w">    </span><span class="nt">resource_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xxxx-xxxx-xxxx-aaaa</span>
-<span class="w">    </span><span class="nt">apikey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-solcast-api-key</span>
+<span class="w">    </span><span class="nt">api_token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-solcast-api-key</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Dach West</span>
 <span class="w">    </span><span class="nt">resource_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xxxx-xxxx-xxxx-bbbb</span>
-<span class="w">    </span><span class="nt">apikey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-solcast-api-key</span>
+<span class="w">    </span><span class="nt">api_token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-solcast-api-key</span>
 </code></pre></div>
 <h3 id="optional-percentile-parameter">Optional percentile parameter<a class="headerlink" href="#optional-percentile-parameter" title="Permanent link">&para;</a></h3>
 <p>You can select which estimate batcontrol uses per installation:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">pvinstallations</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Haus</span>
 <span class="w">    </span><span class="nt">resource_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xxxx-xxxx-xxxx-xxxx</span>
-<span class="w">    </span><span class="nt">apikey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-solcast-api-key</span>
+<span class="w">    </span><span class="nt">api_token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">your-solcast-api-key</span>
 <span class="w">    </span><span class="nt">percentile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">  </span><span class="c1"># 10 (pessimistic), 50 (default, most likely), 90 (optimistic)</span>
 </code></pre></div>
 <p>A pessimistic setting (<code>percentile: 10</code>) makes batcontrol plan with less expected solar production, which reduces the risk of an undercharged battery on cloudy days.</p>
@@ -1695,10 +2011,10 @@ Use the evcc based sensor, which might be additionally enabled in the SolarML Ad
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../assets/js/vendor/chart.umd.js"></script>
       

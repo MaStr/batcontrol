@@ -8,18 +8,17 @@ Peak shaving solves this by **limiting the PV-to-battery charge rate** so the ba
 
 ## Status
 
-The algorithm is in the status "experimental", which is the reason why it is only available in the logic type `next`. After collecting enough experience with that feature, it will move into `default` eventually.
+Peak shaving is **stable** and part of the standard battery control logic.
 
 ## Prerequisites
 
-Peak shaving was introduced with 0.8.0 and is only available with the **`next` logic type**. Set this in the `battery_control` section of your configuration:
+Peak shaving was introduced with 0.8.0 in the `next` logic type. Since 0.10.0 it is part of the standard logic, so no particular `battery_control.type` has to be selected any more -- setting `peak_shaving.enabled: true` is enough.
 
-```
-battery_control:
-  type: next   # Required -- 'default' does not include peak shaving
-```
+Existing configurations with `type: next` keep working unchanged: `next` is only an alias for the standard logic and behaves identically.
 
-The `default` logic type does not support peak shaving at all. Enabling peak shaving without switching to `next` has no effect.
+Upgrading from 0.9.x or earlier with `type: default`
+
+Before 0.10.0, `peak_shaving.enabled: true` had **no effect** unless `battery_control.type` was set to `next`. If your configuration carries `enabled: true` from that time, peak shaving now becomes active on the first control cycle after the upgrade and starts limiting PV-to-battery charging. batcontrol logs a one-time `Peak shaving is ENABLED ...` line at startup so the change is visible. Set `peak_shaving.enabled: false` if you do not want the feature.
 
 ## Configuration
 
@@ -50,22 +49,25 @@ peak_shaving:
 | `feed_in_limit_w`          | int   | `0`            | Absolute feed-in power limit in watts (solar rule). Formula: `0.6 * kWp * 1000`. Set to `0` to disable.                                             |
 | `feed_in_limit_headroom`   | float | `1.0`          | Safety factor (>= 1.0) on the forecast surplus (solar rule). Recommended: `1.1` if clipping is observed.                                            |
 
-**Deprecated:** The old `mode` parameter (`time` / `price` / `combined`) is still accepted for backward compatibility and mapped to the switches at startup; a deprecation warning is logged. New configurations should use the switch-based design above.
+**Removed in 0.10.0:** The old `mode` parameter (`time` / `price` / `combined`) is no longer supported; a configuration containing it is rejected at startup. Use the switches above instead (`time` = `time_active` only, `price` = `price_active` only, `combined` = both).
 
 ### MQTT Runtime Control
 
 The following parameters can be changed at runtime via MQTT without restarting batcontrol:
 
-| Topic                                              | Accepts                       | Description                                                                           |
-| -------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------- |
-| `{base}/peak_shaving/enabled/set`                  | `true` / `false`              | Enable or disable peak shaving                                                        |
-| `{base}/peak_shaving/allow_full_battery_after/set` | int 0-23                      | Change the target hour for the time rule                                              |
-| `{base}/peak_shaving/price_limit/set`              | float                         | Change the price threshold for the price rule                                         |
-| `{base}/peak_shaving/mode/set`                     | `time` / `price` / `combined` | Deprecated: kept for backward compatibility, mapped onto `time_active`/`price_active` |
+| Topic                                              | Accepts          | Description                                   |
+| -------------------------------------------------- | ---------------- | --------------------------------------------- |
+| `{base}/peak_shaving/enabled/set`                  | `true` / `false` | Enable or disable peak shaving                |
+| `{base}/peak_shaving/allow_full_battery_after/set` | int 0-23         | Change the target hour for the time rule      |
+| `{base}/peak_shaving/price_limit/set`              | float            | Change the price threshold for the price rule |
 
 The rule switches themselves (`time_active`, `price_active`, `solar_cap_active`) and the solar parameters (`feed_in_limit_w`, `feed_in_limit_headroom`) have no MQTT setters and require restarting batcontrol to take effect.
 
 Runtime changes are temporary and are not written back to the configuration file.
+
+### Runtime state in the REST API
+
+`GET /api/v1/peak-shaving` (MCP: `batcontrol_get_peak_shaving`) reports what peak shaving did in the last control cycle: whether it is switched on now, whether it ran or was suspended by evcc (`suspended_by`), the resulting PV charge limit in W (`charge_limit_w`, -1 = none) and the outcome and reason code of the peak shaving rule and of the solar (feed-in) rule. A value switched via MQTT also shows in `GET /api/v1/config` under `overrides`, next to the configured value. See [REST API](https://mastr.github.io/batcontrol/integrations/rest-api/index.md).
 
 ## The `allow_full_battery_after` Target Hour
 
@@ -128,13 +130,11 @@ Only slots within the **production window** are considered. The production windo
 
 When multiple rules are active, the **strictest (lowest non-negative) limit wins**. For example, if the time rule suggests 500 W and the price rule suggests 300 W, the applied limit is 300 W. This conservative approach prioritizes the rules in combination rather than overriding each other.
 
-**Backward compatibility:** the old `mode` parameter (`time` / `price` / `combined`) is still accepted and mapped to the switches at startup:
+**Migration:** the old `mode` parameter was removed in 0.10.0. Replace it with the switches:
 
 - `mode: time` → `time_active: true`, `price_active: false`
 - `mode: price` → `time_active: false`, `price_active: true`
 - `mode: combined` → `time_active: true`, `price_active: true`
-
-New configurations should use the switch-based design.
 
 ## Solar Feed-in Limit (Solarspitzengesetz)
 
@@ -268,9 +268,6 @@ The charge limit is recalculated every evaluation cycle (typically every 3 minut
 **Simple time-based setup** -- spread charging until 14:00, no price or solar awareness:
 
 ```
-battery_control:
-  type: next
-
 peak_shaving:
   enabled: true
   time_active: true
@@ -282,9 +279,6 @@ peak_shaving:
 **Price-aware combined setup** -- reserve capacity for cheap slots below 5 ct/kWh:
 
 ```
-battery_control:
-  type: next
-
 peak_shaving:
   enabled: true
   time_active: true
@@ -297,9 +291,6 @@ peak_shaving:
 **With solar feed-in limit** -- add clipping absorption for a 10 kWp plant (6000 W limit):
 
 ```
-battery_control:
-  type: next
-
 peak_shaving:
   enabled: true
   time_active: true

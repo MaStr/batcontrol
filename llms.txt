@@ -32,9 +32,13 @@ across the day using forecasts, and works with both dynamic and static tariffs.
 - [Peak Shaving Scenarios](https://mastr.github.io/batcontrol/features/peak-shaving-scenarios/index.md): Worked example day for every peak shaving rule combination
 - [Battery Control Expert](https://mastr.github.io/batcontrol/features/battery-control-expert/index.md): Advanced tuning parameters
 - [Price Difference Calculation](https://mastr.github.io/batcontrol/features/price-difference-calculation/index.md): How price thresholds are calculated
+- [Understanding the Decision Sensor](https://mastr.github.io/batcontrol/features/decision-sensor/index.md): How to read the Home Assistant Decision sensor, with worked examples
+- [Dashboard](https://mastr.github.io/batcontrol/features/dashboard/index.md): The built-in web dashboard and how to read it
 
 ## Integrations
 
+- [REST API](https://mastr.github.io/batcontrol/integrations/rest-api/index.md): Read-only HTTP API, conventions, authentication and the OpenAPI reference
+- [MCP Server](https://mastr.github.io/batcontrol/integrations/mcp-server/index.md): MCP server for AI assistants, tools and client setup
 - [MQTT API](https://mastr.github.io/batcontrol/integrations/mqtt-api/index.md): MQTT state publishing, runtime overrides, and Home Assistant auto-discovery
 - [MQTT Inverter](https://mastr.github.io/batcontrol/integrations/mqtt-inverter/index.md): Integrating any battery system via MQTT bridge
 - [evcc Connection](https://mastr.github.io/batcontrol/integrations/evcc-connection/index.md): Coordinating with EV charging via evcc
@@ -44,4 +48,9 @@ across the day using forecasts, and works with both dynamic and static tariffs.
 
 - [15-Minute Interval Transformation](https://mastr.github.io/batcontrol/development/15-min-transform/index.md): Internal 15-minute interval resolution
 - [Solar Feed-in Limit Evaluation](https://mastr.github.io/batcontrol/development/solar-limit-evaluation/index.md): Solar feed-in limit (Solarspitzengesetz) evaluation
+- [Decision Trace and Journal](https://mastr.github.io/batcontrol/development/decision-trace/index.md): Decision trace and journal (why did batcontrol do this)
+- [Dashboard Specification](https://mastr.github.io/batcontrol/development/dashboard-spec/index.md): Design contract for the built-in web dashboard
+- [Frontend Build](https://mastr.github.io/batcontrol/development/frontend-build/index.md): Building the dashboard and how it reaches the wheel
+- [MCP Server Specification](https://mastr.github.io/batcontrol/development/mcp-spec/index.md): Design contract for the read-only MCP server
+- [MCP Evaluation](https://mastr.github.io/batcontrol/development/mcp-evaluation/index.md): Questions for checking the MCP tools against real use
 

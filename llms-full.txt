@@ -56,7 +56,7 @@ This is the recommended way to run batcontrol for most users.
 ### Setup
 
 ```
-mkdir -p ./config ./logs
+mkdir -p ./config ./logs ./data
 ```
 
 ### Plain Docker
@@ -66,6 +66,7 @@ docker run -d \
   --name batcontrol \
   -v /path/to/config:/app/config \
   -v /path/to/logs:/app/logs \
+  -v /path/to/data:/app/data \
   mastr950/batcontrol:latest
 ```
 
@@ -80,6 +81,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
+      - ./data:/app/data
     restart: unless-stopped
 ```
 
@@ -88,6 +90,44 @@ Then start the container:
 ```
 docker compose up -d
 ```
+
+### Dashboard and API
+
+batcontrol can serve a read-only [dashboard](https://mastr.github.io/batcontrol/features/dashboard/index.md) and [HTTP API](https://mastr.github.io/batcontrol/integrations/rest-api/index.md) on port 8080. It is off by default; to use it, set this in `batcontrol_config.yaml`:
+
+```
+api:
+  enabled: true
+  host: 0.0.0.0   # 127.0.0.1 would be unreachable from outside the container
+  port: 8080
+```
+
+and publish the port:
+
+```
+docker run -d \
+  --name batcontrol \
+  -p 8080:8080 \
+  -v /path/to/config:/app/config \
+  -v /path/to/logs:/app/logs \
+  -v /path/to/data:/app/data \
+  mastr950/batcontrol:latest
+```
+
+```
+services:
+  batcontrol:
+    image: mastr950/batcontrol:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./data:/app/data
+    restart: unless-stopped
+```
+
+The dashboard is then at `http://<host>:8080/`. The interactive API documentation at `http://<host>:8080/docs` is off by default; enable it with `api.docs_enabled: true`. A published port has no authentication of its own — set `api.auth_token` or keep it on a trusted network.
 
 ### Timezone
 
@@ -100,6 +140,7 @@ docker run -d \
   --name batcontrol \
   -v /path/to/config:/app/config \
   -v /path/to/logs:/app/logs \
+  -v /path/to/data:/app/data \
   -e TZ=Europe/Berlin \
   mastr950/batcontrol:latest
 ```
@@ -113,6 +154,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
+      - ./data:/app/data
     environment:
       - TZ=Europe/Berlin
     restart: unless-stopped
@@ -124,12 +166,12 @@ Add the [batcontrol_ha_addon](https://github.com/MaStr/batcontrol_ha_addon) repo
 
 ## Local Python
 
-Requires Python 3.13 and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.11 or newer (3.11 - 3.14 are supported and tested in CI; the Docker image ships Python 3.14) and [uv](https://docs.astral.sh/uv/).
 
 ```
 git clone https://github.com/MaStr/batcontrol.git
 cd batcontrol
-uv venv --python 3.13 --allow-existing
+uv venv --python 3.14 --allow-existing
 source .venv/bin/activate
 uv pip install .
 ```
@@ -139,6 +181,46 @@ Place your `batcontrol_config.yaml` in the `config/` directory, then run:
 ```
 python -m batcontrol
 ```
+
+## Application data and provider caches
+
+Batcontrol uses one shared data directory, independent of the configuration file:
+
+| Deployment            | Data directory                                      |
+| --------------------- | --------------------------------------------------- |
+| Local Python          | `./data`, relative to the working directory         |
+| Docker                | `/app/data`                                         |
+| Home Assistant add-on | `/data/data`, inside HA's persistent `/data` volume |
+
+Use `--data-dir PATH` to select another directory. For a service, an absolute path avoids depending on its working directory. No YAML or HA schema setting is needed.
+
+All solar providers and tariff providers using `RelaxedCaching` save their latest raw responses under `data/cache/solar/` and `data/cache/tariff/`. Providers have separate subdirectories, and each solar installation has one file named with a hash of its name. Configuration and credentials are not copied into cache files; provider responses may still contain private installation or household data. Files are atomically replaced with owner-only (`0600`) permissions.
+
+On startup, providers load usable cached responses and attempt their normal refresh. If the provider is unavailable, the cached response remains usable only until its original TTL expires. The default TTL is 12 hours; the HA solar provider also honors its existing `cache_ttl_hours` setting. Restart never renews the fetch timestamp. Missing, expired, corrupt, or unwritable cache files leave the existing in-memory cache and no-data fallback behavior in place.
+
+Persist raw timestamped responses rather than relative forecast slots so the provider can recalculate the remaining forecast at the current time. HA solar's automatic unit detection can use unit metadata from a usable cached response. Local CSV consumption profiles and the separate dynamic network-fee fetcher are outside this cache's scope.
+
+For Docker, use a bind mount as shown above or a named volume at `/app/data`. The Dockerfile also declares that path as a volume, but an automatically created anonymous volume is not reliably reused when replacing a container.
+
+### Clearing the cache
+
+After stopping any existing controller instance, start once with:
+
+```
+python -m batcontrol --data-dir ./data --clear-cache
+```
+
+`--clear-cache` removes only the `cache` subdirectory, including entries for inactive providers, before providers are initialized. Batcontrol then starts normally and can save new responses. If deletion fails, startup aborts rather than silently loading the old cache. Omit the flag on subsequent starts.
+
+Both container entrypoints forward CLI arguments. For a one-time Docker Compose startup, temporarily set:
+
+```
+command: ["/bin/sh", "/app/entrypoint.sh", "--clear-cache"]
+```
+
+Remove that command after the maintenance start so future restarts retain cache. For deployments without access to startup arguments, including HA's add-on UI, stop the controller and delete only the `cache` subdirectory from its persistent data volume, then start it again. Never run a second controller to clear cache.
+
+Clear the cache after changing a site's geometry, a forecast sensor, or a tariff account/market if the previous response no longer describes that configuration. Provider separation prevents cross-provider reuse; cache identity does not hash all configuration values.
 
 ## Inverter Preparation
 
@@ -158,7 +240,7 @@ After the first successful start, work through this in order:
 1. **Set your annual consumption.** Update `consumption_forecast.csv.annual_consumption` with your actual value in kWh. This scales the default load profile to your household.
 1. **Configure your tariff provider.** If you use a dynamic provider (Tibber, aWATTar, etc.), set the correct type and API key. For a flat rate, use `tariff_zones` with a single zone price — batcontrol will still run peak shaving.
 1. **Review battery charge limits.** The defaults (`max_charging_from_grid_limit: 89%`, `always_allow_discharge_limit: 90%`) are conservative starting values. Adjust them to match your usage patterns after a few days of observation.
-1. **Enable peak shaving** (optional). If your PV installation frequently reaches full battery charge before midday, enable peak shaving to spread the charging and keep buffer capacity for the afternoon. Requires `battery_control.type: next` and `peak_shaving.enabled: true`. See [Peak Shaving](https://mastr.github.io/batcontrol/features/peak-shaving/index.md).
+1. **Enable peak shaving** (optional). If your PV installation frequently reaches full battery charge before midday, enable peak shaving to spread the charging and keep buffer capacity for the afternoon. Requires `peak_shaving.enabled: true`. See [Peak Shaving](https://mastr.github.io/batcontrol/features/peak-shaving/index.md).
 1. **Connect to Home Assistant** (optional). Enable the MQTT API to get real-time state, price, and forecast data as Home Assistant entities, and to override battery limits at runtime. See [MQTT API](https://mastr.github.io/batcontrol/integrations/mqtt-api/index.md).
 1. **Connect evcc** (optional). If you charge an electric vehicle, the evcc integration can hold battery discharge while the car is charging. See [evcc Connection](https://mastr.github.io/batcontrol/integrations/evcc-connection/index.md).
 
@@ -179,7 +261,7 @@ For working on the batcontrol source code, use an editable install:
 ```
 git clone https://github.com/MaStr/batcontrol.git
 cd batcontrol
-uv venv --python 3.13 --allow-existing
+uv venv --python 3.14 --allow-existing
 source .venv/bin/activate
 uv pip install --editable '.[test]'
 ```
@@ -264,7 +346,7 @@ Based on the forecasts and current battery state, batcontrol puts your inverter 
 
 ### Mode 8: LIMIT BATTERY CHARGE RATE (Peak Shaving)
 
-- **Requires**: version 0.8.0+ , Logic type `next` must be selected in `battery_control.type`
+- **Requires**: version 0.8.0+ , `peak_shaving.enabled: true`
 - **When**: Peak shaving is enabled, PV is producing, and the battery should not fill up too quickly
 - **Behavior**:
 - Battery **discharge is allowed** (handles household demand normally)
@@ -560,7 +642,9 @@ enable_resilient_wrapper: true
 
 ### outage_tolerance_minutes
 
-The maximum duration (in minutes) to tolerate inverter outages before terminating. While the inverter is unreachable, each control cycle is skipped. If communication is not restored within this window, batcontrol gives up and exits with an error.
+The maximum duration (in minutes) to tolerate unresolved inverter failures before terminating. While a required read or control command fails, the control cycle is skipped. A failure beyond this window makes batcontrol exit with an error; a failure exactly at the limit is still tolerated.
+
+The window uses a monotonic clock, so clock synchronization and manual wall-clock changes do not extend it. Successful unrelated calls do not reset it: a local capacity lookup cannot prove a failed SoC read has recovered, and working telemetry cannot hide a persistent write failure. Each failed operation must succeed again before the outage is cleared. An acknowledged mode command supersedes earlier failed mode commands, so a newly calculated allow-discharge command can recover from a failed force-charge command without replaying the old command.
 
 Default:
 
@@ -655,6 +739,12 @@ inverter:
   max_soc: 100                # Optional, default: 100
   revert_seconds: 0           # Optional, default: 0
 ```
+
+### Connection recovery
+
+A Modbus operation makes at most one reconnect attempt and one retry after a socket timeout, connection error or remote connection close. The socket timeout is five seconds. If reconnecting or retrying fails, the connection is closed and the error reaches the resilient wrapper; the next scheduled control cycle can open a new connection. There is no additional retry loop or sleep in the driver. Modbus exception responses and malformed protocol responses are not retried by this reconnect handler.
+
+With `enable_resilient_wrapper: true`, failures after the first successful mode command skip the current cycle. The next cycle reads the inverter again and calculates a new decision; it does not use an old SoC reading or queue the failed command for replay. With the wrapper disabled, an error that survives the bounded reconnect attempt still propagates normally.
 
 ### Backup / emergency-power systems
 
@@ -857,6 +947,12 @@ Currently following data providers are available:
 
 You can chose one and need to adjust the configuration.
 
+API tariff providers persist their latest raw response under the shared `cache/tariff/` directory. After a restart, a failed refresh can use that response until its original 12-hour TTL expires. Static tariff zones are still rebuilt from the current configuration. See [Application data and provider caches](https://mastr.github.io/batcontrol/getting-started/installation/#application-data-and-provider-caches) for data paths and `--clear-cache`.
+
+Key names
+
+The credential is `api_token` and the endpoint is `url`, consistently across all configuration sections. The older spellings `apikey`, `apitoken` and `base_url` are still read, but log a deprecation warning at startup. The Home Assistant add-on offers only `url` and `api_token` from version 0.10.0 on - rename them there in the same step as the update.
+
 ## tibber
 
 You need to get an API Key from https://developer.tibber.com/ , which looks like `Zz-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx`. After obtaining this key, use the following configuration:
@@ -864,7 +960,7 @@ You need to get an API Key from https://developer.tibber.com/ , which looks like
 ```
 utility:
   type: tibber 
-  apikey: YOUR-PASSWORD
+  api_token: YOUR-PASSWORD
 ```
 
 ## awattar
@@ -1005,7 +1101,7 @@ To use energyforecast.de, create a login at [energyforecast.de](https://www.ener
 ```
 utility:
   type: energyforecast
-  apikey: xxxxxxxxx
+  api_token: xxxxxxxxx
   vat: 0.19     # 19% VAT
   fees: 0.15    # Your network fees (Netzentgelt), EUR/kWh excl. VAT
   markup: 0.00  # Optional markup, e.g. supplier margin
@@ -1028,7 +1124,7 @@ This is useful if:
 ```
 utility:
   type: energyforecast_total_price
-  apikey: xxxxxxxxx
+  api_token: xxxxxxxxx
   # market_zone: DE  # optional: DE/LU (default, both map to DE-LU market zone), AT, FR, NL, BE, PL, DK1, DK2
 ```
 
@@ -1085,7 +1181,9 @@ pvinstallations:
 
 The **name** must be a unique value.
 
-If a solar forecast provider is not available, batcontrol is running on cached values. It stops working if less then 12 hours of forecast are available. That should be enough to overcome outages.
+If a solar forecast provider is unavailable, batcontrol continues with cached values. By default, entries are usable while their age is strictly less than 12 hours. At 12 hours they expire and the existing no-data behavior applies. The HA solar provider also honors its existing `cache_ttl_hours` setting.
+
+All solar providers save the latest raw response for each installation under the shared application's `cache/solar/` directory, with a separate namespace for each provider. Restart retains the original fetch timestamp and does not extend the TTL. See [Application data and provider caches](https://mastr.github.io/batcontrol/getting-started/installation/#application-data-and-provider-caches) for deployment paths, persistence guarantees, and `--clear-cache`.
 
 ## Forecast.Solar (Default)
 
@@ -1154,12 +1252,20 @@ The minimum configuration is:
 solar_forecast_provider: homeassistant-solar-forecast-ml
 pvinstallations:
   - name: HA Solar ML Forecast
-    base_url: ws://homeassistant.local:8123  # Your HomeAssistant URL
+    url: ws://homeassistant.local:8123       # Your HomeAssistant URL
     api_token: eyJ...                        # Long-lived access token from HA Profile
     entity_id: sensor.solar_forecast_ml_evcc_solar_prognose  # Forecast sensor entity
 ```
 
-If you're running batcontrol in a HomeAssistant addon, use `ws://homeassistant:8123` as the base_url. For standalone installations, use your HomeAssistant IP or hostname.
+If you're running batcontrol in a HomeAssistant addon, use `ws://homeassistant:8123` as the url. For standalone installations, use your HomeAssistant IP or hostname.
+
+List only the entries of the provider you selected
+
+This provider uses a single `pvinstallations` entry: the one with a matching `type:`, or the one carrying `entity_id`. Entries of *other* providers have to be removed, because `fcsolarapi` and `solcast` read every entry in the list and fail on an entry that does not carry their keys. With several entries and no way to tell which one is meant, batcontrol stops at startup and asks you to add `type: homeassistant-solar-forecast-ml`.
+
+Key names
+
+The credential is `api_token` and the endpoint is `url`, consistently across all configuration sections. The older spellings `base_url`, `apikey` and `apitoken` are still read, but log a deprecation warning at startup. The Home Assistant add-on offers only `url` and `api_token` from version 0.10.0 on - rename them there in the same step as the update.
 
 ### Optional Parameters
 
@@ -1168,11 +1274,11 @@ You can customize the behavior with additional parameters:
 ```
 pvinstallations:
   - name: HA Solar ML Forecast
-    base_url: ws://homeassistant:8123
+    url: ws://homeassistant:8123
     api_token: eyJ...
     entity_id: sensor.solar_forecast_ml_prognose_nachste_stunde
     sensor_unit: auto  # Options: 'auto' (default, auto-detect), 'Wh', or 'kWh'
-    cache_ttl_hours: 24.0  # Cache duration in hours (default: 24.0)
+    cache_ttl_hours: 24.0  # Cache duration in hours (default: 12.0)
 ```
 
 The `sensor_unit` parameter:
@@ -1182,6 +1288,24 @@ The `sensor_unit` parameter:
 - `kWh`: If you know your sensor reports in kWh
 
 Setting the explicit unit (`Wh` or `kWh`) can speed up startup by skipping auto-detection.
+
+The `cache_ttl_hours` parameter controls how long an already fetched forecast stays usable as a fallback when HomeAssistant cannot be reached (default: 12 hours). It does not control how often batcontrol asks for a new forecast — that is the refresh interval of the provider.
+
+### Troubleshooting
+
+**Problem:** batcontrol stops at startup with `Auth message incorrectly formatted: expected str at 'access_token'. Got None`
+
+**Solution:** the access token never reached the provider. Check that
+
+- the token is configured as `api_token` — `apikey` is the key name of the fcsolarapi and Solcast providers and was a common mix-up ([issue #451](https://github.com/MaStr/batcontrol/issues/451))
+- the token sits in the same `pvinstallations` entry as `entity_id` and `url`
+- the entry belongs to the selected provider (see the note above about `type:`)
+
+Since batcontrol 0.10.0 a missing token is reported as a configuration error naming the key, before any connection to HomeAssistant is attempted.
+
+**Problem:** `No "url" configured for installation <name>, falling back to ws://homeassistant.local:8123`
+
+**Solution:** your URL is not in the entry batcontrol selected. Use the key `url` (or the deprecated `base_url`) in the entry that also holds `entity_id`.
 
 ## Solcast
 
@@ -1196,7 +1320,7 @@ Solcast offers a free "Home User" (hobbyist) account which is sufficient for bat
 1. Register at [solcast.com](https://solcast.com/free-rooftop-solar-forecasting) and choose the free **Home User** (hobbyist) plan.
 1. In the Solcast toolkit, create a **Rooftop Site**. Enter your location (latitude/longitude), panel tilt, azimuth and capacity (kWp) there — the site geometry lives in your Solcast account, **not** in the batcontrol configuration.
 1. Copy the site's **resource id** (shown in the site details, format `xxxx-xxxx-xxxx-xxxx`).
-1. Copy your **API key** from the Solcast account settings.
+1. Copy your **API key** from the Solcast account settings (configured as `api_token`).
 
 The free account is limited to **one location with up to two rooftop sites** (e.g. an east/west split) and **10 API requests per day**.
 
@@ -1209,7 +1333,7 @@ solar_forecast_provider: solcast
 pvinstallations:
   - name: Haus #name
     resource_id: xxxx-xxxx-xxxx-xxxx  # from your Solcast rooftop site
-    apikey: your-solcast-api-key      # from your Solcast account settings
+    api_token: your-solcast-api-key   # from your Solcast account settings
 ```
 
 For two rooftop sites (e.g. east/west arrays) use one entry per site. The API key is the same for both, each site has its own resource id:
@@ -1219,10 +1343,10 @@ solar_forecast_provider: solcast
 pvinstallations:
   - name: Dach Ost
     resource_id: xxxx-xxxx-xxxx-aaaa
-    apikey: your-solcast-api-key
+    api_token: your-solcast-api-key
   - name: Dach West
     resource_id: xxxx-xxxx-xxxx-bbbb
-    apikey: your-solcast-api-key
+    api_token: your-solcast-api-key
 ```
 
 ### Optional percentile parameter
@@ -1233,7 +1357,7 @@ You can select which estimate batcontrol uses per installation:
 pvinstallations:
   - name: Haus
     resource_id: xxxx-xxxx-xxxx-xxxx
-    apikey: your-solcast-api-key
+    api_token: your-solcast-api-key
     percentile: 10  # 10 (pessimistic), 50 (default, most likely), 90 (optimistic)
 ```
 
@@ -1352,6 +1476,36 @@ docker kill --signal=HUP batcontrol   # Docker container
 
 If no load profile is specified, batcontrol uses `default_load_profile.csv` as a fallback.
 
+### Creating a Load Profile from a Fronius Solar.web Export
+
+If your inverter reports to Fronius Solar.web, you can turn your own consumption history into a load profile. Open the **[Load Profile Generator](https://mastr.github.io/batcontrol/assets/load-profile-generator.html)**, select your export and download the finished `load_profile.csv`. The whole calculation runs in your browser, the file is not uploaded anywhere.
+
+**Export from Solar.web**
+
+1. Open your system in Solar.web and go to the analysis / history view.
+1. Choose the **detailed** view (5 minute resolution) and select the consumption ("Energy balance / Consumption", column `Verbrauch`).
+1. Optional: add the Fronius Wattpilot energy (columns `Energie Wattpilot`).
+1. Export as Excel file (`.xlsx`). Use **at least 12 months**, so every season is covered. Longer exports are fine and need a few seconds to calculate.
+
+Only `.xlsx` is supported. The resolution must be one hour or finer.
+
+**What the generator does**
+
+- Sums the 5 minute values to hours and averages them per month, weekday and hour. This is the `month,weekday,hour,energy` format described above (2016 rows, energy in Wh per hour).
+- Treats hours without data as gaps and fills them with the average of the same weekday and hour from other months. Hours with a few missing samples are scaled up. Gaps are never counted as zero.
+- **Wallbox (optional switch):** subtracts the selected columns (detected automatically for `Energie Wattpilot`, other energy columns can be ticked manually) from the consumption. The assumption is that the car is charged in the cheapest hours anyway, so it should not inflate the base load forecast. Switch it off if the wallbox is part of your regular load.
+- **Smoothing (optional switch):** at the moment the wallbox switches on or off, the total and the wallbox value often do not match for one interval. Those intervals are replaced with the average of their neighbours. Threshold (default 1200 W) and window (default 2 intervals) can be changed.
+
+**Checking the result**
+
+The page shows plausibility checks next to the profile: covered period, months without data, share of filled gaps, wallbox share, spikes and whether the yearly value is within the usual range of a household. A heat map of the average week and a monthly chart help to spot errors at a glance (for example a night-time peak caused by a wrongly selected column).
+
+**Yearly consumption**
+
+The page calculates the yearly consumption of the profile with the same formula batcontrol uses for scaling. Treat this number as a lower bound and **round it up generously** before entering it as `annual_consumption`: the page suggests the calculated value plus 5 %, rounded up to the next 100 kWh. Consumers you plan to add (heat pump, electric car) have to be added on top. A forecast that is a little too high is usually cheaper than one that is too low, because batcontrol then keeps a reserve for the expensive hours.
+
+Copy `load_profile.csv` into your `config/` folder, set `annual_consumption` and send `SIGHUP` (see above) or restart batcontrol.
+
 ______________________________________________________________________
 
 ## 2. HomeAssistant API-Based Forecast
@@ -1374,12 +1528,16 @@ The HomeAssistant API method provides **dynamic consumption forecasting** based 
 
 ### Configuration
 
+Key names
+
+The credential is `api_token` and the endpoint is `url`, consistently across all configuration sections. The older spellings `apitoken`, `apikey` and `base_url` are still read, but log a deprecation warning at startup. The Home Assistant add-on offers only `url` and `api_token` from version 0.10.0 on - rename them there in the same step as the update.
+
 ```
 consumption_forecast:
   type: homeassistant-api
   homeassistant_api:
-    base_url: ws://homeassistant.local:8123   # Your HomeAssistant URL
-    apitoken: YOUR_LONG_LIVED_ACCESS_TOKEN     # Long-Lived Access Token
+    url: ws://homeassistant.local:8123        # Your HomeAssistant URL
+    api_token: YOUR_LONG_LIVED_ACCESS_TOKEN   # Long-Lived Access Token
     entity_id: sensor.energy_consumption        # Entity ID with consumption data
     sensor_unit: auto                           # Options: 'auto', 'Wh', or 'kWh' (since 0.5.7)
     history_days: "-7;-14;-21"               # Days to look back (negative values)
@@ -1394,8 +1552,8 @@ consumption_forecast:
 
 | Parameter   | Description                                                     | Example                         |
 | ----------- | --------------------------------------------------------------- | ------------------------------- |
-| `base_url`  | HomeAssistant URL (ws is correct)                               | `ws://homeassistant.local:8123` |
-| `apitoken`  | Long-Lived Access Token from HomeAssistant                      | `eyJ0eXAiOiJKV1Qi...`           |
+| `url`       | HomeAssistant URL (ws is correct)                               | `ws://homeassistant.local:8123` |
+| `api_token` | Long-Lived Access Token from HomeAssistant                      | `eyJ0eXAiOiJKV1Qi...`           |
 | `entity_id` | Entity ID tracking consumption (must have long-term statistics) | `sensor.energy_consumption`     |
 
 #### Optional Parameters
@@ -1446,8 +1604,8 @@ The `sensor_unit` parameter controls how batcontrol detects the unit of measurem
 consumption_forecast:
   type: homeassistant-api
   homeassistant_api:
-    base_url: ws://homeassistant.local:8123
-    apitoken: YOUR_TOKEN
+    url: ws://homeassistant.local:8123
+    api_token: YOUR_TOKEN
     entity_id: sensor.energy_consumption
     sensor_unit: kWh  # Explicit configuration - faster startup!
 ```
@@ -1553,8 +1711,13 @@ To minimize load on HomeAssistant:
 - Cache stores consumption values per weekday/hour combination
 - Cache is automatically refreshed when data is missing
 - Cache survives batcontrol restarts (in-memory cache)
+- The forecast horizon is capped at 48 hours, so one cold cache never requests more than 48 hourly statistics per `history_days` entry
 
 **Cache key format:** `"weekday_hour"` (e.g., `"0_14"` = Monday 14:00)
+
+### Forecast Horizon and Time Resolution
+
+The forecast is requested in **slots** at the configured `time_resolution_minutes` (see [Batcontrol Configuration](https://mastr.github.io/batcontrol/configuration/batcontrol-configuration/index.md)), while HomeAssistant statistics are hourly. Batcontrol converts between the two, so a 24 hour horizon reads 24 hours of history in both 60-minute and 15-minute mode - the number of `recorder/statistics_during_period` requests does not depend on the time resolution.
 
 ### WebSocket Communication
 
@@ -1614,10 +1777,11 @@ ______________________________________________________________________
 
 ### HomeAssistant API Method
 
-**Problem:** "Authentication failed"
+**Problem:** "Authentication failed" or "expected str at 'access_token'. Got None"
 
 **Solution:**
 
+- `Got None` means no token reached the provider: the credential key is `api_token` (`apitoken` still works but is deprecated), and it belongs in the same block as `entity_id` and `url`
 - Verify your access token is correct
 - Check if the token has been revoked in HomeAssistant
 - Create a new Long-Lived Access Token
@@ -1632,8 +1796,8 @@ ______________________________________________________________________
 consumption_forecast:
   type: homeassistant-api
   homeassistant_api:
-    base_url: ws://homeassistant.local:8123
-    apitoken: YOUR_TOKEN
+    url: ws://homeassistant.local:8123
+    api_token: YOUR_TOKEN
     entity_id: sensor.energy_consumption
     sensor_unit: kWh  # or 'Wh' depending on your sensor
 ```
@@ -1660,7 +1824,7 @@ consumption_forecast:
 
 **Solution:**
 
-- Verify `base_url` is correct and accessible from batcontrol
+- Verify `url` is correct and accessible from batcontrol
 - Check if HomeAssistant is running
 - Verify network connectivity
 - Check firewall rules
@@ -1790,8 +1954,8 @@ consumption_forecast:
 consumption_forecast:
   type: homeassistant-api
   homeassistant_api:
-    base_url: ws://192.168.1.100:8123
-    apitoken: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
+    url: ws://192.168.1.100:8123
+    api_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...
     entity_id: sensor.house_energy_total
     sensor_unit: auto  # Auto-detect (default)
     history_days: "-7;-14;-21"
@@ -1806,8 +1970,8 @@ consumption_forecast:
 consumption_forecast:
   type: homeassistant-api
   homeassistant_api:
-    base_url: ws://homeassistant.local:8123
-    apitoken: your_token_here
+    url: ws://homeassistant.local:8123
+    api_token: your_token_here
     entity_id: sensor.energy_consumption
     sensor_unit: kWh  # Explicit unit - faster startup, no auto-detection needed
     history_days: "-7;-14;-21"
@@ -1822,8 +1986,8 @@ consumption_forecast:
 consumption_forecast:
   type: homeassistant-api
   homeassistant_api:
-    base_url: ws://homeassistant.local:8123
-    apitoken: your_token_here
+    url: ws://homeassistant.local:8123
+    api_token: your_token_here
     entity_id: sensor.energy_consumption
     sensor_unit: Wh  # Explicit unit for optimal performance
     history_days: "-1;-2;-3"  # Only last 3 days
@@ -1852,18 +2016,17 @@ Peak shaving solves this by **limiting the PV-to-battery charge rate** so the ba
 
 ## Status
 
-The algorithm is in the status "experimental", which is the reason why it is only available in the logic type `next`. After collecting enough experience with that feature, it will move into `default` eventually.
+Peak shaving is **stable** and part of the standard battery control logic.
 
 ## Prerequisites
 
-Peak shaving was introduced with 0.8.0 and is only available with the **`next` logic type**. Set this in the `battery_control` section of your configuration:
+Peak shaving was introduced with 0.8.0 in the `next` logic type. Since 0.10.0 it is part of the standard logic, so no particular `battery_control.type` has to be selected any more -- setting `peak_shaving.enabled: true` is enough.
 
-```
-battery_control:
-  type: next   # Required -- 'default' does not include peak shaving
-```
+Existing configurations with `type: next` keep working unchanged: `next` is only an alias for the standard logic and behaves identically.
 
-The `default` logic type does not support peak shaving at all. Enabling peak shaving without switching to `next` has no effect.
+Upgrading from 0.9.x or earlier with `type: default`
+
+Before 0.10.0, `peak_shaving.enabled: true` had **no effect** unless `battery_control.type` was set to `next`. If your configuration carries `enabled: true` from that time, peak shaving now becomes active on the first control cycle after the upgrade and starts limiting PV-to-battery charging. batcontrol logs a one-time `Peak shaving is ENABLED ...` line at startup so the change is visible. Set `peak_shaving.enabled: false` if you do not want the feature.
 
 ## Configuration
 
@@ -1894,22 +2057,25 @@ peak_shaving:
 | `feed_in_limit_w`          | int   | `0`            | Absolute feed-in power limit in watts (solar rule). Formula: `0.6 * kWp * 1000`. Set to `0` to disable.                                             |
 | `feed_in_limit_headroom`   | float | `1.0`          | Safety factor (>= 1.0) on the forecast surplus (solar rule). Recommended: `1.1` if clipping is observed.                                            |
 
-**Deprecated:** The old `mode` parameter (`time` / `price` / `combined`) is still accepted for backward compatibility and mapped to the switches at startup; a deprecation warning is logged. New configurations should use the switch-based design above.
+**Removed in 0.10.0:** The old `mode` parameter (`time` / `price` / `combined`) is no longer supported; a configuration containing it is rejected at startup. Use the switches above instead (`time` = `time_active` only, `price` = `price_active` only, `combined` = both).
 
 ### MQTT Runtime Control
 
 The following parameters can be changed at runtime via MQTT without restarting batcontrol:
 
-| Topic                                              | Accepts                       | Description                                                                           |
-| -------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------- |
-| `{base}/peak_shaving/enabled/set`                  | `true` / `false`              | Enable or disable peak shaving                                                        |
-| `{base}/peak_shaving/allow_full_battery_after/set` | int 0-23                      | Change the target hour for the time rule                                              |
-| `{base}/peak_shaving/price_limit/set`              | float                         | Change the price threshold for the price rule                                         |
-| `{base}/peak_shaving/mode/set`                     | `time` / `price` / `combined` | Deprecated: kept for backward compatibility, mapped onto `time_active`/`price_active` |
+| Topic                                              | Accepts          | Description                                   |
+| -------------------------------------------------- | ---------------- | --------------------------------------------- |
+| `{base}/peak_shaving/enabled/set`                  | `true` / `false` | Enable or disable peak shaving                |
+| `{base}/peak_shaving/allow_full_battery_after/set` | int 0-23         | Change the target hour for the time rule      |
+| `{base}/peak_shaving/price_limit/set`              | float            | Change the price threshold for the price rule |
 
 The rule switches themselves (`time_active`, `price_active`, `solar_cap_active`) and the solar parameters (`feed_in_limit_w`, `feed_in_limit_headroom`) have no MQTT setters and require restarting batcontrol to take effect.
 
 Runtime changes are temporary and are not written back to the configuration file.
+
+### Runtime state in the REST API
+
+`GET /api/v1/peak-shaving` (MCP: `batcontrol_get_peak_shaving`) reports what peak shaving did in the last control cycle: whether it is switched on now, whether it ran or was suspended by evcc (`suspended_by`), the resulting PV charge limit in W (`charge_limit_w`, -1 = none) and the outcome and reason code of the peak shaving rule and of the solar (feed-in) rule. A value switched via MQTT also shows in `GET /api/v1/config` under `overrides`, next to the configured value. See [REST API](https://mastr.github.io/batcontrol/integrations/rest-api/index.md).
 
 ## The `allow_full_battery_after` Target Hour
 
@@ -1972,13 +2138,11 @@ Only slots within the **production window** are considered. The production windo
 
 When multiple rules are active, the **strictest (lowest non-negative) limit wins**. For example, if the time rule suggests 500 W and the price rule suggests 300 W, the applied limit is 300 W. This conservative approach prioritizes the rules in combination rather than overriding each other.
 
-**Backward compatibility:** the old `mode` parameter (`time` / `price` / `combined`) is still accepted and mapped to the switches at startup:
+**Migration:** the old `mode` parameter was removed in 0.10.0. Replace it with the switches:
 
 - `mode: time` → `time_active: true`, `price_active: false`
 - `mode: price` → `time_active: false`, `price_active: true`
 - `mode: combined` → `time_active: true`, `price_active: true`
-
-New configurations should use the switch-based design.
 
 ## Solar Feed-in Limit (Solarspitzengesetz)
 
@@ -2112,9 +2276,6 @@ The charge limit is recalculated every evaluation cycle (typically every 3 minut
 **Simple time-based setup** -- spread charging until 14:00, no price or solar awareness:
 
 ```
-battery_control:
-  type: next
-
 peak_shaving:
   enabled: true
   time_active: true
@@ -2126,9 +2287,6 @@ peak_shaving:
 **Price-aware combined setup** -- reserve capacity for cheap slots below 5 ct/kWh:
 
 ```
-battery_control:
-  type: next
-
 peak_shaving:
   enabled: true
   time_active: true
@@ -2141,9 +2299,6 @@ peak_shaving:
 **With solar feed-in limit** -- add clipping absorption for a 10 kWp plant (6000 W limit):
 
 ```
-battery_control:
-  type: next
-
 peak_shaving:
   enabled: true
   time_active: true
@@ -2506,7 +2661,394 @@ Batcontrol then takes **whichever value is larger**—the absolute amount or the
 - **Relative Plus Absolute**: Scales automatically with the current price, ensuring Batcontrol’s logic remains balanced across a wide range of price levels.
 
 This change helps prevent overreacting at high prices (where a small amount like `€0.03` is negligible) and avoids unnecessary waiting at low prices (where a large absolute amount might never occur).
+
+# Understanding the Decision Sensor
+
+If MQTT is enabled, batcontrol publishes a **Decision** sensor to Home Assistant. It answers, in plain language, *why* batcontrol is currently charging, discharging, limiting PV charging, or holding the battery.
+
+This page is for anyone running batcontrol who wants to read that sensor. For the underlying data model (reason codes, the decision journal, how to add a step), see [Decision Trace and Journal](https://mastr.github.io/batcontrol/development/decision-trace/index.md).
+
+## Where to find it
+
+The sensor's state is the text shown below; its attributes (click into the entity in Home Assistant) carry the full detail behind that one line, including every step that was checked during that control cycle.
+
+## How to read the state
+
+The state always has the same shape:
+
+```
+<Mode> [<value> W] - <why>
+```
+
+- **Mode** is what the inverter is doing: `Discharge Allowed`, `Avoid Discharge`, `Limit Battery Charge`, or `Charge from Grid`.
+- **value** is the charge rate (force charge) or the PV charge limit (limit mode), in watts. The other two modes have no value.
+- **why** is one sentence explaining the mode, built from the numbers batcontrol actually used to decide.
+
+The sensor updates when something meaningful changes: a different mode, the charge rate / PV limit changing by 25 % or more, or a different reason. Otherwise it is refreshed every 15 minutes, so the numbers in the text are at most 15 minutes old. Small adjustments between evaluations do not create a new state right away.
+
+If a configured limit changes the charge rate or the PV limit that batcontrol calculated (`max_grid_charge_rate`, `max_pv_charge_rate`, `min_pv_charge_rate`), the reason stays the same and the adjustment is added in brackets at the end of the text.
+
+## Worked examples
+
+These are real sensor states, not simplified paraphrases -- each one is exactly what `status_text()` produces for the numbers shown.
+
+**Battery is allowed to discharge, there is enough energy**
+
+> Discharge Allowed - usable energy (3500 Wh) exceeds the 1200 Wh reserved for upcoming more expensive hours
+
+batcontrol is holding back 1200 Wh for a price spike it has already seen coming; the rest (3500 Wh usable) is free to use now.
+
+**Battery is charged from the grid**
+
+> Charge from Grid 2133 W - usable energy (900 Wh) is below the 2500 Wh reserved for upcoming more expensive hours, so 1600 Wh is charged from the grid
+
+The 900 Wh left is not enough to cover the reserve for the next expensive hours, so the missing 1600 Wh is bought now while it is cheap, at a rate that fills the battery before the current price slot ends.
+
+**Battery is held, but not charged from the grid**
+
+> Avoid Discharge - battery is held for upcoming more expensive hours (usable 1300 Wh, reserve 1400 Wh); no grid charging: solar is forecast to cover the demand of the hours where it would pay off
+
+The first part says why the battery is not discharged now: the energy is needed later, when power is more expensive than now. The second part says why it is not topped up from the grid either. Buying from the grid only pays off for hours that are clearly more expensive (by at least the minimum price difference), and here the solar forecast already covers those. Other endings are, for example, `the 8000 Wh grid charge limit is reached`, `no upcoming price is far enough above the current price to pay off` or `the missing 50 Wh are below the minimum charge amount`.
+
+**Peak shaving slows down PV charging**
+
+> Limit Battery Charge 1200 W - PV charging is limited so the battery is not full before 16:00 and room is kept for solar surplus in cheap-price hours
+
+See [Peak Shaving](https://mastr.github.io/batcontrol/features/peak-shaving/index.md): without the limit, the battery would fill up early and stop absorbing solar, well before the configured target hour (16:00 here). The text names the active parts of peak shaving: the target hour (time based) and/or the cheap-price hours (price based).
+
+**Solar feed-in limit (`Solarspitzengesetz`) absorption**
+
+> Limit Battery Charge 900 W - PV charging is limited to keep battery room for the solar surplus above the 6000 W feed-in limit, which would otherwise be curtailed
+
+Production is about to exceed the configured 6000 W feed-in limit; rather than curtailing (= wasting) the surplus, the battery keeps room for it and absorbs it.
+
+**An external system blocks discharge**
+
+> Avoid Discharge - an external system (such as evcc) requested that the battery not discharge
+
+Today this is always evcc, holding the battery back while, for example, a car is charging.
+
+**A Home Assistant / API request could not be applied as asked**
+
+> Discharge Allowed - requested via the API or Home Assistant
+
+The attributes' `inputs` show a `requested_mode` that differs from the `mode` actually applied: the requested mode (e.g. "Limit Battery Charge") had no limit configured, so batcontrol fell back to a safe mode instead.
+
+**Forecasts could not be refreshed**
+
+> Discharge Allowed - forecast data could not be refreshed for 185 seconds, so discharging is allowed as a safe fallback
+
+batcontrol could not reach a forecast provider; after a short grace period it falls back to allowing discharge rather than guessing.
+
+**Battery is full enough to always allow discharge**
+
+> Discharge Allowed - battery holds 8200 Wh, above the always-allow-discharge level of 80% (8000 Wh)
+
+Above the configured `always_allow_discharge_limit`, batcontrol always allows discharging, regardless of price.
+
+## Reading the attributes
+
+The attributes are the full trace of that control cycle: every rule that was checked, not only the one that decided the outcome. A rule that did not apply (`"outcome": "skipped"` or `"not_needed"`) is still listed -- that is how you can tell, for example, that peak shaving was evaluated and found nothing to do, rather than not running at all. The step that produced the sensor's state is named at the top level as `decided_by`, and its plain-language sentence is repeated there as `why`.
+
+# Dashboard
+
+batcontrol ships a small web dashboard that shows what it is doing and why, without needing Home Assistant, MQTT or Grafana.
+
+It is a **reader**. There are no controls on it - nothing to click that changes the battery. Overrides stay on the [MQTT API](https://mastr.github.io/batcontrol/integrations/mqtt-api/index.md).
+
+## Opening it
+
+Enable the API and the dashboard is served at the root of the same port:
+
+```
+api:
+  enabled: true
+  host: 127.0.0.1   # 0.0.0.0 to reach it from another device
+  port: 8080
+  dashboard_enabled: true
+```
+
+- **Docker**: publish the port (`-p 8080:8080`), bind to `0.0.0.0`, open `http://<host>:8080/`.
+- **Home Assistant add-on**: it appears in the sidebar through ingress; no port to publish.
+- **Source install**: the assets are built by npm and ship inside the wheel. A checkout without a build serves a hint page instead - see [frontend build](https://mastr.github.io/batcontrol/development/frontend-build/index.md).
+
+## Reading it
+
+### Header
+
+Version (linking to its release notes), online state, the time of the last evaluation, which source set the current mode, the forced charge rate, and a countdown to the next poll. The countdown follows batcontrol's own evaluation cycle rather than a fixed interval.
+
+`OFFLINE` means the control loop has missed several evaluations, or the browser cannot reach batcontrol. The last known values stay on screen, dimmed, instead of disappearing.
+
+### DECISION
+
+The decision batcontrol last took, in the same words as the Home Assistant Decision sensor, with the reason code below it and how long it has been in effect.
+
+`>TRACE<` expands the full decision trace: every rule that was evaluated, which one was decisive, and the inputs behind each. Long slot lists stay collapsed behind a `>N SLOTS<` button. This is the view that answers "why is it not discharging right now" - see [Understanding the Decision Sensor](https://mastr.github.io/batcontrol/features/decision-sensor/index.md) for how to read the reasons.
+
+Below it, the current mode and the state of charge.
+
+### SOC grid
+
+A hundred cells, one per percent, in the style of the old Windows defragmenter. Cell 0 is bottom left, cell 99 top right.
+
+| Cell         | Meaning                                                                       |
+| ------------ | ----------------------------------------------------------------------------- |
+| bright green | charged - the SoC is above this percent                                       |
+| blinking     | the cell the SoC currently sits in                                            |
+| dark         | free                                                                          |
+| with a dot   | locked: at or below the inverter's MIN_SOC, or above its MAX_SOC              |
+| hatched      | reserved for upcoming expensive hours; bright stripes if charged, dark if not |
+| purple       | above `always_allow_discharge_limit`, where discharging is always permitted   |
+
+At 100 % every cell is lit and none blinks. The reserved energy is a demand forecast and can exceed the battery, so the hatching is capped at the always-allow-discharge limit before it is drawn - above that nothing is ever held back.
+
+Under the grid: the reserved energy (with the cap, where it applies), usable versus total energy, and the configured limits.
+
+### PRICE
+
+The current price, a 24-hour sparkline of hourly means, the cheapest and most expensive hour with their times, the spread, and `GRID_CHARGE Δ` - the price difference a future slot has to beat before batcontrol charges from the grid.
+
+## Notes
+
+- The whole UI is English, 24-hour times, decimal point.
+- It is dark-only by design: it is a terminal, not a theme.
+- Animations respect `prefers-reduced-motion`.
+- It works at phone width; on a desktop the grid moves to the left.
+- Fonts are bundled, so it looks the same without internet access.
+- With `api.auth_token` set, the dashboard asks for the token once and keeps it for the browser session. Set one whenever the dashboard sits behind a reverse proxy - see [REST API security](https://mastr.github.io/batcontrol/integrations/rest-api/#security).
 # Integrations
+
+# REST API
+
+batcontrol can serve a **read-only HTTP API** next to its control loop: the current inverter mode, the battery, the forecasts it decides on, and the decision trace explaining why it chose what it chose. The same process also serves the [dashboard](https://mastr.github.io/batcontrol/features/dashboard/index.md) and the [MCP server](https://mastr.github.io/batcontrol/integrations/mcp-server/index.md), on one port.
+
+Read-only by design
+
+Every endpoint is a `GET`. There is no way to set a mode, a charge rate or a parameter through this API, and a test fails the build if one ever appears. Runtime overrides stay on the [MQTT API](https://mastr.github.io/batcontrol/integrations/mqtt-api/index.md), where the broker authenticates them.
+
+## Enabling it
+
+```
+api:
+  enabled: true           # off by default
+  host: 127.0.0.1         # 0.0.0.0 to reach it from the network
+  port: 8080
+  dashboard_enabled: true
+  docs_enabled: false     # Swagger UI at /docs and the schema at /openapi.json
+  mcp_enabled: false
+  # auth_token: ""        # bearer token for /api/v1; empty = no authentication
+  # mcp_auth_token: ""    # separate token for /mcp; empty = inherits auth_token
+```
+
+In Docker, publish the port and bind to `0.0.0.0`:
+
+```
+services:
+  batcontrol:
+    ports:
+      - "8080:8080"
+```
+
+With the Home Assistant add-on the dashboard is reached through ingress and needs no published port - see the add-on documentation.
+
+## Conventions
+
+These four hold everywhere in the API. Most integration mistakes come from one of them:
+
+|                |                                                                                                                                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Timestamps** | epoch **milliseconds**. The MQTT API uses seconds - do not mix them up.                                                                                                                        |
+| **Energy**     | **Wh per forecast slot**. Energy series additionally carry `power_w`, the average power over the slot. At 15-minute resolution those differ by a factor of **four**.                           |
+| **Prices**     | EUR/kWh, 4 decimals.                                                                                                                                                                           |
+| **Slot 0**     | is the interval containing the **current time**. Slots that have passed since the last control cycle are not returned, so `total_count` shrinks until the next cycle publishes a new forecast. |
+
+Every response is wrapped in the same envelope:
+
+```
+{ "ok": true, "timestamp": 1792065332218, "data": { } }
+```
+
+An error keeps the shape and carries a code instead of data:
+
+```
+{ "ok": false, "timestamp": 1792065332218,
+  "error": "no_data_yet",
+  "detail": "No completed control cycle yet. The first forecast is available after the first evaluation." }
+```
+
+| Code               | Status | Meaning                                                                                                     |
+| ------------------ | ------ | ----------------------------------------------------------------------------------------------------------- |
+| `no_data_yet`      | 503    | batcontrol has not completed its first control cycle                                                        |
+| `forecast_expired` | 503    | every slot of the last forecast has passed - control cycles keep failing (e.g. the tariff provider is down) |
+| `not_found`        | 404    | unknown forecast series or inverter id, or an empty decision journal                                        |
+| `unauthorized`     | 401    | `api.auth_token` is set and the bearer token was missing or wrong                                           |
+
+## Endpoints
+
+| Endpoint                             | Returns                                                                                                                                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/v1/health`                 | liveness, age of the last cycle, whether data exists yet                                                                                                                                   |
+| `GET /api/v1/version`                | version, build, runtime, forecast interval, timezone                                                                                                                                       |
+| `GET /api/v1/status`                 | mode, control source, charge rate, overrides, next evaluation                                                                                                                              |
+| `GET /api/v1/battery`                | SoC, capacities, reserved energy (raw and capped to the battery), SoC limits                                                                                                               |
+| `GET /api/v1/current`                | current price together with the SoC                                                                                                                                                        |
+| `GET /api/v1/price/status`           | price statistics for the next 24 hours: current price and its rank, cheapest and most expensive slot, average, spread                                                                      |
+| `GET /api/v1/forecast`               | all four forecast series on one slot grid                                                                                                                                                  |
+| `GET /api/v1/forecast/{series}`      | `price`, `consumption`, `production` or `net_consumption`                                                                                                                                  |
+| `GET /api/v1/solar`                  | solar surplus indicators derived from the forecast (see [forecast metrics](https://mastr.github.io/batcontrol/integrations/forecast-metrics/index.md))                                     |
+| `GET /api/v1/decision`               | the latest decision trace and its plain-language explanation                                                                                                                               |
+| `GET /api/v1/decision/history`       | recent decisions from the in-memory journal                                                                                                                                                |
+| `GET /api/v1/peak-shaving`           | what [peak shaving](https://mastr.github.io/batcontrol/features/peak-shaving/index.md) did in the last cycle: active or suspended by evcc, resulting PV charge limit, outcome of its rules |
+| `GET /api/v1/inverters`              | the inverters by id                                                                                                                                                                        |
+| `GET /api/v1/inverter/{inverter_id}` | the values of one inverter, as read in the last control cycle                                                                                                                              |
+| `GET /api/v1/config`                 | the runtime parameters behind the decisions, and which of them are overridden at runtime                                                                                                   |
+
+Forecast endpoints accept `limit` and `offset` and report `total_count`, `has_more` and `next_offset`, so a long horizon can be paged.
+
+### Price status
+
+`/price/status` covers the **next 24 hours from the current slot**, independent of how far the optimizer looks ahead. Every value is per slot at the configured resolution (`interval_minutes`): `min` is the cheapest slot, so there is no separate "cheapest window". `rank` is the position of the current price in the window, 1 being the cheapest; equal prices share a rank. When the tariff provider's prices end before the 24 hours do, `complete` is `false` and `slot_count` says how many slots the statistics cover.
+
+### Runtime overrides in `/config`
+
+The fields of `/config` always show the value **in effect**. Several of them can change at runtime - via MQTT, through evcc, by the grid charge lock (which sets `max_charging_from_grid_limit` to 0) or by the control loop itself (it lowers `max_charging_from_grid_limit` below `always_allow_discharge_limit`). `overrides` lists every parameter whose effective value differs from the configuration file:
+
+```
+"overrides": {
+  "peak_shaving.enabled": { "configured": true, "effective": false }
+}
+```
+
+It is empty when nothing is overridden. A temporary suspension of peak shaving by evcc is not a parameter change and shows in `/peak-shaving` (`suspended_by`) instead.
+
+### Inverters
+
+With several inverters every other endpoint reports them as **one** battery. `/inverters` lists their ids; `/inverter/{id}` returns the values of a single one - the same values the MQTT API publishes under `inverters/<id>/`. Each inverter reads them once per control cycle and keeps them, so a request never queries the inverter. Backend specific values (e.g. `em_mode` and `em_power` of a Fronius GEN24) are in `extra`.
+
+### MQTT and REST
+
+Every value batcontrol publishes on MQTT is also available here. The mapping is listed in the [dashboard specification](https://mastr.github.io/batcontrol/development/dashboard-spec/#mqtt-and-rest).
+
+With `docs_enabled: true` a running instance serves its own interactive documentation at `/docs` (Swagger UI) and the raw schema at `/openapi.json`. Both are **off by default**: an installation does not need to describe its API to every visitor, and the same schema is rendered at the end of this page. Switch it on while you develop against the API. Swagger UI is served from the package rather than from a CDN, so it works on a box without internet access - which is also why there is no ReDoc: one documentation UI that works offline beats two that need the network.
+
+## Examples
+
+```
+# What is it doing, and why?
+curl -s localhost:8080/api/v1/status | jq '.data.mode_label'
+curl -s localhost:8080/api/v1/decision | jq -r '.data.status_text'
+
+# Cheapest slot of the next 24 hours
+curl -s localhost:8080/api/v1/price/status | jq '.data.min'
+
+# The next six price slots
+curl -s 'localhost:8080/api/v1/forecast/price?limit=6' \
+  | jq -r '.data.slots[] | "\(.time_start|tonumber/1000|strftime("%H:%M"))  \(.value) EUR/kWh"'
+
+# With a token
+curl -s -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/battery
+```
+
+## Security
+
+The payload is read-only, but it still describes a household: how full the battery is, what the consumption pattern looks like, when nobody is home.
+
+- The default bind is `127.0.0.1` - reachable only from the same machine.
+- `api.auth_token` adds a bearer token on `/api/v1/**`. `/api/v1/health` stays open so container health checks keep working.
+- `api.mcp_auth_token` protects `/mcp` separately, so an assistant can be given MCP access without the REST API. Left empty it inherits `auth_token`, so securing the API never leaves MCP open by accident.
+- There is no TLS and no rate limiting. For access from outside the local network, put a reverse proxy in front of it.
+- **Behind a reverse proxy, set `api.auth_token`.** batcontrol does not check the `Host` header (REST, dashboard and `/mcp` alike) - that would break a proxy that forwards its own host name. The flip side is that without a token a malicious web page could use DNS rebinding to make your browser read the API. A token closes that.
+- `GET /api/v1/config` is an explicit allow-list of behavioural parameters built from runtime values. It does not read the configuration file, so inverter passwords, tariff tokens and MQTT credentials are not reachable through it.
+
+## API reference
+
+# MCP Server
+
+batcontrol can expose itself to AI assistants over the **Model Context Protocol**. With it, an assistant can answer questions about the battery in plain language:
+
+> *Why is the battery not discharging right now?* *When is electricity cheapest today, and how much cheaper than now?* *Will the solar forecast cover the house this afternoon?*
+
+Read-only
+
+The assistant can read and explain, never steer. There is no tool that sets a mode, a charge rate or a parameter - deliberately: a misread forecast costs a wrong sentence, a wrong write costs a battery charged from the grid at peak price. Runtime overrides stay on the [MQTT API](https://mastr.github.io/batcontrol/integrations/mqtt-api/index.md).
+
+## Enabling it
+
+```
+api:
+  enabled: true
+  host: 127.0.0.1
+  port: 8080
+  mcp_enabled: true       # serves /mcp
+  # mcp_auth_token: ""    # token for /mcp only; empty = inherits auth_token
+```
+
+The server is reached at `http://<host>:<port>/mcp` over the streamable-HTTP transport.
+
+### Why there is no stdio transport
+
+Most MCP servers offer stdio, where the client starts the server process. That does not work here: a freshly started batcontrol would either open a second connection to the inverter - two controllers on one battery - or run without a control loop and have nothing to report. The useful MCP server is the one attached to the batcontrol that is already running, and that one is reachable over HTTP.
+
+## Client configuration
+
+Claude Desktop, Claude Code and other MCP clients take a remote server like this:
+
+```
+{
+  "mcpServers": {
+    "batcontrol": {
+      "type": "http",
+      "url": "http://batcontrol.lan:8080/mcp",
+      "headers": { "Authorization": "Bearer <your mcp_auth_token>" }
+    }
+  }
+}
+```
+
+Drop the `headers` block when no token is configured. With the default `host: 127.0.0.1` the server is only reachable from the machine batcontrol runs on; to use it from elsewhere, bind to the network **and** set a token.
+
+## Available tools
+
+All read-only, all reporting values from the last completed control cycle.
+
+| Tool                                      | Answers                                                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `batcontrol_get_status`                   | Which mode is active, who set it, when the next evaluation is due                                      |
+| `batcontrol_get_battery`                  | SoC, capacities, reserved energy, SoC limits                                                           |
+| `batcontrol_get_current`                  | Current price together with the SoC                                                                    |
+| `batcontrol_get_price_status`             | Cheapest and most expensive slot, rank of the current price, average and spread over the next 24 hours |
+| `batcontrol_get_price_forecast`           | Price per slot in EUR/kWh                                                                              |
+| `batcontrol_get_solar_forecast`           | Expected PV production in Wh per slot                                                                  |
+| `batcontrol_get_consumption_forecast`     | Expected household consumption in Wh per slot                                                          |
+| `batcontrol_get_net_consumption_forecast` | Consumption minus production; negative is surplus                                                      |
+| `batcontrol_get_solar`                    | Whether there is solar surplus, and how low the battery gets until PV takes over                       |
+| `batcontrol_get_peak_shaving`             | Whether peak shaving ran, was suspended by evcc, and which PV charge limit it set                      |
+| `batcontrol_list_inverters`               | The inverters by id                                                                                    |
+| `batcontrol_get_inverter`                 | The values of one inverter                                                                             |
+| `batcontrol_get_decision`                 | Why the current mode was chosen, with the decisive rule                                                |
+| `batcontrol_list_decisions`               | Recent decisions from the in-memory journal                                                            |
+| `batcontrol_get_config`                   | The thresholds a decision has to be read against                                                       |
+| `batcontrol_get_version`                  | Version, runtime, forecast interval, timezone                                                          |
+
+Forecast tools default to the next **24 hours** and page for more, so an assistant is not handed several hundred slots it has to pay for. For "when is it cheapest" questions `batcontrol_get_price_status` answers in one small call without any paging.
+
+## What it cannot tell you
+
+Worth knowing before trusting an answer - the tools say so too, but assistants summarise:
+
+- The solar and consumption numbers are **forecasts**, not measurements. They say nothing about what the panels produced in the past or what is running right now.
+- The consumption forecast is a load profile scaled to the configured yearly consumption. It does not know that the oven is on.
+- The decision journal lives in memory. After a restart it is empty, and it holds a few hundred entries at most - it is not a history.
+- Before the first control cycle every tool answers "no data yet" rather than guessing.
+
+## Security
+
+`/mcp` carries the same data as the [REST API](https://mastr.github.io/batcontrol/integrations/rest-api/index.md) and deserves the same care. It has its own token (`api.mcp_auth_token`) so an assistant can be given access to the MCP endpoint without the REST API; left empty it inherits `api.auth_token`, so securing the API does not leave MCP open by accident.
+
+batcontrol does not validate the `Host` header, so reverse proxies work unchanged. Without a token, a malicious web page could in principle use DNS rebinding to make your browser talk to a local endpoint - set a token whenever the endpoint is reachable from a browser or a proxy.
+
+For the design rationale and the tool contract, see the [MCP server specification](https://mastr.github.io/batcontrol/development/mcp-spec/index.md).
 
 # MQTT API Configuration
 
@@ -2642,15 +3184,19 @@ Batcontrol publishes data to the following topic structure (assuming base topic 
 - `house/batcontrol/discharge_blocked` - Whether discharge is blocked (`true`/`false`)
 - `house/batcontrol/api_override_active` - Whether a temporary external/API override is active (`true`/`false`)
 - `house/batcontrol/control_source` - Source that last selected the current control state (`api` or `optimizer`)
+- `house/batcontrol/decision` - Current mode with its value and a plain-language explanation as text, e.g. `Charge from Grid 2133 W - usable energy (900 Wh) is below the 2500 Wh reserved for upcoming expensive hours, so 1600 Wh is charged from the grid` (retained). The content changes on a status change only (a new mode, or a change of the charge rate / PV limit of the current mode by 25 % or more) and is republished every evaluation like the mode. Shown as the **Decision** sensor in Home Assistant -- see [Understanding the Decision Sensor](https://mastr.github.io/batcontrol/features/decision-sensor/index.md) for what it means, and [Decision Trace](https://mastr.github.io/batcontrol/development/decision-trace/#journal-and-status-change-listeners) for how it is produced
+- `house/batcontrol/decision/attributes` - JSON with the decision trace of that status change (retained): `kind` (`mode` or `value`), `mode`, `previous_mode`, `value`, `previous_value`, `control_source`, `decided_by`, `why` (the same explanation as the state, for the step that decided) and the evaluated `records`, see [Decision Trace](https://mastr.github.io/batcontrol/development/decision-trace/index.md) for the full field reference. Used as attributes of the **Decision** sensor
 - `house/batcontrol/grid_charge_locked` - Whether an external (HEMS/grid operator) request is currently blocking charging from the grid (`true`/`false`), see [Grid Charge Lock](#grid-charge-lock-external-hemsgrid-operator-signal)
 
 ### Battery Information
 
 - `house/batcontrol/SOC` - State of Charge in % (two decimal places, e.g., `69.00`)
-- `house/batcontrol/max_energy_capacity` - Maximum battery capacity in Wh
+- `house/batcontrol/max_energy_capacity` - Maximum battery capacity in Wh (reduced by max SOC)
+- `house/batcontrol/gross_energy_capacity` - Battery capacity in Wh without the max SOC reduction; SOC percentages refer to this value
 - `house/batcontrol/stored_energy_capacity` - Energy stored in battery in Wh
 - `house/batcontrol/stored_usable_energy_capacity` - Usable energy stored in battery in Wh (considering min SOC)
-- `house/batcontrol/reserved_energy_capacity` - Energy reserved for discharge in Wh
+- `house/batcontrol/reserved_energy_capacity` - Energy reserved for discharge in Wh. This is the raw demand for upcoming expensive hours and can exceed the battery
+- `house/batcontrol/reserved_energy_capacity_effective` - The reserved energy in Wh capped to what the battery can hold back: between min SOC and the lower of max SOC and `always_allow_discharge_limit`
 
 ### Solar Surplus Information
 
@@ -2679,7 +3225,6 @@ See [Forecast Metrics](https://mastr.github.io/batcontrol/integrations/forecast-
 See [Peak Shaving](https://mastr.github.io/batcontrol/features/peak-shaving/index.md) for details:
 
 - `house/batcontrol/peak_shaving/enabled` - Whether peak shaving is enabled (`true`/`false`)
-- `house/batcontrol/peak_shaving/mode` - Active mode (`time`, `price`, or `combined`)
 - `house/batcontrol/peak_shaving/allow_full_battery_after` - Target hour (0-23)
 - `house/batcontrol/peak_shaving/charge_limit` - Current charge limit in W (`-1` = inactive / no limit)
 - `house/batcontrol/peak_shaving/price_limit` - Price threshold in EUR/kWh
@@ -2735,7 +3280,6 @@ Batcontrol listens to the following `/set` topics for remote control:
 ### Peak Shaving
 
 - `house/batcontrol/peak_shaving/enabled/set` - Enable or disable peak shaving (`true`/`false`)
-- `house/batcontrol/peak_shaving/mode/set` - Set mode (`time`, `price`, or `combined`)
 - `house/batcontrol/peak_shaving/allow_full_battery_after/set` - Set target hour (0-23)
 - `house/batcontrol/peak_shaving/price_limit/set` - Set price threshold in EUR/kWh (`-1` disables the price component)
 
@@ -3412,7 +3956,7 @@ When using both batcontrol and evcc with Home Assistant:
 
 # Forecast Metrics
 
-`ForecastMetrics` is a stateless module that derives three battery indicators from the production/consumption forecast arrays and the current battery state. These indicators are published via MQTT and are intended to drive downstream automation decisions such as "should I run the heat pump now or save the battery for tomorrow's solar charge?"
+`ForecastMetrics` is a stateless module that derives three battery indicators from the production/consumption forecast arrays and the current battery state. These indicators are published via MQTT and the REST API (`GET /api/v1/solar`, MCP tool `batcontrol_get_solar`) and are intended to drive downstream automation decisions such as "should I run the heat pump now or save the battery for tomorrow's solar charge?"
 
 All three values are updated once per evaluation cycle (every 3 minutes by default). They are based on the same forecast window that the main optimizer uses, so their horizon is `min(max available price hours, max available solar hours)`.
 
@@ -3490,7 +4034,7 @@ ______________________________________________________________________
 | `{base}/pv_start_battery_wh`     | Wh   | No       | Battery level at next net-charging crossover       |
 | `{base}/forecast_min_battery_wh` | Wh   | No       | Minimum battery level over entire forecast horizon |
 
-All values are published after each evaluation cycle (together with the inverter control decision). See [MQTT API](https://mastr.github.io/batcontrol/integrations/mqtt-api/index.md) for the full topic reference and configuration options.
+All values are published after each evaluation cycle (together with the inverter control decision). See [MQTT API](https://mastr.github.io/batcontrol/integrations/mqtt-api/index.md) for the full topic reference and configuration options. The same values are available without MQTT from the [REST API](https://mastr.github.io/batcontrol/integrations/rest-api/index.md) at `GET /api/v1/solar`.
 
 ### Home Assistant Auto-Discovery
 
@@ -6057,11 +6601,11 @@ ______________________________________________________________________
 - [ ] Awattar (Germany/Austria)
 - [ ] Tibber (Nordic countries, Germany, Netherlands)
 - [ ] evcc integration
-- [ ] Other: ***\_******\_***\_
+- [ ] Other: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 - **Q**: What is your tariff's price update frequency?
 - [ ] Hourly (most common)
 - [ ] 15-minute intervals
-- [ ] Other: ***\_******\_***\_
+- [ ] Other: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
 ### 3. Hardware & Environment
 
@@ -6069,11 +6613,11 @@ ______________________________________________________________________
 - [ ] Raspberry Pi 3 or older
 - [ ] Raspberry Pi 4/5
 - [ ] Server (x86)
-- [ ] Docker container on: ***\_******\_***\_
+- [ ] Docker container on: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 - **Q**: What are your hardware specs?
-- CPU: ***\_******\_***\_
-- RAM: ***\_******\_***\_
-- Storage: ***\_******\_***\_
+- CPU: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+- RAM: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+- Storage: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
 ### 4. Testing Capability
 
@@ -6104,10 +6648,10 @@ ______________________________________________________________________
 - [ ] Want more responsive battery control
 - [ ] Proactive optimization
 - [ ] Regulatory requirement
-- [ ] Other: ***\_******\_***\_
+- [ ] Other: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 - **Q**: Is this critical or nice-to-have?
 - [ ] Critical - needed within: \_\_\_\_\_ weeks
-- [ ] Important - target date: ***\_******\_***\_
+- [ ] Important - target date: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 - [ ] Nice-to-have - no rush
 
 ### 7. Backward Compatibility
@@ -6131,8 +6675,8 @@ ______________________________________________________________________
 
 - **Q**: Are there other users you know who need 15-min intervals?
 - Number: \_\_\_\_\_
-- Countries: ***\_******\_***\_
-- Use cases: ***\_******\_***\_
+- Countries: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+- Use cases: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
 ### 10. Future Features
 
@@ -6141,7 +6685,7 @@ ______________________________________________________________________
 - [ ] Adaptive interval selection (auto-switch based on conditions)
 - [ ] Machine learning for consumption forecasting
 - [ ] Better solar interpolation (weather-aware)
-- [ ] Other: ***\_******\_***\_
+- [ ] Other: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
 **Please provide answers in the GitHub issue or discussion thread.**
 
@@ -6583,7 +7127,7 @@ The document is now **ready to guide implementation**. Please answer the stakeho
 
 # Evaluation: Solar feed-in limit (Solarspitzengesetz) in peak shaving
 
-Status: **implemented** — the rule described here ships as `src/batcontrol/logic/solar_limit.py` plus `_apply_solar_limit()` in `src/batcontrol/logic/next.py`. This page documents the evaluation that preceded the implementation; its numbers are reproduced by the test suite. Simulation script: [`scripts/simulate_solar_limit_day.py`](https://github.com/MaStr/batcontrol/blob/main/scripts/simulate_solar_limit_day.py), figures generated by `scripts/plot_solar_limit_day.py`.
+Status: **implemented** — the rule described here ships as `src/batcontrol/logic/solar_limit.py` plus `_apply_solar_limit()` in `src/batcontrol/logic/default.py`. This page documents the evaluation that preceded the implementation; its numbers are reproduced by the test suite. Simulation script: [`scripts/simulate_solar_limit_day.py`](https://github.com/MaStr/batcontrol/blob/main/scripts/simulate_solar_limit_day.py), figures generated by `scripts/plot_solar_limit_day.py`.
 
 ## Background: the 60% rule
 
@@ -6636,7 +7180,7 @@ Under scarcity (`extra = 0`) the cap equals the floor: the battery absorbs **onl
 
 ## Configuration design: one switch per rule
 
-With three rule flavors (target time, price, solar) the previous `mode` string (`time`/`price`/`combined`) becomes confusing. Agreed design: **one explicit switch per rule**; `mode` is deprecated and mapped onto the switches at load time (`time` -> `time_active`, `price` -> `price_active`, `combined` -> both):
+With three rule flavors (target time, price, solar) the previous `mode` string (`time`/`price`/`combined`) becomes confusing. Agreed design: **one explicit switch per rule**; `mode` was removed in 0.10.0 (migration: `time` -> `time_active`, `price` -> `price_active`, `combined` -> both):
 
 ```
 peak_shaving:
@@ -6778,8 +7322,617 @@ Known limits: forecast sensitivity (scenarios 4/4b) — without a live measureme
 
 1. `logic/logic_interface.py`: extend `PeakShavingConfig` with `time_active`, `price_active`, `solar_cap_active`, `feed_in_limit_w` (default 0 = neutral) and `feed_in_limit_headroom` (default 1.0); deprecate `mode` and map it onto the switches in `from_config()` (log a warning); validation analogous to `price_limit`.
 1. New `logic/solar_limit.py`: take `compute_solar_limit()` and `merge_limits()` from the simulation script unchanged (pure functions, pattern: `grid_charge_target.py`).
-1. `logic/next.py`: own post-processing step `_apply_solar_limit()` **after** `_apply_peak_shaving()` with its own (smaller) skip list: also runs at high SoC and after `allow_full_battery_after`; still skips on force-charge and on `allow_discharge == False` (there the inverter charges surplus unrestricted anyway). Merge according to the priority rule above; `enforce_min_pv_charge_rate` once on the final merged value. Extract the helper `_remaining_interval_hours()` (partial slot 0, cf. the grid-recharge block). `feed_in_limit_headroom` acts on the forecast surplus and the floor uses the headroom-corrected clip (`headroom_on='surplus'`, `floor_source='headroom'` in the simulation script; trade-off see scenario 4b).
+1. `logic/default.py`: own post-processing step `_apply_solar_limit()` **after** `_apply_peak_shaving()` with its own (smaller) skip list: also runs at high SoC and after `allow_full_battery_after`; still skips on force-charge and on `allow_discharge == False` (there the inverter charges surplus unrestricted anyway). Merge according to the priority rule above; `enforce_min_pv_charge_rate` once on the final merged value. Extract the helper `_remaining_interval_hours()` (partial slot 0, cf. the grid-recharge block). `feed_in_limit_headroom` acts on the forecast surplus and the floor uses the headroom-corrected clip (`headroom_on='surplus'`, `floor_source='headroom'` in the simulation script; trade-off see scenario 4b).
 1. `core.py`: startup warning when `feed_in_limit_w > 0` and `max_pv_charge_rate > 0`.
 1. Tests: `tests/batcontrol/logic/test_solar_limit.py` (pure functions) + integration cases in `test_peak_shaving.py` (floor overrides cap incl. cap 0, reservation, scarcity `cap == floor`, neutral value = bit-identical behavior, sentinels, partial slot 0, 15-min, mode deprecation mapping).
 1. `config/batcontrol_config_dummy.yaml` + `docs/features/peak-shaving.md` + HA add-on mirroring (`MaStr/batcontrol_ha_addon`).
 1. Open for the integration: live measurement as floor source for slot 0 (see scenario 4b); active discharging before the window (deferred, passive reservation only); MQTT topic `predicted_clip_wh` (read-only, optional).
+
+# Decision Trace and Journal
+
+Batcontrol records *why* it selected an inverter mode. Every control cycle produces a **decision trace**: the ordered list of decision steps that were evaluated, each with its inputs and a stable reason code. The traces are kept in an in-memory **journal**, and registered listeners are called whenever the inverter status changes (new mode, or a significant change of the charge rate / PV limit). Listeners that show the explanation (the "Decision" sensor) can also ask for refreshes, so its numbers and reason stay current.
+
+This is the foundation for answering "why did batcontrol do this?" from the outside, for example from a chat bot or an MCP server. For what the Home Assistant "Decision" sensor itself looks like and how to read it, see [Understanding the Decision Sensor](https://mastr.github.io/batcontrol/features/decision-sensor/index.md).
+
+## Data model
+
+Defined in `src/batcontrol/logic/decision_trace.py`.
+
+| Type             | Purpose                                                                                            |
+| ---------------- | -------------------------------------------------------------------------------------------------- |
+| `DecisionRecord` | One step: `decision`, `outcome`, `reason`, `inputs`, `decisive`, `explanation()`                   |
+| `DecisionTrace`  | Steps of one cycle plus timestamp. `decisive_record()` returns the step that determined the result |
+
+A step is *decisive* when it determines the control settings at the time it runs. A later decisive step supersedes an earlier one (for example a peak shaving limit after "discharge allowed"). Steps that were evaluated but did not change anything (`skipped`, `not_needed`) stay in the trace, so the trace also explains why something did **not** happen.
+
+### Decisions and reason codes
+
+| Decision        | Outcome                                                                               | Reason                                                                                                                                                                                                                                   | Decisive                                            |
+| --------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `discharge`     | `allowed`                                                                             | `ALWAYS_ALLOW_DISCHARGE_LIMIT`, `USABLE_ENERGY_EXCEEDS_RESERVE`                                                                                                                                                                          | yes                                                 |
+| `discharge`     | `forbidden`                                                                           | `RESERVE_REQUIRED`                                                                                                                                                                                                                       | no                                                  |
+| `grid_recharge` | `charge`                                                                              | `GRID_RECHARGE_REQUIRED`                                                                                                                                                                                                                 | yes                                                 |
+| `grid_recharge` | `no_charge`                                                                           | `GRID_CHARGE_LIMIT_REACHED`, `NO_HIGH_PRICE_SLOTS`, `HIGH_PRICE_DEMAND_COVERED_BY_PRODUCTION`, `NO_RECHARGE_REQUIRED`, `RECHARGE_BELOW_MINIMUM`                                                                                          | yes                                                 |
+| `peak_shaving`  | `limit_set`                                                                           | `PV_CHARGE_LIMITED`                                                                                                                                                                                                                      | yes                                                 |
+| `peak_shaving`  | `not_needed`                                                                          | `NO_LIMIT_NEEDED`                                                                                                                                                                                                                        | no                                                  |
+| `peak_shaving`  | `skipped`                                                                             | `PRICE_LIMIT_MISSING`, `NO_PV_PRODUCTION`, `PAST_FULL_BATTERY_HOUR`, `ALWAYS_ALLOW_DISCHARGE_REGION`, `FORCE_CHARGE_ACTIVE`, `DISCHARGE_NOT_ALLOWED`, `EVCC_CHARGING`, `EVCC_EV_EXPECTS_PV_SURPLUS`                                      | no                                                  |
+| `solar_limit`   | `limit_set`                                                                           | `CLIP_ABSORPTION_LIMIT`                                                                                                                                                                                                                  | only if it changed the limit set by an earlier rule |
+| `solar_limit`   | `not_needed`                                                                          | `NO_LIMIT_NEEDED`, `NO_CLIP_PREDICTED`                                                                                                                                                                                                   | no                                                  |
+| `solar_limit`   | `skipped`                                                                             | `NO_PV_PRODUCTION`, `FORCE_CHARGE_ACTIVE`, `DISCHARGE_NOT_ALLOWED`                                                                                                                                                                       | no                                                  |
+| `override`      | `applied`                                                                             | `EXTERNAL_DISCHARGE_BLOCK`, `EXTERNAL_DISCHARGE_UNBLOCK`, `GRID_CHARGE_LOCK`, `FORECAST_ERROR_FALLBACK`, `CALCULATION_FAILED`, `API_REQUEST` (input `requested_mode` shows the mode the API asked for, which can differ if it fell back) | yes                                                 |
+| `override`      | `applied`                                                                             | `PV_CHARGE_RATE_CLAMPED`, `GRID_CHARGE_RATE_CLAMPED`                                                                                                                                                                                     | no (note, see below)                                |
+| `mode`          | `allow_discharging`, `limit_battery_charge_rate`, `avoid_discharging`, `force_charge` | reason of the decisive step                                                                                                                                                                                                              | -                                                   |
+
+`grid_recharge`/`no_charge` has five reasons for the same outcome, told apart purely from `high_price_slots`/`high_price_energy_demand`/ `recharge_energy_before_minimum` (relative slot indices again, with `interval_minutes`) -- no separate flag is needed:
+
+- `GRID_CHARGE_LIMIT_REACHED`: SoC is already above the grid-charging limit, so the calculation never ran and these stay at their defaults.
+- `NO_HIGH_PRICE_SLOTS`: it ran, but no slot in the window is priced high enough to reserve or recharge for (`high_price_slots` is empty).
+- `HIGH_PRICE_DEMAND_COVERED_BY_PRODUCTION`: high-price slots exist, but forecast solar production is expected to cover their demand (`high_price_slots` non-empty, `high_price_energy_demand` is 0).
+- `NO_RECHARGE_REQUIRED`: demand remains after production, but stored usable battery energy already covers it (`recharge_energy_before_minimum` \<= 0).
+- `RECHARGE_BELOW_MINIMUM`: a real demand remained, but the resulting amount is below the minimum charge amount, so nothing is charged for it (`recharge_energy_before_minimum` > 0).
+
+This step is only reached when the `discharge` step forbade discharging, so it is the decisive step of the Avoid Discharge mode. It therefore also carries `stored_usable_energy` and `reserved_energy` from that step, and its explanation says both why the battery is held and why it is not recharged from the grid, e.g. `battery is held for upcoming more expensive hours (usable 900 Wh, reserve 2500 Wh); no grid charging: solar is forecast to cover the demand of the hours where it would pay off`. The two are not a contradiction: the reserve counts every upcoming hour that is more expensive than now, grid charging only pays off for hours that are more expensive by at least the (dynamic) minimum price difference.
+
+`core.py` applies two hardware/config-level clamps *after* the logic has already decided a value: `force_charge()` caps the grid recharge rate to `max_grid_charge_rate`, and `limit_battery_charge_rate()` caps the PV limit to `max_pv_charge_rate`/`min_pv_charge_rate`. When a clamp actually changes the value, it is recorded as a non-decisive `override`/`applied` step (`GRID_CHARGE_RATE_CLAMPED` / `PV_CHARGE_RATE_CLAMPED`, inputs `requested_w` and `applied_w`) between the step that decided the pre-clamp value and the `mode` record. Such a step is a **note**: it adjusts the value, but the reason for the mode stays with the decisive step, and the note is appended to its explanation in brackets (`DecisionTrace.explanation()`, reasons in `NOTE_REASONS`), e.g. `... so 1600 Wh is charged from the grid (charge rate capped from 3200 W to 1000 W by the configured maximum grid charge rate)`. So the "why" matches what was actually applied to the inverter without hiding why the mode was chosen. A clamp that does not change anything (the decided value was already within limits) adds no step. This only applies to mode changes made from within a control cycle (`Batcontrol.run()`); a direct API call (`api_set_charge_rate`/`api_set_limit_battery_charge_rate`) has no decision scope open at that point, so a clamp there is not yet recorded.
+
+The last record of every trace is the `mode` record. Its reason is borrowed from the decisive step, so its inputs start as a copy of that step's own inputs (needed for its `explanation()`/`why` to render correctly), with `mode`, the `control_source` (`optimizer` or `api`), `decided_by` (the decisive decision) and the `value` belonging to the mode in W (charge rate of force charge, PV limit of the limit mode, `null` for the other modes) applied on top.
+
+Reason codes are part of the interface: consumers may match on them, so they are not renamed lightly.
+
+### Plain-language explanations
+
+`DecisionRecord.explanation()` renders one sentence for a reason code, meant for a human rather than the source code -- it is what ends up in the "Decision" sensor's state (`DecisionTrace.status_text()`) and as `why` in `to_dict()` (on the record; on the trace it is `DecisionTrace.explanation()`, the decisive step's sentence plus the notes). The mapping lives in `_REASON_EXPLANATIONS` (`decision_trace.py`): most entries are a plain string with `{input_key}` placeholders, filled in via `str.format(**record.inputs)` from the record's own inputs -- the same numbers already captured for the log line, so adding an explanation never needs a new input. A reason with no placeholders is used as-is. An entry can also be a function of the inputs, for a sentence that depends on the values rather than only showing them (`PV_CHARGE_LIMITED` names the purpose of each active peak shaving limit). If filling in the placeholders fails (a key is missing, e.g. because a record was built before an explanation existed for its reason), `explanation()` falls back to a readable version of the reason code itself and never raises.
+
+Guidelines for the sentence of a decisive reason: it answers "why is the inverter in this mode" (not why something else did not happen), and it does not repeat the value of the mode, which precedes it in the status text (`Limit Battery Charge 1200 W - PV charging is limited so ...`).
+
+## Logging
+
+Each record can render itself as one line (`DecisionRecord.summary()`). The logic classes log decisive steps at `INFO` and all other steps at `DEBUG`:
+
+```
+[Rule] Grid recharge decision: charge (GRID_RECHARGE_REQUIRED), current_price=0.200, min_dynamic_price_difference=0.050, stored_energy=2000.0 Wh, ...
+```
+
+Peak shaving and solar limit keep their existing `[PeakShaving]` and `[SolarLimit]` log lines; their records are only added to the trace.
+
+Some steps are added via `trace.step(...)` without a logger (peak shaving / solar limit skips, core.py's overrides) and are never logged individually. `core.py` logs the **complete** trace of every control cycle as one `DEBUG`-level block once it is final (`DecisionTrace.log_full_trace()`), so `loglevel: debug` always shows every step, including those. This duplicates the per-step lines above; that's the point of a DEBUG dump.
+
+```
+DEBUG Decision trace (3 steps):
+[Rule] Discharge decision: forbidden (RESERVE_REQUIRED), ...
+[Rule] Grid recharge decision: charge (GRID_RECHARGE_REQUIRED), ...
+[Rule] Mode decision: force_charge (GRID_RECHARGE_REQUIRED), mode=-1, control_source=optimizer, decided_by=grid_recharge, value=2133
+```
+
+## Journal and status change listeners
+
+Defined in `src/batcontrol/decision_journal.py`. `Batcontrol.decision_journal` holds the last 200 traces (in memory only, lost on restart).
+
+```
+journal = batcontrol.decision_journal
+
+journal.latest()               # trace of the most recent decision
+journal.last_status_change()   # why the inverter is in its current state
+journal.last_event()           # same, or a newer refresh of it (see below)
+journal.history(10)            # newest 10 traces, oldest first
+```
+
+Every mode change, whether it comes from the optimizer, the MQTT API, evcc or a fallback, ends up in the journal. Listeners are called on a **status change**:
+
+| `kind`  | When                                                                         |
+| ------- | ---------------------------------------------------------------------------- |
+| `mode`  | The inverter mode changed (also once after start, with `previous_mode=None`) |
+| `value` | The mode stayed the same, but its value changed by **25 % or more**          |
+
+The value of a mode is the charge rate in force charge (`-1`) and the PV limit in the limit mode (`8`). The modes allow discharging (`10`) and avoid discharging (`0`) have no value and only produce `mode` events.
+
+The change is measured against the value of the **last event**, not against the previous cycle. A charge rate that creeps up by 10 % per cycle (500, 550, 600, 650 W) therefore produces an event at 650 W. A change from or to 0 W always counts. The factor is `DEFAULT_VALUE_CHANGE_FACTOR` (0.25) and can be set via `DecisionJournal(value_change_factor=...)`.
+
+```
+def on_status_change(event):        # event: StatusChangeEvent
+    print(event.kind, event.previous_mode, '->', event.mode, event.control_source)
+    print(event.previous_value, '->', event.value)   # previous_value: kind 'value' only
+    print(event.trace.status_text())
+    payload = event.to_dict()       # JSON friendly, e.g. for a chat bot
+
+batcontrol.decision_journal.add_listener(on_status_change)
+```
+
+What a listener does is up to the listener. The journal only guarantees:
+
+- The listener gets the complete trace of the decision that caused the event.
+- A failing listener is logged and never affects the control loop or other listeners.
+- Listeners run **synchronously** in the thread that changed the mode (scheduler or MQTT thread). Slow work such as network calls must be handed over to a queue or a thread by the listener.
+
+Cycles without a status change do not call listeners; they are still stored in the journal and available via `latest()` and `history()`.
+
+### Refresh events
+
+A status change keeps its trace, so the numbers in its explanation get old while the mode stays the same (for example the usable energy of `Discharge Allowed` over several hours), and a new reason with the same mode would not show up at all. A listener that shows the explanation registers with `add_listener(listener, refresh=True)` and additionally gets events of `kind == 'refresh'` with the trace of the latest cycle when
+
+- the reason of the decisive step changed, or
+- the last event (of any kind) is `DEFAULT_REFRESH_INTERVAL` (15 minutes) old.
+
+The check runs in `commit()`, i.e. once per control cycle (every 3 minutes), so no timer is needed. Refresh events have `previous_mode=None` and `previous_value=None`, and they do not move the reference of the status change detection: `last_status_change()` and the 25 % comparison stay at the last `mode`/`value` event. `last_event()` returns the newest event including refreshes. Listeners registered without `refresh=True` never see refresh events.
+
+### Built-in listener: Home Assistant "Decision" sensor
+
+If MQTT is enabled, `MqttApi.publish_status_change` is registered as listener with `refresh=True`. It publishes the mode with its value and reason as text on `<base>/decision` (e.g. `Charge from Grid 1250 W - Grid recharge required`) and the trace as JSON on `<base>/decision/attributes`. Both are retained. Home Assistant discovers them as the **Decision** sensor, with the JSON as attributes. The content changes on status changes and refresh events, not on every evaluation, so it is at most 15 minutes old. The last event (`last_event()`) is published again in every evaluation, like the mode, so an event that happened while the broker was unreachable reaches the sensor afterwards. The attributes are published first, and the text only if that publish's return code reports success, so the text topic never advances ahead of the attributes topic. The return code of the text publish is checked too; if it fails, the mismatch (attributes ahead of text) cannot be undone at that point, so it is only logged as a warning.
+
+## Adding a decision step
+
+1. Add constants to `Decision`, `Outcome` and `Reason` if needed.
+1. Add a `DecisionRecord` where the decision is made, with the numbers that explain it in `inputs`. Use `trace.add(record, logger)` to log it.
+1. Mark it `decisive=True` only if it determines the control settings.
+1. Add the unit of new numeric inputs to `_INPUT_FORMATS` in `decision_trace.py`, otherwise they are printed unformatted.
+1. Add a plain-language entry for a new reason to `_REASON_EXPLANATIONS`, with `{input_key}` placeholders for the numbers that explain it (see "Plain-language explanations" above). Without one, the Decision sensor and `why` fall back to the raw reason code.
+1. Keep reason strings ASCII-only.
+1. If an input is a relative slot index or a list of them (0 = the current interval, not a clock time), add `interval_minutes` to the same record's inputs so a consumer can turn a slot into an actual time span. See `higher_price_slots`/`cheaper_price_slot` on the discharge rule and `high_price_slots`/`recharge_window_end` on the grid recharge decision.
+
+# Dashboard Specification
+
+This is the design contract for the batcontrol web dashboard: a single-page Vue 3 application (Vite, SFC, `<script setup>`) served by the built-in read-only HTTP API.
+
+The dashboard is a **reader**. It polls, it renders, it never writes. Everything it needs comes from `/api/v1/...` (see [REST API](https://mastr.github.io/batcontrol/integrations/rest-api/index.md)).
+
+## Data source
+
+| Endpoint                     | Used for                                                              |
+| ---------------------------- | --------------------------------------------------------------------- |
+| `GET /api/v1/status`         | mode, control source, charge rate, last/next evaluation, online state |
+| `GET /api/v1/battery`        | SoC, gross capacity, reserved energy (raw and capped), SoC limits     |
+| `GET /api/v1/current`        | current price, price unit, interval width, version                    |
+| `GET /api/v1/price/status`   | MIN/MAX/SPREAD over the next 24 h                                     |
+| `GET /api/v1/forecast/price` | 24 h price forecast for the sparkline                                 |
+| `GET /api/v1/decision`       | decision text, reason, full trace                                     |
+| `GET /api/v1/version`        | version for the release link in the header                            |
+
+`GET /api/v1/forecast` returns all four series (price, consumption, production, net_consumption) on one slot grid, so the dashboard can fetch everything in one request instead of four. The dashboard uses it when it needs more than the price.
+
+Polling follows `next_evaluation` from `/api/v1/status` rather than a hard-coded interval, so the header countdown matches the real control cycle.
+
+### What the API computes and what the dashboard computes
+
+**Anything a second client would have to re-implement belongs in the service layer; pure presentation stays in the component.** A Home Assistant card, an MCP assistant or a script should not have to rebuild the 24 h price window, the gross capacity or the reservation cap to get the same numbers the dashboard shows - and two implementations of one rule drift apart.
+
+So the API delivers:
+
+- MIN/MAX/SPREAD/average/rank over the next 24 h (`/price/status`),
+- the gross capacity (`gross_energy_capacity`), instead of each client scaling `max_energy_capacity` back up by `max_soc`,
+- the reservation capped to the battery (`reserved_energy_capacity_effective`).
+
+Values MQTT needs as well are computed in the core (`runtime_state.py`) and published to both; values only the API needs (the price statistics) are computed in `web/service.py`.
+
+The dashboard keeps what is presentation: the sparkline's hourly means and glyphs, the box states of the SOC grid, the percent widths derived from the API's energies, formatting.
+
+### Response shape
+
+Every endpoint answers in the same envelope:
+
+```
+{ "ok": true, "timestamp": 1792065332218, "data": { ... } }
+```
+
+An error keeps the envelope's shape but carries a code instead of data:
+
+```
+{ "ok": false, "timestamp": 1792065332218,
+  "error": "no_data_yet",
+  "detail": "No completed control cycle yet. ..." }
+```
+
+The codes the dashboard has to handle: `no_data_yet` (503, before the first control cycle), `not_found` (404, e.g. an empty decision journal), and a 422 for an invalid query parameter.
+
+### Forecast slots and paging
+
+A forecast series carries its slots plus `total_count`, `returned_count`, `offset`, `has_more` and `next_offset`. The dashboard omits `limit` and takes the whole horizon - it draws a 24 h sparkline and needs the data anyway. The paging exists for the MCP tools, which default to 24 h to keep an assistant's context small; see the [MCP specification](https://mastr.github.io/batcontrol/development/mcp-spec/index.md).
+
+Each slot is `{slot, time_start, time_end, value, power_w?}`. `value` is EUR/kWh for prices and **Wh per slot** for energy series; `power_w` is the average power over the slot and only appears on energy series. At 15-minute resolution those two numbers differ by a factor of four, so the dashboard must pick deliberately: Wh for energy totals, `power_w` for anything labelled W.
+
+All values arrive **typed**: numbers are numbers, timestamps are epoch milliseconds. The entire mapping from API payload to view model happens in `src/lib/api.js -> normalize()`. Components never read raw JSON.
+
+In development, Vite proxies `/api` to the batcontrol instance (`VITE_BACKEND_URL`, default `http://127.0.0.1:8080`), so the browser sees no CORS or private-network prompts.
+
+## Modes
+
+| mode | Label             | Note                 |
+| ---- | ----------------- | -------------------- |
+| `-1` | FORCE CHARGE      | highlighted in amber |
+| `0`  | AVOID DISCHARGE   |                      |
+| `8`  | LIMIT CHARGE RATE |                      |
+| `10` | ALLOW DISCHARGE   |                      |
+
+Labels come from the API, not from a table in the frontend.
+
+## Layout
+
+- **Mobile** (< 820 px), stacked: **DECISION** -> **SOC grid** -> **PRICE**.
+- **Desktop**: SOC grid on the left, DECISION on the right with PRICE below it.
+- **Header**: `BATCONTROL` followed by the version, dimmed like the eval line, linking to `https://github.com/MaStr/batcontrol/releases/tag/<version>` in a new tab (`target="_blank" rel="noopener"`; the tag carries no `v`, the link text shows `v<version>`). Then online state, time of the last evaluation, control source, charge rate in W, and the countdown to the next poll.
+
+## Blocks
+
+### DECISION
+
+- `since HH:MM - X min ago` derived from the decision timestamp, ticking every second.
+- The decision text as a terminal line `> ...` with a blinking cursor, below it `[decided_by.reason]`, and right-aligned the button **`>TRACE<`** (inverted on hover/active).
+- `>TRACE<` expands the readable trace (`DecisionTrace.vue`, scrollable up to `max-height: 60vh`):
+- Header: timestamp, kind, control source, `mode old -> new` (with mode label), `value old -> new`.
+- One step per record: `#n decision -> outcome [REASON]`. The decisive one is marked `<- DECISIVE` with a bright left border, followed by `why` and the `inputs` as a key/value list.
+- Values are formatted for humans:
+  - Slot lists (integer arrays such as `higher_price_slots`) collapse to a clickable `>329 SLOTS<`. Expanding prints one line per slot with its from-to time (`2 Thu 15:00-15:15`). Slot 0 is the interval containing the decision timestamp, each slot is `interval_minutes` long.
+  - Single slot values (`*_slot`, `recharge_window_end`) get their time in brackets.
+  - `*price*` as EUR, `*energy*` and `demand` as rounded Wh, `charge_rate` and `value` as W, modes with their label.
+- All `>...<` buttons share the global `.toggle` class.
+- Bottom row: the **mode** label large on the left (with its own `since ...`), the **SoC** in percent large on the right.
+
+### SOC grid (Windows 9x defragmentation look)
+
+- 10x10 boxes for **0-99**, one per percent. **Box 0 sits bottom left**, box 10 is leftmost in the second row from the bottom, box 99 is top right. Axis labels (00, 10 ... 90) run down the left side.
+- At 100 % every box is lit and none blinks. All boxes being lit from 99.1 % upwards is intentional: battery balancing takes the step from 99 to 100 % almost immediately anyway.
+- Boxes carry a 3D bevel (light top/left, dark bottom/right) inside an inset frame, in green instead of the original blue.
+
+States, combinable:
+
+| State              | Rule                                                                  | Rendering                                                                                                      |
+| ------------------ | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `charged`          | `p < ceil(soc)`                                                       | bright glowing green                                                                                           |
+| `current`          | box `ceil(soc)`                                                       | blinks (87.0 % -> 87, 87.1 % -> 88)                                                                            |
+| `locked`           | `p <= MIN_SOC`, or `MAX_SOC < 100` and `p > MAX_SOC`                  | dot in the centre; may still glow                                                                              |
+| `reserved`         | `MIN_SOC < p` and `p - 1 < MIN_SOC + reservedCapped / capacity * 100` | diagonal hatching; bright stripes when charged, dark stripes when empty                                        |
+| `always_discharge` | `p > always_allow_discharge_limit_percent`                            | same states in purple (`#c77dff`, dark `#1d0b2b`), by overriding the `--cell-*` variables on `.cell.discharge` |
+| `free`             | otherwise                                                             | dark                                                                                                           |
+
+`reservedCapped` is `reserved_energy_capacity_effective` from `/api/v1/battery`: `min(reserved_energy, capacity * (min(MAX_SOC, always_allow_discharge) - MIN_SOC))`, computed by the core (`runtime_state.cap_reserved_energy`). The reservation can exceed the battery, hence the cap; `capacity` is `gross_energy_capacity`. Every box the reservation reaches is hatched, including the blinking current one. Nothing above `always_allow_discharge` is ever hatched - discharging is always permitted there.
+
+Legend below the grid, with exactly these names: charged, free, locked (\<= MIN / > MAX), reserved (bright and dark variant), always_discharge, current.
+
+Below that, as text: RESERVED (raw value, plus `-> max. x kWh up to always_allow_discharge %` when capped), USABLE (`stored_usable / capacity * (MAX - MIN)`), STORED, LIMITS, ALWAYS ALLOW DISCHARGE (`above 84 %`).
+
+### PRICE
+
+- Current price large, in EUR/kWh, from `/api/v1/current`.
+- Sparkline over the next 24 h from hourly means, drawn with the block characters `_,.-~=#` equivalents (`U+2581` to `U+2588`), axis labels now / +12h / +24h.
+- MIN 24h and MAX 24h each with their time and **SPREAD 24h = max - min**, all from `/api/v1/price/status`, and **GRID_CHARGE delta = `min_dynamic_price_difference`**.
+
+## Look: green-screen terminal
+
+- Background near-black green `#030a05`, phosphor green `#33ff66` with a `text-shadow` glow, dimmed `#1f9e43`. Amber `#ffcc33` for FORCE CHARGE, red for errors.
+- Fonts: IBM Plex Mono for text, VT323 for the large numbers. Both are **bundled with the application**, never loaded from a CDN: batcontrol runs in homes without internet egress and behind Home Assistant ingress, so an external font request would simply fail and leave the UI in a fallback face. Both are licensed under the SIL Open Font License 1.1; their license texts ship next to the font files and are served at `licenses/` (see [THIRD-PARTY-LICENSES.md](https://github.com/MaStr/batcontrol/blob/main/THIRD-PARTY-LICENSES.md)). The CSS declares an explicit local fallback stack so a missing font file degrades instead of breaking the layout.
+- CRT scanlines and a vignette as a `body::after` overlay.
+- Panels have a 1 px green border with the title sitting in the top border (`-- SOC --`).
+- **UI is English throughout.** Decimal point, 24-hour clock (`en-GB`), relative times as `5 min ago`. Animations only while `prefers-reduced-motion` permits them.
+- The defrag bevel applies **only** to the grid. Everything else stays flat terminal.
+
+## Error and offline behaviour
+
+- Keep the last known data visible but dimmed, with a clear banner naming the problem.
+- Before the first control cycle has completed the API answers 503; the dashboard says so instead of rendering zeros.
+- With `api.auth_token` configured, the dashboard asks for the token once on a 401, keeps it in `sessionStorage`, and re-asks when it stops working. It never needs the separate `api.mcp_auth_token`, which protects only `/mcp`.
+- `GET /api/v1/health` is never authenticated, so a container health check works without the token. The dashboard itself takes `online` from `/status`.
+
+## MQTT and REST
+
+Every value batcontrol publishes on MQTT has a counterpart in the REST API (and through it in MCP). Ratios that MQTT publishes twice - as `0..1` and as percent - appear once in each REST place: as percent in `/battery`, as ratio in `/config`. Timestamps are epoch seconds on MQTT and epoch milliseconds in REST.
+
+| MQTT topic                                                                                              | REST                                                                                                        |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `status`                                                                                                | `/health` (`stale`), `/status` (`online`)                                                                   |
+| `mode`                                                                                                  | `/status` `mode`                                                                                            |
+| `charge_rate`                                                                                           | `/status` `charge_rate`                                                                                     |
+| `limit_battery_charge_rate`                                                                             | `/status` `limit_battery_charge_rate`                                                                       |
+| `control_source`                                                                                        | `/status` `control_source`                                                                                  |
+| `api_override_active`                                                                                   | `/status` `api_override_active`                                                                             |
+| `discharge_blocked`                                                                                     | `/status` `discharge_blocked`                                                                               |
+| `grid_charge_locked`                                                                                    | `/status` `grid_charge_locked`                                                                              |
+| `evaluation_intervall`                                                                                  | `/status` `evaluation_interval_seconds`                                                                     |
+| `last_evaluation`                                                                                       | `/status` `last_evaluation`                                                                                 |
+| `decision`, `decision/attributes`                                                                       | `/decision` `status_text`, `event`                                                                          |
+| `SOC`                                                                                                   | `/battery` `soc`                                                                                            |
+| `max_energy_capacity`                                                                                   | `/battery` `max_energy_capacity`                                                                            |
+| `gross_energy_capacity`                                                                                 | `/battery` `gross_energy_capacity`                                                                          |
+| `stored_energy_capacity`                                                                                | `/battery` `stored_energy_capacity`                                                                         |
+| `stored_usable_energy_capacity`                                                                         | `/battery` `stored_usable_energy_capacity`                                                                  |
+| `reserved_energy_capacity`                                                                              | `/battery` `reserved_energy_capacity`                                                                       |
+| `reserved_energy_capacity_effective`                                                                    | `/battery` `reserved_energy_capacity_effective`                                                             |
+| `always_allow_discharge_limit_capacity`                                                                 | `/battery` `always_allow_discharge_limit_capacity`                                                          |
+| `always_allow_discharge_limit`, `..._percent`                                                           | `/config` `battery_control.always_allow_discharge_limit`, `/battery` `always_allow_discharge_limit_percent` |
+| `max_charging_from_grid_limit`, `..._percent`                                                           | `/config` `battery_control.max_charging_from_grid_limit`, `/battery` `max_charging_from_grid_limit_percent` |
+| `min_grid_charge_soc`, `..._percent`                                                                    | `/config` `battery_control.min_grid_charge_soc`                                                             |
+| `effective_min_grid_charge_soc`, `..._percent`                                                          | `/battery` `effective_min_grid_charge_soc_percent`                                                          |
+| `min_price_difference`                                                                                  | `/config` `battery_control.min_price_difference`                                                            |
+| `min_price_difference_rel`                                                                              | `/config` `battery_control.min_price_difference_rel`                                                        |
+| `min_dynamic_price_difference`                                                                          | `/current` and `/price/status` `min_dynamic_price_difference`                                               |
+| `production_offset`                                                                                     | `/config` `battery_control.production_offset_percent`                                                       |
+| `solar_active`                                                                                          | `/solar` `solar_active`                                                                                     |
+| `solar_surplus_wh`                                                                                      | `/solar` `solar_surplus_wh`                                                                                 |
+| `pv_start_battery_wh`                                                                                   | `/solar` `pv_start_battery_wh`                                                                              |
+| `forecast_min_battery_wh`                                                                               | `/solar` `forecast_min_battery_wh`                                                                          |
+| `peak_shaving/enabled`                                                                                  | `/config` `peak_shaving.enabled`, `/peak-shaving` `enabled`                                                 |
+| `peak_shaving/allow_full_battery_after`                                                                 | `/config` `peak_shaving.allow_full_battery_after`                                                           |
+| `peak_shaving/price_limit`                                                                              | `/config` `peak_shaving.price_limit` (null instead of MQTT's -1)                                            |
+| `peak_shaving/charge_limit`                                                                             | `/peak-shaving` `charge_limit_w`                                                                            |
+| `FCST/prices`, `FCST/production`, `FCST/consumption`, `FCST/net_consumption`                            | `/forecast`, `/forecast/{series}`                                                                           |
+| `inverters/<id>/SOC`, `stored_energy`, `stored_usable_energy`, `free_capacity`, `max_capacity`          | `/inverter/{id}`                                                                                            |
+| `inverters/<id>/capacity`, `min_soc`, `max_soc`, `max_grid_charge_rate`, `max_pv_charge_rate` (Fronius) | `/inverter/{id}`                                                                                            |
+| `inverters/<id>/em_mode`, `em_power` (Fronius)                                                          | `/inverter/{id}` `extra`                                                                                    |
+
+Not mapped on purpose: the Home Assistant discovery messages (`homeassistant/...`) are MQTT plumbing, not values, and the `*/set` topics are inputs - the REST API is read-only.
+
+## Out of scope
+
+The dashboard is a reader, like the API it is built on. It has no controls that change batcontrol's behaviour - no mode buttons, no charge-rate slider, no config form. Overrides stay on the MQTT API, where Home Assistant can gate them behind its own automations and permissions. A screen that only displays cannot misfire at peak price.
+
+## Open ideas
+
+- `max_charging_from_grid_limit_percent` as an additional marker in the grid.
+- A compact history view over the decision journal.
+
+# Frontend Build
+
+The dashboard is a Vue 3 application in `frontend/`. It is built by npm into `src/batcontrol/web/static/`, from where setuptools picks it up as package data - so the assets travel **inside the wheel**.
+
+That last point is the one to remember: the Home Assistant stable add-on installs nothing but the released wheel. A wheel built without the npm step produces an add-on without a dashboard, and nothing fails loudly on the way there.
+
+## Building it
+
+```
+cd frontend
+npm ci
+npm run build          # -> ../src/batcontrol/web/static/
+```
+
+`npm run build` also runs `scripts/check-offline.mjs`, which fails if the built output would load a font, stylesheet or script from the network. batcontrol runs in homes without internet egress and behind Home Assistant ingress, where an external asset does not degrade - it never arrives.
+
+A source checkout without Node is a legitimate state: batcontrol then serves a short hint page at `/` instead of the dashboard, and the REST API is unaffected.
+
+## Developing
+
+Two modes, depending on whether you need live data:
+
+```
+# Against a running batcontrol (api.enabled: true). The dummy inverter in
+# config/batcontrol_config_dummy.yaml is enough - no hardware needed.
+npm run dev
+
+# Against frozen fixtures, no backend at all
+npm run dev:fixtures
+VITE_FIXTURE=battery-full npm run dev:fixtures
+```
+
+Fixtures exist for the states a live battery will not produce on request: exactly 100 %, 3 % in force charge, a reservation larger than the battery, the 503 before the first control cycle, a stalled control loop, a wrong token. They were captured from a real instance, so their shape is the API's. See `frontend/fixtures/README.md`.
+
+`npm run dev` proxies `/api` to `VITE_BACKEND_URL` (default `http://127.0.0.1:8080`), so the browser sees one origin and no CORS or private-network prompt.
+
+## Dependency pinning
+
+`package.json` holds **exact versions**, not ranges, and `.npmrc` sets `save-exact=true` so a later `npm install <pkg>` cannot reintroduce one. `package-lock.json` pins every transitive package by its `sha512` integrity hash, and `npm ci` - which is what the Dockerfile and both CI workflows run - verifies each hash and fails on a mismatch rather than resolving anything.
+
+Updating a dependency is therefore deliberate: `npm install <pkg>@<version>`, commit both `package.json` and `package-lock.json`, and check the build output still passes `check-offline.mjs`.
+
+## Tests
+
+```
+npm test               # vitest
+```
+
+Covered: `normalize()` against every fixture, the SOC grid cell states against the table in the [dashboard specification](https://mastr.github.io/batcontrol/development/dashboard-spec/index.md), and the decision trace component against a captured payload.
+
+## How it reaches the user
+
+```
+frontend/                      npm run build
+  └─> src/batcontrol/web/static/
+        └─> wheel (package data)
+              ├─> Docker image         (Dockerfile, node stage)
+              ├─> HA stable add-on     (installs the released wheel)
+              └─> HA development add-on (builds the wheel from main)
+```
+
+The Docker build uses a dedicated `node:24-alpine` stage with `--platform=$BUILDPLATFORM`, so a multi-arch build runs npm once, natively, instead of once per architecture under emulation. The output is static files and architecture independent.
+
+## Pitfalls
+
+- **`base: './'` is required.** The same bundle is served at `/`, under a Home Assistant ingress token path and under a reverse-proxy subpath. Absolute asset paths break two of the three. The API base URL is derived from `document.baseURI` for the same reason.
+- **An asset only ships if something imports it.** Vite does not copy unreferenced files under `src/`. Anything that has to ship verbatim - the font licenses, for example - belongs in `frontend/public/`.
+- **Timestamps are epoch milliseconds** in the API and epoch seconds in MQTT.
+- **`value` is Wh per slot, `power_w` is W.** At 15-minute resolution they differ by a factor of four.
+
+# MCP Server Specification
+
+Design contract for batcontrol's MCP (Model Context Protocol) server. It lets an assistant - Claude Desktop, Claude Code, a Home Assistant voice agent - answer questions about the battery in natural language: *"why is the battery not discharging right now?"*, *"when is electricity cheapest today?"*, *"has it been flapping between modes?"*
+
+Implementation: `src/batcontrol/web/mcp.py`. Tests: `tests/batcontrol/web/test_mcp.py`.
+
+## Scope
+
+**Read-only, and that is a design decision, not a stage of completion.** There is no tool that sets a mode, a charge rate or a parameter. The reasoning:
+
+- An assistant that can steer a battery can cost real money through a misread forecast or a hallucinated unit. The blast radius of a wrong read is a wrong sentence; the blast radius of a wrong write is a battery charged from the grid at peak price.
+- Runtime overrides already exist on the MQTT API, where the broker authenticates them and Home Assistant can gate them behind its own automations and user permissions.
+- A read-only surface needs no confirmation flow, no dry-run, no undo, and no audit trail.
+
+A test enforces this: every tool name must start with `get` or `list` (`test_no_tool_can_change_anything`). Relaxing it is a maintainer decision, not a refactor.
+
+## Transport
+
+**HTTP only**, served at `/mcp` by the same application as the REST API, on the same port.
+
+There is deliberately **no stdio transport**, even though it is the usual default for MCP servers. With stdio the client spawns the server process, and a freshly spawned batcontrol would either
+
+- open a second connection to the inverter - two controllers on one battery - or
+- run without a control loop, so every tool could only answer `available: false`.
+
+The only useful MCP server is the one attached to the batcontrol that is already running, and that one is reachable over HTTP.
+
+The MCP route is attached to the FastAPI router directly rather than mounted as a sub-app: a mounted app with an inner `/` route answers `/mcp` with a `307` redirect to `/mcp/`, and an exact route spares every client that extra round trip. Because attaching routes does not run the mounted app's lifespan, the FastAPI lifespan enters the MCP session manager's lifespan explicitly.
+
+### Host header validation
+
+None. The MCP SDK would validate the `Host` header on a loopback bind (DNS-rebinding protection), but that breaks every reverse proxy that forwards its own host name, so it is switched off explicitly - like for the REST API. `api.mcp_auth_token` (or the inherited `api.auth_token`) is the protection.
+
+### Authentication
+
+Two independent tokens, so the MCP token can be handed to an assistant without giving away the REST API:
+
+| Config key           | Protects                      | Empty means                       |
+| -------------------- | ----------------------------- | --------------------------------- |
+| `api.auth_token`     | `/api/v1/**` except `/health` | no authentication on the REST API |
+| `api.mcp_auth_token` | `/mcp`                        | inherits `api.auth_token`         |
+
+The fallback is deliberate: securing the API must never silently leave MCP wide open. When both are empty, neither surface is authenticated - bind to loopback or put a proxy in front.
+
+`/mcp` is a raw ASGI route, so FastAPI's dependency-based auth does not reach it; a small ASGI wrapper (`bearer_guard`) does the check with `secrets.compare_digest`. Neither token ever appears in a log line or a response.
+
+## Tool contract
+
+### Naming
+
+`batcontrol_<action>_<resource>`, snake_case, action first. The service prefix is not redundant with the server name: a client that aggregates several MCP servers shows the tools in one flat list, and `get_status` from an unknown server is a worse prompt than `batcontrol_get_status`.
+
+### The tools
+
+| Tool                                      | Answers                                                                   | Paged |
+| ----------------------------------------- | ------------------------------------------------------------------------- | ----- |
+| `batcontrol_get_status`                   | Which mode is active, who set it, when the next evaluation is due         | -     |
+| `batcontrol_get_battery`                  | SoC, capacities, reserved energy (raw and capped), SoC limits             | -     |
+| `batcontrol_get_current`                  | Current price together with SoC, in one call                              | -     |
+| `batcontrol_get_price_status`             | Cheapest/most expensive slot, rank, average and spread over the next 24 h | -     |
+| `batcontrol_get_price_forecast`           | Price per slot in EUR/kWh                                                 | yes   |
+| `batcontrol_get_solar_forecast`           | Expected PV production in Wh per slot                                     | yes   |
+| `batcontrol_get_consumption_forecast`     | Expected consumption in Wh per slot                                       | yes   |
+| `batcontrol_get_net_consumption_forecast` | Consumption minus production; negative = surplus                          | yes   |
+| `batcontrol_get_solar`                    | Solar surplus indicators derived from the forecast                        | -     |
+| `batcontrol_get_peak_shaving`             | Whether peak shaving ran, evcc suspension, resulting PV limit             | -     |
+| `batcontrol_list_inverters`               | The inverters by id                                                       | -     |
+| `batcontrol_get_inverter`                 | The values of one inverter                                                | -     |
+| `batcontrol_get_decision`                 | Why the current mode was chosen, with the decisive rule                   | -     |
+| `batcontrol_list_decisions`               | Recent decisions from the journal                                         | yes   |
+| `batcontrol_get_config`                   | The thresholds a decision has to be read against                          | -     |
+| `batcontrol_get_version`                  | Version, runtime, forecast interval, timezone                             | -     |
+
+Every tool is annotated `read_only_hint: true`, `destructive_hint: false`, `idempotent_hint: true`, `open_world_hint: false`. Annotations are hints, not guarantees - the guarantee is that no write tool exists.
+
+### Descriptions are the interface
+
+A tool docstring is LLM-facing documentation, and it must state:
+
+1. **The unit.** `Wh per slot` and `W` differ by a factor of four at 15-minute resolution. A model that has to guess answers confidently and wrongly.
+1. **The sign convention.** Negative net consumption is surplus solar energy.
+1. **The time base.** Timestamps are epoch milliseconds; forecast slot 0 is the interval containing the moment of the call. Slots that passed since the last control cycle are dropped.
+1. **What the tool does not know.** The solar forecast is a forecast, not a measurement. The consumption forecast is a load profile, so it knows nothing about an appliance being switched on. The decision journal is in memory and empty after a restart.
+
+Point 4 earns its place: without it a model will cheerfully report a forecast as a measurement.
+
+### Responses
+
+Every tool returns the same envelope, so each one has an output schema and clients get structured content instead of prose:
+
+```
+{ "available": true, "reason": null, "data": { ... } }
+```
+
+`data` reuses the REST API's Pydantic models - one definition for both transports, so units and field names cannot drift apart.
+
+### Paging
+
+The forecast horizon can be several hundred slots, and a model pays for every token it is handed. Paged tools therefore take `limit` and `offset` and report `total_count`, `returned_count`, `has_more` and `next_offset`.
+
+`limit` defaults to **24 hours expressed in slots** - 24 at 60-minute, 96 at 15-minute resolution - resolved from the configuration at call time, which is why the schema default is `null` rather than a number. A model that needs more pages for it.
+
+Ranges are enforced by the input schema, so an out-of-range value comes back as a validation error the model can read and correct, rather than being silently clamped.
+
+### Errors
+
+Failures are reported **inside the result**, never as a protocol error:
+
+| Situation                           | Result                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------- |
+| No control cycle completed yet      | `available: false`, reason names the condition and says to retry after the next cycle |
+| Nothing in the decision journal yet | `available: false` with that reason                                                   |
+| Unexpected exception                | `available: false`, generic message pointing at the batcontrol log                    |
+
+The last row matters: the full exception goes to the log, not into the answer. An MCP response is not the place to leak an internal detail - an exception string can contain a broker URL with credentials in it.
+
+## Client configuration
+
+```
+{
+  "mcpServers": {
+    "batcontrol": {
+      "type": "http",
+      "url": "http://batcontrol.lan:8080/mcp",
+      "headers": { "Authorization": "Bearer <api.mcp_auth_token>" }
+    }
+  }
+}
+```
+
+With `api.host: 127.0.0.1` the server is only reachable from the same machine, which is the right setup for a client running next to batcontrol. For anything else, set a token.
+
+## Evaluation
+
+Per the MCP server guidance, the tool set is checked against questions a user would actually ask - read-only, realistic, verifiable, and independent of each other. See [MCP evaluation](https://mastr.github.io/batcontrol/development/mcp-evaluation/index.md).
+
+## Open ideas
+
+- MCP resources for the config and the dashboard spec, so an assistant can read documentation rather than infer it.
+- A prompt template for "explain today's battery plan".
+
+# MCP Evaluation
+
+Ten questions for checking that the [MCP server](https://mastr.github.io/batcontrol/development/mcp-spec/index.md) is actually usable by an assistant. They are the kind of thing a user asks, they are read-only, each one stands alone, and each has an answer that can be verified rather than judged.
+
+## Why a fixture, not a live instance
+
+"Verifiable" and "the answer does not change over time" rule out a live battery: the SoC moves, prices roll over at midnight, and the decision journal empties on restart. The evaluation therefore runs against a **frozen scenario** - a `ForecastSnapshot` and a recorded decision with fixed values - served through the real service layer and the real MCP tools. Only the data source is pinned; everything the evaluation exercises is production code.
+
+The scenario below extends the test fixture in `tests/batcontrol/web/conftest.py`, which is already a complete stand-in for the core.
+
+## Scenario
+
+| Quantity        | Value                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------- |
+| Interval        | 60 minutes                                                                            |
+| Battery         | 11000 Wh capacity, SoC 87.4 %, 9614 Wh stored, 8844 Wh usable, 1500 Wh reserved       |
+| SoC limits      | inverter min 7 %, max 100 %; always_allow_discharge 90 %; max_charging_from_grid 89 % |
+| Mode            | 10 (allow discharge), set by `optimizer`                                              |
+| Price forecast  | slot 0: 0.308, slot 1: 0.254, slot 2: 0.201, slot 3: 0.350 EUR/kWh                    |
+| Production      | 0, 120, 900, 1500 Wh per slot                                                         |
+| Consumption     | 450, 420, 400, 500 Wh per slot                                                        |
+| Net consumption | 450, 300, -500, -1000 Wh per slot                                                     |
+| Decision        | decisive reason `ALWAYS_ALLOW_DISCHARGE_LIMIT`                                        |
+| Config          | min_price_difference 0.05, min_price_difference_rel 0.10, peak shaving off            |
+
+## The questions
+
+| #   | Question                                                                             | Tools the assistant has to reach for                         | Verifiable answer                                                                                                                                                                                                            |
+| --- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | "What is my battery doing right now, and why?"                                       | `get_status` + `get_decision`                                | Discharging is allowed (mode 10), because the SoC is above the always-allow-discharge limit. Must name the reason, not just the mode.                                                                                        |
+| 2   | "How much usable energy is left in the battery?"                                     | `get_battery`                                                | 8844 Wh. Must not answer 9614 Wh (that is the stored total, including what sits below the inverter's min SoC).                                                                                                               |
+| 3   | "When is electricity cheapest in the next few hours, and how much cheaper than now?" | `get_price_forecast`                                         | Slot 2, 0.201 EUR/kWh, 0.107 below the current 0.308. Requires reading `time_start` to name a time, not a slot index.                                                                                                        |
+| 4   | "Will my solar cover the house this afternoon?"                                      | `get_net_consumption_forecast` (or production + consumption) | From slot 2 onward net consumption is negative (-500 and -1000 Wh), so yes, with surplus. A wrong sign convention inverts this answer.                                                                                       |
+| 5   | "What is the peak solar power expected today?"                                       | `get_solar_forecast`                                         | 1500 Wh in the last slot, which at 60-minute resolution is 1500 W average. At 15-minute resolution the same Wh value would be 6000 W - the answer must come from `power_w`, not from `value`.                                |
+| 6   | "Is batcontrol holding energy back, and how much?"                                   | `get_battery` (+ `get_config`)                               | 1500 Wh reserved. A good answer notes the reservation is capped by the always-allow-discharge limit before it is rendered.                                                                                                   |
+| 7   | "How big does a price difference have to be before it charges from the grid?"        | `get_config`                                                 | 0.05 EUR/kWh absolute and 10 % relative. Must not confuse the two or report 0.10 EUR.                                                                                                                                        |
+| 8   | "Has the mode been flapping in the last hour?"                                       | `list_decisions`                                             | Answerable from the journal; with a single recorded decision the answer is no. Must also say the journal is in memory and short, rather than implying a full history.                                                        |
+| 9   | "Can you set the battery to charge from the grid now?"                               | none                                                         | A refusal: these tools are read-only, and the change has to be made in the configuration or over the MQTT API. Any attempt to find a write tool is a failure.                                                                |
+| 10  | "Give me the whole price forecast for the next two days."                            | `get_price_forecast`, then paging                            | The horizon in the scenario is 4 slots, so `has_more` is false and the honest answer is that only four hours are available - not an invented two days. Against a longer horizon, the assistant must page with `next_offset`. |
+
+## What each question is actually testing
+
+- **1, 6, 7** - whether the decision trace and the thresholds are presented together. A mode without its reason is not an answer.
+- **2, 5** - unit discipline. These are the two places where a plausible wrong number exists right next to the right one.
+- **3** - whether epoch-millisecond timestamps get rendered as local times.
+- **4** - the sign convention of net consumption.
+- **8, 10** - whether the model reports the limits of the data (in-memory journal, finite horizon) instead of filling the gap.
+- **9** - the read-only guarantee, from the model's side.
+
+## Running it
+
+The deterministic parts are already automated in `tests/batcontrol/web/test_mcp.py`: the tool surface, the paging metadata, the sign convention, the units in the descriptions, and the absence of any write tool. What a test cannot check is whether the *descriptions* are good enough for a model to pick the right tool - that needs a real client:
+
+1. Start batcontrol with `api.enabled: true` and `api.mcp_enabled: true`.
+1. Point a client at `http://127.0.0.1:8080/mcp`.
+1. Ask the ten questions verbatim, in separate conversations.
+1. A question that needs a hint, or that produces a wrong unit or sign, is a bug in the tool description, not in the model. Fix the docstring.

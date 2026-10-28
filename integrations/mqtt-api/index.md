@@ -132,15 +132,19 @@ Batcontrol publishes data to the following topic structure (assuming base topic 
 - `house/batcontrol/discharge_blocked` - Whether discharge is blocked (`true`/`false`)
 - `house/batcontrol/api_override_active` - Whether a temporary external/API override is active (`true`/`false`)
 - `house/batcontrol/control_source` - Source that last selected the current control state (`api` or `optimizer`)
+- `house/batcontrol/decision` - Current mode with its value and a plain-language explanation as text, e.g. `Charge from Grid 2133 W - usable energy (900 Wh) is below the 2500 Wh reserved for upcoming expensive hours, so 1600 Wh is charged from the grid` (retained). The content changes on a status change only (a new mode, or a change of the charge rate / PV limit of the current mode by 25 % or more) and is republished every evaluation like the mode. Shown as the **Decision** sensor in Home Assistant -- see [Understanding the Decision Sensor](https://mastr.github.io/batcontrol/features/decision-sensor/index.md) for what it means, and [Decision Trace](https://mastr.github.io/batcontrol/development/decision-trace/#journal-and-status-change-listeners) for how it is produced
+- `house/batcontrol/decision/attributes` - JSON with the decision trace of that status change (retained): `kind` (`mode` or `value`), `mode`, `previous_mode`, `value`, `previous_value`, `control_source`, `decided_by`, `why` (the same explanation as the state, for the step that decided) and the evaluated `records`, see [Decision Trace](https://mastr.github.io/batcontrol/development/decision-trace/index.md) for the full field reference. Used as attributes of the **Decision** sensor
 - `house/batcontrol/grid_charge_locked` - Whether an external (HEMS/grid operator) request is currently blocking charging from the grid (`true`/`false`), see [Grid Charge Lock](#grid-charge-lock-external-hemsgrid-operator-signal)
 
 ### Battery Information
 
 - `house/batcontrol/SOC` - State of Charge in % (two decimal places, e.g., `69.00`)
-- `house/batcontrol/max_energy_capacity` - Maximum battery capacity in Wh
+- `house/batcontrol/max_energy_capacity` - Maximum battery capacity in Wh (reduced by max SOC)
+- `house/batcontrol/gross_energy_capacity` - Battery capacity in Wh without the max SOC reduction; SOC percentages refer to this value
 - `house/batcontrol/stored_energy_capacity` - Energy stored in battery in Wh
 - `house/batcontrol/stored_usable_energy_capacity` - Usable energy stored in battery in Wh (considering min SOC)
-- `house/batcontrol/reserved_energy_capacity` - Energy reserved for discharge in Wh
+- `house/batcontrol/reserved_energy_capacity` - Energy reserved for discharge in Wh. This is the raw demand for upcoming expensive hours and can exceed the battery
+- `house/batcontrol/reserved_energy_capacity_effective` - The reserved energy in Wh capped to what the battery can hold back: between min SOC and the lower of max SOC and `always_allow_discharge_limit`
 
 ### Solar Surplus Information
 
@@ -169,7 +173,6 @@ See [Forecast Metrics](https://mastr.github.io/batcontrol/integrations/forecast-
 See [Peak Shaving](https://mastr.github.io/batcontrol/features/peak-shaving/index.md) for details:
 
 - `house/batcontrol/peak_shaving/enabled` - Whether peak shaving is enabled (`true`/`false`)
-- `house/batcontrol/peak_shaving/mode` - Active mode (`time`, `price`, or `combined`)
 - `house/batcontrol/peak_shaving/allow_full_battery_after` - Target hour (0-23)
 - `house/batcontrol/peak_shaving/charge_limit` - Current charge limit in W (`-1` = inactive / no limit)
 - `house/batcontrol/peak_shaving/price_limit` - Price threshold in EUR/kWh
@@ -225,7 +228,6 @@ Batcontrol listens to the following `/set` topics for remote control:
 ### Peak Shaving
 
 - `house/batcontrol/peak_shaving/enabled/set` - Enable or disable peak shaving (`true`/`false`)
-- `house/batcontrol/peak_shaving/mode/set` - Set mode (`time`, `price`, or `combined`)
 - `house/batcontrol/peak_shaving/allow_full_battery_after/set` - Set target hour (0-23)
 - `house/batcontrol/peak_shaving/price_limit/set` - Set price threshold in EUR/kWh (`-1` disables the price component)
 

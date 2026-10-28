@@ -44,7 +44,9 @@ enable_resilient_wrapper: true
 
 ### outage_tolerance_minutes
 
-The maximum duration (in minutes) to tolerate inverter outages before terminating. While the inverter is unreachable, each control cycle is skipped. If communication is not restored within this window, batcontrol gives up and exits with an error.
+The maximum duration (in minutes) to tolerate unresolved inverter failures before terminating. While a required read or control command fails, the control cycle is skipped. A failure beyond this window makes batcontrol exit with an error; a failure exactly at the limit is still tolerated.
+
+The window uses a monotonic clock, so clock synchronization and manual wall-clock changes do not extend it. Successful unrelated calls do not reset it: a local capacity lookup cannot prove a failed SoC read has recovered, and working telemetry cannot hide a persistent write failure. Each failed operation must succeed again before the outage is cleared. An acknowledged mode command supersedes earlier failed mode commands, so a newly calculated allow-discharge command can recover from a failed force-charge command without replaying the old command.
 
 Default:
 
@@ -139,6 +141,12 @@ inverter:
   max_soc: 100                # Optional, default: 100
   revert_seconds: 0           # Optional, default: 0
 ```
+
+### Connection recovery
+
+A Modbus operation makes at most one reconnect attempt and one retry after a socket timeout, connection error or remote connection close. The socket timeout is five seconds. If reconnecting or retrying fails, the connection is closed and the error reaches the resilient wrapper; the next scheduled control cycle can open a new connection. There is no additional retry loop or sleep in the driver. Modbus exception responses and malformed protocol responses are not retried by this reconnect handler.
+
+With `enable_resilient_wrapper: true`, failures after the first successful mode command skip the current cycle. The next cycle reads the inverter again and calculates a new decision; it does not use an old SoC reading or queue the failed command for replay. With the wrapper disabled, an error that survives the bounded reconnect attempt still propagates normally.
 
 ### Backup / emergency-power systems
 

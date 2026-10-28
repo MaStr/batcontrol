@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -841,6 +841,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#runtime-state-in-the-rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime state in the REST API
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1127,6 +1138,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../decision-sensor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Understanding the Decision Sensor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1185,6 +1252,62 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/rest-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mcp-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -1413,6 +1536,146 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/decision-trace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decision Trace and Journal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/dashboard-spec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard Specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/frontend-build/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Frontend Build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/mcp-spec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Server Specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/mcp-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1507,6 +1770,17 @@
     <span class="md-ellipsis">
       
         MQTT Runtime Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runtime-state-in-the-rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime state in the REST API
       
     </span>
   </a>
@@ -1764,13 +2038,20 @@
 <p>Most PV systems produce peak power around midday. Without any intervention the battery charges as fast as possible and is full well before the afternoon. Once the battery is full, all surplus PV energy is fed into the grid -- often at the lowest grid prices of the day. For newer installations feed-in compensation may be very small or zero, so this exported energy is essentially wasted.</p>
 <p>Peak shaving solves this by <strong>limiting the PV-to-battery charge rate</strong> so the battery fills gradually over the course of the day. The goal is to reach full capacity only by a configurable target hour (e.g. 14:00). This way the battery absorbs as much solar energy as possible and grid feed-in during midday peaks is minimised.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
-<p>The algorithm is in the status "experimental", which is the reason why it is only available in the logic type <code>next</code>. After collecting enough experience with that feature, it will move into <code>default</code> eventually.</p>
+<p>Peak shaving is <strong>stable</strong> and part of the standard battery control logic.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
-<p>Peak shaving was introduced with 0.8.0 and is only available with the <strong><code>next</code> logic type</strong>. Set this in the <code>battery_control</code> section of your configuration:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">battery_control</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">next</span><span class="w">   </span><span class="c1"># Required -- 'default' does not include peak shaving</span>
-</code></pre></div>
-<p>The <code>default</code> logic type does not support peak shaving at all. Enabling peak shaving without switching to <code>next</code> has no effect.</p>
+<p>Peak shaving was introduced with 0.8.0 in the <code>next</code> logic type. Since 0.10.0 it is part of the standard logic, so no particular <code>battery_control.type</code> has to be selected any more -- setting <code>peak_shaving.enabled: true</code> is enough.</p>
+<p>Existing configurations with <code>type: next</code> keep working unchanged: <code>next</code> is only an alias for the standard logic and behaves identically.</p>
+<div class="admonition warning">
+<p class="admonition-title">Upgrading from 0.9.x or earlier with <code>type: default</code></p>
+<p>Before 0.10.0, <code>peak_shaving.enabled: true</code> had <strong>no effect</strong> unless
+<code>battery_control.type</code> was set to <code>next</code>. If your configuration carries
+<code>enabled: true</code> from that time, peak shaving now becomes active on the
+first control cycle after the upgrade and starts limiting PV-to-battery
+charging. batcontrol logs a one-time <code>Peak shaving is ENABLED ...</code> line at
+startup so the change is visible. Set <code>peak_shaving.enabled: false</code> if you
+do not want the feature.</p>
+</div>
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
 <p>Add a <code>peak_shaving</code> block at the <strong>top level</strong> of your configuration file (not nested under <code>battery_control</code>):</p>
 <div class="highlight"><pre><span></span><code><span class="nt">peak_shaving</span><span class="p">:</span>
@@ -1844,7 +2125,7 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Deprecated:</strong> The old <code>mode</code> parameter (<code>time</code> / <code>price</code> / <code>combined</code>) is still accepted for backward compatibility and mapped to the switches at startup; a deprecation warning is logged. New configurations should use the switch-based design above.</p>
+<p><strong>Removed in 0.10.0:</strong> The old <code>mode</code> parameter (<code>time</code> / <code>price</code> / <code>combined</code>) is no longer supported; a configuration containing it is rejected at startup. Use the switches above instead (<code>time</code> = <code>time_active</code> only, <code>price</code> = <code>price_active</code> only, <code>combined</code> = both).</p>
 <h3 id="mqtt-runtime-control">MQTT Runtime Control<a class="headerlink" href="#mqtt-runtime-control" title="Permanent link">&para;</a></h3>
 <p>The following parameters can be changed at runtime via MQTT without restarting batcontrol:</p>
 <table>
@@ -1871,15 +2152,17 @@
 <td>float</td>
 <td>Change the price threshold for the price rule</td>
 </tr>
-<tr>
-<td><code>{base}/peak_shaving/mode/set</code></td>
-<td><code>time</code> / <code>price</code> / <code>combined</code></td>
-<td>Deprecated: kept for backward compatibility, mapped onto <code>time_active</code>/<code>price_active</code></td>
-</tr>
 </tbody>
 </table>
 <p>The rule switches themselves (<code>time_active</code>, <code>price_active</code>, <code>solar_cap_active</code>) and the solar parameters (<code>feed_in_limit_w</code>, <code>feed_in_limit_headroom</code>) have no MQTT setters and require restarting batcontrol to take effect.</p>
 <p>Runtime changes are temporary and are not written back to the configuration file.</p>
+<h3 id="runtime-state-in-the-rest-api">Runtime state in the REST API<a class="headerlink" href="#runtime-state-in-the-rest-api" title="Permanent link">&para;</a></h3>
+<p><code>GET /api/v1/peak-shaving</code> (MCP: <code>batcontrol_get_peak_shaving</code>) reports what peak shaving did in
+the last control cycle: whether it is switched on now, whether it ran or was suspended by evcc
+(<code>suspended_by</code>), the resulting PV charge limit in W (<code>charge_limit_w</code>, -1 = none) and the
+outcome and reason code of the peak shaving rule and of the solar (feed-in) rule. A value
+switched via MQTT also shows in <code>GET /api/v1/config</code> under <code>overrides</code>, next to the configured
+value. See <a href="../../integrations/rest-api/">REST API</a>.</p>
 <h2 id="the-allow_full_battery_after-target-hour">The <code>allow_full_battery_after</code> Target Hour<a class="headerlink" href="#the-allow_full_battery_after-target-hour" title="Permanent link">&para;</a></h2>
 <p>This parameter controls when the battery is <strong>allowed</strong> to be 100% full:</p>
 <ul>
@@ -1940,11 +2223,10 @@ If pv_surplus &gt; free_capacity:
 - If surplus fits in free capacity, no limit is applied.</p>
 <h3 id="combining-rules">Combining Rules<a class="headerlink" href="#combining-rules" title="Permanent link">&para;</a></h3>
 <p>When multiple rules are active, the <strong>strictest (lowest non-negative) limit wins</strong>. For example, if the time rule suggests 500 W and the price rule suggests 300 W, the applied limit is 300 W. This conservative approach prioritizes the rules in combination rather than overriding each other.</p>
-<p><strong>Backward compatibility:</strong> the old <code>mode</code> parameter (<code>time</code> / <code>price</code> / <code>combined</code>) is still accepted and mapped to the switches at startup:
+<p><strong>Migration:</strong> the old <code>mode</code> parameter was removed in 0.10.0. Replace it with the switches:
 - <code>mode: time</code> → <code>time_active: true</code>, <code>price_active: false</code>
 - <code>mode: price</code> → <code>time_active: false</code>, <code>price_active: true</code>
 - <code>mode: combined</code> → <code>time_active: true</code>, <code>price_active: true</code></p>
-<p>New configurations should use the switch-based design.</p>
 <h2 id="solar-feed-in-limit-solarspitzengesetz">Solar Feed-in Limit (Solarspitzengesetz)<a class="headerlink" href="#solar-feed-in-limit-solarspitzengesetz" title="Permanent link">&para;</a></h2>
 <h3 id="the-german-60-rule">The German 60% Rule<a class="headerlink" href="#the-german-60-rule" title="Permanent link">&para;</a></h3>
 <p>The German "Solarspitzengesetz" (in force since 2025-02-25) limits uncontrolled PV plants to feeding at most <strong>60% of their installed power</strong> into the grid. The inverter enforces this limit hard: production above it is <strong>curtailed and lost</strong>, unless self-consumed or charged into the battery.</p>
@@ -2159,10 +2441,7 @@ where it matters, and the example day reaches zero curtailment.</p>
 <p>The charge limit is recalculated every evaluation cycle (typically every 3 minutes). If clouds reduce PV production significantly, the free capacity stays higher at the next cycle and the counter-linear ramp automatically produces a higher allowed rate. This means the system self-corrects without manual intervention, though there is no intra-cycle adjustment.</p>
 <h2 id="quick-start-examples">Quick-Start Examples<a class="headerlink" href="#quick-start-examples" title="Permanent link">&para;</a></h2>
 <p><strong>Simple time-based setup</strong> -- spread charging until 14:00, no price or solar awareness:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">battery_control</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">next</span>
-
-<span class="nt">peak_shaving</span><span class="p">:</span>
+<div class="highlight"><pre><span></span><code><span class="nt">peak_shaving</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">  </span><span class="nt">time_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">  </span><span class="nt">price_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
@@ -2170,10 +2449,7 @@ where it matters, and the example day reaches zero curtailment.</p>
 <span class="w">  </span><span class="nt">allow_full_battery_after</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">14</span>
 </code></pre></div>
 <p><strong>Price-aware combined setup</strong> -- reserve capacity for cheap slots below 5 ct/kWh:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">battery_control</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">next</span>
-
-<span class="nt">peak_shaving</span><span class="p">:</span>
+<div class="highlight"><pre><span></span><code><span class="nt">peak_shaving</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">  </span><span class="nt">time_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">  </span><span class="nt">price_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
@@ -2182,10 +2458,7 @@ where it matters, and the example day reaches zero curtailment.</p>
 <span class="w">  </span><span class="nt">price_limit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.05</span>
 </code></pre></div>
 <p><strong>With solar feed-in limit</strong> -- add clipping absorption for a 10 kWp plant (6000 W limit):</p>
-<div class="highlight"><pre><span></span><code><span class="nt">battery_control</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">next</span>
-
-<span class="nt">peak_shaving</span><span class="p">:</span>
+<div class="highlight"><pre><span></span><code><span class="nt">peak_shaving</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">  </span><span class="nt">time_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 <span class="w">  </span><span class="nt">price_active</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
@@ -2290,10 +2563,10 @@ where it matters, and the example day reaches zero curtailment.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../assets/js/vendor/chart.umd.js"></script>
       

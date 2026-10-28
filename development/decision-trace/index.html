@@ -1,0 +1,2076 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Optimize your electricity costs by re-charging your PV battery when electricity is cheap and there is not enough solar power available.">
+      
+      
+      
+        <link rel="canonical" href="https://mastr.github.io/batcontrol/development/decision-trace/">
+      
+      
+        <link rel="prev" href="../solar-limit-evaluation/">
+      
+      
+        <link rel="next" href="../dashboard-spec/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Decision Trace and Journal - Batcontrol Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/css/peak-shaving-charts.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#decision-trace-and-journal" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Batcontrol Documentation" class="md-header__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Batcontrol Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Decision Trace and Journal
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="green" data-md-color-accent="light-green"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Batcontrol Documentation" class="md-nav__button md-logo" aria-label="Batcontrol Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.67 4H15V2H9v2H7.33A1.33 1.33 0 0 0 6 5.33v15.33C6 21.4 6.6 22 7.33 22h9.33c.74 0 1.34-.6 1.34-1.33V5.33C18 4.6 17.4 4 16.67 4M11 20v-5.5H9L13 7v5.5h2"/></svg>
+
+    </a>
+    Batcontrol Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/MaStr/batcontrol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MaStr/batcontrol
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/how-batcontrol-works/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How Batcontrol Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/batcontrol-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Main Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/inverter-configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/multiple-inverters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiple Inverters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/dynamic-tariff-provider/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic Tariff Provider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/solar-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/consumption-forecast/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Consumption Forecast
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/battery-control-expert/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Battery Control Expert
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/peak-shaving-scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peak Shaving Scenarios
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/price-difference-calculation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Price Difference Calculation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/decision-sensor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Understanding the Decision Sensor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/dashboard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/rest-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mcp-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mqtt-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/forecast-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Forecast Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/mqtt-inverter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MQTT Inverter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integrations/evcc-connection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    evcc Connection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../15-min-transform/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    15-Minute Interval Transformation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../solar-limit-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solar Feed-in Limit Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decision Trace and Journal
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decision Trace and Journal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#data-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Data model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#decisions-and-reason-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisions and reason codes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plain-language-explanations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plain-language explanations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#journal-and-status-change-listeners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Journal and status change listeners
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Journal and status change listeners">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#refresh-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refresh events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#built-in-listener-home-assistant-decision-sensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in listener: Home Assistant "Decision" sensor
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-decision-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a decision step
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dashboard-spec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dashboard Specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../frontend-build/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Frontend Build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-spec/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Server Specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#data-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Data model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#decisions-and-reason-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisions and reason codes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plain-language-explanations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plain-language explanations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Logging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#journal-and-status-change-listeners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Journal and status change listeners
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Journal and status change listeners">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#refresh-events" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refresh events
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#built-in-listener-home-assistant-decision-sensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in listener: Home Assistant "Decision" sensor
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-decision-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a decision step
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/MaStr/batcontrol/edit/main/docs/development/decision-trace.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="decision-trace-and-journal">Decision Trace and Journal<a class="headerlink" href="#decision-trace-and-journal" title="Permanent link">&para;</a></h1>
+<p>Batcontrol records <em>why</em> it selected an inverter mode. Every control cycle
+produces a <strong>decision trace</strong>: the ordered list of decision steps that were
+evaluated, each with its inputs and a stable reason code. The traces are kept in
+an in-memory <strong>journal</strong>, and registered listeners are called whenever the
+inverter status changes (new mode, or a significant change of the charge rate /
+PV limit). Listeners that show the explanation (the "Decision" sensor) can
+also ask for refreshes, so its numbers and reason stay current.</p>
+<p>This is the foundation for answering "why did batcontrol do this?" from the
+outside, for example from a chat bot or an MCP server. For what the Home
+Assistant "Decision" sensor itself looks like and how to read it, see
+<a href="../../features/decision-sensor/">Understanding the Decision Sensor</a>.</p>
+<h2 id="data-model">Data model<a class="headerlink" href="#data-model" title="Permanent link">&para;</a></h2>
+<p>Defined in <code>src/batcontrol/logic/decision_trace.py</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DecisionRecord</code></td>
+<td>One step: <code>decision</code>, <code>outcome</code>, <code>reason</code>, <code>inputs</code>, <code>decisive</code>, <code>explanation()</code></td>
+</tr>
+<tr>
+<td><code>DecisionTrace</code></td>
+<td>Steps of one cycle plus timestamp. <code>decisive_record()</code> returns the step that determined the result</td>
+</tr>
+</tbody>
+</table>
+<p>A step is <em>decisive</em> when it determines the control settings at the time it
+runs. A later decisive step supersedes an earlier one (for example a peak
+shaving limit after "discharge allowed"). Steps that were evaluated but did not
+change anything (<code>skipped</code>, <code>not_needed</code>) stay in the trace, so the trace also
+explains why something did <strong>not</strong> happen.</p>
+<h3 id="decisions-and-reason-codes">Decisions and reason codes<a class="headerlink" href="#decisions-and-reason-codes" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Decision</th>
+<th>Outcome</th>
+<th>Reason</th>
+<th>Decisive</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>discharge</code></td>
+<td><code>allowed</code></td>
+<td><code>ALWAYS_ALLOW_DISCHARGE_LIMIT</code>, <code>USABLE_ENERGY_EXCEEDS_RESERVE</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>discharge</code></td>
+<td><code>forbidden</code></td>
+<td><code>RESERVE_REQUIRED</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>grid_recharge</code></td>
+<td><code>charge</code></td>
+<td><code>GRID_RECHARGE_REQUIRED</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>grid_recharge</code></td>
+<td><code>no_charge</code></td>
+<td><code>GRID_CHARGE_LIMIT_REACHED</code>, <code>NO_HIGH_PRICE_SLOTS</code>, <code>HIGH_PRICE_DEMAND_COVERED_BY_PRODUCTION</code>, <code>NO_RECHARGE_REQUIRED</code>, <code>RECHARGE_BELOW_MINIMUM</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>peak_shaving</code></td>
+<td><code>limit_set</code></td>
+<td><code>PV_CHARGE_LIMITED</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>peak_shaving</code></td>
+<td><code>not_needed</code></td>
+<td><code>NO_LIMIT_NEEDED</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>peak_shaving</code></td>
+<td><code>skipped</code></td>
+<td><code>PRICE_LIMIT_MISSING</code>, <code>NO_PV_PRODUCTION</code>, <code>PAST_FULL_BATTERY_HOUR</code>, <code>ALWAYS_ALLOW_DISCHARGE_REGION</code>, <code>FORCE_CHARGE_ACTIVE</code>, <code>DISCHARGE_NOT_ALLOWED</code>, <code>EVCC_CHARGING</code>, <code>EVCC_EV_EXPECTS_PV_SURPLUS</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>solar_limit</code></td>
+<td><code>limit_set</code></td>
+<td><code>CLIP_ABSORPTION_LIMIT</code></td>
+<td>only if it changed the limit set by an earlier rule</td>
+</tr>
+<tr>
+<td><code>solar_limit</code></td>
+<td><code>not_needed</code></td>
+<td><code>NO_LIMIT_NEEDED</code>, <code>NO_CLIP_PREDICTED</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>solar_limit</code></td>
+<td><code>skipped</code></td>
+<td><code>NO_PV_PRODUCTION</code>, <code>FORCE_CHARGE_ACTIVE</code>, <code>DISCHARGE_NOT_ALLOWED</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>override</code></td>
+<td><code>applied</code></td>
+<td><code>EXTERNAL_DISCHARGE_BLOCK</code>, <code>EXTERNAL_DISCHARGE_UNBLOCK</code>, <code>GRID_CHARGE_LOCK</code>, <code>FORECAST_ERROR_FALLBACK</code>, <code>CALCULATION_FAILED</code>, <code>API_REQUEST</code> (input <code>requested_mode</code> shows the mode the API asked for, which can differ if it fell back)</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>override</code></td>
+<td><code>applied</code></td>
+<td><code>PV_CHARGE_RATE_CLAMPED</code>, <code>GRID_CHARGE_RATE_CLAMPED</code></td>
+<td>no (note, see below)</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>allow_discharging</code>, <code>limit_battery_charge_rate</code>, <code>avoid_discharging</code>, <code>force_charge</code></td>
+<td>reason of the decisive step</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<p><code>grid_recharge</code>/<code>no_charge</code> has five reasons for the same outcome, told
+apart purely from <code>high_price_slots</code>/<code>high_price_energy_demand</code>/
+<code>recharge_energy_before_minimum</code> (relative slot indices again, with
+<code>interval_minutes</code>) -- no separate flag is needed:
+- <code>GRID_CHARGE_LIMIT_REACHED</code>: SoC is already above the grid-charging
+  limit, so the calculation never ran and these stay at their defaults.
+- <code>NO_HIGH_PRICE_SLOTS</code>: it ran, but no slot in the window is priced high
+  enough to reserve or recharge for (<code>high_price_slots</code> is empty).
+- <code>HIGH_PRICE_DEMAND_COVERED_BY_PRODUCTION</code>: high-price slots exist, but
+  forecast solar production is expected to cover their demand
+  (<code>high_price_slots</code> non-empty, <code>high_price_energy_demand</code> is 0).
+- <code>NO_RECHARGE_REQUIRED</code>: demand remains after production, but stored
+  usable battery energy already covers it
+  (<code>recharge_energy_before_minimum</code> &lt;= 0).
+- <code>RECHARGE_BELOW_MINIMUM</code>: a real demand remained, but the resulting
+  amount is below the minimum charge amount, so nothing is charged for it
+  (<code>recharge_energy_before_minimum</code> &gt; 0).</p>
+<p>This step is only reached when the <code>discharge</code> step forbade discharging, so
+it is the decisive step of the Avoid Discharge mode. It therefore also
+carries <code>stored_usable_energy</code> and <code>reserved_energy</code> from that step, and its
+explanation says both why the battery is held and why it is not recharged
+from the grid, e.g. <code>battery is held for upcoming more expensive hours
+(usable 900 Wh, reserve 2500 Wh); no grid charging: solar is forecast to
+cover the demand of the hours where it would pay off</code>. The two are not a
+contradiction: the reserve counts every upcoming hour that is more
+expensive than now, grid charging only pays off for hours that are more
+expensive by at least the (dynamic) minimum price difference.</p>
+<p><code>core.py</code> applies two hardware/config-level clamps <em>after</em> the logic has
+already decided a value: <code>force_charge()</code> caps the grid recharge rate to
+<code>max_grid_charge_rate</code>, and <code>limit_battery_charge_rate()</code> caps the PV limit
+to <code>max_pv_charge_rate</code>/<code>min_pv_charge_rate</code>. When a clamp actually changes
+the value, it is recorded as a non-decisive <code>override</code>/<code>applied</code> step
+(<code>GRID_CHARGE_RATE_CLAMPED</code> / <code>PV_CHARGE_RATE_CLAMPED</code>, inputs <code>requested_w</code>
+and <code>applied_w</code>) between the step that decided the pre-clamp value and the
+<code>mode</code> record. Such a step is a <strong>note</strong>: it adjusts the value, but the
+reason for the mode stays with the decisive step, and the note is appended
+to its explanation in brackets (<code>DecisionTrace.explanation()</code>, reasons in
+<code>NOTE_REASONS</code>), e.g. <code>... so 1600 Wh is charged from the grid (charge rate
+capped from 3200 W to 1000 W by the configured maximum grid charge rate)</code>.
+So the "why" matches what was actually applied to the inverter without
+hiding why the mode was chosen. A clamp that does not change anything (the decided value
+was already within limits) adds no step. This only applies to mode changes
+made from within a control cycle (<code>Batcontrol.run()</code>); a direct API call
+(<code>api_set_charge_rate</code>/<code>api_set_limit_battery_charge_rate</code>) has no decision
+scope open at that point, so a clamp there is not yet recorded.</p>
+<p>The last record of every trace is the <code>mode</code> record. Its reason is borrowed
+from the decisive step, so its inputs start as a copy of that step's own
+inputs (needed for its <code>explanation()</code>/<code>why</code> to render correctly), with
+<code>mode</code>, the <code>control_source</code> (<code>optimizer</code> or <code>api</code>), <code>decided_by</code> (the
+decisive decision) and the <code>value</code> belonging to the mode in W (charge rate of
+force charge, PV limit of the limit mode, <code>null</code> for the other modes) applied
+on top.</p>
+<p>Reason codes are part of the interface: consumers may match on them, so they are
+not renamed lightly.</p>
+<h3 id="plain-language-explanations">Plain-language explanations<a class="headerlink" href="#plain-language-explanations" title="Permanent link">&para;</a></h3>
+<p><code>DecisionRecord.explanation()</code> renders one sentence for a reason code, meant
+for a human rather than the source code -- it is what ends up in the "Decision"
+sensor's state (<code>DecisionTrace.status_text()</code>) and as <code>why</code> in <code>to_dict()</code>
+(on the record; on the trace it is <code>DecisionTrace.explanation()</code>, the
+decisive step's sentence plus the notes). The
+mapping lives in <code>_REASON_EXPLANATIONS</code> (<code>decision_trace.py</code>): most entries
+are a plain string with <code>{input_key}</code> placeholders, filled in via
+<code>str.format(**record.inputs)</code> from the record's own inputs -- the same
+numbers already captured for the log line, so adding an explanation never
+needs a new input. A reason with no placeholders is used as-is. An entry can
+also be a function of the inputs, for a sentence that depends on the values
+rather than only showing them (<code>PV_CHARGE_LIMITED</code> names the purpose of each
+active peak shaving limit). If filling
+in the placeholders fails (a key is missing, e.g. because a record was built
+before an explanation existed for its reason), <code>explanation()</code> falls back to
+a readable version of the reason code itself and never raises.</p>
+<p>Guidelines for the sentence of a decisive reason: it answers "why is the
+inverter in this mode" (not why something else did not happen), and it does
+not repeat the value of the mode, which precedes it in the status text
+(<code>Limit Battery Charge 1200 W - PV charging is limited so ...</code>).</p>
+<h2 id="logging">Logging<a class="headerlink" href="#logging" title="Permanent link">&para;</a></h2>
+<p>Each record can render itself as one line (<code>DecisionRecord.summary()</code>). The
+logic classes log decisive steps at <code>INFO</code> and all other steps at <code>DEBUG</code>:</p>
+<div class="highlight"><pre><span></span><code>[Rule] Grid recharge decision: charge (GRID_RECHARGE_REQUIRED), current_price=0.200, min_dynamic_price_difference=0.050, stored_energy=2000.0 Wh, ...
+</code></pre></div>
+<p>Peak shaving and solar limit keep their existing <code>[PeakShaving]</code> and
+<code>[SolarLimit]</code> log lines; their records are only added to the trace.</p>
+<p>Some steps are added via <code>trace.step(...)</code> without a logger (peak shaving /
+solar limit skips, core.py's overrides) and are never logged individually.
+<code>core.py</code> logs the <strong>complete</strong> trace of every control cycle as one
+<code>DEBUG</code>-level block once it is final (<code>DecisionTrace.log_full_trace()</code>), so
+<code>loglevel: debug</code> always shows every step, including those. This duplicates
+the per-step lines above; that's the point of a DEBUG dump.</p>
+<div class="highlight"><pre><span></span><code>DEBUG Decision trace (3 steps):
+[Rule] Discharge decision: forbidden (RESERVE_REQUIRED), ...
+[Rule] Grid recharge decision: charge (GRID_RECHARGE_REQUIRED), ...
+[Rule] Mode decision: force_charge (GRID_RECHARGE_REQUIRED), mode=-1, control_source=optimizer, decided_by=grid_recharge, value=2133
+</code></pre></div>
+<h2 id="journal-and-status-change-listeners">Journal and status change listeners<a class="headerlink" href="#journal-and-status-change-listeners" title="Permanent link">&para;</a></h2>
+<p>Defined in <code>src/batcontrol/decision_journal.py</code>. <code>Batcontrol.decision_journal</code>
+holds the last 200 traces (in memory only, lost on restart).</p>
+<div class="highlight"><pre><span></span><code><span class="n">journal</span> <span class="o">=</span> <span class="n">batcontrol</span><span class="o">.</span><span class="n">decision_journal</span>
+
+<span class="n">journal</span><span class="o">.</span><span class="n">latest</span><span class="p">()</span>               <span class="c1"># trace of the most recent decision</span>
+<span class="n">journal</span><span class="o">.</span><span class="n">last_status_change</span><span class="p">()</span>   <span class="c1"># why the inverter is in its current state</span>
+<span class="n">journal</span><span class="o">.</span><span class="n">last_event</span><span class="p">()</span>           <span class="c1"># same, or a newer refresh of it (see below)</span>
+<span class="n">journal</span><span class="o">.</span><span class="n">history</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>            <span class="c1"># newest 10 traces, oldest first</span>
+</code></pre></div>
+<p>Every mode change, whether it comes from the optimizer, the MQTT API, evcc or
+a fallback, ends up in the journal. Listeners are called on a <strong>status change</strong>:</p>
+<table>
+<thead>
+<tr>
+<th><code>kind</code></th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mode</code></td>
+<td>The inverter mode changed (also once after start, with <code>previous_mode=None</code>)</td>
+</tr>
+<tr>
+<td><code>value</code></td>
+<td>The mode stayed the same, but its value changed by <strong>25 % or more</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The value of a mode is the charge rate in force charge (<code>-1</code>) and the PV limit
+in the limit mode (<code>8</code>). The modes allow discharging (<code>10</code>) and avoid
+discharging (<code>0</code>) have no value and only produce <code>mode</code> events.</p>
+<p>The change is measured against the value of the <strong>last event</strong>, not against the
+previous cycle. A charge rate that creeps up by 10 % per cycle (500, 550, 600,
+650 W) therefore produces an event at 650 W. A change from or to 0 W always
+counts. The factor is <code>DEFAULT_VALUE_CHANGE_FACTOR</code> (0.25) and can be set via
+<code>DecisionJournal(value_change_factor=...)</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">on_status_change</span><span class="p">(</span><span class="n">event</span><span class="p">):</span>        <span class="c1"># event: StatusChangeEvent</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">kind</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">previous_mode</span><span class="p">,</span> <span class="s1">'-&gt;'</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">mode</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">control_source</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">previous_value</span><span class="p">,</span> <span class="s1">'-&gt;'</span><span class="p">,</span> <span class="n">event</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>   <span class="c1"># previous_value: kind 'value' only</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">trace</span><span class="o">.</span><span class="n">status_text</span><span class="p">())</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>       <span class="c1"># JSON friendly, e.g. for a chat bot</span>
+
+<span class="n">batcontrol</span><span class="o">.</span><span class="n">decision_journal</span><span class="o">.</span><span class="n">add_listener</span><span class="p">(</span><span class="n">on_status_change</span><span class="p">)</span>
+</code></pre></div>
+<p>What a listener does is up to the listener. The journal only guarantees:</p>
+<ul>
+<li>The listener gets the complete trace of the decision that caused the event.</li>
+<li>A failing listener is logged and never affects the control loop or other
+  listeners.</li>
+<li>Listeners run <strong>synchronously</strong> in the thread that changed the mode
+  (scheduler or MQTT thread). Slow work such as network calls must be handed
+  over to a queue or a thread by the listener.</li>
+</ul>
+<p>Cycles without a status change do not call listeners; they are still stored in
+the journal and available via <code>latest()</code> and <code>history()</code>.</p>
+<h3 id="refresh-events">Refresh events<a class="headerlink" href="#refresh-events" title="Permanent link">&para;</a></h3>
+<p>A status change keeps its trace, so the numbers in its explanation get old
+while the mode stays the same (for example the usable energy of <code>Discharge
+Allowed</code> over several hours), and a new reason with the same mode would not
+show up at all. A listener that shows the explanation registers with
+<code>add_listener(listener, refresh=True)</code> and additionally gets events of
+<code>kind == 'refresh'</code> with the trace of the latest cycle when</p>
+<ul>
+<li>the reason of the decisive step changed, or</li>
+<li>the last event (of any kind) is <code>DEFAULT_REFRESH_INTERVAL</code> (15 minutes)
+  old.</li>
+</ul>
+<p>The check runs in <code>commit()</code>, i.e. once per control cycle (every 3 minutes),
+so no timer is needed. Refresh events have <code>previous_mode=None</code> and
+<code>previous_value=None</code>, and they do not move the reference of the status
+change detection: <code>last_status_change()</code> and the 25 % comparison stay at the
+last <code>mode</code>/<code>value</code> event. <code>last_event()</code> returns the newest event including
+refreshes. Listeners registered without <code>refresh=True</code> never see refresh
+events.</p>
+<h3 id="built-in-listener-home-assistant-decision-sensor">Built-in listener: Home Assistant "Decision" sensor<a class="headerlink" href="#built-in-listener-home-assistant-decision-sensor" title="Permanent link">&para;</a></h3>
+<p>If MQTT is enabled, <code>MqttApi.publish_status_change</code> is registered as listener
+with <code>refresh=True</code>.
+It publishes the mode with its value and reason as text on <code>&lt;base&gt;/decision</code>
+(e.g. <code>Charge from Grid 1250 W - Grid recharge required</code>) and the trace as JSON
+on <code>&lt;base&gt;/decision/attributes</code>. Both are retained. Home Assistant discovers
+them as the <strong>Decision</strong> sensor, with the JSON as attributes. The content
+changes on status changes and refresh events, not on every evaluation, so it
+is at most 15 minutes old. The last event (<code>last_event()</code>) is published again
+in every evaluation, like the mode, so an event that happened while the
+broker was unreachable reaches the sensor afterwards.
+The attributes are published first, and the text only if that publish's
+return code reports success, so the text topic never advances ahead of the
+attributes topic. The return code of the text publish is checked too; if
+it fails, the mismatch (attributes ahead of text) cannot be undone at that
+point, so it is only logged as a warning.</p>
+<h2 id="adding-a-decision-step">Adding a decision step<a class="headerlink" href="#adding-a-decision-step" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Add constants to <code>Decision</code>, <code>Outcome</code> and <code>Reason</code> if needed.</li>
+<li>Add a <code>DecisionRecord</code> where the decision is made, with the numbers that
+   explain it in <code>inputs</code>. Use <code>trace.add(record, logger)</code> to log it.</li>
+<li>Mark it <code>decisive=True</code> only if it determines the control settings.</li>
+<li>Add the unit of new numeric inputs to <code>_INPUT_FORMATS</code> in
+   <code>decision_trace.py</code>, otherwise they are printed unformatted.</li>
+<li>Add a plain-language entry for a new reason to <code>_REASON_EXPLANATIONS</code>,
+   with <code>{input_key}</code> placeholders for the numbers that explain it (see
+   "Plain-language explanations" above). Without one, the Decision sensor
+   and <code>why</code> fall back to the raw reason code.</li>
+<li>Keep reason strings ASCII-only.</li>
+<li>If an input is a relative slot index or a list of them (0 = the current
+   interval, not a clock time), add <code>interval_minutes</code> to the same record's
+   inputs so a consumer can turn a slot into an actual time span. See
+   <code>higher_price_slots</code>/<code>cheaper_price_slot</code> on the discharge rule and
+   <code>high_price_slots</code>/<code>recharge_window_end</code> on the grid recharge decision.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../solar-limit-evaluation/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Solar Feed-in Limit Evaluation">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Solar Feed-in Limit Evaluation
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../dashboard-spec/" class="md-footer__link md-footer__link--next" aria-label="Next: Dashboard Specification">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Dashboard Specification
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+        <script src="../../assets/js/vendor/chart.umd.js"></script>
+      
+        <script src="../../assets/js/peak-shaving-charts.js"></script>
+      
+    
+  </body>
+</html>
