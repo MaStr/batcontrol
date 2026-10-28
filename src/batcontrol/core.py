@@ -76,7 +76,6 @@ DELAY_EVALUATION_BY_SECONDS = 15  # Delay evaluation for x seconds at every trig
 TIME_BETWEEN_EVALUATIONS = EVALUATIONS_EVERY_MINUTES * 60
 TIME_BETWEEN_UTILITY_API_CALLS = 900  # 15 Minutes
 MIN_FORECAST_HOURS = 1  # Minimum required forecast hours
-FORECAST_TOLERANCE = 3  # Acceptable tolerance for forecast hours
 
 CONTROL_SOURCE_API = 'api'
 CONTROL_SOURCE_OPTIMIZER = 'optimizer'
@@ -777,10 +776,9 @@ class Batcontrol:
             consumption_forecast = self.fc_consumption.get_forecast(
                 requested_slots)
             if len(consumption_forecast) < requested_slots:
-                # Accept a shorter forecast horizon if not enough data is
-                # available
-                if len(consumption_forecast) < max(
-                        fc_period - FORECAST_TOLERANCE, MIN_FORECAST_HOURS):
+                # A shorter consumption forecast reduces the forecast horizon,
+                # like it does for prices and production
+                if len(consumption_forecast) < MIN_FORECAST_HOURS:
                     # Note: string formatting to avoid f-string multiline issues in <=Python3.11
                     raise RuntimeError(
                         "Not enough consumption forecast data available, requested %d, got %d" % (
