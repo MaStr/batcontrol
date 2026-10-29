@@ -2049,7 +2049,7 @@
     "description": "\nRead-only access to a running batcontrol instance: control state, battery,\nprice/solar/consumption forecasts and the decision trace that explains why\nbatcontrol chose the current inverter mode.\n\n**This API never changes anything.** Every endpoint is a GET. Runtime\noverrides stay on the MQTT API.\n\nConventions:\n\n* Timestamps are epoch **milliseconds** (the MQTT API uses seconds).\n* Energy is **Wh per forecast slot**; energy series also carry `power_w`, the\n  average power over the slot. At 15-minute resolution those differ by a\n  factor of four.\n* Prices are EUR/kWh with 4 decimals.\n* Forecast slot 0 is the interval containing the current time. Slots that\n  have passed since the last control cycle are not returned.\n",
     "summary": "Read-only API of a running batcontrol instance",
     "title": "batcontrol",
-    "version": "0.10.0"
+    "version": "0.10.1"
   },
   "openapi": "3.1.0",
   "paths": {
