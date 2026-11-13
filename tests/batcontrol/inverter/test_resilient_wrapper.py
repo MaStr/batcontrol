@@ -5,7 +5,7 @@ Behaviour under test:
 2. After initialization: any failure raises InverterCommunicationError so the
    caller can skip the cycle. No caching - nothing is returned on failure.
 3. After the outage tolerance expires: InverterOutageError is raised.
-4. Successful calls reset the outage tracking (automatic recovery).
+4. Recovery of failed operations resets tracking; unrelated successes do not.
 """
 
 import pytest

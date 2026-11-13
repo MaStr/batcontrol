@@ -44,7 +44,8 @@ class DynamicTariffBaseclass(TariffInterface):
     def __init__(self, timezone, min_time_between_API_calls,
                  delay_evaluation_by_seconds,
                  target_resolution: int = 60,
-                 native_resolution: int = 60) -> None:
+                 native_resolution: int = 60,
+                 persistence_path=None) -> None:
         """Initialize tariff baseclass with resolution handling.
 
         Args:
@@ -53,6 +54,7 @@ class DynamicTariffBaseclass(TariffInterface):
             delay_evaluation_by_seconds: Random delay before API calls
             target_resolution: Target resolution in minutes (what core.py expects: 15 or 60)
             native_resolution: Native resolution in minutes (what provider returns: 15 or 60)
+            persistence_path: Optional restart-cache file for the raw response.
         """
         self.timezone = timezone
         self.min_time_between_updates = min_time_between_API_calls
@@ -62,7 +64,7 @@ class DynamicTariffBaseclass(TariffInterface):
 
         self.raw_data = {}
         self.next_update_ts = 0
-        self.cache = RelaxedCaching()
+        self.cache = RelaxedCaching(persistence_path=persistence_path)
         self._refresh_data_lock = threading.Lock()
 
         logger.info(
@@ -109,7 +111,8 @@ class DynamicTariffBaseclass(TariffInterface):
                     self.next_update_ts = time.time() + self.min_time_between_updates
                     self.schedule_next_refresh()
                 except (ConnectionError, TimeoutError) as e:
-                    logger.error('Error getting raw tariff data: %s', e)
+                    logger.error('Error getting raw tariff data (%s)',
+                                 type(e).__name__)
                     logger.warning('Using cached raw tariff data')
 
     def get_prices(self) -> dict[int, float]:

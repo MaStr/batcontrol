@@ -40,7 +40,7 @@ This is the recommended way to run batcontrol for most users.
 ### Setup
 
 ```sh
-mkdir -p ./config ./logs
+mkdir -p ./config ./logs ./data
 ```
 
 ### Plain Docker
@@ -50,6 +50,7 @@ docker run -d \
   --name batcontrol \
   -v /path/to/config:/app/config \
   -v /path/to/logs:/app/logs \
+  -v /path/to/data:/app/data \
   mastr950/batcontrol:latest
 ```
 
@@ -64,6 +65,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
+      - ./data:/app/data
     restart: unless-stopped
 ```
 
@@ -94,6 +96,7 @@ docker run -d \
   -p 8080:8080 \
   -v /path/to/config:/app/config \
   -v /path/to/logs:/app/logs \
+  -v /path/to/data:/app/data \
   mastr950/batcontrol:latest
 ```
 
@@ -106,6 +109,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
+      - ./data:/app/data
     restart: unless-stopped
 ```
 
@@ -124,6 +128,7 @@ docker run -d \
   --name batcontrol \
   -v /path/to/config:/app/config \
   -v /path/to/logs:/app/logs \
+  -v /path/to/data:/app/data \
   -e TZ=Europe/Berlin \
   mastr950/batcontrol:latest
 ```
@@ -137,6 +142,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
+      - ./data:/app/data
     environment:
       - TZ=Europe/Berlin
     restart: unless-stopped
@@ -165,6 +171,73 @@ Place your `batcontrol_config.yaml` in the `config/` directory, then run:
 python -m batcontrol
 ```
 
+## Application data and provider caches
+
+Batcontrol uses one shared data directory, independent of the configuration file:
+
+| Deployment | Data directory |
+|---|---|
+| Local Python | `./data`, relative to the working directory |
+| Docker | `/app/data` |
+| Home Assistant add-on | `/data/data`, inside HA's persistent `/data` volume |
+
+Use `--data-dir PATH` to select another directory. For a service, an absolute path
+avoids depending on its working directory. No YAML or HA schema setting is needed.
+
+All solar providers and tariff providers using `RelaxedCaching` save their latest
+raw responses under `data/cache/solar/` and `data/cache/tariff/`. Providers have
+separate subdirectories, and each solar installation has one file named with a
+hash of its name. Configuration and credentials are not copied into cache files;
+provider responses may still contain private installation or household data.
+Files are atomically replaced with owner-only (`0600`) permissions.
+
+On startup, providers load usable cached responses and attempt their normal
+refresh. If the provider is unavailable, the cached response remains usable only
+until its original TTL expires. The default TTL is 12 hours; the HA solar
+provider also honors its existing `cache_ttl_hours` setting. Restart never renews
+the fetch timestamp. Missing, expired, corrupt, or unwritable cache files leave
+the existing in-memory cache and no-data fallback behavior in place.
+
+Persist raw timestamped responses rather than relative forecast slots so the
+provider can recalculate the remaining forecast at the current time. HA solar's
+automatic unit detection can use unit metadata from a usable cached response.
+Local CSV consumption profiles and the separate dynamic network-fee fetcher are
+outside this cache's scope.
+
+For Docker, use a bind mount as shown above or a named volume at `/app/data`.
+The Dockerfile also declares that path as a volume, but an automatically created
+anonymous volume is not reliably reused when replacing a container.
+
+### Clearing the cache
+
+After stopping any existing controller instance, start once with:
+
+```sh
+python -m batcontrol --data-dir ./data --clear-cache
+```
+
+`--clear-cache` removes only the `cache` subdirectory, including entries for
+inactive providers, before providers are initialized. Batcontrol then starts
+normally and can save new responses. If deletion fails, startup aborts rather
+than silently loading the old cache. Omit the flag on subsequent starts.
+
+Both container entrypoints forward CLI arguments. For a one-time Docker Compose
+startup, temporarily set:
+
+```yaml
+command: ["/bin/sh", "/app/entrypoint.sh", "--clear-cache"]
+```
+
+Remove that command after the maintenance start so future restarts retain cache.
+For deployments without access to startup arguments, including HA's add-on UI,
+stop the controller and delete only the `cache` subdirectory from its persistent
+data volume, then start it again. Never run a second controller to clear cache.
+
+Clear the cache after changing a site's geometry, a forecast sensor, or a tariff
+account/market if the previous response no longer describes that configuration.
+Provider separation prevents cross-provider reuse; cache identity does not hash
+all configuration values.
+
 ## Inverter Preparation
 
 Before the first run, verify the following:
@@ -186,7 +259,7 @@ After the first successful start, work through this in order:
 
 4. **Configure your tariff provider.** If you use a dynamic provider (Tibber, aWATTar, etc.), set the correct type and API key. For a flat rate, use `tariff_zones` with a single zone price — batcontrol will still run peak shaving.
 
-5. **Review battery charge limits.** The defaults (`max_charging_from_grid_limit: 89%`, `always_allow_discharge_limit: 90%`) are conservative starting values. Adjust them to match your usage patterns after a few days of observation.
+5. **Review battery charge limits.** The defaults (`max_charging_from_grid_limit: 80%`, `always_allow_discharge_limit: 90%`) are conservative starting values. Adjust them to match your usage patterns after a few days of observation.
 
 6. **Enable peak shaving** (optional). If your PV installation frequently reaches full battery charge before midday, enable peak shaving to spread the charging and keep buffer capacity for the afternoon. Requires `peak_shaving.enabled: true`. See [Peak Shaving](../features/peak-shaving.md).
 

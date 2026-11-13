@@ -16,6 +16,7 @@ Raises:
                      or if the provider type is unknown.
 """
 import logging
+from pathlib import Path
 
 from ..value_utils import get_config_value
 from .awattar import Awattar
@@ -36,7 +37,8 @@ class DynamicTariff:
                               min_time_between_api_calls,
                               delay_evaluation_by_seconds,
                               target_resolution: int = 60,
-                              nf_cfg: dict = None
+                              nf_cfg: dict = None,
+                              persistent_cache_directory=None,
                               ) -> TariffInterface:
         """ Select and configure a dynamic tariff provider based on the given configuration
 
@@ -46,11 +48,20 @@ class DynamicTariff:
             min_time_between_api_calls: Minimum seconds between API calls
             delay_evaluation_by_seconds: Random delay before API calls
             target_resolution: Target resolution in minutes (15 or 60)
+            persistent_cache_directory: Optional root for provider-specific caches.
         """
         selected_tariff = None
         provider = config.get('type')
         if not provider:
-            raise RuntimeError('[DynamicTariff] Missing required field "type" in utility config')
+            raise RuntimeError(
+                '[DynamicTariff] Missing required field "type" in utility config')
+
+        cache_options = {}
+        if persistent_cache_directory is not None:
+            cache_options['persistence_path'] = (
+                Path(persistent_cache_directory) /
+                provider.lower() / 'raw.json'
+            )
 
         nf_cfg = nf_cfg or {}
         network_fees_enabled = nf_cfg.get('enabled', False)
@@ -86,7 +97,8 @@ class DynamicTariff:
                 timezone, 'at',
                 min_time_between_api_calls,
                 delay_evaluation_by_seconds,
-                target_resolution=target_resolution
+                target_resolution=target_resolution,
+                **cache_options,
             )
             selected_tariff.set_price_parameters(vat, fees, markup)
             if network_fees_fetcher is not None:
@@ -106,7 +118,8 @@ class DynamicTariff:
                 timezone, 'de',
                 min_time_between_api_calls,
                 delay_evaluation_by_seconds,
-                target_resolution=target_resolution
+                target_resolution=target_resolution,
+                **cache_options,
             )
             selected_tariff.set_price_parameters(vat, fees, markup)
             if network_fees_fetcher is not None:
@@ -124,7 +137,8 @@ class DynamicTariff:
                 token,
                 min_time_between_api_calls,
                 delay_evaluation_by_seconds,
-                target_resolution=target_resolution
+                target_resolution=target_resolution,
+                **cache_options,
             )
 
         elif provider.lower() == 'evcc':
@@ -139,7 +153,8 @@ class DynamicTariff:
                 timezone,
                 url,
                 min_time_between_api_calls,
-                target_resolution=target_resolution
+                target_resolution=target_resolution,
+                **cache_options,
             )
 
         elif provider.lower() == 'energyforecast' or provider.lower() == 'energyforecast_96':
@@ -169,7 +184,8 @@ class DynamicTariff:
                 min_time_between_api_calls,
                 delay_evaluation_by_seconds,
                 target_resolution=target_resolution,
-                market_zone=market_zone
+                market_zone=market_zone,
+                **cache_options,
             )
             selected_tariff.set_price_parameters(vat, fees, markup)
             if network_fees_fetcher is not None:
@@ -201,7 +217,8 @@ class DynamicTariff:
                 delay_evaluation_by_seconds,
                 target_resolution=target_resolution,
                 market_zone=market_zone,
-                use_total_price=True
+                use_total_price=True,
+                **cache_options,
             )
 
         elif provider.lower() == 'tariff_zones':
@@ -251,6 +268,7 @@ class DynamicTariff:
                 tariff_zone_3=float(
                     tariff_zone_3) if tariff_zone_3 is not None else None,
                 zone_3_hours=zone_3_hours,
+                **cache_options,
             )
 
         else:

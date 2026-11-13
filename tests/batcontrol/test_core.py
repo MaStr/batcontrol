@@ -239,6 +239,55 @@ class TestTimeResolutionString:
         assert isinstance(bc.time_resolution, int)
         assert bc.time_resolution == expected_int
 
+    def test_invalid_time_resolution_names_the_value(self, base_mock_config):
+        """Regression: the message used to contain a literal '%s'."""
+        base_mock_config['time_resolution_minutes'] = 30
+        with pytest.raises(ValueError, match="got '30'"):
+            Batcontrol(base_mock_config)
+
+    def test_missing_timezone_is_reported(self, base_mock_config):
+        """Regression: the handler itself raised a bare KeyError."""
+        del base_mock_config['timezone']
+        with pytest.raises(RuntimeError, match="'timezone' is missing"):
+            Batcontrol(base_mock_config)
+
+    @pytest.mark.parametrize('value', ['Mars/Phobos', 42])
+    def test_invalid_timezone_names_the_value(self, base_mock_config, value):
+        base_mock_config['timezone'] = value
+        with pytest.raises(RuntimeError, match='not valid') as excinfo:
+            Batcontrol(base_mock_config)
+        assert repr(value) in str(excinfo.value)
+
+    @patch('batcontrol.core.tariff_factory.create_tarif_provider')
+    @patch('batcontrol.core.inverter_factory.create_inverter')
+    @patch('batcontrol.core.solar_factory.create_solar_provider')
+    @patch('batcontrol.core.consumption_factory.create_consumption')
+    def test_shared_data_directory_is_forwarded_to_provider_factories(
+        self, mock_consumption, mock_solar, mock_inverter_factory, mock_tariff,
+        base_mock_config, tmp_path
+    ):
+        """Solar and tariff caches share one explicit application data root."""
+        mock_inverter = MagicMock()
+        mock_inverter.get_max_capacity = MagicMock(return_value=10000)
+        mock_inverter_factory.return_value = mock_inverter
+        mock_tariff.return_value = MagicMock()
+        mock_solar.return_value = MagicMock()
+        mock_consumption.return_value = MagicMock()
+
+        Batcontrol(
+            base_mock_config,
+            data_directory=tmp_path,
+        )
+
+        assert (
+            mock_solar.call_args.kwargs['persistent_cache_directory']
+            == tmp_path / 'cache' / 'solar'
+        )
+        assert (
+            mock_tariff.call_args.kwargs['persistent_cache_directory']
+            == tmp_path / 'cache' / 'tariff'
+        )
+
     @pytest.mark.parametrize('resolution_str', ['60', '15'])
     def test_logic_factory_accepts_string_resolution_as_int(self, resolution_str):
         """Logic factory must produce a valid logic instance when given an int resolution"""
@@ -604,6 +653,102 @@ class TestCoreRunDispatch:
         )
 
         return Batcontrol(mock_config), fake_logic
+
+    def test_run_reduces_horizon_to_short_consumption_forecast(
+            self, mock_config, mocker):
+        """A consumption forecast shorter than prices/production shortens
+        the horizon instead of raising (regression: HA consumption is
+        limited to 48h while prices and production reach further)."""
+        bc, fake_logic = self._make_batcontrol_for_grid_charge_target(
+            mock_config,
+            mocker,
+            prices={i: 0.3 for i in range(10)},
+            production={i: 0 for i in range(10)},
+            consumption={0: 500, 1: 500, 2: 500},
+        )
+        handle_error = mocker.patch.object(bc, 'handle_forecast_error')
+
+        try:
+            bc.run()
+
+            handle_error.assert_not_called()
+            bc.fc_consumption.get_forecast.assert_called_once_with(10)
+            calc_input = fake_logic.calculate.call_args.args[0]
+            assert len(calc_input.consumption) == 3
+            assert len(calc_input.prices) == 3
+        finally:
+            bc.shutdown()
+
+    def test_run_treats_empty_consumption_forecast_as_error(
+            self, mock_config, mocker):
+        bc, fake_logic = self._make_batcontrol_for_grid_charge_target(
+            mock_config,
+            mocker,
+            prices={i: 0.3 for i in range(6)},
+            production={i: 0 for i in range(6)},
+            consumption={},
+        )
+        handle_error = mocker.patch.object(bc, 'handle_forecast_error')
+
+        try:
+            bc.run()
+
+            handle_error.assert_called_once()
+            fake_logic.calculate.assert_not_called()
+        finally:
+            bc.shutdown()
+
+    @pytest.mark.parametrize('source', ['prices', 'production', 'consumption'])
+    def test_run_treats_gap_in_forecast_as_error(
+            self, mock_config, mocker, source):
+        """A missing slot in provider data is a forecast error, it must not
+        raise out of run() and end the process."""
+        forecasts = {
+            'prices': {i: 0.3 for i in range(4)},
+            'production': {i: 0 for i in range(4)},
+            'consumption': {i: 500 for i in range(4)},
+        }
+        del forecasts[source][2]
+        bc, fake_logic = self._make_batcontrol_for_grid_charge_target(
+            mock_config, mocker, **forecasts)
+        handle_error = mocker.patch.object(bc, 'handle_forecast_error')
+
+        try:
+            bc.run()
+
+            handle_error.assert_called_once()
+            fake_logic.calculate.assert_not_called()
+        finally:
+            bc.shutdown()
+
+    def test_run_falls_back_to_discharge_when_calculation_raises(
+            self, run_dispatch_setup, caplog):
+        """An exception inside the logic must not end the process; the
+        cycle falls back to allow discharging."""
+        bc, mock_inverter, fake_logic = run_dispatch_setup
+        fake_logic.calculate.side_effect = ZeroDivisionError('boom')
+
+        with caplog.at_level(logging.ERROR, logger='batcontrol.core'):
+            bc.run()
+
+        mock_inverter.set_mode_allow_discharge.assert_called_once_with()
+        mock_inverter.set_mode_force_charge.assert_not_called()
+        mock_inverter.set_mode_avoid_discharge.assert_not_called()
+        fake_logic.get_inverter_control_settings.assert_not_called()
+        assert any('Calculation raised an exception' in record.message
+                   and record.exc_info for record in caplog.records)
+        last_event = bc.decision_journal.last_event()
+        assert last_event.trace.decisive_record().reason == 'CALCULATION_FAILED'
+
+    def test_run_falls_back_to_discharge_when_calculation_returns_false(
+            self, run_dispatch_setup):
+        bc, mock_inverter, fake_logic = run_dispatch_setup
+        fake_logic.calculate.return_value = False
+
+        bc.run()
+
+        mock_inverter.set_mode_allow_discharge.assert_called_once_with()
+        fake_logic.get_inverter_control_settings.assert_not_called()
 
     def test_run_passes_grid_charge_target_config_to_logic(
             self, mock_config, mocker):
@@ -1469,6 +1614,112 @@ class TestChargeRateMultiplierWiring:
         config['battery_control_expert'] = invalid_value
         with pytest.raises(ValueError, match="battery_control_expert"):
             Batcontrol(config)
+
+
+class TestExpertConfigValidation:
+    """Invalid battery_control_expert values stop batcontrol at startup, with
+    a message naming the key - not later inside a grid recharge calculation."""
+
+    BASE_CONFIG = TestMarketPriceRefresh.BASE_CONFIG
+    _patch_core = TestChargeRateMultiplierWiring._patch_core
+
+    def setup_method(self):
+        CommonLogic._instance = None
+
+    def teardown_method(self):
+        CommonLogic._instance = None
+
+    @pytest.mark.parametrize("key, invalid_value", [
+        ('soften_price_difference_on_charging_factor', 0),
+        ('soften_price_difference_on_charging_factor', -5),
+        ('soften_price_difference_on_charging_factor', 'five'),
+        ('soften_price_difference_on_charging_factor', None),
+        ('soften_price_difference_on_charging', 'maybe'),
+        ('soften_price_difference_on_charging', 2),
+        ('spread_grid_charge_over_charge_window', 'sometimes'),
+        ('round_price_digits', 2.5),
+        ('round_price_digits', 'four'),
+        ('round_price_digits', True),
+        ('production_offset_percent', -0.1),
+        ('production_offset_percent', 'snow'),
+        ('preserve_min_grid_charge_soc', 'perhaps'),
+    ])
+    def test_invalid_expert_value_raises_at_startup(
+            self, mocker, key, invalid_value):
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control_expert'] = {key: invalid_value}
+        with pytest.raises(
+                ValueError, match=f"battery_control_expert.{key}") as excinfo:
+            Batcontrol(config)
+        assert repr(invalid_value) in str(excinfo.value) \
+            or type(invalid_value).__name__ in str(excinfo.value)
+
+    def test_string_values_of_a_form_field_are_parsed(self, mocker):
+        """"false" must not be treated as enabled, "2" must be usable as a
+        number of digits."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control_expert'] = {
+            'soften_price_difference_on_charging': 'false',
+            'soften_price_difference_on_charging_factor': '5',
+            'spread_grid_charge_over_charge_window': 'False',
+            'round_price_digits': '2',
+            'production_offset_percent': '0.8',
+            'preserve_min_grid_charge_soc': 'true',
+        }
+        bc = Batcontrol(config)
+        try:
+            assert bc.round_price_digits == 2
+            assert bc.production_offset_percent == 0.8
+            assert bc.preserve_min_grid_charge_soc is True
+            logic = LogicFactory.create_logic(
+                60, config, datetime.timezone.utc)
+            assert logic.soften_price_difference_on_charging is False
+            assert logic.soften_price_difference_on_charging_factor == 5.0
+            assert logic.spread_grid_charge_over_charge_window is False
+            assert logic.round_price_digits == 2
+        finally:
+            bc.shutdown()
+
+    def test_template_values_are_accepted(self, mocker):
+        """The values of config/batcontrol_config_dummy.yaml stay valid."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control_expert'] = {
+            'charge_rate_multiplier': 1.1,
+            'soften_price_difference_on_charging': False,
+            'soften_price_difference_on_charging_factor': 5,
+            'spread_grid_charge_over_charge_window': True,
+            'round_price_digits': 4,
+            'production_offset_percent': 1.0,
+            'preserve_min_grid_charge_soc': False,
+        }
+        bc = Batcontrol(config)
+        bc.shutdown()
+
+    @pytest.mark.parametrize("rate, expected", [
+        (5000, 5000.0), (3600.5, 3600.5), (0, 0.0), (-1, 0.0),
+        (None, 0.0), (True, 0.0), ('5000', 0.0),
+    ])
+    def test_known_max_grid_charge_rate(self, mocker, rate, expected):
+        """Only a real positive number is handed to the logic as the maximum
+        grid charge rate; anything else counts as unknown (0)."""
+        self._patch_core(mocker)
+        bc = Batcontrol(dict(self.BASE_CONFIG))
+        try:
+            bc.inverter.max_grid_charge_rate = rate
+            assert bc._known_max_grid_charge_rate() == expected
+        finally:
+            bc.shutdown()
+
+    def test_mock_inverter_rate_counts_as_unknown(self, mocker):
+        self._patch_core(mocker)
+        bc = Batcontrol(dict(self.BASE_CONFIG))
+        try:
+            assert bc._known_max_grid_charge_rate() == 0.0
+        finally:
+            bc.shutdown()
 
 
 class TestApiSetGridChargeLock:

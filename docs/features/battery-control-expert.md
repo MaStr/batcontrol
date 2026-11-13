@@ -20,10 +20,58 @@ With a multiplier value of 1.0, you may observe that the charging power ramps up
 
 ![Example pic for different charge_rate_multiplier](../assets/charge_rate_multiplier.png)
 
+# When grid charging starts
+
+Batcontrol charges as late as possible: as long as a following slot is not more expensive than the
+current one, charging for the expensive hours behind it is left to that later slot. On a rising
+price curve this means charging happens at the lowest point.
+
+A later slot can only take over what the inverter is able to charge in it. Batcontrol therefore
+checks the following cheaper (or equally cheap) slots against `max_grid_charge_rate`:
+
+```
+capacity of one later slot = max_grid_charge_rate / max(charge_rate_multiplier, 1) * slot length
+charged now                = demand of the expensive hours - capacity of the cheaper slots before them
+```
+
+A `charge_rate_multiplier` below 1 is allowed and lowers the requested charge rate as usual. For
+this capacity check it counts as 1: the inverter cannot charge more than `max_grid_charge_rate`,
+and assuming more would defer charging for too long.
+
+Only the part the later slots cannot deliver is charged in the current slot. Everything else is
+still deferred.
+
+Example with 15-minute slots, `max_grid_charge_rate: 5000` and `charge_rate_multiplier: 1.1` (one
+slot can charge about 1.14 kWh): the price is 0.20 €/kWh until 04:00 and 0.40 €/kWh afterwards, the
+expensive block needs 4 kWh and the battery is empty.
+
+| Time | Cheap slots still to come | They can charge | Charged in this slot |
+|------|---------------------------|-----------------|----------------------|
+| 02:00 | 7 | 7.95 kWh | nothing, enough time left |
+| 03:00 | 3 | 3.41 kWh | 0.6 kWh missing, charging starts |
+| 03:15 - 03:45 | 2, 1, 0 | 2.27 / 1.14 / 0 kWh | maximum rate |
+
+Before 0.10.2 batcontrol waited for the last cheap slot (03:45) in this situation and then
+requested the whole 4 kWh within 15 minutes. The inverter capped that at `max_grid_charge_rate`,
+so only about 1.1 kWh arrived in the battery. This affected price plateaus (static tariff zones)
+in particular, and any single cheap slot that is too short for the demand behind it.
+
+The same applies to `min_grid_charge_soc`: the part of the target the following cheaper slots can
+still charge is deferred to them.
+
+The [decision trace](../development/decision-trace.md) shows this case with the reason
+`GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT` and the inputs `deferrable_energy` and
+`max_grid_charge_rate`.
+
+!!! note
+    The check only decides **how much has to be charged now**. It does not change which slots count
+    as cheap or expensive, and it does not change `soften_price_difference_on_charging` or the
+    charging window described below.
+
 # Adjust Charging pricepoint
 * Config options:
   * `soften_price_difference_on_charging` ; true / false  - Enable / Disable
-  * `soften_price_difference_on_charging_factor` ; 5
+  * `soften_price_difference_on_charging_factor` ; 5 - any number greater than 0
 * Default: disabled
 
 By default, Batcontrol checks:
@@ -177,12 +225,12 @@ In optimal conditions, your system might consistently outperform forecasts. A sl
 ### Example Impact
 
 Assume:
-- Forecasted solar production: 5,000 W
+- Forecasted solar production in a slot: 5,000 Wh
 - `production_offset_percent: 0.8` (winter mode)
 
 Then:
-- **Adjusted forecast**: 5,000 W × 0.8 = 4,000 W
-- Batcontrol will base its decisions on 4,000 W instead of 5,000 W
+- **Adjusted forecast**: 5,000 Wh × 0.8 = 4,000 Wh
+- Batcontrol will base its decisions on 4,000 Wh instead of 5,000 Wh for that slot
 
 This conservative approach prevents Batcontrol from over-planning battery discharge based on overly optimistic solar forecasts.
 
@@ -191,7 +239,48 @@ This conservative approach prevents Batcontrol from over-planning battery discha
 When `production_offset_percent` differs from `1.0`, Batcontrol logs the adjustment:
 
 ```
-Production forecast adjusted by 80% (factor: 0.8)
+Production offset active: 80.0% (multiplier: 0.800)
 ```
 
 This helps you verify that your offset setting is being applied correctly.
+
+# Market Price Refresh Time
+* Config option: `market_price_refresh_time`
+* Default: `"12:30"`
+
+## market_price_refresh_time
+
+Once a day batcontrol forces a refresh of the dynamic tariff prices, regardless of what the price cache holds, to pick up newly published next-day prices (for example EPEX spot prices, published around 12:00 UTC).
+
+```
+battery_control_expert:
+  market_price_refresh_time: "12:30"
+```
+
+- The value is a time of day as `"HH:MM"` in **UTC**, not in your local time zone.
+- The value is validated at startup. An invalid value (for example `"25:00"` or `"12.30"`) aborts startup with a `ValueError`.
+- When the refresh runs, batcontrol logs `Hard price refresh at HH:MM UTC - fetching fresh market prices`.
+
+# Valid values
+
+The expert values are checked when batcontrol starts. An invalid value stops the start with a
+message that names the key and the value, for example:
+
+```
+ValueError: battery_control_expert.soften_price_difference_on_charging_factor must be a positive number, got 0
+```
+
+| Parameter | Valid values |
+|-----------|--------------|
+| `charge_rate_multiplier` | number greater than 0 |
+| `soften_price_difference_on_charging` | `true` / `false` |
+| `soften_price_difference_on_charging_factor` | number greater than 0 (it is used as a divisor) |
+| `spread_grid_charge_over_charge_window` | `true` / `false` |
+| `round_price_digits` | whole number |
+| `production_offset_percent` | number, 0 or greater |
+| `preserve_min_grid_charge_soc` | `true` / `false` |
+| `market_price_refresh_time` | time of day as `"HH:MM"` (UTC) |
+
+Booleans may also be written as `yes` / `no`, `on` / `off` or `1` / `0`, and numbers as text
+(`"5"`), which is what a form field of the Home Assistant add-on delivers. The text `"false"` is
+read as `false`.

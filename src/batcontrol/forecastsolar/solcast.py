@@ -36,7 +36,8 @@ class Solcast(ForecastSolarBaseclass):
     """
 
     def __init__(self, pvinstallations, timezone, min_time_between_api_calls,
-                 delay_evaluation_by_seconds, target_resolution=60) -> None:
+                 delay_evaluation_by_seconds, target_resolution=60,
+                 persistent_cache_directory=None) -> None:
         """ Initialize the Solcast class
 
         Args:
@@ -47,6 +48,7 @@ class Solcast(ForecastSolarBaseclass):
             min_time_between_api_calls: Minimum seconds between API calls
             delay_evaluation_by_seconds: Delay for API evaluation
             target_resolution: Target resolution in minutes (15 or 60)
+            persistent_cache_directory: Optional directory for restart-safe raw data.
         """
         # Free hobbyist tier allows 10 API requests/day; each installation
         # costs one request per refresh. Budget 8 refresh cycles/day to keep
@@ -56,7 +58,8 @@ class Solcast(ForecastSolarBaseclass):
                          max(min_time_between_api_calls, self._provider_min),
                          delay_evaluation_by_seconds,
                          target_resolution=target_resolution,
-                         native_resolution=30)  # Solcast provides 30-minute data
+                         native_resolution=30,
+                         persistent_cache_directory=persistent_cache_directory)
 
         for unit in pvinstallations:
             name = unit.get('name')

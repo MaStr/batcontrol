@@ -15,6 +15,7 @@ import time
 import os
 import logging
 import platform
+from pathlib import Path
 import functools
 import contextlib
 import threading
@@ -30,6 +31,7 @@ from .evcc_api import EvccApi
 from .scheduler import SchedulerThread
 
 from .logic import Logic as LogicFactory
+from .logic.logic import parse_logic_expert_settings
 from .logic import CalculationInput, CalculationParameters
 from .logic import CommonLogic
 from .logic import PeakShavingConfig
@@ -63,7 +65,9 @@ from .runtime_state import (
     SolarMetrics, as_number, cap_reserved_energy,
 )
 from .value_utils import (
+    parse_bool_config,
     parse_bool_flag,
+    parse_non_negative_number,
     parse_optional_ratio,
     parse_positive_number,
 )
@@ -74,8 +78,9 @@ DELAY_EVALUATION_BY_SECONDS = 15  # Delay evaluation for x seconds at every trig
 # Interval between evaluations in seconds
 TIME_BETWEEN_EVALUATIONS = EVALUATIONS_EVERY_MINUTES * 60
 TIME_BETWEEN_UTILITY_API_CALLS = 900  # 15 Minutes
-MIN_FORECAST_HOURS = 1  # Minimum required forecast hours
-FORECAST_TOLERANCE = 3  # Acceptable tolerance for forecast hours
+# Minimum number of forecast slots (at time_resolution_minutes) a control
+# cycle needs. A shorter forecast is treated as a forecast error.
+MIN_FORECAST_SLOTS = 1
 
 CONTROL_SOURCE_API = 'api'
 CONTROL_SOURCE_OPTIMIZER = 'optimizer'
@@ -114,7 +119,7 @@ class Batcontrol:
     """ Main class for Batcontrol, handles the logic and control of the battery system """
     general_logic = None  # type: CommonLogic
 
-    def __init__(self, configdict: dict):
+    def __init__(self, configdict: dict, data_directory=None):
         # For API
         self.api_overwrite = False
         # -1 = charge from grid, 0 = avoid discharge,
@@ -176,13 +181,11 @@ class Batcontrol:
             self.time_resolution = time_resolution_raw
 
         if self.time_resolution not in [15, 60]:
-            # Note: Python3.11 had issue with f-strings and multiline. Using format() here.
-            error_message = "time_resolution_minutes must be either " + \
-                "15 (quarter-hourly) or 60 (hourly), " + \
-                " got '%s'.".format(self.time_resolution) + \
-                " Please update your configuration file."
-
-            raise ValueError(error_message)
+            raise ValueError(
+                "time_resolution_minutes must be either 15 (quarter-hourly) "
+                f"or 60 (hourly), got '{self.time_resolution}'. "
+                "Please update your configuration file."
+            )
 
         self.intervals_per_hour = 60 // self.time_resolution
         logger.info(
@@ -191,14 +194,20 @@ class Batcontrol:
             self.intervals_per_hour
         )
 
-        try:
-            tzstring = config['timezone']
-            self.timezone = pytz.timezone(tzstring)
-        except KeyError:
+        tzstring = config.get('timezone')
+        if tzstring is None:
             raise RuntimeError(
-                f"Config Entry in general: timezone {config['timezone']} " +
-                "not valid. Try e.g. 'Europe/Berlin'"
+                "Config entry 'timezone' is missing. "
+                "Set it to e.g. 'Europe/Berlin'"
             )
+        try:
+            self.timezone = pytz.timezone(tzstring)
+        except (pytz.UnknownTimeZoneError, AttributeError) as exc:
+            # AttributeError: pytz calls .upper() on a non-string value
+            raise RuntimeError(
+                f"Config entry 'timezone' is not valid: {tzstring!r}. "
+                "Try e.g. 'Europe/Berlin'"
+            ) from exc
 
         try:
             tz = os.environ['TZ']
@@ -221,7 +230,11 @@ class Batcontrol:
             TIME_BETWEEN_UTILITY_API_CALLS,
             DELAY_EVALUATION_BY_SECONDS,
             target_resolution=self.time_resolution,
-            nf_cfg=config.get('dynamic_network_fees', {})
+            nf_cfg=config.get('dynamic_network_fees', {}),
+            persistent_cache_directory=(
+                Path(data_directory) / 'cache' / 'tariff'
+                if data_directory is not None else None
+            ),
         )
 
         self.inverter = inverter_factory.create_inverters(
@@ -253,7 +266,11 @@ class Batcontrol:
             DELAY_EVALUATION_BY_SECONDS,
             requested_provider=config.get(
                 'solar_forecast_provider', 'fcsolarapi'),
-            target_resolution=self.time_resolution
+            target_resolution=self.time_resolution,
+            persistent_cache_directory=(
+                Path(data_directory) / 'cache' / 'solar'
+                if data_directory is not None else None
+            ),
         )
 
         self.fc_consumption = consumption_factory.create_consumption(
@@ -337,16 +354,24 @@ class Batcontrol:
         self.production_offset_percent = 1.0  # Default: no offset
         self.market_price_refresh_time = "12:30"
 
+        # Validate the expert values at startup: an invalid one (e.g. a
+        # soften factor of 0) must stop batcontrol here with a message that
+        # names the key, not fail later in the middle of a grid recharge
+        # calculation. The logic factory applies the same parsed values.
+        logic_expert_settings = parse_logic_expert_settings(
+            battery_control_expert)
+        self.round_price_digits = logic_expert_settings.get(
+            'round_price_digits', self.round_price_digits)
+
         if battery_control_expert:
-            self.round_price_digits = battery_control_expert.get(
-                'round_price_digits',
-                self.round_price_digits)
-            self.production_offset_percent = battery_control_expert.get(
-                'production_offset_percent',
-                self.production_offset_percent)
-            self.preserve_min_grid_charge_soc = battery_control_expert.get(
-                'preserve_min_grid_charge_soc',
-                self.preserve_min_grid_charge_soc)
+            if 'production_offset_percent' in battery_control_expert:
+                self.production_offset_percent = parse_non_negative_number(
+                    battery_control_expert['production_offset_percent'],
+                    'battery_control_expert.production_offset_percent')
+            if 'preserve_min_grid_charge_soc' in battery_control_expert:
+                self.preserve_min_grid_charge_soc = parse_bool_config(
+                    battery_control_expert['preserve_min_grid_charge_soc'],
+                    'battery_control_expert.preserve_min_grid_charge_soc')
             raw_refresh_time = battery_control_expert.get(
                 'market_price_refresh_time',
                 self.market_price_refresh_time)
@@ -640,6 +665,19 @@ class Batcontrol:
         )
         return max_pv_charge_rate, min_pv_charge_rate
 
+    def _known_max_grid_charge_rate(self) -> float:
+        """ Maximum grid charge rate of the inverter(s) in W, 0 if unknown.
+
+        Only a real, positive number counts as known. Anything else must not
+        reach the logic as a tiny or bogus rate, because the logic would
+        then conclude that later cheap slots cannot deliver anything.
+        """
+        rate = getattr(self.inverter, 'max_grid_charge_rate', None)
+        if isinstance(rate, bool) or not isinstance(rate, (int, float)):
+            return 0.0
+        rate = as_number(rate, 0.0)
+        return rate if rate > 0 else 0.0
+
     @staticmethod
     def _validate_market_price_refresh_time(value: str) -> None:
         """Raise ValueError if value is not a valid HH:MM time string."""
@@ -768,19 +806,31 @@ class Batcontrol:
             consumption_forecast = self.fc_consumption.get_forecast(
                 requested_slots)
             if len(consumption_forecast) < requested_slots:
-                # Accept a shorter forecast horizon if not enough data is
-                # available
-                if len(consumption_forecast) < max(
-                        fc_period - FORECAST_TOLERANCE, MIN_FORECAST_HOURS):
-                    # Note: string formatting to avoid f-string multiline issues in <=Python3.11
+                # A shorter consumption forecast reduces the forecast horizon,
+                # like it does for prices and production
+                if len(consumption_forecast) < MIN_FORECAST_SLOTS:
                     raise RuntimeError(
-                        "Not enough consumption forecast data available, requested %d, got %d" % (
-                            fc_period, len(consumption_forecast)))
+                        "Not enough consumption forecast data available, "
+                        f"requested {requested_slots} slots, "
+                        f"got {len(consumption_forecast)}")
                 logger.warning(
                     "Insufficient consumption forecast data available, reducing "
                     "forecast to %d slots", len(consumption_forecast))
                 fc_period = len(consumption_forecast) - 1
-        except Exception as e:
+
+            # Build the arrays inside the try block: a gap in a provider's
+            # data (missing slot key, non-numeric value) is a forecast
+            # error like a failed fetch, not a reason to end the process.
+            production = np.zeros(fc_period + 1)
+            consumption = np.zeros(fc_period + 1)
+            prices = np.zeros(fc_period + 1)
+
+            for h in range(fc_period + 1):
+                production[h] = production_forecast[h] * \
+                    self.production_offset_percent
+                consumption[h] = consumption_forecast[h]
+                prices[h] = round(price_dict[h], self.round_price_digits)
+        except Exception as e:  # pylint: disable=broad-exception-caught
             logger.warning(
                 'Following Exception occurred when trying to get forecasts: %s',
                 e,
@@ -789,18 +839,6 @@ class Batcontrol:
             return
 
         self.reset_forecast_error()
-
-        # initialize arrays
-
-        production = np.zeros(fc_period + 1)
-        consumption = np.zeros(fc_period + 1)
-        prices = np.zeros(fc_period + 1)
-
-        for h in range(fc_period + 1):
-            production[h] = production_forecast[h] * \
-                self.production_offset_percent
-            consumption[h] = consumption_forecast[h]
-            prices[h] = round(price_dict[h], self.round_price_digits)
 
         net_consumption = consumption - production
 
@@ -926,6 +964,10 @@ class Batcontrol:
             self.min_price_difference,
             self.min_price_difference_rel,
             max_capacity,
+            # Lets the logic check whether a later cheap slot can deliver the
+            # required energy at all. 0 (unknown) keeps the logic from
+            # relying on it.
+            max_grid_charge_rate=self._known_max_grid_charge_rate(),
             min_grid_charge_soc=self.min_grid_charge_soc,
             preserve_min_grid_charge_soc=self.preserve_min_grid_charge_soc,
             peak_shaving=ps_runtime,
@@ -936,7 +978,15 @@ class Batcontrol:
         this_logic_run.set_calculation_parameters(calc_parameters)
         # Calculate inverter mode
         logger.debug('Calculating inverter mode...')
-        if not this_logic_run.calculate(calc_input):
+        try:
+            calculation_ok = this_logic_run.calculate(calc_input)
+        except Exception:  # pylint: disable=broad-exception-caught
+            # A defect in the logic must not end the process: the battery
+            # would stay in whatever mode was set last. Fall back to the
+            # inverter's normal behaviour and try again next cycle.
+            logger.exception('Calculation raised an exception')
+            calculation_ok = False
+        if not calculation_ok:
             logger.error('Calculation failed. Falling back to discharge')
             with self.__override_scope(Reason.CALCULATION_FAILED,
                                        trace=decision_trace):

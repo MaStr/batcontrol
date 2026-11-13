@@ -18,11 +18,13 @@ class ConcreteForecastSolar(ForecastSolarBaseclass):
 
     def __init__(self, pvinstallations, timezone, min_time_between_API_calls,
                  delay_evaluation_by_seconds, mock_provider_func=None, mock_forecast_func=None,
-                 target_resolution=60, native_resolution=60):
+                 target_resolution=60, native_resolution=60,
+                 persistent_cache_directory=None):
         super().__init__(pvinstallations, timezone, min_time_between_API_calls,
                         delay_evaluation_by_seconds,
                         target_resolution=target_resolution,
-                        native_resolution=native_resolution)
+                        native_resolution=native_resolution,
+                        persistent_cache_directory=persistent_cache_directory)
         self.mock_provider_func = mock_provider_func
         self.mock_forecast_func = mock_forecast_func
 
@@ -87,6 +89,17 @@ class TestForecastSolarBaseclass:
                 timezone,
                 min_time_between_API_calls=900,
                 delay_evaluation_by_seconds=0
+            )
+
+    def test_initialization_without_name_with_persistence(self, timezone, tmp_path):
+        """Persistence keeps the existing missing-name validation contract."""
+        with pytest.raises(ValueError, match="'name' key"):
+            ConcreteForecastSolar(
+                [{'no_name': 'value'}],
+                timezone,
+                min_time_between_API_calls=900,
+                delay_evaluation_by_seconds=0,
+                persistent_cache_directory=tmp_path,
             )
 
     def test_store_and_get_raw_data(self, baseclass_instance):

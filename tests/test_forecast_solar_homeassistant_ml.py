@@ -1120,7 +1120,7 @@ class TestEventLoopHandling:
         provider = self._provider(pv_installations, timezone)
 
         async def call_from_async_context():
-            with pytest.raises(ProviderError, match="running event loop"):
+            with pytest.raises(ProviderError, match="HomeAssistant WebSocket request failed"):
                 provider.get_raw_data_from_provider(
                     pv_installations[0]['name'])
 

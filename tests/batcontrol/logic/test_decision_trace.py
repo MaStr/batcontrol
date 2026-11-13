@@ -6,6 +6,7 @@ import logging
 import numpy as np
 import pytest
 
+from batcontrol.logic.decision_trace import _peak_shaving_explanation  # pylint: disable=wrong-import-order
 from batcontrol.logic.decision_trace import (
     Decision, DecisionRecord, DecisionTrace, Outcome, Reason, plain_value,
 )
@@ -502,3 +503,11 @@ class TestAvoidDischargeExplanation:
             'hours (usable 99999 Wh, reserve 99999 Wh); no grid charging: ')
         assert text.isascii()
         assert len(text) <= 255
+
+
+def test_peak_shaving_explanation_mentions_block_below_minimum():
+    text = _peak_shaving_explanation({
+        'active_components': 'time', 'allow_full_battery_after': 14,
+        'computed_limit_w': 142, 'blocked_below_min_rate': True})
+    assert 'below the minimum charge rate' in text
+    assert '142 W' in text

@@ -35,9 +35,20 @@ def discharge_evaluated(allowed: bool, calc_input: CalculationInput,  # pylint: 
                         higher_price_slots: List[int],
                         cheaper_price_slot: Optional[int],
                         cheaper_price: Optional[float],
-                        interval_minutes: int) -> DecisionRecord:
+                        interval_minutes: int,
+                        reserve_behind_cheaper_slot: float = 0.0,
+                        cheaper_slots_charge_capacity: float = 0.0,
+                        higher_price_slots_behind: Optional[List[int]] = None
+                        ) -> DecisionRecord:
     """Result of the reserved energy rule: usable energy against the energy
     reserved for high price slots.
+
+    ``reserved_energy`` covers ``higher_price_slots`` (before
+    ``cheaper_price_slot``) and includes ``reserve_behind_cheaper_slot``:
+    the demand of ``higher_price_slots_behind`` that the cheaper slots
+    cannot recharge (``cheaper_slots_charge_capacity``) at the maximum grid
+    charge rate. The latter three are 0/empty when the cheaper slots are
+    long enough or the rate is unknown.
 
     Allowed is decisive, nothing more is evaluated then. Forbidden is not:
     the grid recharge step decides what happens next.
@@ -62,6 +73,9 @@ def discharge_evaluated(allowed: bool, calc_input: CalculationInput,  # pylint: 
             'higher_price_slots': higher_price_slots,
             'cheaper_price_slot': cheaper_price_slot,
             'cheaper_price': cheaper_price,
+            'reserve_behind_cheaper_slot': reserve_behind_cheaper_slot,
+            'cheaper_slots_charge_capacity': cheaper_slots_charge_capacity,
+            'higher_price_slots_behind': higher_price_slots_behind or [],
             'interval_minutes': interval_minutes,
         },
         decisive=allowed,
@@ -77,8 +91,19 @@ def grid_recharge_charge(calc_input: CalculationInput,  # pylint: disable=too-ma
                          high_price_slots: List[int],
                          high_price_energy_demand: float,
                          recharge_window_end: int,
-                         interval_minutes: int) -> DecisionRecord:
+                         interval_minutes: int,
+                         deferrable_energy: float = 0.0,
+                         max_grid_charge_rate: float = 0.0) -> DecisionRecord:
     """Battery is charged from the grid.
+
+    Two reasons, told apart by ``deferrable_energy``:
+    - GRID_RECHARGE_REQUIRED: the high price slots follow before any slot
+      that is not more expensive than the current one, so this is the
+      moment to charge for them.
+    - GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT: cheaper (or equally cheap)
+      slots follow first, but at ``max_grid_charge_rate`` they can only
+      charge ``deferrable_energy`` of ``high_price_energy_demand``; the
+      rest is charged now.
 
     ``high_price_slots``/``recharge_window_end`` are relative slot indices
     (returned by ``_get_required_recharge_energy`` alongside the energy
@@ -88,7 +113,9 @@ def grid_recharge_charge(calc_input: CalculationInput,  # pylint: disable=too-ma
     return DecisionRecord(
         decision=Decision.GRID_RECHARGE,
         outcome=Outcome.CHARGE,
-        reason=Reason.GRID_RECHARGE_REQUIRED,
+        reason=(Reason.GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT
+                if deferrable_energy > 0
+                else Reason.GRID_RECHARGE_REQUIRED),
         inputs={
             'current_price': calc_input.prices[0],
             'min_dynamic_price_difference':
@@ -104,6 +131,8 @@ def grid_recharge_charge(calc_input: CalculationInput,  # pylint: disable=too-ma
             'high_price_slots': high_price_slots,
             'high_price_energy_demand': high_price_energy_demand,
             'recharge_window_end': recharge_window_end,
+            'deferrable_energy': deferrable_energy,
+            'max_grid_charge_rate': max_grid_charge_rate,
             'interval_minutes': interval_minutes,
         },
         decisive=True,

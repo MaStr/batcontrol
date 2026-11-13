@@ -14,9 +14,14 @@ class ModbusTCPClient:
         self._transaction_id = 0
 
     def connect(self):
+        self.close()
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.settimeout(self.timeout)
-        self._sock.connect((self.host, self.port))
+        try:
+            self._sock.settimeout(self.timeout)
+            self._sock.connect((self.host, self.port))
+        except OSError:
+            self.close()
+            raise
 
     def close(self):
         if self._sock:
@@ -38,11 +43,13 @@ class ModbusTCPClient:
         while len(data) < n:
             chunk = self._sock.recv(n - len(data))
             if not chunk:
-                raise RuntimeError("Connection closed by remote")
+                raise ConnectionError("Connection closed by remote")
             data += chunk
         return data
 
     def _send_and_receive(self, pdu):
+        if self._sock is None:
+            raise ConnectionError("Modbus client is not connected")
         header, tid = self._build_mbap_header(len(pdu) + 1)
         self._sock.sendall(header + pdu)
 
@@ -131,10 +138,14 @@ class FroniusModbusTcpTransport:
     def _retry_after_reconnect(self, operation):
         try:
             return operation()
-        except (ConnectionError, OSError):
+        except OSError:
             self.client.close()
+        try:
             self.client.connect()
             return operation()
+        except OSError:
+            self.client.close()
+            raise
 
     def read_registers(self, register: int, count: int) -> RegisterRead:
         values = self._retry_after_reconnect(

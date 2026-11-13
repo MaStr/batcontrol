@@ -41,14 +41,15 @@ class Evcc(DynamicTariffBaseclass):
     """
 
     def __init__(self, timezone, url, min_time_between_API_calls=60,
-                 target_resolution: int = 60):
+                 target_resolution: int = 60, persistence_path=None):
         # evcc provides native 15-minute data
         super().__init__(
             timezone,
             min_time_between_API_calls,
             delay_evaluation_by_seconds=0,
             target_resolution=target_resolution,
-            native_resolution=15
+            native_resolution=15,
+            persistence_path=persistence_path,
         )
         self.url = url
 
@@ -107,7 +108,8 @@ class Evcc(DynamicTariffBaseclass):
 
             # Calculate relative 15-min interval from start of current hour
             diff = timestamp - current_hour_start
-            rel_interval = int(diff.total_seconds() / 900)  # 900 seconds = 15 minutes
+            # 900 seconds = 15 minutes
+            rel_interval = int(diff.total_seconds() / 900)
 
             # evcc may mix granularities: near-term rates are 15-min slots,
             # but rates further out are sometimes returned as single hourly

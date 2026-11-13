@@ -19,6 +19,7 @@ from websockets.exceptions import WebSocketException
 
 from ..async_utils import run_coroutine
 from .baseclass import ForecastSolarBaseclass, ProviderError
+from ..fetcher.relaxed_caching import CacheMissError
 
 logger = logging.getLogger(__name__)
 logger.info('Loading module')
@@ -29,6 +30,17 @@ logger_ha_communication = logging.getLogger(
     "batcontrol.forecastsolar.forecast_homeassistant_ml.communication")
 
 PROVIDER_NAME = 'homeassistant-solar-forecast-ml'
+
+
+def _unit_to_wh_factor(unit) -> float:
+    """Map provider metadata to Wh without filesystem or network access."""
+    if unit in ('Wh', None):
+        return 1.0
+    if unit == 'kWh':
+        return 1000.0
+    raise ValueError(
+        f"Unsupported unit_of_measurement '{unit}'. "
+        "Only 'Wh' and 'kWh' are supported.")
 
 
 # pylint: disable=too-many-instance-attributes
@@ -60,7 +72,8 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
         delay_evaluation_by_seconds: int = 300,
         sensor_unit: Optional[str] = "auto",
         target_resolution: int = 60,
-        cache_ttl_hours: Optional[float] = None
+        cache_ttl_hours: Optional[float] = None,
+        persistent_cache_directory=None,
     ) -> None:
         """Initialize HomeAssistant solar forecast provider
 
@@ -80,6 +93,7 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
             target_resolution: Target resolution in minutes (15 or 60)
             cache_ttl_hours: How long a fetched forecast stays usable as a
                         fallback, in hours. None keeps the cache default.
+            persistent_cache_directory: Optional directory for restart-safe raw data.
 
         Raises:
             ValueError: If api_token, entity_id, base_url or sensor_unit is missing
@@ -93,7 +107,8 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
             delay_evaluation_by_seconds,
             target_resolution=target_resolution,
             native_resolution=60,
-            cache_ttl_hours=cache_ttl_hours
+            cache_ttl_hours=cache_ttl_hours,
+            persistent_cache_directory=persistent_cache_directory,
         )
 
         # The factory validates these too, but the provider is also
@@ -144,8 +159,8 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
                     "Using configured sensor unit: kWh (conversion factor: 1000.0)"
                 )
         else:
-            # Auto-detect unit from Home Assistant
-            logger.info("Auto-detecting sensor unit from Home Assistant...")
+            # Cached metadata also permits startup while Home Assistant is offline.
+            logger.info("Auto-detecting sensor unit...")
             self.unit_conversion_factor = self._check_sensor_unit()
 
         logger.info(
@@ -181,8 +196,8 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
     def _check_sensor_unit(self) -> float:
         """Check sensor's unit_of_measurement and return conversion factor
 
-        Queries the sensor via WebSocket to get its unit_of_measurement attribute.
-        Returns the appropriate conversion factor to convert to Wh.
+        Uses unit metadata from an unexpired cached entity state when available.
+        Otherwise queries the sensor via WebSocket. Returns the factor for Wh.
 
         Returns:
             float: Conversion factor (1.0 for Wh, 1000.0 for kWh)
@@ -191,6 +206,18 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
             ValueError: If unit_of_measurement is neither Wh nor kWh
             RuntimeError: If sensor cannot be queried
         """
+        try:
+            cached_state = self.get_raw_data(self._installation_name())
+        except CacheMissError:
+            pass
+        else:
+            if (isinstance(cached_state, dict)
+                    and isinstance(cached_state.get('attributes'), dict)):
+                try:
+                    return self._unit_conversion_factor(cached_state['attributes'])
+                except ValueError:
+                    logger.warning(
+                        'Ignoring unsupported unit in cached solar data')
         return run_coroutine(self._check_sensor_unit_async())
 
     async def _check_sensor_unit_async(self) -> float:
@@ -249,41 +276,22 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
                     f"Please check the entity_id."
                 )
 
-            # Get unit_of_measurement from attributes
-            attributes = entity_state.get("attributes", {})
-            unit = attributes.get("unit_of_measurement")
-
-            logger.info(
-                "Entity '%s' has unit_of_measurement: %s",
-                self.entity_id, unit
-            )
-
-            # Determine conversion factor based on unit
-            if unit == "Wh":
-                logger.debug("Unit is Wh, no conversion needed")
-                return 1.0
-
-            if unit == "kWh":
-                logger.info(
-                    "Unit is kWh, will multiply values by 1000 to convert to Wh")
-                return 1000.0
-
-            if unit is None:
-                logger.warning(
-                    "Entity '%s' has no unit_of_measurement. "
-                    "Assuming values are already in Wh "
-                    "(typical for evcc Solar-Prognose sensor). "
-                    "Set 'sensor_unit: Wh' in config to suppress this warning.",
-                    self.entity_id
-                )
-                return 1.0
-
-            raise ValueError(
-                f"Unsupported unit_of_measurement '{unit}' for entity "
-                f"'{self.entity_id}'. Only 'Wh' and 'kWh' are supported.")
+            return self._unit_conversion_factor(entity_state.get('attributes', {}))
 
         finally:
             await self._websocket_disconnect(websocket)
+
+    def _unit_conversion_factor(self, attributes) -> float:
+        """Interpret the same unit metadata in live and cached entity states."""
+        unit = attributes.get('unit_of_measurement')
+        factor = _unit_to_wh_factor(unit)
+        if unit is None:
+            logger.warning(
+                "Entity '%s' has no unit_of_measurement. Assuming values are "
+                "already in Wh. Set 'sensor_unit: Wh' to suppress this warning.",
+                self.entity_id,
+            )
+        return factor
 
     async def _websocket_connect(self):
         """Connect to HomeAssistant WebSocket API and authenticate
@@ -370,13 +378,9 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
         """
         try:
             return run_coroutine(self._fetch_entity_state_async())
-        except (OSError, WebSocketException, RuntimeError) as e:
-            logger.error(
-                'HomeAssistant WebSocket request failed for entity %s: %s',
-                self.entity_id, e, exc_info=True)
+        except (OSError, WebSocketException, RuntimeError):
             raise ProviderError(
-                f'HomeAssistant WebSocket request failed for entity {self.entity_id}: {e}'
-            ) from e
+                'HomeAssistant WebSocket request failed') from None
 
     async def _fetch_entity_state_async(self) -> dict:
         """Async fetch of entity state from HomeAssistant
@@ -463,6 +467,9 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
 
         # Parse forecast data from attributes
         attributes = raw_data.get("attributes", {})
+        if self.sensor_unit == 'auto':
+            self.unit_conversion_factor = _unit_to_wh_factor(
+                attributes.get('unit_of_measurement'))
 
         try:
             forecast_dict = self._parse_forecast_from_attributes(attributes)

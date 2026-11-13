@@ -48,4 +48,4 @@ echo "Current local time is: $(date)"
 echo "Configured timezone (env var TZ) is: $TZ"
 
 # Start batcontrol.py
-exec python -m batcontrol
+exec python -m batcontrol --data-dir /app/data "$@"

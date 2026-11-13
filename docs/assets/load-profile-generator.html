@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Load Profile Generator</title>
+<style>
+  :root {
+    --bg: #f6f8f6; --card: #ffffff; --text: #1d2b1f; --muted: #5d6b60;
+    --line: #d6ded7; --accent: #2e7d32; --accent-text: #ffffff;
+    --ok: #2e7d32; --warn: #b26a00; --bad: #c62828; --info: #1565c0;
+    --heat: 46, 125, 50;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121a14; --card: #1b261d; --text: #e4ece5; --muted: #9db0a0;
+      --line: #2f3f32; --accent: #66bb6a; --accent-text: #0e1a10;
+      --ok: #81c784; --warn: #ffb74d; --bad: #ef7b7b; --info: #64b5f6;
+      --heat: 129, 199, 132;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 0 0 12px; }
+  p { margin: 0 0 12px; }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); font-size: 0.9rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px; margin: 16px 0;
+  }
+  .drop {
+    display: block;
+    border: 2px dashed var(--line); border-radius: 10px; padding: 28px 16px;
+    text-align: center; cursor: pointer;
+  }
+  .drop.over { border-color: var(--accent); }
+  .drop input { display: none; }
+  button, .btn {
+    background: var(--accent); color: var(--accent-text); border: 0;
+    border-radius: 8px; padding: 10px 16px; font: inherit; cursor: pointer;
+  }
+  button.secondary {
+    background: transparent; color: var(--accent); border: 1px solid var(--accent);
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  label.row { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; }
+  label.row input { margin-top: 5px; }
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 24px; }
+  .opts input[type=number] { width: 90px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+  .kpi { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+  .kpi .v { font-size: 1.6rem; font-weight: 600; }
+  .kpi .l { color: var(--muted); font-size: 0.85rem; }
+  ul.checks { list-style: none; padding: 0; margin: 0; }
+  ul.checks li { padding: 6px 0 6px 28px; position: relative; border-bottom: 1px solid var(--line); }
+  ul.checks li:last-child { border-bottom: 0; }
+  ul.checks li::before { position: absolute; left: 0; font-weight: 700; }
+  li.ok::before { content: "OK"; color: var(--ok); font-size: 0.7rem; top: 9px; }
+  li.warn::before { content: "!"; color: var(--warn); left: 8px; }
+  li.bad::before { content: "X"; color: var(--bad); left: 6px; }
+  li.info::before { content: "i"; color: var(--info); left: 9px; }
+  .hint {
+    border-left: 4px solid var(--warn); padding: 8px 12px; margin: 12px 0;
+    background: rgba(178, 106, 0, 0.08);
+  }
+  pre {
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; overflow-x: auto; margin: 8px 0;
+  }
+  .heat { display: grid; grid-template-columns: 34px repeat(24, 1fr); gap: 2px; font-size: 0.7rem; }
+  .heat .c { aspect-ratio: 1.3; border-radius: 3px; min-height: 14px; }
+  .heat .lbl { color: var(--muted); display: flex; align-items: center; }
+  .months { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; align-items: end; height: 140px; }
+  .months .b { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; font-size: 0.7rem; color: var(--muted); }
+  .months .bar { width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 2px; }
+  .err { color: var(--bad); font-weight: 600; }
+  .cols { max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Load Profile Generator</h1>
+  <p class="muted">
+    Creates a batcontrol <code>load_profile.csv</code> from a detailed Fronius Solar.web
+    export (XLSX). Everything runs in your browser, the file is not uploaded anywhere.
+    <a href="../configuration/consumption-forecast/">Back to the documentation</a>
+  </p>
+
+  <section class="card">
+    <h2>1. Select the Solar.web export</h2>
+    <p class="muted">
+      Solar.web &rarr; Analysis &rarr; export the <b>detailed</b> view (5 minute resolution)
+      of "Energy balance / Consumption" as Excel file. For a good profile export at least
+      12 months. Optionally add the Wattpilot energy.
+    </p>
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept=".xlsx">
+      <span id="dropText">Drop the .xlsx file here or click to select it</span>
+    </label>
+    <p id="error" class="err" hidden></p>
+  </section>
+
+  <section class="card" id="optionsCard" hidden>
+    <h2>2. Options</h2>
+    <div class="opts">
+      <div>
+        <label class="row"><input type="checkbox" id="removeWb" checked>
+          <span><b>Remove wallbox consumption</b><br>
+          <span class="muted">Subtracts the selected columns from the consumption. Useful if
+          the car is charged on cheap hours anyway (batcontrol/evcc handles it separately).</span></span>
+        </label>
+        <div class="cols" id="wbCols"></div>
+      </div>
+      <div>
+        <label class="row"><input type="checkbox" id="smooth" checked>
+          <span><b>Smooth wallbox start/stop</b><br>
+          <span class="muted">Replaces the intervals where the wallbox switches on/off
+          with the average of their neighbours (measurement artefacts).</span></span>
+        </label>
+        <label class="row">
+          <span>Threshold (W)&nbsp;<input type="number" id="thr" value="1200" min="100" step="100"></span>
+          <span>Window&nbsp;<input type="number" id="win" value="2" min="1" max="6"></span>
+        </label>
+      </div>
+    </div>
+    <p style="margin-top:12px"><button id="run">Generate load profile</button></p>
+  </section>
+
+  <section id="result" hidden>
+    <div class="card">
+      <h2>3. Result</h2>
+      <div class="kpis" id="kpis"></div>
+      <div class="hint" id="roundHint"></div>
+      <p><button id="download">Download load_profile.csv</button>
+         <button class="secondary" id="copyCfg">Copy config snippet</button></p>
+      <pre id="cfg"></pre>
+    </div>
+
+    <div class="card">
+      <h2>Plausibility checks</h2>
+      <ul class="checks" id="checks"></ul>
+    </div>
+
+    <div class="card">
+      <h2>Average day by weekday and hour</h2>
+      <div class="heat" id="heat"></div>
+      <p class="muted">Average over all months, in Wh per hour. Darker means higher.</p>
+    </div>
+
+    <div class="card">
+      <h2>Average daily consumption per month</h2>
+      <div class="months" id="months"></div>
+      <p class="muted">In kWh per day. Months without data show the filled average.</p>
+    </div>
+  </section>
+</main>
+
+<script src="js/load-profile-core.js"></script>
+<script>
+(function () {
+  'use strict';
+  var core = window.LoadProfileCore;
+  var state = { table: null, detected: null, result: null };
+  var $ = function (id) { return document.getElementById(id); };
+  var DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  function showError(msg) {
+    $('error').textContent = msg || '';
+    $('error').hidden = !msg;
+  }
+
+  function handleFile(file) {
+    showError('');
+    $('result').hidden = true;
+    $('optionsCard').hidden = true;
+    if (!file) { return; }
+    $('dropText').textContent = file.name;
+    file.arrayBuffer().then(core.loadXlsx).then(function (loaded) {
+      var d = loaded.detected;
+      if (d.consumption < 0) {
+        var names = loaded.table.columns.map(function (c) {
+          return c.name + ' ' + c.unit;
+        }).join(', ');
+        throw new Error('No "Verbrauch" (consumption) column in Wh found. ' +
+          'Columns in the file: ' + names);
+      }
+      state.table = loaded.table;
+      state.detected = d;
+      renderColumns();
+      $('optionsCard').hidden = false;
+    }).catch(function (e) {
+      showError(e.message || String(e));
+    });
+  }
+
+  function renderColumns() {
+    var box = $('wbCols');
+    box.innerHTML = '';
+    var d = state.detected;
+    var cols = state.table.columns;
+    var all = d.wattpilot.concat(d.other);
+    $('removeWb').checked = d.wattpilot.length > 0;
+    if (!all.length) {
+      box.textContent = 'No further energy columns in the file.';
+      return;
+    }
+    all.forEach(function (idx) {
+      var l = document.createElement('label');
+      l.className = 'row';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = idx;
+      cb.checked = d.wattpilot.indexOf(idx) >= 0;
+      var t = document.createElement('span');
+      t.textContent = cols[idx].name + (cols[idx].unit ? ' [' + cols[idx].unit + ']' : '');
+      l.appendChild(cb);
+      l.appendChild(t);
+      box.appendChild(l);
+    });
+  }
+
+  function selectedWallbox() {
+    if (!$('removeWb').checked) { return []; }
+    return Array.prototype.filter.call($('wbCols').querySelectorAll('input'),
+      function (cb) { return cb.checked; }).map(function (cb) { return +cb.value; });
+  }
+
+  function fmt(n, digits) {
+    return n.toLocaleString('en-US', {
+      minimumFractionDigits: digits || 0, maximumFractionDigits: digits || 0
+    });
+  }
+
+  function kpi(value, label) {
+    var d = document.createElement('div');
+    d.className = 'kpi';
+    d.innerHTML = '<div class="v"></div><div class="l"></div>';
+    d.firstChild.textContent = value;
+    d.lastChild.textContent = label;
+    return d;
+  }
+
+  function run() {
+    showError('');
+    try {
+      state.result = core.buildProfile(state.table, {
+        consumptionColumn: state.detected.consumption,
+        wallboxColumns: selectedWallbox(),
+        smooth: $('smooth').checked,
+        smoothThresholdW: +$('thr').value,
+        smoothWindow: +$('win').value
+      });
+    } catch (e) {
+      showError(e.message || String(e));
+      $('result').hidden = true;
+      return;
+    }
+    render();
+  }
+
+  function render() {
+    var s = state.result.stats;
+    var p = state.result.profile;
+    var kp = $('kpis');
+    kp.innerHTML = '';
+    kp.appendChild(kpi(fmt(s.annualKwh) + ' kWh', 'Calculated yearly consumption'));
+    kp.appendChild(kpi(fmt(s.suggestedAnnualKwh) + ' kWh', 'Suggested annual_consumption'));
+    kp.appendChild(kpi(fmt(s.days) + ' days', 'Covered period (' + s.intervalMin + ' min data)'));
+    kp.appendChild(kpi(fmt(s.gapShare * 100, 1) + ' %', 'Missing hours'));
+
+    $('roundHint').textContent =
+      'The calculated value is an average over the period you exported. Please round it ' +
+      'up generously (here: +5 %, then to the next 100 kWh = ' + fmt(s.suggestedAnnualKwh) +
+      ' kWh). A forecast that is slightly too high is usually cheaper than one that is too low, ' +
+      'because batcontrol then keeps a reserve for the expensive hours. Add extra consumers you plan ' +
+      '(heat pump, EV) on top.';
+
+    $('cfg').textContent =
+      'consumption_forecast:\n  type: csv\n  csv:\n    annual_consumption: ' +
+      s.suggestedAnnualKwh + ' # kWh per year\n    load_profile: load_profile.csv';
+
+    var ul = $('checks');
+    ul.innerHTML = '';
+    s.checks.forEach(function (c) {
+      var li = document.createElement('li');
+      li.className = c.level;
+      li.textContent = c.text;
+      ul.appendChild(li);
+    });
+
+    drawHeat(p);
+    drawMonths(p);
+    $('result').hidden = false;
+    $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function drawHeat(p) {
+    var heat = $('heat');
+    heat.innerHTML = '';
+    var avg = [];
+    var max = 0;
+    for (var d = 0; d < 7; d++) {
+      avg.push([]);
+      for (var h = 0; h < 24; h++) {
+        var sum = 0;
+        for (var m = 0; m < 12; m++) { sum += p[(m * 7 + d) * 24 + h]; }
+        avg[d].push(sum / 12);
+        max = Math.max(max, sum / 12);
+      }
+    }
+    heat.appendChild(document.createElement('div'));
+    for (var hh = 0; hh < 24; hh++) {
+      var hl = document.createElement('div');
+      hl.className = 'lbl';
+      hl.textContent = hh % 3 === 0 ? hh : '';
+      heat.appendChild(hl);
+    }
+    for (var dd = 0; dd < 7; dd++) {
+      var dl = document.createElement('div');
+      dl.className = 'lbl';
+      dl.textContent = DAYS[dd];
+      heat.appendChild(dl);
+      for (var h2 = 0; h2 < 24; h2++) {
+        var c = document.createElement('div');
+        c.className = 'c';
+        var a = max > 0 ? avg[dd][h2] / max : 0;
+        c.style.background = 'rgba(var(--heat), ' + (0.08 + a * 0.92).toFixed(2) + ')';
+        c.title = DAYS[dd] + ' ' + h2 + ':00  ' + Math.round(avg[dd][h2]) + ' Wh';
+        heat.appendChild(c);
+      }
+    }
+  }
+
+  function drawMonths(p) {
+    var box = $('months');
+    box.innerHTML = '';
+    var vals = [];
+    for (var m = 0; m < 12; m++) {
+      var sum = 0;
+      for (var d = 0; d < 7; d++) {
+        for (var h = 0; h < 24; h++) { sum += p[(m * 7 + d) * 24 + h]; }
+      }
+      vals.push(sum / 7 / 1000);
+    }
+    var max = Math.max.apply(null, vals);
+    vals.forEach(function (v, i) {
+      var b = document.createElement('div');
+      b.className = 'b';
+      var bar = document.createElement('div');
+      bar.className = 'bar';
+      bar.style.height = (max > 0 ? v / max * 100 : 0) + '%';
+      bar.title = core.MONTH_NAMES[i] + ': ' + v.toFixed(1) + ' kWh/day';
+      var t = document.createElement('span');
+      t.textContent = core.MONTH_NAMES[i];
+      b.appendChild(bar);
+      b.appendChild(t);
+      box.appendChild(b);
+    });
+  }
+
+  $('file').addEventListener('change', function (e) { handleFile(e.target.files[0]); });
+  var drop = $('drop');
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function (e) { handleFile(e.dataTransfer.files[0]); });
+  $('run').addEventListener('click', run);
+  $('download').addEventListener('click', function () {
+    var blob = new Blob([core.toCsv(state.result.profile)], { type: 'text/csv' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'load_profile.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+  $('copyCfg').addEventListener('click', function () {
+    if (navigator.clipboard) { navigator.clipboard.writeText($('cfg').textContent); }
+  });
+})();
+</script>
+</body>
+</html>

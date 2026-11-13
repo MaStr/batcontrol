@@ -39,7 +39,8 @@ class Awattar(DynamicTariffBaseclass):
     """
 
     def __init__(self, timezone, country: str, min_time_between_API_calls=0,
-                 delay_evaluation_by_seconds=0, target_resolution: int = 60):
+                 delay_evaluation_by_seconds=0, target_resolution: int = 60,
+                 persistence_path=None):
         """ Initialize Awattar class with parameters """
         # Awattar only provides hourly data (native_resolution=60)
         super().__init__(
@@ -47,7 +48,8 @@ class Awattar(DynamicTariffBaseclass):
             min_time_between_API_calls,
             delay_evaluation_by_seconds,
             target_resolution=target_resolution,
-            native_resolution=60
+            native_resolution=60,
+            persistence_path=persistence_path,
         )
         country = country.lower()
         if country in ['at', 'de']:

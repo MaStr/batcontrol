@@ -61,8 +61,9 @@ curtailed.
 `time_active: true`
 
 The counter-linear ramp spreads the remaining free capacity over the slots
-until `allow_full_battery_after`. The limit starts at the 500 W minimum charge
-rate and rises steeply as 14:00 approaches, because the per-slot allocation is
+until `allow_full_battery_after`. While the computed ramp is below the 500 W
+minimum charge rate, PV charging is blocked (0 W) and the surplus is exported;
+the limit then releases and rises steeply as 14:00 approaches, because the per-slot allocation is
 `2 * free_capacity / (n * (n + 1))` with `n` shrinking. The battery reaches
 full exactly around the target hour instead of at lunchtime.
 

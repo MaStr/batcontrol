@@ -29,7 +29,7 @@ Batcontrol combines three critical forecasts to make intelligent decisions:
 
 ### 1. Electricity Price Forecast
 - **Source**: Dynamic tariff providers (Tibber, aWATTar, evcc, energyforecast.de, static tariff zones) — see [Dynamic Tariff Provider](../configuration/dynamic-tariff-provider.md)
-- **Data**: Hourly electricity prices for the next 24-48 hours
+- **Data**: Electricity prices for the next 24-48 hours, in 15- or 60-minute slots depending on `time_resolution_minutes`
 - **Purpose**: Identifies when electricity is cheapest for charging
 
 ### 2. Solar Production Forecast
@@ -81,10 +81,13 @@ Based on the forecasts and current battery state, batcontrol puts your inverter 
 ### Mode -1: CHARGE FROM GRID (Active Charging)
 - **When**: Current prices are significantly lower than future prices
 - **Behavior**:
-  - Battery charges from grid at configured rate (`max_grid_charge_rate`)
-  - Charging stops at `max_charging_from_grid_limit` (typically 89%)
+  - Battery charges from grid at a calculated rate: the required energy divided by the remaining time, multiplied by `charge_rate_multiplier`, but at least 500 W. `max_grid_charge_rate` is only the upper bound
+  - Charging stops at `max_charging_from_grid_limit` (default: 80%)
 - **Calculation**: Estimates required energy for upcoming expensive hours
-- **Efficiency**: Accounts for 10-20% charge/discharge losses
+- **Timing**: As late as possible, but early enough that the remaining cheap slots can still
+  charge the required energy at `max_grid_charge_rate` - see
+  [When grid charging starts](../features/battery-control-expert.md#when-grid-charging-starts)
+- **Losses**: Charge/discharge losses are not modelled as energy. They are only approximated: `min_price_difference` has to cover them economically, and `charge_rate_multiplier` raises the charge power
 
 ## Price-Based Decision Making
 
@@ -92,6 +95,7 @@ Based on the forecasts and current battery state, batcontrol puts your inverter 
 
 **`min_price_difference`** (absolute): Minimum price difference in Euro to justify grid charging
 - Example: 0.05 means current price must be ≥5 cents lower than future price
+- It also ends the look-ahead window used for the discharge reserve, see [Price Difference Calculation](../features/price-difference-calculation.md#discharge-reserve-and-grid-recharge-use-different-comparisons)
 
 **`min_price_difference_rel`** (relative): Percentage-based price difference threshold
 - Example: 0.10 means current price must be ≥10% lower than future price
@@ -146,6 +150,11 @@ The system validates configuration to prevent problematic behavior:
 - **Timeout**: If APIs fail for >10 minutes, defaults to discharge mode
 - **Fallback Strategy**: Ensures battery remains usable during outages
 - **Recovery**: Automatically resumes normal operation when APIs return
+- **Incomplete data**: A forecast with a missing slot is handled like a failed API call
+
+### Calculation Failures
+- **Fallback**: If the control calculation itself fails, batcontrol logs the error with a traceback, switches to discharge mode for this cycle and tries again at the next evaluation
+- **Visibility**: The Decision sensor reports the reason `CALCULATION_FAILED`
 
 ### Configuration Validation
 - **Runtime Checks**: Validates parameter relationships

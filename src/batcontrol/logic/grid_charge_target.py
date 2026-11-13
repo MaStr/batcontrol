@@ -80,8 +80,12 @@ def apply_grid_charge_target_to_recharge(
         max_charging_from_grid_limit: float) -> GridChargeTargetResult:
     """Apply the configured grid-charge target to recharge energy.
 
-    ``fixed`` applies the configured SoC floor: when grid charging is already
-    required, charge at least up to ``min_grid_charge_soc``.
+    ``fixed`` applies the configured SoC floor independent of the demand:
+    whenever a high-price slot with consumption exists (``required_energy``
+    > 0), charge at least up to ``min_grid_charge_soc`` -- also when the
+    stored energy already covers that demand (``recharge_energy`` <= 0).
+    This is intended: the value secures a minimum SoC, it is not sized by
+    the forecast.
 
     ``forecast`` uses the existing high-price-slot ``required_energy`` as the
     source of truth and treats ``min_grid_charge_soc`` as the reserve that
