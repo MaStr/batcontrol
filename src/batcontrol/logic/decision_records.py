@@ -35,9 +35,20 @@ def discharge_evaluated(allowed: bool, calc_input: CalculationInput,  # pylint: 
                         higher_price_slots: List[int],
                         cheaper_price_slot: Optional[int],
                         cheaper_price: Optional[float],
-                        interval_minutes: int) -> DecisionRecord:
+                        interval_minutes: int,
+                        reserve_behind_cheaper_slot: float = 0.0,
+                        cheaper_slots_charge_capacity: float = 0.0,
+                        higher_price_slots_behind: Optional[List[int]] = None
+                        ) -> DecisionRecord:
     """Result of the reserved energy rule: usable energy against the energy
     reserved for high price slots.
+
+    ``reserved_energy`` covers ``higher_price_slots`` (before
+    ``cheaper_price_slot``) and includes ``reserve_behind_cheaper_slot``:
+    the demand of ``higher_price_slots_behind`` that the cheaper slots
+    cannot recharge (``cheaper_slots_charge_capacity``) at the maximum grid
+    charge rate. The latter three are 0/empty when the cheaper slots are
+    long enough or the rate is unknown.
 
     Allowed is decisive, nothing more is evaluated then. Forbidden is not:
     the grid recharge step decides what happens next.
@@ -62,6 +73,9 @@ def discharge_evaluated(allowed: bool, calc_input: CalculationInput,  # pylint: 
             'higher_price_slots': higher_price_slots,
             'cheaper_price_slot': cheaper_price_slot,
             'cheaper_price': cheaper_price,
+            'reserve_behind_cheaper_slot': reserve_behind_cheaper_slot,
+            'cheaper_slots_charge_capacity': cheaper_slots_charge_capacity,
+            'higher_price_slots_behind': higher_price_slots_behind or [],
             'interval_minutes': interval_minutes,
         },
         decisive=allowed,
