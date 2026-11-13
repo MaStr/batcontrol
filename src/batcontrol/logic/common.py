@@ -240,9 +240,24 @@ class CommonLogic:
         Returns:
             int: Adjusted limit in W.
         """
-        if limit > 0 and limit < MIN_CHARGE_RATE:
+        if 0 < limit < MIN_CHARGE_RATE:
             logger.debug(
                 '[PeakShaving] Raising PV limit from %d W to minimum charge rate %d W',
                 limit, MIN_CHARGE_RATE)
             return MIN_CHARGE_RATE
+        return limit
+
+    def block_below_min_pv_charge_rate(self, limit: int) -> int:
+        """Block PV charging if a positive limit is below MIN_CHARGE_RATE.
+
+        Used by the time/price peak-shaving rules: a ramp below the minimum
+        charge rate is not worth charging at 500 W (that would fill the
+        battery too early), so charging is blocked (0 W) until the computed
+        value reaches MIN_CHARGE_RATE. Limits of 0 or -1 are unchanged.
+        """
+        if 0 < limit < MIN_CHARGE_RATE:
+            logger.debug(
+                '[PeakShaving] PV limit %d W below minimum charge rate '
+                '%d W, blocking PV charging', limit, MIN_CHARGE_RATE)
+            return 0
         return limit

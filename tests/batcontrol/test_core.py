@@ -239,6 +239,25 @@ class TestTimeResolutionString:
         assert isinstance(bc.time_resolution, int)
         assert bc.time_resolution == expected_int
 
+    def test_invalid_time_resolution_names_the_value(self, base_mock_config):
+        """Regression: the message used to contain a literal '%s'."""
+        base_mock_config['time_resolution_minutes'] = 30
+        with pytest.raises(ValueError, match="got '30'"):
+            Batcontrol(base_mock_config)
+
+    def test_missing_timezone_is_reported(self, base_mock_config):
+        """Regression: the handler itself raised a bare KeyError."""
+        del base_mock_config['timezone']
+        with pytest.raises(RuntimeError, match="'timezone' is missing"):
+            Batcontrol(base_mock_config)
+
+    @pytest.mark.parametrize('value', ['Mars/Phobos', 42])
+    def test_invalid_timezone_names_the_value(self, base_mock_config, value):
+        base_mock_config['timezone'] = value
+        with pytest.raises(RuntimeError, match='not valid') as excinfo:
+            Batcontrol(base_mock_config)
+        assert repr(value) in str(excinfo.value)
+
     @patch('batcontrol.core.tariff_factory.create_tarif_provider')
     @patch('batcontrol.core.inverter_factory.create_inverter')
     @patch('batcontrol.core.solar_factory.create_solar_provider')
@@ -678,6 +697,58 @@ class TestCoreRunDispatch:
             fake_logic.calculate.assert_not_called()
         finally:
             bc.shutdown()
+
+    @pytest.mark.parametrize('source', ['prices', 'production', 'consumption'])
+    def test_run_treats_gap_in_forecast_as_error(
+            self, mock_config, mocker, source):
+        """A missing slot in provider data is a forecast error, it must not
+        raise out of run() and end the process."""
+        forecasts = {
+            'prices': {i: 0.3 for i in range(4)},
+            'production': {i: 0 for i in range(4)},
+            'consumption': {i: 500 for i in range(4)},
+        }
+        del forecasts[source][2]
+        bc, fake_logic = self._make_batcontrol_for_grid_charge_target(
+            mock_config, mocker, **forecasts)
+        handle_error = mocker.patch.object(bc, 'handle_forecast_error')
+
+        try:
+            bc.run()
+
+            handle_error.assert_called_once()
+            fake_logic.calculate.assert_not_called()
+        finally:
+            bc.shutdown()
+
+    def test_run_falls_back_to_discharge_when_calculation_raises(
+            self, run_dispatch_setup, caplog):
+        """An exception inside the logic must not end the process; the
+        cycle falls back to allow discharging."""
+        bc, mock_inverter, fake_logic = run_dispatch_setup
+        fake_logic.calculate.side_effect = ZeroDivisionError('boom')
+
+        with caplog.at_level(logging.ERROR, logger='batcontrol.core'):
+            bc.run()
+
+        mock_inverter.set_mode_allow_discharge.assert_called_once_with()
+        mock_inverter.set_mode_force_charge.assert_not_called()
+        mock_inverter.set_mode_avoid_discharge.assert_not_called()
+        fake_logic.get_inverter_control_settings.assert_not_called()
+        assert any('Calculation raised an exception' in record.message
+                   and record.exc_info for record in caplog.records)
+        last_event = bc.decision_journal.last_event()
+        assert last_event.trace.decisive_record().reason == 'CALCULATION_FAILED'
+
+    def test_run_falls_back_to_discharge_when_calculation_returns_false(
+            self, run_dispatch_setup):
+        bc, mock_inverter, fake_logic = run_dispatch_setup
+        fake_logic.calculate.return_value = False
+
+        bc.run()
+
+        mock_inverter.set_mode_allow_discharge.assert_called_once_with()
+        fake_logic.get_inverter_control_settings.assert_not_called()
 
     def test_run_passes_grid_charge_target_config_to_logic(
             self, mock_config, mocker):

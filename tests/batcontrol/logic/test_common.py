@@ -110,6 +110,14 @@ class TestCommonLogic(unittest.TestCase):
         self.assertEqual(logic.enforce_min_pv_charge_rate(MIN_CHARGE_RATE), MIN_CHARGE_RATE)
         self.assertEqual(logic.enforce_min_pv_charge_rate(MIN_CHARGE_RATE + 100), MIN_CHARGE_RATE + 100)
 
+    def test_block_below_min_pv_charge_rate(self):
+        logic = CommonLogic.get_instance()
+        self.assertEqual(logic.block_below_min_pv_charge_rate(1), 0)
+        self.assertEqual(logic.block_below_min_pv_charge_rate(MIN_CHARGE_RATE - 1), 0)
+        self.assertEqual(logic.block_below_min_pv_charge_rate(MIN_CHARGE_RATE), MIN_CHARGE_RATE)
+        self.assertEqual(logic.block_below_min_pv_charge_rate(0), 0)
+        self.assertEqual(logic.block_below_min_pv_charge_rate(-1), -1)
+
     def test_enforce_min_pv_charge_rate_keeps_zero(self):
         """A limit of 0 (block charging entirely) must not be raised."""
         logic = CommonLogic.get_instance()

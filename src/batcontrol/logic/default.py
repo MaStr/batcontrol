@@ -423,9 +423,11 @@ class DefaultLogic(LogicInterface):
 
         charge_limit = min(candidates)
 
-        # Enforce minimum charge rate: avoid inefficient low-power scenarios.
-        # 0 is kept as-is (means block charging entirely).
-        charge_limit = self.common.enforce_min_pv_charge_rate(charge_limit)
+        # Below the minimum charge rate: block PV charging (0 W) instead of
+        # raising it; the limit is recomputed every cycle and releases once
+        # the computed value reaches the minimum.
+        computed_limit_w = charge_limit
+        charge_limit = self.common.block_below_min_pv_charge_rate(charge_limit)
 
         # Apply charge rate limit (keep more restrictive if one already exists)
         if settings.limit_battery_charge_rate < 0:
@@ -453,6 +455,8 @@ class DefaultLogic(LogicInterface):
             decisive=True,
             active_components=active_components,
             final_limit_w=settings.limit_battery_charge_rate,
+            computed_limit_w=computed_limit_w,
+            blocked_below_min_rate=(computed_limit_w > 0 and charge_limit == 0),
             price_limit_w=price_limit_w if price_limit_w >= 0 else None,
             time_limit_w=time_limit_w if time_limit_w >= 0 else None,
             allow_full_battery_after=(
@@ -565,7 +569,8 @@ class DefaultLogic(LogicInterface):
         """Reserve battery free capacity for upcoming cheap-price PV slots.
 
         Only slots within the production window are considered as cheap slots.
-        The production window ends at the first slot where production is zero;
+        The production window ends at the first slot (from slot 1) whose average
+        power is below 50 W (see solar_limit.find_production_window_end);
         beyond that there is no PV generation so no capacity needs to be
         reserved.
 
@@ -594,13 +599,10 @@ class DefaultLogic(LogicInterface):
         # is only needed to convert a Wh/slot rate back to an average W.
 
         # Limit cheap-slot search to the production window.
-        # The production window ends at the first slot with zero production;
+        # The production window ends at the first slot (from slot 1) below 50 W average power;
         # beyond that there is no PV generation and no need to reserve capacity.
-        production_end = len(prices)
-        for i, prod in enumerate(calc_input.production):
-            if float(prod) == 0:
-                production_end = i
-                break
+        production_end = solar_limit.find_production_window_end(
+            calc_input.production, interval_hours, len(prices))
 
         cheap_slots = [i for i, p in enumerate(prices)
                        if i < production_end and p is not None and p <= price_limit]

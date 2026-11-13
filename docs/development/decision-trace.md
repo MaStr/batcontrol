@@ -46,6 +46,8 @@ explains why something did **not** happen.
 | `override` | `applied` | `PV_CHARGE_RATE_CLAMPED`, `GRID_CHARGE_RATE_CLAMPED` | no (note, see below) |
 | `mode` | `allow_discharging`, `limit_battery_charge_rate`, `avoid_discharging`, `force_charge` | reason of the decisive step | - |
 
+The `limit_set` record of `peak_shaving` carries `computed_limit_w` (merged time/price limit before the minimum charge rate) and `blocked_below_min_rate`. When the computed limit was between 1 W and 499 W, `final_limit_w` is 0 and `blocked_below_min_rate` is true.
+
 `grid_recharge`/`charge` has two reasons, told apart by `deferrable_energy`:
 - `GRID_RECHARGE_REQUIRED`: the high-price slots follow before any slot
   that is not more expensive than the current one, so this is the moment to
