@@ -1545,6 +1545,112 @@ class TestChargeRateMultiplierWiring:
             Batcontrol(config)
 
 
+class TestExpertConfigValidation:
+    """Invalid battery_control_expert values stop batcontrol at startup, with
+    a message naming the key - not later inside a grid recharge calculation."""
+
+    BASE_CONFIG = TestMarketPriceRefresh.BASE_CONFIG
+    _patch_core = TestChargeRateMultiplierWiring._patch_core
+
+    def setup_method(self):
+        CommonLogic._instance = None
+
+    def teardown_method(self):
+        CommonLogic._instance = None
+
+    @pytest.mark.parametrize("key, invalid_value", [
+        ('soften_price_difference_on_charging_factor', 0),
+        ('soften_price_difference_on_charging_factor', -5),
+        ('soften_price_difference_on_charging_factor', 'five'),
+        ('soften_price_difference_on_charging_factor', None),
+        ('soften_price_difference_on_charging', 'maybe'),
+        ('soften_price_difference_on_charging', 2),
+        ('spread_grid_charge_over_charge_window', 'sometimes'),
+        ('round_price_digits', 2.5),
+        ('round_price_digits', 'four'),
+        ('round_price_digits', True),
+        ('production_offset_percent', -0.1),
+        ('production_offset_percent', 'snow'),
+        ('preserve_min_grid_charge_soc', 'perhaps'),
+    ])
+    def test_invalid_expert_value_raises_at_startup(
+            self, mocker, key, invalid_value):
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control_expert'] = {key: invalid_value}
+        with pytest.raises(
+                ValueError, match=f"battery_control_expert.{key}") as excinfo:
+            Batcontrol(config)
+        assert repr(invalid_value) in str(excinfo.value) \
+            or type(invalid_value).__name__ in str(excinfo.value)
+
+    def test_string_values_of_a_form_field_are_parsed(self, mocker):
+        """"false" must not be treated as enabled, "2" must be usable as a
+        number of digits."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control_expert'] = {
+            'soften_price_difference_on_charging': 'false',
+            'soften_price_difference_on_charging_factor': '5',
+            'spread_grid_charge_over_charge_window': 'False',
+            'round_price_digits': '2',
+            'production_offset_percent': '0.8',
+            'preserve_min_grid_charge_soc': 'true',
+        }
+        bc = Batcontrol(config)
+        try:
+            assert bc.round_price_digits == 2
+            assert bc.production_offset_percent == 0.8
+            assert bc.preserve_min_grid_charge_soc is True
+            logic = LogicFactory.create_logic(
+                60, config, datetime.timezone.utc)
+            assert logic.soften_price_difference_on_charging is False
+            assert logic.soften_price_difference_on_charging_factor == 5.0
+            assert logic.spread_grid_charge_over_charge_window is False
+            assert logic.round_price_digits == 2
+        finally:
+            bc.shutdown()
+
+    def test_template_values_are_accepted(self, mocker):
+        """The values of config/batcontrol_config_dummy.yaml stay valid."""
+        self._patch_core(mocker)
+        config = dict(self.BASE_CONFIG)
+        config['battery_control_expert'] = {
+            'charge_rate_multiplier': 1.1,
+            'soften_price_difference_on_charging': False,
+            'soften_price_difference_on_charging_factor': 5,
+            'spread_grid_charge_over_charge_window': True,
+            'round_price_digits': 4,
+            'production_offset_percent': 1.0,
+            'preserve_min_grid_charge_soc': False,
+        }
+        bc = Batcontrol(config)
+        bc.shutdown()
+
+    @pytest.mark.parametrize("rate, expected", [
+        (5000, 5000.0), (3600.5, 3600.5), (0, 0.0), (-1, 0.0),
+        (None, 0.0), (True, 0.0), ('5000', 0.0),
+    ])
+    def test_known_max_grid_charge_rate(self, mocker, rate, expected):
+        """Only a real positive number is handed to the logic as the maximum
+        grid charge rate; anything else counts as unknown (0)."""
+        self._patch_core(mocker)
+        bc = Batcontrol(dict(self.BASE_CONFIG))
+        try:
+            bc.inverter.max_grid_charge_rate = rate
+            assert bc._known_max_grid_charge_rate() == expected
+        finally:
+            bc.shutdown()
+
+    def test_mock_inverter_rate_counts_as_unknown(self, mocker):
+        self._patch_core(mocker)
+        bc = Batcontrol(dict(self.BASE_CONFIG))
+        try:
+            assert bc._known_max_grid_charge_rate() == 0.0
+        finally:
+            bc.shutdown()
+
+
 class TestApiSetGridChargeLock:
     """External grid-charge lock signal (e.g. HEMS/grid operator, section 14a EnWG)."""
 

@@ -4,8 +4,48 @@ import logging
 from .logic_interface import LogicInterface
 from .default import DefaultLogic
 from .next import NextLogic
+from ..value_utils import (
+    parse_bool_config,
+    parse_integer,
+    parse_positive_number,
+)
 
 logger = logging.getLogger(__name__)
+
+# Expert tuning attributes that are set directly on the logic instance, with
+# the parser that validates their value.
+_EXPERT_ATTRIBUTE_PARSERS = {
+    'soften_price_difference_on_charging': parse_bool_config,
+    # Used as a divisor, so zero and negative values are invalid
+    'soften_price_difference_on_charging_factor': parse_positive_number,
+    'spread_grid_charge_over_charge_window': parse_bool_config,
+    'round_price_digits': parse_integer,
+}
+
+
+def parse_logic_expert_settings(battery_control_expert) -> dict:
+    """ Validate the battery_control_expert values the logic uses.
+
+    Returns the parsed value for every logic attribute present in the
+    section. Raises ValueError naming the config key and the value for
+    anything that cannot be used. Called at startup by the core, so a typo
+    stops batcontrol right away instead of failing in the middle of a later
+    grid recharge calculation.
+    """
+    if battery_control_expert is None:
+        return {}
+    if not isinstance(battery_control_expert, dict):
+        raise ValueError(
+            'battery_control_expert must be a mapping of key: value '
+            f'settings, got {type(battery_control_expert).__name__}'
+        )
+    settings = {}
+    for attribute, parser in _EXPERT_ATTRIBUTE_PARSERS.items():
+        if attribute in battery_control_expert:
+            settings[attribute] = parser(
+                battery_control_expert[attribute],
+                f'battery_control_expert.{attribute}')
+    return settings
 
 class Logic:
     """ Factory for logic classes. """
@@ -31,18 +71,11 @@ class Logic:
             raise RuntimeError(
                 f'[Logic] Unknown logic type "{request_type}" specified in configuration')
 
-        # Apply expert tuning attributes
-        if config.get('battery_control_expert', None) is not None:
-            battery_control_expert = config.get('battery_control_expert', {})
-            attribute_list = [
-                'soften_price_difference_on_charging',
-                'soften_price_difference_on_charging_factor',
-                'spread_grid_charge_over_charge_window',
-                'round_price_digits',
-            ]
-            for attribute in attribute_list:
-                if attribute in battery_control_expert:
-                    logger.debug('Setting %s to %s', attribute,
-                                 battery_control_expert[attribute])
-                    setattr(logic, attribute, battery_control_expert[attribute])
+        # Apply expert tuning attributes (validated, see
+        # parse_logic_expert_settings)
+        expert_settings = parse_logic_expert_settings(
+            config.get('battery_control_expert', None))
+        for attribute, value in expert_settings.items():
+            logger.debug('Setting %s to %s', attribute, value)
+            setattr(logic, attribute, value)
         return logic

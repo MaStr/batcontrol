@@ -84,6 +84,9 @@ Based on the forecasts and current battery state, batcontrol puts your inverter 
   - Battery charges from grid at configured rate (`max_grid_charge_rate`)
   - Charging stops at `max_charging_from_grid_limit` (typically 89%)
 - **Calculation**: Estimates required energy for upcoming expensive hours
+- **Timing**: As late as possible, but early enough that the remaining cheap slots can still
+  charge the required energy at `max_grid_charge_rate` - see
+  [When grid charging starts](../features/battery-control-expert.md#when-grid-charging-starts)
 - **Efficiency**: Accounts for 10-20% charge/discharge losses
 
 ## Price-Based Decision Making
