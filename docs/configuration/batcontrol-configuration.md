@@ -106,7 +106,7 @@ To also preserve this target as reserved energy during cheap/pre-expensive windo
 
 If `min_grid_charge_soc` is higher than `max_charging_from_grid_limit`, grid charging cannot reach the configured minimum SoC target. Batcontrol will log a warning in this case; increase `max_charging_from_grid_limit` or lower `min_grid_charge_soc` so the settings correlate.
 
-`min_recharge_amount` controls the minimum amount of Wh is needed to be recharged before batcontrol activates battery charging. Once the required recharge energy reaches this minimum, batcontrol adds the same amount on top of the energy to charge, so it does not get stuck right at the threshold.
+`min_recharge_amount` is the minimum amount of energy (Wh) that must be recharged before batcontrol activates battery charging. Once the required recharge energy reaches this minimum, batcontrol adds the same amount on top of the energy to charge, so it does not get stuck right at the threshold.
 
 ## Battery Control Expert Tuning Parameters
 
