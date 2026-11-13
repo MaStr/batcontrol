@@ -254,7 +254,7 @@ Peak shaving cap rules (time and price) are automatically bypassed in the follow
 | EV connected in PV-surplus mode (evcc: `pv`, `minpv`, `smart`) | Bypassed | Not applied |
 | `price_limit` not configured | Price rule inactive | Not affected |
 
-Once the battery reaches `always_allow_discharge_limit`, the time and price limit is dropped. The remaining capacity above that SoC is therefore charged without a limit, even before the target hour.
+Once the battery reaches `always_allow_discharge_limit`, the limits of the time and price rule are dropped. The remaining capacity above that SoC is therefore charged without a limit, even before the target hour.
 
 ## evcc Interaction
 
