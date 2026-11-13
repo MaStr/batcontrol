@@ -78,7 +78,7 @@ battery_control:
   min_price_difference: 0.05 
   min_price_difference_rel: 0.10
   always_allow_discharge_limit: 0.90
-  max_charging_from_grid_limit: 0.89
+  max_charging_from_grid_limit: 0.80
   min_grid_charge_soc: 0.55 # optional: grid-charge to this SoC before expensive slots
   grid_charge_target_strategy: fixed # optional: fixed or forecast
   min_recharge_amount: 100          
@@ -106,7 +106,7 @@ To also preserve this target as reserved energy during cheap/pre-expensive windo
 
 If `min_grid_charge_soc` is higher than `max_charging_from_grid_limit`, grid charging cannot reach the configured minimum SoC target. Batcontrol will log a warning in this case; increase `max_charging_from_grid_limit` or lower `min_grid_charge_soc` so the settings correlate.
 
-`min_recharge_amount` controls the minimum amount of Wh is needed to be recharged before batcontrol activates battery charging.
+`min_recharge_amount` controls the minimum amount of Wh is needed to be recharged before batcontrol activates battery charging. Once the required recharge energy reaches this minimum, batcontrol adds the same amount on top of the energy to charge, so it does not get stuck right at the threshold.
 
 ## Battery Control Expert Tuning Parameters
 
@@ -119,6 +119,7 @@ battery_control_expert:
   round_price_digits: 4
   production_offset_percent: 1.0
   preserve_min_grid_charge_soc: false
+  market_price_refresh_time: "12:30"
 ```
 
 These expert parameters allow fine-tuning of Batcontrol's behavior. See [Battery Control Expert](../features/battery-control-expert.md) for detailed explanations of each parameter:
@@ -132,3 +133,4 @@ These expert parameters allow fine-tuning of Batcontrol's behavior. See [Battery
 | `round_price_digits` | integer | 4 | Decimal places for price rounding in comparisons |
 | `production_offset_percent` | float | 1.0 | Multiplier to adjust solar production forecast (1.0 = no change, 0.8 = 80%, etc.) |
 | `preserve_min_grid_charge_soc` | boolean | false | Also preserve `min_grid_charge_soc` as reserved battery energy during cheap/pre-expensive windows |
+| `market_price_refresh_time` | string | "12:30" | UTC time ("HH:MM") of the daily forced price refresh that picks up newly published next-day prices. An invalid value aborts startup |
