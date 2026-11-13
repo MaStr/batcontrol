@@ -30,9 +30,13 @@ A later slot can only take over what the inverter is able to charge in it. Batco
 checks the following cheaper (or equally cheap) slots against `max_grid_charge_rate`:
 
 ```
-capacity of one later slot = max_grid_charge_rate / charge_rate_multiplier * slot length
+capacity of one later slot = max_grid_charge_rate / max(charge_rate_multiplier, 1) * slot length
 charged now                = demand of the expensive hours - capacity of the cheaper slots before them
 ```
+
+A `charge_rate_multiplier` below 1 is allowed and lowers the requested charge rate as usual. For
+this capacity check it counts as 1: the inverter cannot charge more than `max_grid_charge_rate`,
+and assuming more would defer charging for too long.
 
 Only the part the later slots cannot deliver is charged in the current slot. Everything else is
 still deferred.

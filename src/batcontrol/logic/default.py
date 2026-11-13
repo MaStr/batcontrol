@@ -891,14 +891,21 @@ class DefaultLogic(LogicInterface):
         per time multiplied by ``charge_rate_multiplier`` and capped at
         ``max_grid_charge_rate``, so a slot charging at the cap accounts for
         ``max_grid_charge_rate / charge_rate_multiplier`` W of the planned
-        energy. Returns 0 if the maximum grid charge rate is unknown.
+        energy.
+
+        A multiplier below 1 is a valid setting and lowers the requested
+        rate as usual, but it is not used to raise the capacity here: the
+        inverter cannot charge more than ``max_grid_charge_rate``, and an
+        overestimated capacity would defer charging for too long. The
+        capacity is therefore ``max_grid_charge_rate /
+        max(charge_rate_multiplier, 1)``.
+
+        Returns 0 if the maximum grid charge rate is unknown.
         """
         max_rate = self.calculation_parameters.max_grid_charge_rate
         if max_rate is None or max_rate <= 0:
             return 0.0
-        multiplier = self.common.charge_rate_multiplier
-        if multiplier > 1:
-            max_rate = max_rate / multiplier
+        max_rate = max_rate / max(self.common.charge_rate_multiplier, 1.0)
         return max_rate * self.interval_minutes / 60.0
 
     def _get_required_recharge_energy(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements

@@ -37,13 +37,13 @@ PLATEAU_DEMAND = 8 * CONSUMPTION
 
 def _logic(logic_cls, max_grid_charge_rate, **kwargs):
     kwargs.setdefault('min_grid_charge_soc', None)
+    kwargs.setdefault('charge_rate_multiplier', CHARGE_RATE_MULTIPLIER)
     return make_logic(
         logic_cls,
         interval_minutes=15,
         preserve_min_grid_charge_soc=False,
         min_price_difference=0.05,
         min_price_difference_rel=0,
-        charge_rate_multiplier=CHARGE_RATE_MULTIPLIER,
         max_grid_charge_rate=max_grid_charge_rate,
         **kwargs)
 
@@ -108,6 +108,23 @@ class TestPricePlateau:
         assert 'cheaper hours can charge only 2273 Wh of the 4000 Wh' \
             in explanation
         assert '5000 W' in explanation
+
+    @pytest.mark.parametrize('multiplier', [0.8, 1.0])
+    def test_multiplier_below_one_does_not_raise_slot_capacity(
+            self, logic_cls, multiplier):
+        """A charge_rate_multiplier below 1 is valid, but a later slot can
+        never charge more than max_grid_charge_rate: its capacity is planned
+        as for a multiplier of 1, not as max_rate / 0.8."""
+        logic = _logic(logic_cls, MAX_RATE, charge_rate_multiplier=multiplier)
+
+        settings, output = _run(logic, PLATEAU[5:])
+
+        physical_slot_capacity = MAX_RATE * 0.25
+        shortfall = PLATEAU_DEMAND - 2 * physical_slot_capacity
+        assert settings.charge_from_grid
+        assert output.required_recharge_energy == pytest.approx(shortfall + 100)
+        assert _recharge_record(logic).inputs['deferrable_energy'] == \
+            pytest.approx(2 * physical_slot_capacity)
 
     def test_last_plateau_slot_is_the_plain_recharge(self, logic_cls):
         """Nothing is deferred any more: same result with and without a
