@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, Any
+from typing import Optional, Any, Union
 import datetime
 import numpy as np
 
@@ -159,7 +159,7 @@ class CalculationInput:
     """ Input for the calculation """
     production: np.ndarray
     consumption: np.ndarray
-    prices: dict
+    prices: Union[np.ndarray, dict]
     stored_energy: float  # Stored energy in Wh
     stored_usable_energy: float # Usable energy in Wh (reduced by MIN_SOC)
     free_capacity: float  # Free capacity in Wh (reduced by MAX_SOC)
@@ -218,7 +218,7 @@ class InverterControlSettings:
     # Force charge mode is used to charge the battery from grid
     charge_from_grid: bool
     charge_rate: int
-    # Limit charge rate (via PV) to a certain value Wh
+    # Limit charge rate (via PV) to a certain value W
     # -1 means no limit, 0 means no charging
     limit_battery_charge_rate: int
 
@@ -227,7 +227,7 @@ class LogicInterface(ABC):
     """ Interface for Logic classes """
 
     @abstractmethod
-    def __init__(self, timezone):
+    def __init__(self, timezone, interval_minutes: int = 60):
         """ Initialize the Logic class """
         pass
 
@@ -237,7 +237,8 @@ class LogicInterface(ABC):
         pass
 
     @abstractmethod
-    def calculate(self, input_data: CalculationInput, calc_timestamp:datetime) -> bool:
+    def calculate(self, input_data: CalculationInput,
+                  calc_timestamp: Optional[datetime.datetime] = None) -> bool:
         """ Calculate the inverter control settings based on the input data """
         pass
 

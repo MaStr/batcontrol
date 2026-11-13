@@ -156,7 +156,7 @@ def _rule_values(scenario, logic, calc_input, timestamp, stored_wh, common):
                 calc_input, timestamp)
         if peak_shaving.price_active and peak_shaving.price_limit is not None:
             price_w = logic._calculate_peak_shaving_charge_limit_price_based(
-                calc_input)
+                calc_input, timestamp)
 
     if peak_shaving.solar_cap_active and peak_shaving.feed_in_limit_w > 0:
         # Mirrors _apply_solar_limit's own call

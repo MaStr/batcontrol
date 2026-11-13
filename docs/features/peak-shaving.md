@@ -133,7 +133,7 @@ Only slots within the **production window** are considered. The production windo
 4. Otherwise: spread `additional_allowed` evenly over the slots before the cheap window.
 
 **Inside the cheap window:**
-- If total PV surplus during cheap slots exceeds free capacity, spread `free_capacity` evenly over cheap slots so the battery fills gradually.
+- If total PV surplus during cheap slots exceeds free capacity, spread `free_capacity` over the cheap slots that have a PV surplus, in proportion to time, so the battery fills gradually. The current slot counts only with the time that is left in it, all following slots count in full; the limit is `free_capacity` divided by the hours covered by these slots. Cheap slots without surplus are not counted.
 - If surplus fits in free capacity, no limit is applied.
 
 ### Combining Rules

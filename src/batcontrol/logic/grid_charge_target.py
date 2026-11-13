@@ -38,23 +38,23 @@ class GridChargeTargetResult:
     effective_soc: Optional[float]
 
 
-def _parse_grid_charge_target_strategy(value) -> str:
-    """Parse the grid-charge target strategy config value."""
-    strategy = str(value).strip().lower()
+def _validate_strategy(strategy: str, raw_value=None) -> str:
+    """Return ``strategy`` if known, else raise ValueError with key and value.
+
+    ``raw_value`` is the unnormalised configured value shown in the message.
+    """
     if strategy not in GRID_CHARGE_TARGET_STRATEGIES:
+        shown = strategy if raw_value is None else raw_value
         raise ValueError(
             f"battery_control.grid_charge_target_strategy must be one of "
-            f"{GRID_CHARGE_TARGET_STRATEGIES}, got {value!r}"
+            f"{GRID_CHARGE_TARGET_STRATEGIES}, got {shown!r}"
         )
     return strategy
 
 
-def _validate_strategy(strategy: str) -> None:
-    if strategy not in GRID_CHARGE_TARGET_STRATEGIES:
-        raise ValueError(
-            f"grid_charge_target_strategy must be one of "
-            f"{GRID_CHARGE_TARGET_STRATEGIES}, got '{strategy}'"
-        )
+def _parse_grid_charge_target_strategy(value) -> str:
+    """Parse the grid-charge target strategy config value."""
+    return _validate_strategy(str(value).strip().lower(), value)
 
 
 def _capped_forecast_soc(

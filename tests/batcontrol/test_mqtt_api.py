@@ -827,6 +827,36 @@ class TestPeakShavingPriceLimitApi:
             bc.mqtt_api.publish_peak_shaving_price_limit.assert_not_called()
 
 
+class TestPeakShavingEnabledAndHourApi:
+    """enabled / allow_full_after setters replace the config by one assignment."""
+
+    def test_enabled_replaces_config_object(self):
+        original = PeakShavingConfig(enabled=False)
+        bc = _make_bc_stub(original)
+        Batcontrol.api_set_peak_shaving_enabled(bc, 'true')
+        assert bc.peak_shaving_config is not original
+        assert bc.peak_shaving_config.enabled is True
+        assert original.enabled is False
+        bc.mqtt_api.publish_peak_shaving_enabled.assert_called_once_with(True)
+
+    def test_allow_full_after_replaces_config_object(self):
+        original = PeakShavingConfig(allow_full_battery_after=14)
+        bc = _make_bc_stub(original)
+        Batcontrol.api_set_peak_shaving_allow_full_after(bc, 10)
+        assert bc.peak_shaving_config is not original
+        assert bc.peak_shaving_config.allow_full_battery_after == 10
+        assert original.allow_full_battery_after == 14
+        bc.mqtt_api.publish_peak_shaving_allow_full_after.assert_called_once_with(10)
+
+    def test_invalid_hours_are_rejected(self):
+        original = PeakShavingConfig(allow_full_battery_after=14)
+        for hour in (-1, 24, 'noon', True, 10.5):
+            bc = _make_bc_stub(original)
+            Batcontrol.api_set_peak_shaving_allow_full_after(bc, hour)
+            assert bc.peak_shaving_config is original
+            bc.mqtt_api.publish_peak_shaving_allow_full_after.assert_not_called()
+
+
 # Byte-for-byte MQTT forecast payloads, recorded before the slot rendering was
 # shared with the web snapshot (interval_utils.iter_slots). Home Assistant
 # sensors parse these, so the refactoring must not change a single character:

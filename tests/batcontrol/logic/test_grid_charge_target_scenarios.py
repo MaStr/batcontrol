@@ -153,3 +153,55 @@ def test_forecast_strategy_preserve_adds_reserve_only_when_enabled(logic_cls):
         high_price_required_energy)
     assert enabled_result.allow_discharge is False
     assert enabled_output.reserved_energy == pytest.approx(expected_reserve)
+
+
+@pytest.mark.parametrize("logic_cls", [DefaultLogic, NextLogic])
+def test_fixed_strategy_charges_to_floor_although_stored_energy_covers_demand(
+        logic_cls):
+    """Intended behaviour (maintainer decision): strategy "fixed" is a floor.
+
+    With a high-price slot that has consumption and discharge held back, the
+    battery is grid-charged up to min_grid_charge_soc even though the stored
+    usable energy (2000 Wh) already covers the high-price demand (1000 Wh, slot 2).
+    The value secures a minimum SoC; it is not sized by the forecast. See
+    docs/configuration/batcontrol-configuration.md.
+    """
+    logic = make_logic(
+        logic_cls,
+        capacity_wh=10000,
+        min_grid_charge_soc=0.55,
+        min_price_difference=0.05,
+        min_price_difference_rel=0.0,
+        grid_charge_target=GridChargeTargetConfig(strategy='fixed'),
+    )
+    calc_input = make_calc_input(
+        production=[0, 0, 0],
+        consumption=[0, 1500, 1000],
+        prices=[0.20, 0.22, 0.30],
+        soc=25,
+        capacity_wh=10000,
+        min_soc=0.05,
+    )
+    assert calc_input.stored_usable_energy == 2000.0
+
+    assert logic.calculate(calc_input, datetime.datetime(
+        2026, 4, 30, 14, 0, 0, tzinfo=datetime.timezone.utc))
+    settings = logic.get_inverter_control_settings()
+
+    assert settings.allow_discharge is False
+    assert settings.charge_from_grid is True
+    # at least floor (5500 Wh) - stored (2500 Wh); demand alone needs nothing
+    assert logic.get_calculation_output().required_recharge_energy == 3100.0
+
+    # Control: without the floor the demand alone needs no grid charge
+    control = make_logic(
+        logic_cls,
+        capacity_wh=10000,
+        min_grid_charge_soc=0.0,
+        min_price_difference=0.05,
+        min_price_difference_rel=0.0,
+        grid_charge_target=GridChargeTargetConfig(strategy='fixed'),
+    )
+    assert control.calculate(calc_input, datetime.datetime(
+        2026, 4, 30, 14, 0, 0, tzinfo=datetime.timezone.utc))
+    assert control.get_inverter_control_settings().charge_from_grid is False
