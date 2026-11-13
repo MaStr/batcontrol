@@ -146,6 +146,11 @@ The system validates configuration to prevent problematic behavior:
 - **Timeout**: If APIs fail for >10 minutes, defaults to discharge mode
 - **Fallback Strategy**: Ensures battery remains usable during outages
 - **Recovery**: Automatically resumes normal operation when APIs return
+- **Incomplete data**: A forecast with a missing slot is handled like a failed API call
+
+### Calculation Failures
+- **Fallback**: If the control calculation itself fails, batcontrol logs the error with a traceback, switches to discharge mode for this cycle and tries again at the next evaluation
+- **Visibility**: The Decision sensor reports the reason `CALCULATION_FAILED`
 
 ### Configuration Validation
 - **Runtime Checks**: Validates parameter relationships
