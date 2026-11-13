@@ -49,7 +49,7 @@ without any guarantee.
 ## Proposed algorithm: the "solar_cap" rule
 
 The rule works on the existing forecast arrays (Wh per interval, index 0 = now) and
-distinguishes two cases. Per slot `k` (up to the end of the production window):
+distinguishes two cases. Per slot `k` (up to the end of the production window, i.e. the first slot from slot 1 on below 50 W average power):
 
 ```
 surplus_wh[k]    = max(0, production[k] - consumption[k])
@@ -155,7 +155,8 @@ Documented, fixed order of precedence (no configuration needed):
    battery reach 100% only after the target hour; lost energy weighs more than a
    late-full battery.
 5. **Static inverter clamps** last (`max_pv_charge_rate` as upper bound, 500 W
-   minimum via `enforce_min_pv_charge_rate`). Caution: a configured
+   minimum via `enforce_min_pv_charge_rate`, which raises; the time/price rules use
+   `block_below_min_pv_charge_rate` instead and block below 500 W). Caution: a configured
    `max_pv_charge_rate` below the floor makes curtailment physically unavoidable
    -> startup warning planned.
 

@@ -47,6 +47,7 @@ from batcontrol.logic.logic_interface import (
     PeakShavingConfig,
 )
 from batcontrol.logic.common import CommonLogic
+from batcontrol.logic.solar_limit import find_production_window_end
 
 # ---------------------------------------------------------------------------
 # Global simulation parameters
@@ -128,13 +129,9 @@ def compute_solar_limit(production_wh, consumption_wh, feed_in_limit_w,
         slot0_hours = interval_h
 
     n = min(len(production_wh), len(consumption_wh))
-    # Production window ends at the first slot with zero production
+    # Production window ends at the first slot below 50 W average power
     # (same convention as the price-based peak shaving rule).
-    prod_end = n
-    for i in range(n):
-        if float(production_wh[i]) == 0:
-            prod_end = i
-            break
+    prod_end = find_production_window_end(production_wh, interval_h, n)
     if prod_end == 0:
         return 0, -1
 
@@ -313,6 +310,9 @@ def run_day(prod_actual_w, cons_actual_w, capacity_wh,
                 )
                 time_cap_w = logic._calculate_peak_shaving_charge_limit(
                     calc_input, ts)
+                if time_cap_w >= 0:
+                    time_cap_w = common.block_below_min_pv_charge_rate(
+                        time_cap_w)
 
         final_w = merge_limits(floor_w, [time_cap_w, solar_cap_w])
         if final_w > 0:

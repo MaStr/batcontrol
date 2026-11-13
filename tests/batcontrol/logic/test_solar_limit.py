@@ -7,8 +7,10 @@ docs/development/solar-limit-evaluation.md for the algorithm spec and the
 reference-day numbers reproduced in test_reference_day_first_clip_floor.
 """
 import unittest
+import numpy as np
 
-from batcontrol.logic.solar_limit import compute_solar_limit, merge_limits
+from batcontrol.logic.solar_limit import (
+    compute_solar_limit, merge_limits, find_production_window_end)
 
 
 class TestComputeSolarLimitNeutral(unittest.TestCase):
@@ -223,6 +225,49 @@ class TestMergeLimits(unittest.TestCase):
     def test_zero_floor_with_blocking_cap_blocks(self):
         """floor=0, caps=[0] -> 0 (nothing to override with)."""
         self.assertEqual(merge_limits(0, [0]), 0)
+
+
+
+
+class TestProductionWindowEnd(unittest.TestCase):
+    """The production window ends below 50 W average power (from slot 1)."""
+
+    def test_tiny_values_end_window(self):
+        prod = [3000, 3000, 0.5, 0.5, 9000, 9000]
+        self.assertEqual(find_production_window_end(prod, 1.0), 2)
+
+    def test_threshold_is_average_power(self):
+        # 15 min slots: 12 Wh = 48 W (ends), 13 Wh = 52 W (continues)
+        self.assertEqual(find_production_window_end([100, 12, 100], 0.25), 1)
+        self.assertEqual(find_production_window_end([100, 13, 100], 0.25), 3)
+
+    def test_slot0_small_does_not_close_window(self):
+        self.assertEqual(find_production_window_end([1.0, 3000, 0], 1.0), 2)
+
+    def test_slot0_zero_closes_window(self):
+        self.assertEqual(find_production_window_end([0, 3000], 1.0), 0)
+
+    def test_solar_limit_ignores_next_day_after_tiny_night_values(self):
+        args = dict(consumption_wh=[400] * 8, feed_in_limit_w=1000,
+                    interval_h=1.0, free_capacity_wh=500,
+                    max_capacity_wh=10000)
+        with_tiny = compute_solar_limit(
+            production_wh=[3000, 3000, 0.5, 0.5, 0.5, 0.5, 9000, 9000], **args)
+        with_zero = compute_solar_limit(
+            production_wh=[3000, 3000, 0, 0, 0, 0, 9000, 9000], **args)
+        self.assertEqual(with_tiny, with_zero)
+
+    def test_solar_limit_small_slot0_keeps_rule_active(self):
+        result = compute_solar_limit(
+            production_wh=[2.0, 9000, 0], consumption_wh=[0, 400, 0],
+            feed_in_limit_w=1000, interval_h=1.0,
+            free_capacity_wh=1000, max_capacity_wh=10000)
+        self.assertNotEqual(result, (0, -1))
+
+    def test_production_shorter_than_n_does_not_raise(self):
+        """n larger than the production array: no IndexError, returns n."""
+        prod = np.array([3000.0, 3000.0, 3000.0])
+        self.assertEqual(find_production_window_end(prod, 1.0, 6), 6)
 
 
 if __name__ == '__main__':

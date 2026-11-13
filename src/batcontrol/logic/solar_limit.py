@@ -23,6 +23,31 @@ clip) -- see the "Forecast-error plan" section of the linked document.
 """
 import numpy as np
 
+# Average power (W) below which a slot no longer counts as production.
+PRODUCTION_WINDOW_MIN_POWER_W = 50
+
+
+def find_production_window_end(production_wh, interval_h, n=None):
+    """Return the index of the first slot that ends the production window.
+
+    Slot 0 only ends the window when it has no production at all (it is
+    scaled by the remaining time of the current slot and can be tiny near
+    the slot end). From slot 1 on, a slot ends the window when its average
+    power (Wh / interval_h) is below PRODUCTION_WINDOW_MIN_POWER_W.
+    Returns n (default: len(production_wh)) if the window never ends;
+    slots beyond the end of production_wh are not inspected.
+    """
+    if n is None:
+        n = len(production_wh)
+    for i in range(min(n, len(production_wh))):
+        prod = float(production_wh[i])
+        if i == 0:
+            if prod == 0:
+                return 0
+        elif prod / interval_h < PRODUCTION_WINDOW_MIN_POWER_W:
+            return i
+    return n
+
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments
 # pylint: disable=too-many-locals,too-many-return-statements
@@ -57,13 +82,9 @@ def compute_solar_limit(
         slot0_hours = interval_h
 
     n = min(len(production_wh), len(consumption_wh))
-    # Production window ends at the first slot with zero production (same
-    # convention as the existing time/price peak-shaving rules).
-    prod_end = n
-    for i in range(n):
-        if float(production_wh[i]) == 0:
-            prod_end = i
-            break
+    # Production window ends at the first slot below the minimum power
+    # (same convention as the price-based peak-shaving rule).
+    prod_end = find_production_window_end(production_wh, interval_h, n)
     if prod_end == 0:
         return 0, -1
 

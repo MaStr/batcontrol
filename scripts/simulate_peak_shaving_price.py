@@ -34,6 +34,7 @@ from batcontrol.logic.logic_interface import (
     PeakShavingConfig,
 )
 from batcontrol.logic.common import CommonLogic
+from batcontrol.logic.solar_limit import find_production_window_end
 
 # ---------------------------------------------------------------------------
 # Simulation parameters
@@ -239,7 +240,7 @@ for hour in range(24):
         raw_limit = logic_shav._calculate_peak_shaving_charge_limit_price_based(
             calc_input)
         if raw_limit >= 0:
-            limit_w = common.enforce_min_pv_charge_rate(raw_limit)
+            limit_w = common.block_below_min_pv_charge_rate(raw_limit)
         else:
             limit_w = -1
     else:
@@ -322,11 +323,7 @@ for hour in range(24):
     cons_d       = calc_input_d.consumption
 
     # Find production_end in the shifted array
-    prod_end = len(prices_d)
-    for i, p in enumerate(prod_d):
-        if float(p) == 0:
-            prod_end = i
-            break
+    prod_end = find_production_window_end(prod_d, INTERVAL_H, len(prices_d))
 
     cheap_slots_d = [i for i, p in enumerate(prices_d)
                      if i < prod_end and p is not None and p <= PRICE_LIMIT]
@@ -341,7 +338,7 @@ for hour in range(24):
     if prod_w > 0:
         raw = debug_logic._calculate_peak_shaving_charge_limit_price_based(
             calc_input_d)
-        applied = common.enforce_min_pv_charge_rate(raw) if raw >= 0 else -1
+        applied = common.block_below_min_pv_charge_rate(raw) if raw >= 0 else -1
     else:
         raw     = None
         applied = None
