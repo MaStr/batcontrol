@@ -242,7 +242,7 @@ for hour in range(24):
     if prod_w > 0 and hour < TARGET_HOUR:
         raw_limit = logic_shav._calculate_peak_shaving_charge_limit(calc_input, ts)
         if raw_limit >= 0:
-            limit_w = common.enforce_min_pv_charge_rate(raw_limit)
+            limit_w = common.block_below_min_pv_charge_rate(raw_limit)
         else:
             limit_w = -1  # no limiting needed
     else:
@@ -307,7 +307,7 @@ for hour in range(24):
     n_remain = max(TARGET_HOUR - hour, 0)
     if prod_w > 0 and hour < TARGET_HOUR:
         raw = logic_ramp._calculate_peak_shaving_charge_limit(calc_input, ts)
-        applied = common.enforce_min_pv_charge_rate(raw) if raw >= 0 else -1
+        applied = common.block_below_min_pv_charge_rate(raw) if raw >= 0 else -1
     else:
         raw = -1
         applied = -1
@@ -363,7 +363,7 @@ def run_scenario(target_hour: int, initial_soc_wh: float) -> dict:
 
         if prod_w > 0 and hour < target_hour:
             raw = logic._calculate_peak_shaving_charge_limit(calc_input, ts_local)
-            lim = common_local.enforce_min_pv_charge_rate(raw) if raw >= 0 else -1
+            lim = common_local.block_below_min_pv_charge_rate(raw) if raw >= 0 else -1
         else:
             lim = -1
 

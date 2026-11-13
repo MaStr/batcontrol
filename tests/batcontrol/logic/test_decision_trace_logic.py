@@ -323,7 +323,9 @@ class TestPeakShavingSteps:
         assert (record.decision, record.outcome, record.reason) == (
             Decision.PEAK_SHAVING, Outcome.LIMIT_SET, Reason.PV_CHARGE_LIMITED)
         assert record.decisive
-        assert record.inputs['final_limit_w'] == 500
+        assert record.inputs['final_limit_w'] == 0
+        assert record.inputs['computed_limit_w'] == 142
+        assert record.inputs['blocked_below_min_rate'] is True
         assert record.inputs['price_limit_w'] is None
         assert record.inputs['time_limit_w'] == 142
 

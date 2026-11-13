@@ -189,7 +189,11 @@ def _peak_shaving_explanation(inputs: Dict[str, Any]) -> str:
         purposes.append('room is kept for solar surplus in cheap-price hours')
     if not purposes:
         raise KeyError('active_components')
-    return 'PV charging is limited so ' + ' and '.join(purposes)
+    text = 'PV charging is limited so ' + ' and '.join(purposes)
+    if inputs.get('blocked_below_min_rate'):
+        text += (f"; the computed limit of {inputs['computed_limit_w']:.0f} W "
+                 'is below the minimum charge rate, so PV charging is blocked')
+    return text
 
 
 # Shared start of the explanations for "no grid charging" while discharging
