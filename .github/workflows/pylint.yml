@@ -41,4 +41,7 @@ jobs:
 
       - name: Run pylint
         run: |
-          pylint -j 0 --fail-under 9 --source-roots ./src batcontrol
+          # Parallel pylint pickles its state with dill, and dill 0.4.1 reads
+          # code.co_lnotab, which Python 3.15 removed. Run single-process on
+          # 3.15 until dill supports it.
+          pylint -j ${{ matrix.python-version == '3.15' && '1' || '0' }} --fail-under 9 --source-roots ./src batcontrol
