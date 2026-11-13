@@ -21,7 +21,7 @@ already a complete stand-in for the core.
 |---|---|
 | Interval | 60 minutes |
 | Battery | 11000 Wh capacity, SoC 87.4 %, 9614 Wh stored, 8844 Wh usable, 1500 Wh reserved |
-| SoC limits | inverter min 7 %, max 100 %; always_allow_discharge 90 %; max_charging_from_grid 89 % |
+| SoC limits | inverter min 7 %, max 100 %; always_allow_discharge 90 %; max_charging_from_grid 80 % |
 | Mode | 10 (allow discharge), set by `optimizer` |
 | Price forecast | slot 0: 0.308, slot 1: 0.254, slot 2: 0.201, slot 3: 0.350 EUR/kWh |
 | Production | 0, 120, 900, 1500 Wh per slot |

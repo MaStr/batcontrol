@@ -20,7 +20,7 @@ battery_control:
   min_price_difference: 0.05 # Euro/kWh, absolute gain needed to charge from grid
   min_price_difference_rel: 0.10 # ... or this share of the current price; the higher one wins
   always_allow_discharge_limit: 0.90 # 0.00-1.00, above this SoC discharging is always allowed
-  max_charging_from_grid_limit: 0.89 # 0.00-1.00, charge from grid only up to this SoC
+  max_charging_from_grid_limit: 0.80 # 0.00-1.00, charge from grid only up to this SoC
   min_recharge_amount: 100 # Wh, minimum energy per grid recharge
   # min_grid_charge_soc: 0.55 # 0.00-1.00, SoC to preserve/charge before expensive slots
   # grid_charge_target_strategy: fixed # fixed = use min_grid_charge_soc as is; forecast = keep as reserve

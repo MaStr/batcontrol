@@ -225,12 +225,12 @@ In optimal conditions, your system might consistently outperform forecasts. A sl
 ### Example Impact
 
 Assume:
-- Forecasted solar production: 5,000 W
+- Forecasted solar production in a slot: 5,000 Wh
 - `production_offset_percent: 0.8` (winter mode)
 
 Then:
-- **Adjusted forecast**: 5,000 W × 0.8 = 4,000 W
-- Batcontrol will base its decisions on 4,000 W instead of 5,000 W
+- **Adjusted forecast**: 5,000 Wh × 0.8 = 4,000 Wh
+- Batcontrol will base its decisions on 4,000 Wh instead of 5,000 Wh for that slot
 
 This conservative approach prevents Batcontrol from over-planning battery discharge based on overly optimistic solar forecasts.
 
@@ -239,10 +239,27 @@ This conservative approach prevents Batcontrol from over-planning battery discha
 When `production_offset_percent` differs from `1.0`, Batcontrol logs the adjustment:
 
 ```
-Production forecast adjusted by 80% (factor: 0.8)
+Production offset active: 80.0% (multiplier: 0.800)
 ```
 
 This helps you verify that your offset setting is being applied correctly.
+
+# Market Price Refresh Time
+* Config option: `market_price_refresh_time`
+* Default: `"12:30"`
+
+## market_price_refresh_time
+
+Once a day batcontrol forces a refresh of the dynamic tariff prices, regardless of what the price cache holds, to pick up newly published next-day prices (for example EPEX spot prices, published around 12:00 UTC).
+
+```
+battery_control_expert:
+  market_price_refresh_time: "12:30"
+```
+
+- The value is a time of day as `"HH:MM"` in **UTC**, not in your local time zone.
+- The value is validated at startup. An invalid value (for example `"25:00"` or `"12.30"`) aborts startup with a `ValueError`.
+- When the refresh runs, batcontrol logs `Hard price refresh at HH:MM UTC - fetching fresh market prices`.
 
 # Valid values
 
@@ -262,6 +279,7 @@ ValueError: battery_control_expert.soften_price_difference_on_charging_factor mu
 | `round_price_digits` | whole number |
 | `production_offset_percent` | number, 0 or greater |
 | `preserve_min_grid_charge_soc` | `true` / `false` |
+| `market_price_refresh_time` | time of day as `"HH:MM"` (UTC) |
 
 Booleans may also be written as `yes` / `no`, `on` / `off` or `1` / `0`, and numbers as text
 (`"5"`), which is what a form field of the Home Assistant add-on delivers. The text `"false"` is
