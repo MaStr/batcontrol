@@ -1,6 +1,8 @@
 """Tests for value parsing helpers in value_utils."""
 import pytest
 
+from batcontrol import value_utils
+
 from batcontrol.value_utils import (
     get_config_value,
     mask_secret,
@@ -279,3 +281,57 @@ class TestRedactSecrets:
 
     def test_non_string_input(self):
         assert redact_secrets(429, 'aaaaaaaaaa') == '429'
+
+
+class TestParseBoolConfig:
+    """Boolean config values, including the strings a form field delivers."""
+
+    @pytest.mark.parametrize("value", [True, 1, "true", "True", " yes ", "on", "1"])
+    def test_true_values(self, value):
+        assert value_utils.parse_bool_config(value, 'section.key') is True
+
+    @pytest.mark.parametrize("value", [False, 0, "false", "FALSE", "no", "off", "0"])
+    def test_false_values(self, value):
+        assert value_utils.parse_bool_config(value, 'section.key') is False
+
+    @pytest.mark.parametrize("value", [None, "maybe", "", 2, 0.5, [], {}])
+    def test_invalid_values_name_the_key(self, value):
+        with pytest.raises(ValueError, match="section.key must be true or false"):
+            value_utils.parse_bool_config(value, 'section.key')
+
+
+class TestParseInteger:
+    """Integer config values."""
+
+    @pytest.mark.parametrize("value, expected", [
+        (4, 4), (0, 0), (-1, -1), (4.0, 4), ("4", 4), (" 2 ", 2),
+    ])
+    def test_valid_values(self, value, expected):
+        result = value_utils.parse_integer(value, 'section.key')
+        assert result == expected
+        assert isinstance(result, int)
+
+    @pytest.mark.parametrize("value", [
+        None, True, 2.5, "2.5", "four", "", float("nan"), float("inf"),
+    ])
+    def test_invalid_values_name_the_key(self, value):
+        with pytest.raises(ValueError, match="section.key must be an integer"):
+            value_utils.parse_integer(value, 'section.key')
+
+
+class TestParseNonNegativeNumber:
+    """Numeric config values that may be zero."""
+
+    @pytest.mark.parametrize("value, expected", [
+        (0, 0.0), (1, 1.0), (0.8, 0.8), ("1.2", 1.2),
+    ])
+    def test_valid_values(self, value, expected):
+        assert value_utils.parse_non_negative_number(
+            value, 'section.key') == expected
+
+    @pytest.mark.parametrize("value", [
+        None, True, -0.1, "much", "", float("nan"), float("inf"),
+    ])
+    def test_invalid_values_name_the_key(self, value):
+        with pytest.raises(ValueError, match="section.key must be a number >= 0"):
+            value_utils.parse_non_negative_number(value, 'section.key')

@@ -177,6 +177,11 @@ class CalculationParameters:
     # Expert option: also preserve the target as reserved energy during
     # cheap/pre-expensive windows.
     preserve_min_grid_charge_soc: bool = False
+    # Maximum grid charge power of the inverter(s) in W. Used to check
+    # whether later cheap slots can deliver the energy a grid recharge is
+    # deferred to. <= 0 means unknown: the logic then defers as if a later
+    # cheap slot could deliver any amount.
+    max_grid_charge_rate: float = 0.0
     # Peak shaving sub-configuration. evcc may set ``enabled=False`` for a
     # single calculation cycle via ``dataclasses.replace`` in core.py.
     peak_shaving: PeakShavingConfig = field(default_factory=PeakShavingConfig)

@@ -34,7 +34,7 @@ explains why something did **not** happen.
 |----------|---------|--------|----------|
 | `discharge` | `allowed` | `ALWAYS_ALLOW_DISCHARGE_LIMIT`, `USABLE_ENERGY_EXCEEDS_RESERVE` | yes |
 | `discharge` | `forbidden` | `RESERVE_REQUIRED` | no |
-| `grid_recharge` | `charge` | `GRID_RECHARGE_REQUIRED` | yes |
+| `grid_recharge` | `charge` | `GRID_RECHARGE_REQUIRED`, `GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT` | yes |
 | `grid_recharge` | `no_charge` | `GRID_CHARGE_LIMIT_REACHED`, `NO_HIGH_PRICE_SLOTS`, `HIGH_PRICE_DEMAND_COVERED_BY_PRODUCTION`, `NO_RECHARGE_REQUIRED`, `RECHARGE_BELOW_MINIMUM` | yes |
 | `peak_shaving` | `limit_set` | `PV_CHARGE_LIMITED` | yes |
 | `peak_shaving` | `not_needed` | `NO_LIMIT_NEEDED` | no |
@@ -47,6 +47,17 @@ explains why something did **not** happen.
 | `mode` | `allow_discharging`, `limit_battery_charge_rate`, `avoid_discharging`, `force_charge` | reason of the decisive step | - |
 
 The `limit_set` record of `peak_shaving` carries `computed_limit_w` (merged time/price limit before the minimum charge rate) and `blocked_below_min_rate`. When the computed limit was between 1 W and 499 W, `final_limit_w` is 0 and `blocked_below_min_rate` is true.
+
+`grid_recharge`/`charge` has two reasons, told apart by `deferrable_energy`:
+- `GRID_RECHARGE_REQUIRED`: the high-price slots follow before any slot
+  that is not more expensive than the current one, so this is the moment to
+  charge for them (`deferrable_energy` is 0).
+- `GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT`: cheaper or equally cheap slots
+  follow first, but at `max_grid_charge_rate` they can only charge
+  `deferrable_energy` of the `high_price_energy_demand` behind them; the rest
+  is charged now. `high_price_slots` then also lists the slots behind
+  `recharge_window_end` that cause the recharge. Only possible when the
+  inverter reports a `max_grid_charge_rate`.
 
 `grid_recharge`/`no_charge` has five reasons for the same outcome, told
 apart purely from `high_price_slots`/`high_price_energy_demand`/

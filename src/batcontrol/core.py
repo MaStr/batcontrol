@@ -31,6 +31,7 @@ from .evcc_api import EvccApi
 from .scheduler import SchedulerThread
 
 from .logic import Logic as LogicFactory
+from .logic.logic import parse_logic_expert_settings
 from .logic import CalculationInput, CalculationParameters
 from .logic import CommonLogic
 from .logic import PeakShavingConfig
@@ -64,7 +65,9 @@ from .runtime_state import (
     SolarMetrics, as_number, cap_reserved_energy,
 )
 from .value_utils import (
+    parse_bool_config,
     parse_bool_flag,
+    parse_non_negative_number,
     parse_optional_ratio,
     parse_positive_number,
 )
@@ -351,16 +354,24 @@ class Batcontrol:
         self.production_offset_percent = 1.0  # Default: no offset
         self.market_price_refresh_time = "12:30"
 
+        # Validate the expert values at startup: an invalid one (e.g. a
+        # soften factor of 0) must stop batcontrol here with a message that
+        # names the key, not fail later in the middle of a grid recharge
+        # calculation. The logic factory applies the same parsed values.
+        logic_expert_settings = parse_logic_expert_settings(
+            battery_control_expert)
+        self.round_price_digits = logic_expert_settings.get(
+            'round_price_digits', self.round_price_digits)
+
         if battery_control_expert:
-            self.round_price_digits = battery_control_expert.get(
-                'round_price_digits',
-                self.round_price_digits)
-            self.production_offset_percent = battery_control_expert.get(
-                'production_offset_percent',
-                self.production_offset_percent)
-            self.preserve_min_grid_charge_soc = battery_control_expert.get(
-                'preserve_min_grid_charge_soc',
-                self.preserve_min_grid_charge_soc)
+            if 'production_offset_percent' in battery_control_expert:
+                self.production_offset_percent = parse_non_negative_number(
+                    battery_control_expert['production_offset_percent'],
+                    'battery_control_expert.production_offset_percent')
+            if 'preserve_min_grid_charge_soc' in battery_control_expert:
+                self.preserve_min_grid_charge_soc = parse_bool_config(
+                    battery_control_expert['preserve_min_grid_charge_soc'],
+                    'battery_control_expert.preserve_min_grid_charge_soc')
             raw_refresh_time = battery_control_expert.get(
                 'market_price_refresh_time',
                 self.market_price_refresh_time)
@@ -654,6 +665,19 @@ class Batcontrol:
         )
         return max_pv_charge_rate, min_pv_charge_rate
 
+    def _known_max_grid_charge_rate(self) -> float:
+        """ Maximum grid charge rate of the inverter(s) in W, 0 if unknown.
+
+        Only a real, positive number counts as known. Anything else must not
+        reach the logic as a tiny or bogus rate, because the logic would
+        then conclude that later cheap slots cannot deliver anything.
+        """
+        rate = getattr(self.inverter, 'max_grid_charge_rate', None)
+        if isinstance(rate, bool) or not isinstance(rate, (int, float)):
+            return 0.0
+        rate = as_number(rate, 0.0)
+        return rate if rate > 0 else 0.0
+
     @staticmethod
     def _validate_market_price_refresh_time(value: str) -> None:
         """Raise ValueError if value is not a valid HH:MM time string."""
@@ -940,6 +964,10 @@ class Batcontrol:
             self.min_price_difference,
             self.min_price_difference_rel,
             max_capacity,
+            # Lets the logic check whether a later cheap slot can deliver the
+            # required energy at all. 0 (unknown) keeps the logic from
+            # relying on it.
+            max_grid_charge_rate=self._known_max_grid_charge_rate(),
             min_grid_charge_soc=self.min_grid_charge_soc,
             preserve_min_grid_charge_soc=self.preserve_min_grid_charge_soc,
             peak_shaving=ps_runtime,

@@ -59,6 +59,8 @@ class Reason:
     RESERVE_REQUIRED = 'RESERVE_REQUIRED'
     # grid recharge
     GRID_RECHARGE_REQUIRED = 'GRID_RECHARGE_REQUIRED'
+    GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT = \
+        'GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT'
     GRID_CHARGE_LIMIT_REACHED = 'GRID_CHARGE_LIMIT_REACHED'
     NO_HIGH_PRICE_SLOTS = 'NO_HIGH_PRICE_SLOTS'
     HIGH_PRICE_DEMAND_COVERED_BY_PRODUCTION = 'HIGH_PRICE_DEMAND_COVERED_BY_PRODUCTION'
@@ -130,6 +132,8 @@ _INPUT_FORMATS = {
     'required_recharge_energy': _ENERGY,
     'recharge_energy': _ENERGY,
     'high_price_energy_demand': _ENERGY,
+    'deferrable_energy': _ENERGY,
+    'max_grid_charge_rate': _POWER,
     'available_grid_charge_capacity': _ENERGY,
     'charge_limit_capacity': _ENERGY,
     'remaining_time': '%0.2f h',
@@ -231,6 +235,12 @@ _REASON_EXPLANATIONS: Dict[str, Union[str, Callable[[Dict[str, Any]], str]]] = {
         'usable energy ({stored_usable_energy:.0f} Wh) is below the '
         '{reserved_energy:.0f} Wh reserved for upcoming more expensive hours, '
         'so {recharge_energy:.0f} Wh is charged from the grid',
+    Reason.GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT:
+        'the upcoming cheaper hours can charge only '
+        '{deferrable_energy:.0f} Wh of the {high_price_energy_demand:.0f} Wh '
+        'needed for the more expensive hours after them (at most '
+        '{max_grid_charge_rate:.0f} W), so {recharge_energy:.0f} Wh is '
+        'charged from the grid now',
     Reason.GRID_CHARGE_LIMIT_REACHED:
         _HELD + 'the {charge_limit_capacity:.0f} Wh grid charge limit is '
         'reached ({stored_energy:.0f} Wh stored)',

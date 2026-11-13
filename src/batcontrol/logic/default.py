@@ -178,6 +178,7 @@ class DefaultLogic(LogicInterface):
             high_price_energy_demand = 0.0
             recharge_energy_before_minimum = 0.0
             window_end_slot = 0
+            deferrable_energy = 0.0
 
             logger.debug('Charging allowed: %s', is_charging_possible)
             if is_charging_possible:
@@ -186,7 +187,7 @@ class DefaultLogic(LogicInterface):
                              )
                 (required_recharge_energy, high_price_slots,
                  high_price_energy_demand, recharge_energy_before_minimum,
-                 window_end_slot
+                 window_end_slot, deferrable_energy
                  ) = self._get_required_recharge_energy(
                     calc_input,
                     net_consumption[:max_slot],
@@ -240,6 +241,9 @@ class DefaultLogic(LogicInterface):
                     high_price_slots=high_price_slots,
                     high_price_energy_demand=high_price_energy_demand,
                     recharge_window_end=window_end_slot,
+                    deferrable_energy=deferrable_energy,
+                    max_grid_charge_rate=(
+                        self.calculation_parameters.max_grid_charge_rate),
                     interval_minutes=self.interval_minutes), logger)
 
                 #self.force_charge(charge_rate)
@@ -882,27 +886,76 @@ class DefaultLogic(LogicInterface):
     #  Recharge energy calculation                                        #
     # ------------------------------------------------------------------ #
 
-    def _get_required_recharge_energy(
+    def _deferrable_energy_per_slot(self) -> float:
+        """Energy in Wh one full later slot can charge from the grid.
+
+        The charge rate requested from the inverter is the required energy
+        per time multiplied by ``charge_rate_multiplier`` and capped at
+        ``max_grid_charge_rate``, so a slot charging at the cap accounts for
+        ``max_grid_charge_rate / charge_rate_multiplier`` W of the planned
+        energy.
+
+        A multiplier below 1 is a valid setting and lowers the requested
+        rate as usual, but it is not used to raise the capacity here: the
+        inverter cannot charge more than ``max_grid_charge_rate``, and an
+        overestimated capacity would defer charging for too long. The
+        capacity is therefore ``max_grid_charge_rate /
+        max(charge_rate_multiplier, 1)``.
+
+        Returns 0 if the maximum grid charge rate is unknown.
+        """
+        max_rate = self.calculation_parameters.max_grid_charge_rate
+        if max_rate is None or max_rate <= 0:
+            return 0.0
+        max_rate = max_rate / max(self.common.charge_rate_multiplier, 1.0)
+        return max_rate * self.interval_minutes / 60.0
+
+    def _get_required_recharge_energy(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
             self, calc_input: CalculationInput, net_consumption: list,
-            prices: dict) -> Tuple[float, List[int], float, float, int]:
+            prices: dict) -> Tuple[float, List[int], float, float, int, float]:
         """ Calculate the required energy to shift toward high price slots.
 
-            If a recharge price window is detected, the energy required to
-            recharge the battery to the next high price slots is calculated.
+            The recharge evaluation window ends at the first slot that is
+            not more expensive than the current one: charging is deferred to
+            that slot, the demand of the high price slots behind it is its
+            business. That only works if the later slots can deliver the
+            energy. With a known ``max_grid_charge_rate`` the high price
+            slots behind the window are therefore evaluated as well, and the
+            part of their demand that the cheaper slots in between cannot
+            charge at the maximum rate has to be charged now:
+
+                required = max over high price slots h of
+                           (demand up to h) - (charge capacity of the slots
+                                               before h that end the window)
+
+            Inside the window there are no such slots, so the result is
+            never below the demand of the window itself. Without a known
+            maximum rate only the window is evaluated.
+
+            Known simplification: a cheaper slot may need part of its
+            capacity for demand that is not "high price" seen from the
+            current price (the threshold moves with the price). That demand
+            is not subtracted from the capacity here.
 
             return: (recharge_energy, high_price_slots, high_price_energy_demand,
-                      recharge_energy_before_minimum, window_end) --
+                      recharge_energy_before_minimum, window_end,
+                      deferrable_energy) --
                 recharge_energy/high_price_energy_demand/
-                recharge_energy_before_minimum in Wh, high_price_slots/
-                window_end relative slot indices. recharge_energy_before_minimum
-                is the amount right before the minimum-charge-amount check
-                below; > 0 there (but still zeroed into recharge_energy)
-                means a real, if small, demand existed -- as opposed to
-                stored energy already covering it. All passed on to the
+                recharge_energy_before_minimum/deferrable_energy in Wh,
+                high_price_slots/window_end relative slot indices.
+                recharge_energy_before_minimum is the amount right before
+                the minimum-charge-amount check below; > 0 there (but still
+                zeroed into recharge_energy) means a real, if small, demand
+                existed -- as opposed to stored energy already covering it.
+                deferrable_energy is the part of high_price_energy_demand
+                that later cheaper slots are able to charge; > 0 means the
+                recharge is only needed because those slots are too short
+                for the whole demand. All passed on to the
                 grid_recharge_charge/grid_recharge_idle decision record.
          """
         current_price = prices[0]
-        max_slot = len(net_consumption)
+        horizon = len(net_consumption)
+        max_slot = horizon
         consumption = np.array(net_consumption)
         consumption[consumption < 0] = 0
 
@@ -912,50 +965,79 @@ class DefaultLogic(LogicInterface):
         min_dynamic_price_difference = self._calculate_min_dynamic_price_difference(
             current_price)
 
-        # evaluation period until price is first time lower then current price
-        for slot in range(1, max_slot):
-            future_price = prices[slot]
-            found_lower_price = False
-            # Soften the price difference to avoid too early charging
-            if self.soften_price_difference_on_charging:
-                modified_price = current_price-min_price_difference / \
-                    self.soften_price_difference_on_charging_factor
-                found_lower_price = future_price <= modified_price
-            else:
-                found_lower_price = future_price <= current_price
+        # A slot at or below this price ends the evaluation window: charging
+        # is deferred to it. Soften the price difference to avoid too early
+        # charging.
+        if self.soften_price_difference_on_charging:
+            deferral_price = current_price-min_price_difference / \
+                self.soften_price_difference_on_charging_factor
+        else:
+            deferral_price = current_price
 
-            if found_lower_price:
+        # evaluation period until price is first time lower then current price
+        for slot in range(1, horizon):
+            if prices[slot] <= deferral_price:
                 max_slot = slot
                 break
 
         self.recharge_window_end = max_slot
 
-        # get high price slots
-        high_price_slots = []
-        for slot in range(max_slot):
-            future_price = prices[slot]
-            if future_price > current_price+min_dynamic_price_difference:
-                high_price_slots.append(slot)
+        # Without a known maximum grid charge rate a later cheap slot is
+        # assumed to deliver any amount, so nothing behind the window counts.
+        slot_charge_capacity = self._deferrable_energy_per_slot()
+        plan_end = horizon if slot_charge_capacity > 0 else max_slot
 
-        # start with nearest slot
-        high_price_slots.sort()
+        # Walk the slots starting with the nearest one. High price slots add
+        # to the demand, slots that end the window add charge capacity for
+        # the demand behind them.
+        high_price = current_price+min_dynamic_price_difference
+        seen_high_price_slots = []
+        window_high_price_count = 0
+        binding_high_price_count = 0
+        cumulative_demand = 0.0
+        cumulative_capacity = 0.0
         required_energy = 0.0
-        for high_price_slot in high_price_slots:
-            energy_to_shift = consumption[high_price_slot]
+        high_price_energy_demand = 0.0
+        deferrable_energy = 0.0
+        # Charge capacity of the cheaper slots before the first high price
+        # slot, see the grid-charge target below.
+        capacity_before_first_high = 0.0
+        for slot in range(plan_end):
+            future_price = prices[slot]
+            if future_price > high_price:
+                if not seen_high_price_slots:
+                    capacity_before_first_high = cumulative_capacity
+                seen_high_price_slots.append(slot)
+                if slot < max_slot:
+                    window_high_price_count = len(seen_high_price_slots)
+                energy_to_shift = consumption[slot]
 
-            # correct energy to shift with potential production
-            # start with nearest slot
-            for slot in range(1, high_price_slot):
-                if production[slot] == 0:
-                    continue
-                if production[slot] >= energy_to_shift:
-                    production[slot] -= energy_to_shift
-                    energy_to_shift = 0
-                else:
-                    energy_to_shift -= production[slot]
-                    production[slot] = 0
-            # add_remaining energy to shift to recharge amount
-            required_energy += energy_to_shift
+                # correct energy to shift with potential production
+                # start with nearest slot
+                for prod_slot in range(1, slot):
+                    if production[prod_slot] == 0:
+                        continue
+                    if production[prod_slot] >= energy_to_shift:
+                        production[prod_slot] -= energy_to_shift
+                        energy_to_shift = 0
+                    else:
+                        energy_to_shift -= production[prod_slot]
+                        production[prod_slot] = 0
+                # add remaining energy to shift to the demand
+                cumulative_demand += energy_to_shift
+                shortfall = cumulative_demand - cumulative_capacity
+                if shortfall > required_energy:
+                    required_energy = float(shortfall)
+                    high_price_energy_demand = float(cumulative_demand)
+                    deferrable_energy = cumulative_capacity
+                    binding_high_price_count = len(seen_high_price_slots)
+            elif slot >= 1 and future_price <= deferral_price:
+                cumulative_capacity += slot_charge_capacity
+
+        # The slots of the window, plus the ones behind it that cause the
+        # recharge if later cheaper slots cannot deliver their demand.
+        high_price_slots = seen_high_price_slots[
+            :max(window_high_price_count, binding_high_price_count)]
 
         if required_energy > 0.0:
             recharge_energy = required_energy-calc_input.stored_usable_energy
@@ -979,12 +1061,12 @@ class DefaultLogic(LogicInterface):
         if required_energy == 0.0:
             self.calculation_output.required_recharge_energy = recharge_energy
             return (recharge_energy, high_price_slots, required_energy,
-                   recharge_energy, max_slot)
+                   recharge_energy, max_slot, 0.0)
 
         recharge_target = apply_grid_charge_target_to_recharge(
             config=self.calculation_parameters.grid_charge_target,
             recharge_energy=recharge_energy,
-            required_energy=required_energy,
+            required_energy=high_price_energy_demand,
             stored_energy=calc_input.stored_energy,
             configured_min_grid_charge_soc=(
                 self.calculation_parameters.min_grid_charge_soc),
@@ -992,7 +1074,14 @@ class DefaultLogic(LogicInterface):
             max_charging_from_grid_limit=(
                 self.calculation_parameters.max_charging_from_grid_limit),
         )
-        recharge_energy = recharge_target.energy
+        # The target SoC has to be reached before the first high price slot.
+        # If the window holds none, the cheaper slots before the first one
+        # can still charge towards the target, so only the part they cannot
+        # deliver is added now. Inside the window that capacity is 0.
+        target_increase = recharge_target.energy - recharge_energy
+        if target_increase > 0:
+            recharge_energy += max(
+                0.0, target_increase - capacity_before_first_high)
         self.calculation_output.effective_min_grid_charge_soc = (
             recharge_target.effective_soc
         )
@@ -1013,8 +1102,8 @@ class DefaultLogic(LogicInterface):
             recharge_energy = recharge_energy + self.common.min_charge_energy
 
         self.calculation_output.required_recharge_energy = recharge_energy
-        return (recharge_energy, high_price_slots, required_energy,
-               recharge_energy_before_minimum, max_slot)
+        return (recharge_energy, high_price_slots, high_price_energy_demand,
+               recharge_energy_before_minimum, max_slot, deferrable_energy)
 
     def _calculate_min_dynamic_price_difference(self, price: float) -> float:
         """ Calculate the dynamic limit for the current price """

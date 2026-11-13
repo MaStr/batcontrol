@@ -34,6 +34,7 @@ def make_logic(logic_cls, *,
                peak_shaving_enabled=False,
                peak_shaving=None,
                grid_charge_target=None,
+               max_grid_charge_rate=0.0,
                interval_minutes=60):
     """Create a logic instance with common scenario defaults.
 
@@ -65,6 +66,7 @@ def make_logic(logic_cls, *,
             else PeakShavingConfig(enabled=peak_shaving_enabled)
         ),
         grid_charge_target=grid_charge_target or GridChargeTargetConfig(),
+        max_grid_charge_rate=max_grid_charge_rate,
     ))
     return logic
 

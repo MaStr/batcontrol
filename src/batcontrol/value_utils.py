@@ -193,6 +193,72 @@ def parse_positive_number(value, config_key: str) -> float:
     return number
 
 
+def parse_non_negative_number(value, config_key: str) -> float:
+    """Parse a finite numeric config value that is zero or greater."""
+    if isinstance(value, bool):
+        raise ValueError(
+            f"{config_key} must be a number >= 0, "
+            f"got {type(value).__name__}"
+        )
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{config_key} must be a number >= 0, got {value!r}"
+        ) from exc
+    if not math.isfinite(number) or number < 0:
+        raise ValueError(
+            f"{config_key} must be a number >= 0, got {value!r}"
+        )
+    return number
+
+
+def parse_integer(value, config_key: str) -> int:
+    """Parse an integer config value.
+
+    Whole numbers given as float or string (``4.0``, ``"4"``; form fields of
+    the HomeAssistant add-on deliver strings) are accepted, anything with a
+    fractional part is not.
+    """
+    if isinstance(value, bool):
+        raise ValueError(
+            f"{config_key} must be an integer, got {type(value).__name__}"
+        )
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{config_key} must be an integer, got {value!r}"
+        ) from exc
+    if not math.isfinite(number) or number != int(number):
+        raise ValueError(
+            f"{config_key} must be an integer, got {value!r}"
+        )
+    return int(number)
+
+
+def parse_bool_config(value, config_key: str) -> bool:
+    """Parse a boolean config value.
+
+    Accepts real booleans, 0/1 and the strings true/false, yes/no, on/off,
+    1/0 (case-insensitive). A plain ``bool(value)`` would treat the string
+    "false" as enabled.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in ('1', 'true', 'yes', 'on'):
+            return True
+        if normalized in ('0', 'false', 'no', 'off'):
+            return False
+    raise ValueError(
+        f"{config_key} must be true or false, got {value!r}"
+    )
+
+
 def parse_bool_flag(value) -> bool:
     """Parse an MQTT payload for a boolean flag: 1/0 or true/false (case-insensitive)."""
     normalized = str(value).strip().lower()

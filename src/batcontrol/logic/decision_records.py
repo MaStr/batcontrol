@@ -77,8 +77,19 @@ def grid_recharge_charge(calc_input: CalculationInput,  # pylint: disable=too-ma
                          high_price_slots: List[int],
                          high_price_energy_demand: float,
                          recharge_window_end: int,
-                         interval_minutes: int) -> DecisionRecord:
+                         interval_minutes: int,
+                         deferrable_energy: float = 0.0,
+                         max_grid_charge_rate: float = 0.0) -> DecisionRecord:
     """Battery is charged from the grid.
+
+    Two reasons, told apart by ``deferrable_energy``:
+    - GRID_RECHARGE_REQUIRED: the high price slots follow before any slot
+      that is not more expensive than the current one, so this is the
+      moment to charge for them.
+    - GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT: cheaper (or equally cheap)
+      slots follow first, but at ``max_grid_charge_rate`` they can only
+      charge ``deferrable_energy`` of ``high_price_energy_demand``; the
+      rest is charged now.
 
     ``high_price_slots``/``recharge_window_end`` are relative slot indices
     (returned by ``_get_required_recharge_energy`` alongside the energy
@@ -88,7 +99,9 @@ def grid_recharge_charge(calc_input: CalculationInput,  # pylint: disable=too-ma
     return DecisionRecord(
         decision=Decision.GRID_RECHARGE,
         outcome=Outcome.CHARGE,
-        reason=Reason.GRID_RECHARGE_REQUIRED,
+        reason=(Reason.GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT
+                if deferrable_energy > 0
+                else Reason.GRID_RECHARGE_REQUIRED),
         inputs={
             'current_price': calc_input.prices[0],
             'min_dynamic_price_difference':
@@ -104,6 +117,8 @@ def grid_recharge_charge(calc_input: CalculationInput,  # pylint: disable=too-ma
             'high_price_slots': high_price_slots,
             'high_price_energy_demand': high_price_energy_demand,
             'recharge_window_end': recharge_window_end,
+            'deferrable_energy': deferrable_energy,
+            'max_grid_charge_rate': max_grid_charge_rate,
             'interval_minutes': interval_minutes,
         },
         decisive=True,

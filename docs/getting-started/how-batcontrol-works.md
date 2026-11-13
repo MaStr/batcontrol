@@ -84,6 +84,9 @@ Based on the forecasts and current battery state, batcontrol puts your inverter 
   - Battery charges from grid at a calculated rate: the required energy divided by the remaining time, multiplied by `charge_rate_multiplier`, but at least 500 W. `max_grid_charge_rate` is only the upper bound
   - Charging stops at `max_charging_from_grid_limit` (default: 80%)
 - **Calculation**: Estimates required energy for upcoming expensive hours
+- **Timing**: As late as possible, but early enough that the remaining cheap slots can still
+  charge the required energy at `max_grid_charge_rate` - see
+  [When grid charging starts](../features/battery-control-expert.md#when-grid-charging-starts)
 - **Losses**: Charge/discharge losses are not modelled as energy. They are only approximated: `min_price_difference` has to cover them economically, and `charge_rate_multiplier` raises the charge power
 
 ## Price-Based Decision Making
