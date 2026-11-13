@@ -1,8 +1,8 @@
 # CLAUDE.md — batcontrol
 
 batcontrol charges a home battery when grid prices are cheap and preserves it for expensive
-hours, based on dynamic tariffs, solar forecast, and consumption forecast. Python 3.11-3.14
-(primary target: 3.14). Full contribution guidelines:
+hours, based on dynamic tariffs, solar forecast, and consumption forecast. Python 3.11-3.15
+(primary target: 3.14, Docker image: 3.15). Full contribution guidelines:
 [`.github/copilot-instructions.md`](.github/copilot-instructions.md)
 
 ## Commands

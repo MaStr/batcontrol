@@ -6,10 +6,12 @@ authors = [{name = "Stephan Mükusch", email = "muexxl@gmx.net"}]
 license = "MIT"
 license-files = ["LICENSE"]
 readme = "README.md"
-requires-python = ">=3.11, <3.15"
+requires-python = ">=3.11, <3.16"
 dependencies = [
     # Python 3.14 needs higher floors: the older releases have no cp314 wheels,
-    # so a resolver would otherwise try to build them from source.
+    # so a resolver would otherwise try to build them from source. The same
+    # floors cover 3.15 (the resolver takes the newest release, which has
+    # cp315 wheels; PyYAML has none yet and builds its pure-Python fallback).
     "numpy>=1.24; python_version < '3.14'",
     "numpy>=2.3.2; python_version >= '3.14'",
     "pandas>=2.0; python_version < '3.14'",

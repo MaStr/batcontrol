@@ -8,7 +8,7 @@ This is a Python based repository providing an application for controlling batte
 - Remove excessive whitespaces.
 - Follow PEP8 standards. Use autopep8 for that.
 - Check against pylint. Target score is like 9.0-9.5, if you can achieve 10, do it.
-- Build against Python 3.14 primarily, ensure compatibility with versions 3.11 to 3.14.
+- Build against Python 3.14 primarily (the Docker image runs 3.15), ensure compatibility with versions 3.11 to 3.15.
 - Run all tests with `run_tests.sh` .
 - Do not add new config parameters on your own: ask the maintainer first and wait for approval. A new parameter is permanent surface - `config/batcontrol_config_dummy.yaml` is also the first-run template for new Docker users, and every key has to be mirrored into the Home Assistant add-on and supported long-term. Propose it with its intended default; a hardcoded default or an existing key is often the better answer.
 - Once approved, create the parameter in `config/batcontrol_config_dummy.yaml` with a short one-line comment (what it does, unit, default). Keep the long explanation out of that file - it is a parameter list, not a manual.
@@ -49,7 +49,7 @@ This is a Python based repository providing an application for controlling batte
 5. Lay test scripts for verification and simple testing into the folder `scripts`.
 6. Never commit content of `tmp`.
 7. User documentation lives in the `docs/` folder and is published via MkDocs to https://mastr.github.io/batcontrol/ — add or update pages there and register new pages in `mkdocs.yml`.
-8. Ensure compatibility with supported Python versions (3.11 to 3.14)
+8. Ensure compatibility with supported Python versions (3.11 to 3.15)
 9. A change that affects which inverter mode is chosen, or why (`core.py`, `logic/default.py`,
    `logic/next.py`), must stay traceable: add or extend a `DecisionRecord` with a plain-language
    explanation (`logic/decision_trace.py`, `logic/decision_records.py`). This feeds the MQTT

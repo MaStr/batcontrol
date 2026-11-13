@@ -154,8 +154,8 @@ Add the [batcontrol_ha_addon](https://github.com/MaStr/batcontrol_ha_addon) repo
 
 ## Local Python
 
-Requires Python 3.11 or newer (3.11 - 3.14 are supported and tested in CI; the
-Docker image ships Python 3.14) and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.11 or newer (3.11 - 3.15 are supported and tested in CI; the
+Docker image ships Python 3.15) and [uv](https://docs.astral.sh/uv/).
 
 ```sh
 git clone https://github.com/MaStr/batcontrol.git
