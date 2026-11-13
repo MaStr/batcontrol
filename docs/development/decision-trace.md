@@ -48,6 +48,18 @@ explains why something did **not** happen.
 
 The `limit_set` record of `peak_shaving` carries `computed_limit_w` (merged time/price limit before the minimum charge rate) and `blocked_below_min_rate`. When the computed limit was between 1 W and 499 W, `final_limit_w` is 0 and `blocked_below_min_rate` is true.
 
+The `discharge` record of the reserved energy rule lists `higher_price_slots`
+(before `cheaper_price_slot`, where the reserve window ends) and, since the
+reserve also looks behind a cheaper slot that is too short,
+`reserve_behind_cheaper_slot` (Wh, included in `reserved_energy`),
+`cheaper_slots_charge_capacity` (Wh the cheaper slots can recharge at
+`max_grid_charge_rate`) and `higher_price_slots_behind` (the slots that cause
+it). The three are 0/empty when the cheaper slots are long enough or the
+inverter reports no `max_grid_charge_rate`. The reason codes are unchanged.
+Both this look-ahead and the one of `grid_recharge` stop where the cheaper
+slots have filled the battery, so `higher_price_slots_behind`,
+`high_price_slots` and `deferrable_energy` do not reach beyond that point.
+
 `grid_recharge`/`charge` has two reasons, told apart by `deferrable_energy`:
 - `GRID_RECHARGE_REQUIRED`: the high-price slots follow before any slot
   that is not more expensive than the current one, so this is the moment to
