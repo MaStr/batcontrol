@@ -18,6 +18,7 @@ from batcontrol.logic.default import DefaultLogic
 from batcontrol.logic.next import NextLogic
 from batcontrol.logic.logic_interface import (
     CalculationInput,
+    CalculationOutput,
     InverterControlSettings,
     PeakShavingConfig,
 )
@@ -220,7 +221,8 @@ class TestSharedDecisionSteps:
         assert recharge.reason == Reason.NO_RECHARGE_REQUIRED
         assert recharge.inputs['high_price_slots'] == [1]
         assert recharge.inputs['high_price_energy_demand'] == 1600
-        assert recharge.inputs['recharge_energy_before_minimum'] < 0
+        # stored energy covers the demand: reported as 0, not negative
+        assert recharge.inputs['recharge_energy_before_minimum'] == 0
 
     def test_recharge_below_minimum_keeps_battery(self, logic_cls):
         """A real but small recharge need (below min_charge_energy) must be
@@ -245,6 +247,23 @@ class TestSharedDecisionSteps:
             'battery is held for upcoming more expensive hours (usable '
             '1500 Wh, reserve 1550 Wh); no grid charging: the missing 50 Wh '
             'are below the minimum charge amount')
+
+    def test_recharge_amount_never_exceeds_free_capacity(self, logic_cls):
+        """The min charge energy is added before the free capacity cap, so
+        the returned amount can not be larger than the free capacity."""
+        logic = _logic(logic_cls)
+        # usable 7300 Wh, demand 9900 Wh -> 2600 Wh missing; free capacity
+        # is 2200 Wh. Capped to 2200, +100 Wh minimum would give 2300.
+        calc_input = _input(7800, [500, 9900], {0: 0.20, 1: 0.35})
+        net_consumption = calc_input.consumption - calc_input.production
+        logic.calculation_output = CalculationOutput()
+
+        result = logic._get_required_recharge_energy(
+            calc_input, net_consumption, calc_input.prices)
+
+        assert calc_input.free_capacity == 2200
+        assert result[0] == 2200
+        assert logic.get_calculation_output().required_recharge_energy == 2200
 
     def test_grid_charge_limit_reached(self, logic_cls):
         logic = _logic(logic_cls)

@@ -1718,7 +1718,8 @@ class Batcontrol:
         """
         enabled = enabled_str.strip().lower() in ('true', 'on', '1')
         logger.info('API: Setting peak shaving enabled to %s', enabled)
-        self.peak_shaving_config.enabled = enabled
+        self.peak_shaving_config = dataclasses.replace(
+            self.peak_shaving_config, enabled=enabled)
         if self.mqtt_api is not None:
             self.mqtt_api.publish_peak_shaving_enabled(enabled)
 
@@ -1726,14 +1727,17 @@ class Batcontrol:
         """ Set peak shaving target hour via external API request.
             The change is temporary and will not be written to the config file.
         """
-        if hour < 0 or hour > 23:
+        try:
+            new_config = dataclasses.replace(
+                self.peak_shaving_config, allow_full_battery_after=hour)
+        except (TypeError, ValueError) as exc:
             logger.warning(
-                'API: Invalid peak shaving allow_full_battery_after %d '
-                '(must be 0-23)', hour)
+                'API: Invalid peak shaving allow_full_battery_after %r '
+                '(must be 0-23): %s', hour, exc)
             return
         logger.info(
             'API: Setting peak shaving allow_full_battery_after to %d', hour)
-        self.peak_shaving_config.allow_full_battery_after = hour
+        self.peak_shaving_config = new_config
         if self.mqtt_api is not None:
             self.mqtt_api.publish_peak_shaving_allow_full_after(hour)
 

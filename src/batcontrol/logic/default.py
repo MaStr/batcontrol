@@ -23,7 +23,7 @@ Usage:
 """
 import datetime
 import logging
-from typing import NamedTuple, Optional, List, Tuple
+from typing import NamedTuple, Optional, List, Tuple, Union
 
 import numpy as np
 
@@ -96,7 +96,7 @@ class DefaultLogic(LogicInterface):
     def set_calculation_parameters(self, parameters: CalculationParameters):
         """ Set the calculation parameters for the logic """
         self.calculation_parameters = parameters
-        self.common.max_capacity= parameters.max_capacity
+        self.common.max_capacity = parameters.max_capacity
 
     def set_timezone(self, timezone: datetime.timezone):
         """ Set the timezone for the logic calculations """
@@ -119,7 +119,7 @@ class DefaultLogic(LogicInterface):
             effective_min_grid_charge_soc=(
                 self.calculation_parameters.min_grid_charge_soc
             )
-       )
+        )
 
         self.inverter_control_settings = self.calculate_inverter_mode(
             input_data,
@@ -159,14 +159,13 @@ class DefaultLogic(LogicInterface):
             logger.error("Calculation output is not set. Please call calculate() first.")
             raise ValueError("Calculation output is not set. Please call calculate() first.")
 
-        net_consumption = calc_input.consumption - calc_input.production
         prices = calc_input.prices
+        # ensure availability of data: truncate once, all rules use the same horizon
+        net_consumption = calc_input.consumption - calc_input.production
+        net_consumption = net_consumption[:len(prices)]
 
         if calc_timestamp is None:
             calc_timestamp = datetime.datetime.now().astimezone(self.timezone)
-
-        # ensure availability of data
-        max_slot = min(len(net_consumption), len(prices))
 
         if self._is_discharge_allowed(calc_input, net_consumption, prices, calc_timestamp):
             inverter_control_settings.allow_discharge = True
@@ -187,6 +186,7 @@ class DefaultLogic(LogicInterface):
             recharge_energy_before_minimum = 0.0
             window_end_slot = 0
             deferrable_energy = 0.0
+            allowed_charging_energy = 0.0
 
             logger.debug('Charging allowed: %s', is_charging_possible)
             if is_charging_possible:
@@ -198,7 +198,7 @@ class DefaultLogic(LogicInterface):
                  window_end_slot, deferrable_energy
                  ) = self._get_required_recharge_energy(
                     calc_input,
-                    net_consumption[:max_slot],
+                    net_consumption,
                     prices
                 )
             else:
@@ -254,7 +254,6 @@ class DefaultLogic(LogicInterface):
                         self.calculation_parameters.max_grid_charge_rate),
                     interval_minutes=self.interval_minutes), logger)
 
-                #self.force_charge(charge_rate)
                 inverter_control_settings.charge_from_grid = True
                 inverter_control_settings.charge_rate = charge_rate
             else:
@@ -399,7 +398,7 @@ class DefaultLogic(LogicInterface):
 
         # Force charge takes priority over peak shaving
         if settings.charge_from_grid:
-            logger.warning('[PeakShaving] Skipped: force_charge (MODE -1) active, '
+            logger.debug('[PeakShaving] Skipped: force_charge (MODE -1) active, '
                            'grid charging takes priority')
             self._trace_skip(Decision.PEAK_SHAVING, Reason.FORCE_CHARGE_ACTIVE)
             return settings
@@ -416,7 +415,8 @@ class DefaultLogic(LogicInterface):
         time_limit_w = -1
 
         if price_active:
-            price_limit_w = self._calculate_peak_shaving_charge_limit_price_based(calc_input)
+            price_limit_w = self._calculate_peak_shaving_charge_limit_price_based(
+                calc_input, calc_timestamp)
         if time_active:
             time_limit_w = self._calculate_peak_shaving_charge_limit(calc_input, calc_timestamp)
 
@@ -573,7 +573,8 @@ class DefaultLogic(LogicInterface):
         return settings
 
     def _calculate_peak_shaving_charge_limit_price_based(
-            self, calc_input: CalculationInput) -> int:
+            self, calc_input: CalculationInput,
+            calc_timestamp: datetime.datetime) -> int:
         """Reserve battery free capacity for upcoming cheap-price PV slots.
 
         Only slots within the production window are considered as cheap slots.
@@ -584,8 +585,10 @@ class DefaultLogic(LogicInterface):
 
         When currently inside a cheap window (first cheap slot == 0):
           If total PV surplus in the window exceeds free capacity, spread
-          the free capacity evenly over all remaining cheap slots so the
-          battery fills gradually rather than hitting 100% in the first slot.
+          the free capacity over the cheap slots that have a PV surplus, in
+          proportion to time (slot 0 counts with its remaining fraction, the
+          others in full), so the battery fills gradually rather than
+          hitting 100% in the first slot.
           If surplus <= free capacity no limit is needed.
 
         When before the cheap window:
@@ -612,8 +615,8 @@ class DefaultLogic(LogicInterface):
         production_end = solar_limit.find_production_window_end(
             calc_input.production, interval_hours, len(prices))
 
-        cheap_slots = [i for i, p in enumerate(prices)
-                       if i < production_end and p is not None and p <= price_limit]
+        cheap_slots = [i for i in range(min(len(prices), production_end))
+                       if prices[i] is not None and prices[i] <= price_limit]
         if not cheap_slots:
             return -1  # No cheap slots in the production window
 
@@ -622,24 +625,37 @@ class DefaultLogic(LogicInterface):
         # -- Currently inside cheap window -------------------------------- #
         if first_cheap_slot == 0:
             total_cheap_surplus_wh = 0.0
+            surplus_slots = []
             for i in cheap_slots:
                 if i < len(calc_input.production) and i < len(calc_input.consumption):
                     surplus = (float(calc_input.production[i])
                                - float(calc_input.consumption[i]))
                     if surplus > 0:
                         total_cheap_surplus_wh += surplus
+                        surplus_slots.append(i)
 
             if total_cheap_surplus_wh <= calc_input.free_capacity:
                 return -1  # Battery can absorb everything, no limit needed
 
-            # Surplus exceeds free capacity: spread evenly over cheap slots
-            charge_rate_w = (calc_input.free_capacity
-                             / len(cheap_slots) / interval_hours)
+            # Surplus exceeds free capacity: spread over the cheap slots that
+            # have a surplus, in proportion to time. Slot 0 is only partly
+            # left (core.py scales its forecast by the remaining time), the
+            # other slots count in full.
+            covered_hours = 0.0
+            for i in surplus_slots:
+                if i == 0:
+                    covered_hours += self._remaining_interval_hours(calc_timestamp)
+                else:
+                    covered_hours += interval_hours
+            if covered_hours <= 0:
+                # No usable surplus slot (e.g. negative free capacity)
+                return -1
+            charge_rate_w = calc_input.free_capacity / covered_hours
             logger.debug(
                 '[PeakShaving] In cheap window: surplus %.0f Wh > free %.0f Wh, '
-                'spreading over %d slots -> %d W',
+                'spreading over %d slots (%.2f h) -> %d W',
                 total_cheap_surplus_wh, calc_input.free_capacity,
-                len(cheap_slots), int(charge_rate_w))
+                len(surplus_slots), covered_hours, int(charge_rate_w))
             return int(charge_rate_w)
 
         # -- Before cheap window: reserve capacity for it ----------------- #
@@ -752,7 +768,7 @@ class DefaultLogic(LogicInterface):
 
     def _is_discharge_allowed(self, calc_input: CalculationInput,
                                     net_consumption: np.ndarray,
-                                    prices: dict,
+                                    prices: Union[np.ndarray, dict],
                                     calc_timestamp: Optional[datetime.datetime] = None) -> bool:
         """ Evaluate if the battery is allowed to discharge
 
@@ -864,7 +880,7 @@ class DefaultLogic(LogicInterface):
         return discharge_allowed
 
     @staticmethod
-    def _find_slot_at_or_below(prices: dict, horizon: int,
+    def _find_slot_at_or_below(prices: Union[np.ndarray, dict], horizon: int,
                                price_limit: float) -> Optional[int]:
         """Return the first future slot priced at or below ``price_limit``,
         None if there is none within ``horizon``."""
@@ -893,7 +909,7 @@ class DefaultLogic(LogicInterface):
             required_energy -= used
         return required_energy
 
-    def _reserve_until_cheaper_slot(self, prices: dict,
+    def _reserve_until_cheaper_slot(self, prices: Union[np.ndarray, dict],
                                     consumption: np.ndarray,
                                     production: np.ndarray,
                                     window_end: int) -> Tuple[List[int], float]:
@@ -927,7 +943,7 @@ class DefaultLogic(LogicInterface):
                 * self.calculation_parameters.max_charging_from_grid_limit
                 - min_soc_energy)
 
-    def _reserve_behind_cheaper_slots(self, prices: dict,  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _reserve_behind_cheaper_slots(self, prices: Union[np.ndarray, dict],  # pylint: disable=too-many-arguments,too-many-positional-arguments
                                       consumption: np.ndarray,
                                       production: np.ndarray,
                                       slots_behind: range,
@@ -993,7 +1009,7 @@ class DefaultLogic(LogicInterface):
 
     @staticmethod
     def _has_grid_charge_soc_price_signal(consumption: np.ndarray,
-                                          prices: dict,
+                                          prices: Union[np.ndarray, dict],
                                           max_slots: int,
                                           current_price: float,
                                           min_dynamic_price_difference: float) -> bool:
@@ -1035,7 +1051,7 @@ class DefaultLogic(LogicInterface):
 
     def _get_required_recharge_energy(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
             self, calc_input: CalculationInput, net_consumption: list,
-            prices: dict) -> Tuple[float, List[int], float, float, int, float]:
+            prices: Union[np.ndarray, dict]) -> Tuple[float, List[int], float, float, int, float]:
         """ Calculate the required energy to shift toward high price slots.
 
             The recharge evaluation window ends at the first slot that is
@@ -1154,9 +1170,9 @@ class DefaultLogic(LogicInterface):
                     if production[prod_slot] >= energy_to_shift:
                         production[prod_slot] -= energy_to_shift
                         energy_to_shift = 0
-                    else:
-                        energy_to_shift -= production[prod_slot]
-                        production[prod_slot] = 0
+                        break
+                    energy_to_shift -= production[prod_slot]
+                    production[prod_slot] = 0
                 # add remaining energy to shift to the demand
                 cumulative_demand += energy_to_shift
                 shortfall = min(cumulative_demand - cumulative_capacity,
@@ -1236,13 +1252,15 @@ class DefaultLogic(LogicInterface):
             logger.debug(
                 "Recharge limited by free capacity: %0.1f Wh", recharge_energy)
 
-        recharge_energy_before_minimum = recharge_energy
+        # Negative: stored energy already covers the demand. Reported as 0.
+        recharge_energy_before_minimum = max(0.0, recharge_energy)
         if not self.common.is_charging_above_minimum(recharge_energy):
             recharge_energy = 0.0
         else:
             # We are adding that minimum charge energy here, so that we are not stuck
-            #   between limits.
-            recharge_energy = recharge_energy + self.common.min_charge_energy
+            #   between limits. The result must still fit into the battery.
+            recharge_energy = min(
+                recharge_energy + self.common.min_charge_energy, free_capacity)
 
         self.calculation_output.required_recharge_energy = recharge_energy
         return (recharge_energy, high_price_slots, high_price_energy_demand,

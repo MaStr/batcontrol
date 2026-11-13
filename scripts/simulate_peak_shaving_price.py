@@ -238,7 +238,7 @@ for hour in range(24):
     # Only engage peak shaving when there is PV production
     if prod_w > 0:
         raw_limit = logic_shav._calculate_peak_shaving_charge_limit_price_based(
-            calc_input)
+            calc_input, ts)
         if raw_limit >= 0:
             limit_w = common.block_below_min_pv_charge_rate(raw_limit)
         else:
@@ -337,7 +337,7 @@ for hour in range(24):
 
     if prod_w > 0:
         raw = debug_logic._calculate_peak_shaving_charge_limit_price_based(
-            calc_input_d)
+            calc_input_d, ts_d)
         applied = common.block_below_min_pv_charge_rate(raw) if raw >= 0 else -1
     else:
         raw     = None
@@ -362,5 +362,5 @@ print("FINDINGS:")
 print(f"  Before hours {CHEAP_HOURS}: price-based algo sees upcoming cheap-window")
 print(f"  PV surplus and holds back capacity (reserve_wh).  Once free_cap")
 print(f"  shrinks below reserve_wh the algorithm blocks charging (raw=0).")
-print(f"  Inside cheap window (hours {CHEAP_HOURS}): surplus spread evenly if it")
-print(f"  exceeds free capacity; otherwise no limit (-1).")
+print(f"  Inside cheap window (hours {CHEAP_HOURS}): surplus spread over the cheap")
+print(f"  slots with PV surplus (by time) if it exceeds free capacity; otherwise no limit (-1).")
