@@ -93,6 +93,7 @@ def grid_recharge_charge(calc_input: CalculationInput,  # pylint: disable=too-ma
                          recharge_window_end: int,
                          interval_minutes: int,
                          deferrable_energy: float = 0.0,
+                         battery_room: float = 0.0,
                          max_grid_charge_rate: float = 0.0) -> DecisionRecord:
     """Battery is charged from the grid.
 
@@ -103,7 +104,9 @@ def grid_recharge_charge(calc_input: CalculationInput,  # pylint: disable=too-ma
     - GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT: cheaper (or equally cheap)
       slots follow first, but at ``max_grid_charge_rate`` they can only
       charge ``deferrable_energy`` of ``high_price_energy_demand``; the
-      rest is charged now.
+      rest is charged now. If the battery cannot take the whole rest on
+      top of what those slots charge, ``battery_room`` is the part that
+      fits (recorded as ``battery_room_behind_cheaper_slots``, otherwise 0).
 
     ``high_price_slots``/``recharge_window_end`` are relative slot indices
     (returned by ``_get_required_recharge_energy`` alongside the energy
@@ -132,6 +135,7 @@ def grid_recharge_charge(calc_input: CalculationInput,  # pylint: disable=too-ma
             'high_price_energy_demand': high_price_energy_demand,
             'recharge_window_end': recharge_window_end,
             'deferrable_energy': deferrable_energy,
+            'battery_room_behind_cheaper_slots': battery_room,
             'max_grid_charge_rate': max_grid_charge_rate,
             'interval_minutes': interval_minutes,
         },
