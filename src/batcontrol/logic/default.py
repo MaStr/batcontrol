@@ -1051,7 +1051,7 @@ class DefaultLogic(LogicInterface):
         return max_rate * self.interval_minutes / 60.0
 
     def _get_required_recharge_energy(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
-            self, calc_input: CalculationInput, net_consumption: list,
+            self, calc_input: CalculationInput, net_consumption: np.ndarray,
             prices: Union[np.ndarray, dict]) -> Tuple[float, List[int], float, float, int, float]:
         """ Calculate the required energy to shift toward high price slots.
 
