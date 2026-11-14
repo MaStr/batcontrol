@@ -27,6 +27,13 @@ from .helpers import make_logic
 # Start of a slot: slot 0 has its full interval left.
 _TS = datetime.datetime(2025, 6, 20, 12, 0, 0, tzinfo=datetime.timezone.utc)
 
+
+def _scale_slot0(values, remaining_fraction):
+    """Forecast as core.py hands it to the logic: slot 0 scaled by the
+    fraction of the current slot that is still left."""
+    return [values[0] * remaining_fraction] + list(values[1:])
+
+
 logging.basicConfig(level=logging.DEBUG)
 
 
@@ -1005,40 +1012,59 @@ class TestPeakShavingPriceBased(unittest.TestCase):
     def test_in_cheap_window_slot0_weighted_by_remaining_time_60min(self):
         """Slot 0 counts with the remaining fraction of the hour.
 
-        cheap slots [0, 1], 4000 Wh surplus each > free 5000 Wh.
-        At 12:00 slot 0 has 1 h left: 5000 / (1 + 1) = 2500 W.
-        At 12:45 slot 0 has 0.25 h left: 5000 / (0.25 + 1) = 4000 W.
+        core.py scales the forecast of slot 0 by the remaining time before
+        the logic runs, so the input late in the slot carries the scaled
+        value (4000 Wh for the hour -> 1000 Wh for the last quarter).
+
+        cheap slots [0, 1], forecast 4000 and 6000 Wh, free 5000 Wh.
+        At 12:00: surplus 10000 Wh > free, 5000 / (1 + 1) = 2500 W.
+        At 12:45: surplus 1000 + 6000 Wh > free, 5000 / (0.25 + 1) = 4000 W.
         """
         prices = [0, 0, 10, 10]
-        production = [4000, 4000, 500, 500]
-        calc_input = self._make_input(production, prices, free_capacity=5000)
-        late = _TS.replace(minute=45)
+        full_slot = [4000, 6000, 500, 500]
         self.assertEqual(
             self.logic._calculate_peak_shaving_charge_limit_price_based(
-                calc_input, _TS), 2500)
+                self._make_input(full_slot, prices, free_capacity=5000),
+                _TS), 2500)
+        late_input = self._make_input(
+            _scale_slot0(full_slot, 0.25), prices, free_capacity=5000)
         self.assertEqual(
             self.logic._calculate_peak_shaving_charge_limit_price_based(
-                calc_input, late), 4000)
+                late_input, _TS.replace(minute=45)), 4000)
+
+    def test_in_cheap_window_late_slot_surplus_fits_no_limit(self):
+        """Late in the slot the scaled surplus of slot 0 is small: if the
+        rest fits into the free capacity no limit is needed any more."""
+        prices = [0, 0, 10, 10]
+        full_slot = [4000, 4000, 500, 500]
+        late_input = self._make_input(
+            _scale_slot0(full_slot, 0.25), prices, free_capacity=5000)
+        self.assertEqual(
+            self.logic._calculate_peak_shaving_charge_limit_price_based(
+                late_input, _TS.replace(minute=45)), -1)
 
     def test_in_cheap_window_slot0_weighted_by_remaining_time_15min(self):
         """Same at 15 minute resolution (interval 0.25 h).
 
-        cheap slots [0, 1], 600 Wh surplus each > free 1000 Wh.
-        At 12:00 slot 0 has 0.25 h left: 1000 / (0.25 + 0.25) = 2000 W.
-        At 12:10 slot 0 has 5 min = 1/12 h left: 1000 / (1/12 + 0.25)
-        = 1000 / (1/3) = 3000 W.
+        cheap slots [0, 1], forecast 600 and 900 Wh, free 1000 Wh.
+        At 12:00: surplus 1500 Wh > free, 1000 / (0.25 + 0.25) = 2000 W.
+        At 12:10 slot 0 has 5 min = 1/12 h left and its forecast is scaled
+        to a third (200 Wh): surplus 1100 Wh > free,
+        1000 / (1/12 + 0.25) = 1000 / (1/3) = 3000 W.
         """
         logic_15 = DefaultLogic(timezone=datetime.timezone.utc, interval_minutes=15)
         logic_15.set_calculation_parameters(self.params)
         prices = [0, 0, 10, 10]
-        production = [600, 600, 500, 500]
-        calc_input = self._make_input(production, prices, free_capacity=1000)
+        full_slot = [600, 900, 500, 500]
         self.assertEqual(
             logic_15._calculate_peak_shaving_charge_limit_price_based(
-                calc_input, _TS), 2000)
+                self._make_input(full_slot, prices, free_capacity=1000),
+                _TS), 2000)
+        late_input = self._make_input(
+            _scale_slot0(full_slot, 1 / 3), prices, free_capacity=1000)
         self.assertEqual(
             logic_15._calculate_peak_shaving_charge_limit_price_based(
-                calc_input, _TS.replace(minute=10)), 3000)
+                late_input, _TS.replace(minute=10)), 3000)
 
     def test_negative_free_capacity_with_surplus_blocks_charging(self):
         """The inverter can report a SoC above max_soc, so the free capacity
@@ -1076,9 +1102,10 @@ class TestPeakShavingPriceBased(unittest.TestCase):
 
     def test_apply_peak_shaving_late_in_cheap_slot(self):
         """Through _apply_peak_shaving: slot 0 weighted by remaining time;
-        the record carries the price limit."""
+        the record carries the price limit. Slot 0 is given as core.py
+        passes it at 12:45: the hourly 4000 Wh scaled to the last quarter."""
         prices = [0, 0, 10, 10]
-        production = [4000, 4000, 500, 500]
+        production = _scale_slot0([4000, 6000, 500, 500], 0.25)
         late = _TS.replace(minute=45)
 
         def run(free_capacity):
