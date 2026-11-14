@@ -144,6 +144,8 @@ These are used by [peak shaving](../features/peak-shaving.md): peak shaving is a
 2. **Limit Restoration**: Original discharge limit is restored
 3. **Logging**: Batcontrol logs: `"evcc is not charging, remove block"`
 
+The battery is not released at that moment. The end of the block does not tell batcontrol which mode would be right, so discharging stays avoided until the next evaluation (at most 3 minutes later) decides. During that time the Decision sensor shows the reason `EXTERNAL_DISCHARGE_UNBLOCK`. Above `always_allow_discharge_limit` nothing is held back.
+
 ### When evcc Goes Offline
 1. **Safety Mechanism**: If evcc goes offline while charging, blocks are automatically removed
 2. **Limit Restoration**: Original settings are restored

@@ -603,6 +603,10 @@ class DefaultLogic(LogicInterface):
         price_limit = self.calculation_parameters.peak_shaving.price_limit
         prices = calc_input.prices
         interval_hours = self.interval_minutes / 60.0
+        # The inverter can report a SoC above max_soc, which makes the free
+        # capacity negative. Treat that as a full battery: with a surplus
+        # ahead the rule then blocks PV charging (0 W), like the time rule.
+        free_capacity = max(calc_input.free_capacity, 0)
 
         # Note: production/consumption are already Wh energy per slot (see
         # forecastsolar/baseclass.py), not average power -- surplus sums
@@ -634,7 +638,7 @@ class DefaultLogic(LogicInterface):
                         total_cheap_surplus_wh += surplus
                         surplus_slots.append(i)
 
-            if total_cheap_surplus_wh <= calc_input.free_capacity:
+            if total_cheap_surplus_wh <= free_capacity:
                 return -1  # Battery can absorb everything, no limit needed
 
             # Surplus exceeds free capacity: spread over the cheap slots that
@@ -647,14 +651,11 @@ class DefaultLogic(LogicInterface):
                     covered_hours += self._remaining_interval_hours(calc_timestamp)
                 else:
                     covered_hours += interval_hours
-            if covered_hours <= 0:
-                # No usable surplus slot (e.g. negative free capacity)
-                return -1
-            charge_rate_w = calc_input.free_capacity / covered_hours
+            charge_rate_w = free_capacity / covered_hours
             logger.debug(
                 '[PeakShaving] In cheap window: surplus %.0f Wh > free %.0f Wh, '
                 'spreading over %d slots (%.2f h) -> %d W',
-                total_cheap_surplus_wh, calc_input.free_capacity,
+                total_cheap_surplus_wh, free_capacity,
                 len(surplus_slots), covered_hours, int(charge_rate_w))
             return int(charge_rate_w)
 
@@ -672,13 +673,13 @@ class DefaultLogic(LogicInterface):
         # Reserve capacity (capped at full battery capacity)
         target_reserve_wh = min(total_cheap_surplus_wh, self.common.max_capacity)
 
-        additional_charging_allowed = calc_input.free_capacity - target_reserve_wh
+        additional_charging_allowed = free_capacity - target_reserve_wh
 
         if additional_charging_allowed <= 0:
             logger.debug(
                 '[PeakShaving] Price-based: battery too full for cheap-window '
                 'reserve (free=%.0f Wh, reserve=%.0f Wh), blocking PV charge',
-                calc_input.free_capacity, target_reserve_wh)
+                free_capacity, target_reserve_wh)
             return 0
 
         # Spread allowed charging evenly over slots before cheap window

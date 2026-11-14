@@ -1430,8 +1430,11 @@ class Batcontrol:
         """ Avoid discharging if an external block is received,
             but take care of the always_allow_discharge_limit.
 
-            If block is removed, the next calculation cycle will
-            decide what to do.
+            Removing the block does not release the battery either:
+            the end of the external block says nothing about which mode
+            would be right, so discharging stays avoided until the next
+            calculation cycle decides (Reason EXTERNAL_DISCHARGE_UNBLOCK).
+            This gap of up to one evaluation interval is intended.
         """
         if discharge_blocked == self.discharge_blocked:
             return
