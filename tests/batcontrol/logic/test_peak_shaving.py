@@ -1040,6 +1040,28 @@ class TestPeakShavingPriceBased(unittest.TestCase):
             logic_15._calculate_peak_shaving_charge_limit_price_based(
                 calc_input, _TS.replace(minute=10)), 3000)
 
+    def test_negative_free_capacity_with_surplus_blocks_charging(self):
+        """The inverter can report a SoC above max_soc, so the free capacity
+        is negative. It counts as a full battery: inside the cheap window
+        with a PV surplus the rule blocks PV charging (0 W), it must not
+        return a negative value that the caller drops as "no limit"."""
+        prices = [0, 0, 10]
+        production = [3000, 3000, 0]
+        for free_capacity in (-50, 0):
+            calc_input = self._make_input(production, prices,
+                                          free_capacity=free_capacity)
+            self.assertEqual(
+                self.logic._calculate_peak_shaving_charge_limit_price_based(
+                    calc_input, _TS), 0)
+
+    def test_negative_free_capacity_before_cheap_window_blocks_charging(self):
+        prices = [10, 0, 0]
+        production = [3000, 3000, 3000]
+        calc_input = self._make_input(production, prices, free_capacity=-50)
+        self.assertEqual(
+            self.logic._calculate_peak_shaving_charge_limit_price_based(
+                calc_input, _TS), 0)
+
     def test_negative_free_capacity_without_surplus_slot_no_limit(self):
         """Regression: free capacity < 0 and no cheap slot with surplus must
         not divide by zero (slot 0 cheap, PV below consumption)."""
