@@ -79,6 +79,13 @@ def _discharge_record(logic):
     return records[0]
 
 
+def _recharge_record(logic):
+    records = [record for record in logic.get_decision_trace().records
+               if record.decision == Decision.GRID_RECHARGE]
+    assert len(records) == 1
+    return records[0]
+
+
 @pytest.mark.parametrize('logic_cls', LOGIC_CLASSES)
 class TestCheaperSlotTooShort:
     """One cheap 15-minute slot in front of an expensive block."""
@@ -268,6 +275,63 @@ class TestCheaperSlotsCanFillTheBattery:
         assert settings.allow_discharge
         assert output.reserved_energy == pytest.approx(
             GRID_CHARGEABLE - 7 * SLOT_CAPACITY)
+
+    def test_recharge_is_limited_to_the_room_left_in_the_battery(
+            self, logic_cls):
+        """Five cheap slots charge 5682 Wh of the 8090 Wh the battery
+        takes. The 8500 Wh needed behind them leave 2818 Wh uncovered, but
+        only 2408 Wh fit on top: that is what is charged now, and the
+        explanation names the room so the numbers add up."""
+        logic = _logic(logic_cls)
+        prices = [NOW] + [DIP] * 5 + [EXPENSIVE] * 40
+        room = GRID_CHARGEABLE - 5 * SLOT_CAPACITY
+
+        settings, output = _run(logic, prices, usable_wh=0)
+
+        assert settings.charge_from_grid
+        # + min_recharge_amount, as for every grid recharge
+        assert output.required_recharge_energy == pytest.approx(room + 100)
+        assert room + 100 == pytest.approx(2507.8, abs=0.1)
+
+        record = _recharge_record(logic)
+        assert record.reason == Reason.GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT
+        assert record.inputs['deferrable_energy'] == pytest.approx(
+            5 * SLOT_CAPACITY)
+        assert record.inputs['high_price_energy_demand'] == 17 * CONSUMPTION
+        assert record.inputs['battery_room_behind_cheaper_slots'] == \
+            pytest.approx(room)
+        assert record.explanation() == (
+            'the upcoming cheaper hours can charge only 5682 Wh of the '
+            '8500 Wh needed for the more expensive hours after them (at '
+            'most 5000 W); the battery has room for only 2408 Wh on top of '
+            'that, so 2508 Wh is charged from the grid now')
+
+    def test_stored_energy_counts_against_the_room(self, logic_cls):
+        """What is stored already takes part of the room."""
+        logic = _logic(logic_cls)
+        prices = [NOW] + [DIP] * 5 + [EXPENSIVE] * 40
+        room = GRID_CHARGEABLE - 5 * SLOT_CAPACITY
+
+        settings, output = _run(logic, prices, usable_wh=1000)
+
+        assert settings.charge_from_grid
+        assert output.required_recharge_energy == pytest.approx(
+            room - 1000 + 100)
+
+    def test_room_is_not_recorded_if_it_does_not_limit(self, logic_cls):
+        """One cheap slot before 4000 Wh of demand: the battery takes the
+        whole shortfall, the explanation stays as it was."""
+        logic = _logic(logic_cls)
+
+        settings, output = _run(logic, ONE_DIP, usable_wh=0)
+
+        assert settings.charge_from_grid
+        assert output.required_recharge_energy == pytest.approx(
+            DEMAND_BEHIND - SLOT_CAPACITY + 100)
+        record = _recharge_record(logic)
+        assert record.inputs['battery_room_behind_cheaper_slots'] == 0
+        assert 'room' not in record.explanation()
+        assert 'so 2964 Wh is charged from the grid now' in record.explanation()
 
     def test_demand_inside_the_window_is_still_charged(self, logic_cls):
         """An expensive slot before the valley is charged for now, the

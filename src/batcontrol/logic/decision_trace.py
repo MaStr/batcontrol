@@ -133,6 +133,7 @@ _INPUT_FORMATS = {
     'recharge_energy': _ENERGY,
     'high_price_energy_demand': _ENERGY,
     'deferrable_energy': _ENERGY,
+    'battery_room_behind_cheaper_slots': _ENERGY,
     'max_grid_charge_rate': _POWER,
     'available_grid_charge_capacity': _ENERGY,
     'charge_limit_capacity': _ENERGY,
@@ -200,6 +201,21 @@ def _peak_shaving_explanation(inputs: Dict[str, Any]) -> str:
     return text
 
 
+def _cheaper_slots_insufficient_explanation(inputs: Dict[str, Any]) -> str:
+    """GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT: if the battery cannot take
+    the whole missing energy on top of what the cheaper hours charge, the
+    room that is left is what explains the amount, so it is named."""
+    text = ('the upcoming cheaper hours can charge only '
+            '{deferrable_energy:.0f} Wh of the {high_price_energy_demand:.0f} '
+            'Wh needed for the more expensive hours after them (at most '
+            '{max_grid_charge_rate:.0f} W)')
+    if inputs.get('battery_room_behind_cheaper_slots', 0) > 0:
+        text += ('; the battery has room for only '
+                 '{battery_room_behind_cheaper_slots:.0f} Wh on top of that')
+    text += ', so {recharge_energy:.0f} Wh is charged from the grid now'
+    return text.format(**inputs)
+
+
 # Shared start of the explanations for "no grid charging" while discharging
 # is blocked (mode Avoid Discharge): the reason why the battery is held,
 # then why it is not recharged from the grid either.
@@ -236,11 +252,7 @@ _REASON_EXPLANATIONS: Dict[str, Union[str, Callable[[Dict[str, Any]], str]]] = {
         '{reserved_energy:.0f} Wh reserved for upcoming more expensive hours, '
         'so {recharge_energy:.0f} Wh is charged from the grid',
     Reason.GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT:
-        'the upcoming cheaper hours can charge only '
-        '{deferrable_energy:.0f} Wh of the {high_price_energy_demand:.0f} Wh '
-        'needed for the more expensive hours after them (at most '
-        '{max_grid_charge_rate:.0f} W), so {recharge_energy:.0f} Wh is '
-        'charged from the grid now',
+        _cheaper_slots_insufficient_explanation,
     Reason.GRID_CHARGE_LIMIT_REACHED:
         _HELD + 'the {charge_limit_capacity:.0f} Wh grid charge limit is '
         'reached ({stored_energy:.0f} Wh stored)',

@@ -70,6 +70,12 @@ slots have filled the battery, so `higher_price_slots_behind`,
   is charged now. `high_price_slots` then also lists the slots behind
   `recharge_window_end` that cause the recharge. Only possible when the
   inverter reports a `max_grid_charge_rate`.
+  If the battery cannot take the whole rest on top of what the cheaper slots
+  charge, `battery_room_behind_cheaper_slots` (Wh) is the part that fits and
+  the explanation names it; otherwise it is 0. Example: the cheaper slots
+  charge 5682 Wh of 8500 Wh, the battery takes 8090 Wh from the grid, so
+  2408 Wh fit and are charged now (plus the minimum charge amount), not the
+  2818 Wh that are missing.
 
 `grid_recharge`/`no_charge` has five reasons for the same outcome, told
 apart purely from `high_price_slots`/`high_price_energy_demand`/

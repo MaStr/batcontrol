@@ -30,6 +30,7 @@ import numpy as np
 from .logic_interface import LogicInterface
 from .logic_interface import CalculationParameters, CalculationInput
 from .logic_interface import CalculationOutput, InverterControlSettings
+from .cheaper_slot_shortfall import CheaperSlotShortfall
 from .common import CommonLogic, extend_to_grid_charge_window
 from .decision_records import (
     discharge_always_allowed,
@@ -186,6 +187,7 @@ class DefaultLogic(LogicInterface):
             recharge_energy_before_minimum = 0.0
             window_end_slot = 0
             deferrable_energy = 0.0
+            battery_room = 0.0
             allowed_charging_energy = 0.0
 
             logger.debug('Charging allowed: %s', is_charging_possible)
@@ -195,7 +197,7 @@ class DefaultLogic(LogicInterface):
                              )
                 (required_recharge_energy, high_price_slots,
                  high_price_energy_demand, recharge_energy_before_minimum,
-                 window_end_slot, deferrable_energy
+                 window_end_slot, deferrable_energy, battery_room
                  ) = self._get_required_recharge_energy(
                     calc_input,
                     net_consumption,
@@ -250,6 +252,7 @@ class DefaultLogic(LogicInterface):
                     high_price_energy_demand=high_price_energy_demand,
                     recharge_window_end=window_end_slot,
                     deferrable_energy=deferrable_energy,
+                    battery_room=battery_room,
                     max_grid_charge_rate=(
                         self.calculation_parameters.max_grid_charge_rate),
                     interval_minutes=self.interval_minutes), logger)
@@ -892,17 +895,19 @@ class DefaultLogic(LogicInterface):
 
     @staticmethod
     def _demand_after_earlier_production(slot: int, consumption: np.ndarray,
-                                         production: np.ndarray) -> float:
-        """Net consumption of ``slot`` that PV surplus of earlier slots does
-        not cover, in Wh. The surplus used is taken out of ``production``,
-        latest slot first, so it is not credited twice.
+                                         production: np.ndarray,
+                                         first_slot: int = 0) -> float:
+        """Net consumption of ``slot`` that PV surplus of earlier slots
+        (``first_slot`` and later) does not cover, in Wh. The surplus used
+        is taken out of ``production``, latest slot first, so it is not
+        credited twice.
 
         The surplus is credited in full, even beyond the free capacity:
         energy discharged now makes room for PV that would otherwise be
         exported, the battery ends up full either way.
         """
         required_energy = consumption[slot]
-        for prod_slot in range(slot - 1, -1, -1):
+        for prod_slot in range(slot - 1, first_slot - 1, -1):
             if required_energy == 0:
                 break
             used = min(production[prod_slot], required_energy)
@@ -961,52 +966,44 @@ class DefaultLogic(LogicInterface):
         over ``slots_behind``, every slot at or below ``recharge_price``
         adds charge capacity, every slot above the current price adds
         demand; the largest gap between the two has to be in the battery
-        already:
-
-            reserve = max over later slots h of
-                      (demand up to h) - (charge capacity before h)
-
-        Energy kept now only helps as long as the battery has room for it
-        on top of what the cheaper slots charge. That room (``headroom``) is
-        ``grid_chargeable_energy`` minus the net charge of the cheaper slots
-        so far; the reserve never exceeds it, and the walk stops once it is
-        used up: from there on the battery is full whatever is kept now.
+        already, limited to the room the battery has left on top of what
+        the cheaper slots charge (see CheaperSlotShortfall).
 
         With 60-minute slots one cheap slot often recharges more than the
         demand behind it and nothing is added; a 15-minute slot is short, so
-        this is where it matters. Without a known ``max_grid_charge_rate`` a cheaper slot is
-        assumed to recharge any amount and nothing is added.
+        this is where it matters. Without a known ``max_grid_charge_rate`` a
+        cheaper slot is assumed to recharge any amount and nothing is added.
+
+        The grid recharge rule (_get_required_recharge_energy) runs the same
+        balance with its own slot classes: there a slot has to be more
+        expensive by the minimum price difference to count as demand, while
+        any slot that is not more expensive than now adds capacity. That
+        asymmetry is intended, the reserve is the cautious side (see the
+        table in cheaper_slot_shortfall.py).
 
         Known simplification: the capacity of a cheaper slot is not reduced
         by demand that is only expensive seen from that slot's own price.
         """
-        nothing = ReserveBehindCheaperSlots(0.0, 0.0, [])
         slot_charge_capacity = self._deferrable_energy_per_slot()
-        if slot_charge_capacity <= 0 or grid_chargeable_energy <= 0:
-            return nothing
+        if slot_charge_capacity <= 0:
+            return ReserveBehindCheaperSlots(0.0, 0.0, [])
 
         current_price = prices[0]
-        result = nothing
-        demand = 0.0
-        charge_capacity = 0.0
+        shortfall = CheaperSlotShortfall(
+            slot_charge_capacity, grid_chargeable_energy)
         demand_slots = []
-        headroom = grid_chargeable_energy
+        slots = []
         for slot in slots_behind:
             if prices[slot] <= recharge_price:
-                charge_capacity += slot_charge_capacity
-                headroom = min(headroom, grid_chargeable_energy
-                               - (charge_capacity - demand))
-                if headroom <= 0:
+                if not shortfall.add_cheaper_slot():
                     break
             elif prices[slot] > current_price:
                 demand_slots.append(slot)
-                demand += self._demand_after_earlier_production(
-                    slot, consumption, production)
-                uncovered = min(demand - charge_capacity, headroom)
-                if uncovered > result.energy:
-                    result = ReserveBehindCheaperSlots(
-                        float(uncovered), charge_capacity, list(demand_slots))
-        return result
+                if shortfall.add_demand(self._demand_after_earlier_production(
+                        slot, consumption, production)):
+                    slots = list(demand_slots)
+        return ReserveBehindCheaperSlots(
+            shortfall.energy, shortfall.charge_capacity_at_shortfall, slots)
 
     @staticmethod
     def _has_grid_charge_soc_price_signal(consumption: np.ndarray,
@@ -1052,7 +1049,8 @@ class DefaultLogic(LogicInterface):
 
     def _get_required_recharge_energy(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
             self, calc_input: CalculationInput, net_consumption: np.ndarray,
-            prices: Union[np.ndarray, dict]) -> Tuple[float, List[int], float, float, int, float]:
+            prices: Union[np.ndarray, dict]
+            ) -> Tuple[float, List[int], float, float, int, float, float]:
         """ Calculate the required energy to shift toward high price slots.
 
             The recharge evaluation window ends at the first slot that is
@@ -1072,9 +1070,9 @@ class DefaultLogic(LogicInterface):
             never below the demand of the window itself. Without a known
             maximum rate only the window is evaluated. Behind the window
             the result is limited to the room the battery has left on top
-            of what the cheaper slots charge (see _grid_chargeable_energy),
-            and the walk stops once that room is used up: nothing charged
-            now can add to a full battery.
+            of what the cheaper slots charge, and the walk stops once that
+            room is used up: nothing charged now can add to a full battery
+            (see CheaperSlotShortfall, shared with the discharge reserve).
 
             Known simplification: a cheaper slot may need part of its
             capacity for demand that is not "high price" seen from the
@@ -1083,9 +1081,10 @@ class DefaultLogic(LogicInterface):
 
             return: (recharge_energy, high_price_slots, high_price_energy_demand,
                       recharge_energy_before_minimum, window_end,
-                      deferrable_energy) --
+                      deferrable_energy, battery_room) --
                 recharge_energy/high_price_energy_demand/
-                recharge_energy_before_minimum/deferrable_energy in Wh,
+                recharge_energy_before_minimum/deferrable_energy/
+                battery_room in Wh,
                 high_price_slots/window_end relative slot indices.
                 recharge_energy_before_minimum is the amount right before
                 the minimum-charge-amount check below; > 0 there (but still
@@ -1094,7 +1093,9 @@ class DefaultLogic(LogicInterface):
                 deferrable_energy is the part of high_price_energy_demand
                 that later cheaper slots are able to charge; > 0 means the
                 recharge is only needed because those slots are too short
-                for the whole demand. All passed on to the
+                for the whole demand. battery_room is the room the
+                battery has left on top of what those slots charge, if that
+                room limits the amount, otherwise 0. All passed on to the
                 grid_recharge_charge/grid_recharge_idle decision record.
          """
         current_price = prices[0]
@@ -1130,23 +1131,21 @@ class DefaultLogic(LogicInterface):
         # assumed to deliver any amount, so nothing behind the window counts.
         slot_charge_capacity = self._deferrable_energy_per_slot()
         plan_end = horizon if slot_charge_capacity > 0 else max_slot
-        grid_chargeable_energy = self._grid_chargeable_energy(calc_input)
-        # Room for energy charged now behind the cheaper slots; unlimited
-        # inside the window, where no cheaper slot has charged yet.
-        headroom = float('inf')
 
         # Walk the slots starting with the nearest one. High price slots add
         # to the demand, slots that end the window add charge capacity for
-        # the demand behind them.
+        # the demand behind them. Inside the window there is no such slot
+        # yet, so the demand there counts in full.
+        # The slot classes differ from the ones of the discharge reserve on
+        # purpose (see the table in cheaper_slot_shortfall.py): charging
+        # from the grid only pays off above the minimum price difference,
+        # and every slot that is not more expensive is a reason to wait.
         high_price = current_price+min_dynamic_price_difference
+        shortfall = CheaperSlotShortfall(
+            slot_charge_capacity, self._grid_chargeable_energy(calc_input))
         seen_high_price_slots = []
         window_high_price_count = 0
         binding_high_price_count = 0
-        cumulative_demand = 0.0
-        cumulative_capacity = 0.0
-        required_energy = 0.0
-        high_price_energy_demand = 0.0
-        deferrable_energy = 0.0
         # Charge capacity of the cheaper slots before the first high price
         # slot, see the grid-charge target below.
         capacity_before_first_high = 0.0
@@ -1154,45 +1153,23 @@ class DefaultLogic(LogicInterface):
             future_price = prices[slot]
             if future_price > high_price:
                 if not seen_high_price_slots:
-                    capacity_before_first_high = cumulative_capacity
+                    capacity_before_first_high = shortfall.charge_capacity
                 seen_high_price_slots.append(slot)
                 if slot < max_slot:
                     window_high_price_count = len(seen_high_price_slots)
-                energy_to_shift = consumption[slot]
-
-                # correct energy to shift with potential production
-                # start with nearest slot. Slot 0 is left out on purpose:
-                # while charging from the grid, PV of the current slot only
-                # replaces grid power within the charge rate, it does not
-                # add energy on top.
-                for prod_slot in range(1, slot):
-                    if production[prod_slot] == 0:
-                        continue
-                    if production[prod_slot] >= energy_to_shift:
-                        production[prod_slot] -= energy_to_shift
-                        energy_to_shift = 0
-                        break
-                    energy_to_shift -= production[prod_slot]
-                    production[prod_slot] = 0
-                # add remaining energy to shift to the demand
-                cumulative_demand += energy_to_shift
-                shortfall = min(cumulative_demand - cumulative_capacity,
-                                headroom)
-                if shortfall > required_energy:
-                    required_energy = float(shortfall)
-                    high_price_energy_demand = float(cumulative_demand)
-                    deferrable_energy = cumulative_capacity
+                # Demand left after the PV surplus of earlier slots. Slot 0
+                # is left out on purpose: while charging from the grid, PV
+                # of the current slot only replaces grid power within the
+                # charge rate, it does not add energy on top.
+                if shortfall.add_demand(self._demand_after_earlier_production(
+                        slot, consumption, production, first_slot=1)):
                     binding_high_price_count = len(seen_high_price_slots)
             elif slot >= 1 and future_price <= deferral_price:
-                cumulative_capacity += slot_charge_capacity
-                # Energy charged now only helps as long as the battery has
-                # room for it on top of what the cheaper slots charge. Once
-                # that room is used up the battery is full from here on,
-                # whatever is charged now.
-                headroom = min(headroom, grid_chargeable_energy
-                               - (cumulative_capacity - cumulative_demand))
-                if headroom <= 0:
+                if not shortfall.add_cheaper_slot():
                     break
+        required_energy = shortfall.energy
+        high_price_energy_demand = shortfall.demand_at_shortfall
+        deferrable_energy = shortfall.charge_capacity_at_shortfall
 
         # The slots of the window, plus the ones behind it that cause the
         # recharge if later cheaper slots cannot deliver their demand.
@@ -1221,7 +1198,7 @@ class DefaultLogic(LogicInterface):
         if required_energy == 0.0:
             self.calculation_output.required_recharge_energy = recharge_energy
             return (recharge_energy, high_price_slots, required_energy,
-                   recharge_energy, max_slot, 0.0)
+                   recharge_energy, max_slot, 0.0, 0.0)
 
         recharge_target = apply_grid_charge_target_to_recharge(
             config=self.calculation_parameters.grid_charge_target,
@@ -1265,7 +1242,8 @@ class DefaultLogic(LogicInterface):
 
         self.calculation_output.required_recharge_energy = recharge_energy
         return (recharge_energy, high_price_slots, high_price_energy_demand,
-               recharge_energy_before_minimum, max_slot, deferrable_energy)
+               recharge_energy_before_minimum, max_slot, deferrable_energy,
+               shortfall.battery_room_at_shortfall)
 
     def _calculate_min_dynamic_price_difference(self, price: float) -> float:
         """ Calculate the dynamic limit for the current price """
