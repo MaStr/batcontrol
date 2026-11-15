@@ -116,7 +116,6 @@ battery_control_expert:
   soften_price_difference_on_charging: false
   soften_price_difference_on_charging_factor: 5
   spread_grid_charge_over_charge_window: true
-  charge_window_price_tolerance: 0.0
   round_price_digits: 4
   production_offset_percent: 1.0
   preserve_min_grid_charge_soc: false
@@ -130,8 +129,7 @@ These expert parameters allow fine-tuning of Batcontrol's behavior. See [Battery
 | `charge_rate_multiplier` | float | 1.1 | Multiplier for calculated charge rate to compensate for charging inefficiencies |
 | `soften_price_difference_on_charging` | boolean | false | Enable earlier charging based on more relaxed price difference calculations |
 | `soften_price_difference_on_charging_factor` | integer | 5 | Factor to soften price difference requirements when enabled |
-| `spread_grid_charge_over_charge_window` | boolean | true | With soften enabled: calculate the grid charge rate over all following slots that are not more expensive than the current slot (plus `charge_window_price_tolerance`), instead of the current slot only |
-| `charge_window_price_tolerance` | float | 0.0 | EUR/kWh a following slot may be above the current price and still belong to the charging window. Only effective with `spread_grid_charge_over_charge_window`. Recommended with soften enabled: `min_price_difference / soften_price_difference_on_charging_factor` (e.g. 0.05 / 5 = 0.01) |
+| `spread_grid_charge_over_charge_window` | boolean | true | With soften enabled: calculate the grid charge rate over all following slots that are not more expensive than the current slot plus the soften margin (`min_price_difference / soften_price_difference_on_charging_factor`), instead of the current slot only |
 | `round_price_digits` | integer | 4 | Decimal places for price rounding in comparisons |
 | `production_offset_percent` | float | 1.0 | Multiplier to adjust solar production forecast (1.0 = no change, 0.8 = 80%, etc.) |
 | `preserve_min_grid_charge_soc` | boolean | false | Also preserve `min_grid_charge_soc` as reserved battery energy during cheap/pre-expensive windows |

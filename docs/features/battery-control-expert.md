@@ -124,9 +124,18 @@ charged. Without a charging window, the charge rate is calculated for the remain
 `max_grid_charge_rate`) and the battery is full long before the cheap block ends.
 
 With the charging window enabled, all directly following slots with a price **lower than or equal
-to** the current price are treated as one charging opportunity. The window ends at the first more
-expensive slot (even if it is only marginally more expensive, unless `charge_window_price_tolerance`
-is set, see below) or at the end of the recharge evaluation window.
+to** the current price **plus the soften margin** are treated as one charging opportunity:
+
+```
+soften_margin = min_price_difference / soften_price_difference_on_charging_factor
+slot belongs to the window while: slot_price <= current_price + soften_margin
+```
+
+The window ends at the first slot that is more expensive than that, or at the end of the recharge
+evaluation window. The soften margin is the same margin that already decides when charging is
+deferred to a cheaper slot: a slot that is cheaper by less than the margin is not worth waiting
+for, so a slot that is more expensive by less than the margin does not end the charging window
+either. With the defaults (`min_price_difference: 0.05`, factor 5) the margin is 0.01 €/kWh.
 
 ```
 charge_rate = recharge_energy / (remaining time of current slot + slots in window * slot length)
@@ -142,41 +151,18 @@ target energy is still reached before the expensive period starts. This leaves r
 production during the cheap block. Set `spread_grid_charge_over_charge_window: false` to restore
 the previous behaviour (charge as fast as possible within the current slot).
 
-#### Price tolerance of the charging window
+Why the margin matters on nearly flat price curves: neighbouring slots often differ by only a
+fraction of a cent. If a slot 0.1 ct above the current price ended the window, the window would
+shrink to one or two slots, and because the rate is recalculated on every run it would jump to
+`max_grid_charge_rate`. Example at 09:15, price 0.322 €/kWh, the following four hours move between
+0.316 and 0.323 €/kWh, 5.1 kWh to recharge, `charge_rate_multiplier` 1.5:
 
-* Config option: `charge_window_price_tolerance` ; number in EUR/kWh, 0 or greater
-* Default: 0.0 (the window ends at the first more expensive slot)
-* Only effective when `spread_grid_charge_over_charge_window` is enabled
-* Recommended value with soften enabled: `min_price_difference / soften_price_difference_on_charging_factor`
-  (e.g. 0.05 / 5 = 0.01)
+* window cut at the 0.323 €/kWh slot (0.75 h): 5.1 kWh / 0.75 h × 1.5 ≈ 10 kW (capped at
+  `max_grid_charge_rate`)
+* window with the 0.01 €/kWh soften margin (4 h): 5.1 kWh / 4 h × 1.5 ≈ 1.9 kW
 
-On a nearly flat price curve the prices of neighbouring slots often differ by only a fraction of a
-cent. Without a tolerance a slot that is 0.1 ct more expensive than the current slot ends the
-charging window. Because the charge rate is recalculated on every run, a window of only one or two
-slots requests a very high rate, which is then capped at `max_grid_charge_rate` - the inverter
-charges at full power although the price hardly changes.
-
-With a tolerance, a following slot stays part of the charging window as long as
-
-```
-slot_price <= current_price + charge_window_price_tolerance
-```
-
-The window ends at the first slot that is more than the tolerance above the current price, or at
-the end of the recharge evaluation window. The tolerance only changes how long the window is, i.e.
-the time the charge energy is spread over. It does not change how much energy is charged or when
-batcontrol decides to charge.
-
-Example: at 09:15 the price is 0.322 €/kWh, the following slots move between 0.316 and 0.323 €/kWh
-for four hours, 5.1 kWh need to be recharged, `charge_rate_multiplier` is 1.5:
-
-* tolerance 0.0: the slot at 10:00 (0.323 €/kWh) ends the window after 0.75 h →
-  5.1 kWh / 0.75 h × 1.5 ≈ 10 kW (capped at `max_grid_charge_rate`, e.g. 6 kW)
-* tolerance 0.01: the whole flat block belongs to the window (4 h) →
-  5.1 kWh / 4 h × 1.5 ≈ 1.9 kW
-
-An invalid value (negative or not a number) does not stop batcontrol: a warning is logged and the
-tolerance falls back to 0.0.
+The margin only changes the time the charge energy is spread over. It does not change how much
+energy is charged or when batcontrol decides to charge.
 
 # Granularity in price calculations:
 * Config option: `round_price_digits`
@@ -312,7 +298,6 @@ ValueError: battery_control_expert.soften_price_difference_on_charging_factor mu
 | `soften_price_difference_on_charging` | `true` / `false` |
 | `soften_price_difference_on_charging_factor` | number greater than 0 (it is used as a divisor) |
 | `spread_grid_charge_over_charge_window` | `true` / `false` |
-| `charge_window_price_tolerance` | number, 0 or greater (EUR/kWh); an invalid value logs a warning and falls back to 0.0 instead of stopping the start |
 | `round_price_digits` | whole number |
 | `production_offset_percent` | number, 0 or greater |
 | `preserve_min_grid_charge_soc` | `true` / `false` |

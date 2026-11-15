@@ -76,13 +76,9 @@ class DefaultLogic(LogicInterface):
         self.soften_price_difference_on_charging = False
         self.soften_price_difference_on_charging_factor = 5.0  # Default factor
         # Spread grid charging over all following slots that are not more
-        # expensive than the current slot plus charge_window_price_tolerance
-        # (only effective with soften enabled)
+        # expensive than the current slot plus the soften margin, see
+        # _charge_window_price_tolerance (only effective with soften enabled)
         self.spread_grid_charge_over_charge_window = True
-        # A following slot stays part of the charging window as long as its
-        # price is at most this much above the current price (EUR/kWh).
-        # 0.0 ends the window at the first more expensive slot.
-        self.charge_window_price_tolerance = 0.0
         # End of the recharge evaluation window (exclusive), set by
         # _get_required_recharge_energy
         self.recharge_window_end = 1
@@ -98,10 +94,6 @@ class DefaultLogic(LogicInterface):
         """ Set if the price difference should be softened on charging """
         self.soften_price_difference_on_charging = soften
         self.soften_price_difference_on_charging_factor = factor
-
-    def set_charge_window_price_tolerance(self, tolerance: float):
-        """ Set the price tolerance (EUR/kWh) of the grid charging window """
-        self.charge_window_price_tolerance = tolerance
 
     def set_calculation_parameters(self, parameters: CalculationParameters):
         """ Set the calculation parameters for the logic """
@@ -245,7 +237,7 @@ class DefaultLogic(LogicInterface):
                     remaining_time = extend_to_grid_charge_window(
                         remaining_time, prices, self.recharge_window_end,
                         self.interval_minutes,
-                        self.charge_window_price_tolerance)
+                        self._charge_window_price_tolerance())
 
                 # Calculate required charge rate: energy needed / time available
                 charge_rate = required_recharge_energy / remaining_time
@@ -1254,6 +1246,24 @@ class DefaultLogic(LogicInterface):
         return (recharge_energy, high_price_slots, high_price_energy_demand,
                recharge_energy_before_minimum, max_slot, deferrable_energy,
                shortfall.battery_room_at_shortfall)
+
+    def _charge_window_price_tolerance(self) -> float:
+        """ Price (EUR/kWh) a following slot may be above the current price
+        and still belong to the grid charging window.
+
+        This is the soften margin min_price_difference /
+        soften_price_difference_on_charging_factor, the same margin that
+        _get_required_recharge_energy applies to cheaper slots: a slot that
+        is cheaper by less than the margin does not end the evaluation
+        window, so a slot that is more expensive by less than the margin
+        does not end the charging window either. Without soften the
+        margin is 0, the charging window is then empty anyway because the
+        evaluation window ends at the next slot that is not more expensive.
+        """
+        if not self.soften_price_difference_on_charging:
+            return 0.0
+        return (self.calculation_parameters.min_price_difference /
+                self.soften_price_difference_on_charging_factor)
 
     def _calculate_min_dynamic_price_difference(self, price: float) -> float:
         """ Calculate the dynamic limit for the current price """
