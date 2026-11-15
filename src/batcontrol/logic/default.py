@@ -76,8 +76,13 @@ class DefaultLogic(LogicInterface):
         self.soften_price_difference_on_charging = False
         self.soften_price_difference_on_charging_factor = 5.0  # Default factor
         # Spread grid charging over all following slots that are not more
-        # expensive than the current slot (only effective with soften enabled)
+        # expensive than the current slot plus charge_window_price_tolerance
+        # (only effective with soften enabled)
         self.spread_grid_charge_over_charge_window = True
+        # A following slot stays part of the charging window as long as its
+        # price is at most this much above the current price (EUR/kWh).
+        # 0.0 ends the window at the first more expensive slot.
+        self.charge_window_price_tolerance = 0.0
         # End of the recharge evaluation window (exclusive), set by
         # _get_required_recharge_energy
         self.recharge_window_end = 1
@@ -93,6 +98,10 @@ class DefaultLogic(LogicInterface):
         """ Set if the price difference should be softened on charging """
         self.soften_price_difference_on_charging = soften
         self.soften_price_difference_on_charging_factor = factor
+
+    def set_charge_window_price_tolerance(self, tolerance: float):
+        """ Set the price tolerance (EUR/kWh) of the grid charging window """
+        self.charge_window_price_tolerance = tolerance
 
     def set_calculation_parameters(self, parameters: CalculationParameters):
         """ Set the calculation parameters for the logic """
@@ -235,7 +244,8 @@ class DefaultLogic(LogicInterface):
                 if self.spread_grid_charge_over_charge_window:
                     remaining_time = extend_to_grid_charge_window(
                         remaining_time, prices, self.recharge_window_end,
-                        self.interval_minutes)
+                        self.interval_minutes,
+                        self.charge_window_price_tolerance)
 
                 # Calculate required charge rate: energy needed / time available
                 charge_rate = required_recharge_energy / remaining_time

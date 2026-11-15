@@ -159,7 +159,10 @@ high-price zone begins; it only changes how the charging is distributed:
 - For **more even charging** across low-price hours, enable
   `soften_price_difference_on_charging`. With the charging window
   (`spread_grid_charge_over_charge_window`, enabled by default) the charge
-  rate is spread over all remaining slots of the low-price block.
+  rate is spread over all remaining slots of the low-price block. On nearly
+  flat price curves set `charge_window_price_tolerance` (e.g. 0.01) so a
+  slot that is only a fraction of a cent more expensive does not end the
+  block early.
 - For a **late charging start** (optimise efficiency, keep the battery at
   high SOC for less time), leave `soften_price_difference_on_charging`
   disabled. The last slots of the low-price block are then used at up to the

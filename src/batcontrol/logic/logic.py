@@ -7,10 +7,29 @@ from .next import NextLogic
 from ..value_utils import (
     parse_bool_config,
     parse_integer,
+    parse_non_negative_number,
     parse_positive_number,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def parse_price_tolerance(value, config_key: str) -> float:
+    """ Parse an optional price tolerance (EUR/kWh) that is 0 or greater.
+
+    An empty value (None or '', a cleared HomeAssistant add-on field) means
+    no tolerance. An invalid value does not stop batcontrol: it is logged as
+    a warning and the tolerance falls back to 0.0, which is the behaviour
+    without the parameter.
+    """
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return 0.0
+    try:
+        return parse_non_negative_number(value, config_key)
+    except ValueError as exc:
+        logger.warning('%s - using 0.0 (no tolerance) instead', exc)
+        return 0.0
+
 
 # Expert tuning attributes that are set directly on the logic instance, with
 # the parser that validates their value.
@@ -19,6 +38,8 @@ _EXPERT_ATTRIBUTE_PARSERS = {
     # Used as a divisor, so zero and negative values are invalid
     'soften_price_difference_on_charging_factor': parse_positive_number,
     'spread_grid_charge_over_charge_window': parse_bool_config,
+    # Invalid values fall back to 0.0 with a warning instead of failing
+    'charge_window_price_tolerance': parse_price_tolerance,
     'round_price_digits': parse_integer,
 }
 

@@ -34,6 +34,7 @@ battery_control_expert:
   soften_price_difference_on_charging: False # charge earlier using a relaxed price comparison
   soften_price_difference_on_charging_factor: 5 # divisor for the relaxed comparison
   spread_grid_charge_over_charge_window: True # spread grid charging over the whole charging window
+  charge_window_price_tolerance: 0.0 # EUR/kWh a slot may exceed the current price and stay in the charging window. Default: 0.0
   round_price_digits: 4 # round prices to n digits
   production_offset_percent: 1.0 # scale solar forecast (0.8 = 80%), e.g. snow-covered panels
   preserve_min_grid_charge_soc: false # also reserve min_grid_charge_soc during cheap slots
