@@ -76,7 +76,8 @@ class DefaultLogic(LogicInterface):
         self.soften_price_difference_on_charging = False
         self.soften_price_difference_on_charging_factor = 5.0  # Default factor
         # Spread grid charging over all following slots that are not more
-        # expensive than the current slot (only effective with soften enabled)
+        # expensive than the current slot plus the soften margin, see
+        # _charge_window_price_tolerance (only effective with soften enabled)
         self.spread_grid_charge_over_charge_window = True
         # End of the recharge evaluation window (exclusive), set by
         # _get_required_recharge_energy
@@ -235,7 +236,8 @@ class DefaultLogic(LogicInterface):
                 if self.spread_grid_charge_over_charge_window:
                     remaining_time = extend_to_grid_charge_window(
                         remaining_time, prices, self.recharge_window_end,
-                        self.interval_minutes)
+                        self.interval_minutes,
+                        price_tolerance=self._charge_window_price_tolerance())
 
                 # Calculate required charge rate: energy needed / time available
                 charge_rate = required_recharge_energy / remaining_time
@@ -1244,6 +1246,24 @@ class DefaultLogic(LogicInterface):
         return (recharge_energy, high_price_slots, high_price_energy_demand,
                recharge_energy_before_minimum, max_slot, deferrable_energy,
                shortfall.battery_room_at_shortfall)
+
+    def _charge_window_price_tolerance(self) -> float:
+        """ Price (EUR/kWh) a following slot may be above the current price
+        and still belong to the grid charging window.
+
+        This is the soften margin min_price_difference /
+        soften_price_difference_on_charging_factor, the same margin that
+        _get_required_recharge_energy applies to cheaper slots: a slot that
+        is cheaper by less than the margin does not end the evaluation
+        window, so a slot that is more expensive by less than the margin
+        does not end the charging window either. Without soften the
+        margin is 0, the charging window is then empty anyway because the
+        evaluation window ends at the next slot that is not more expensive.
+        """
+        if not self.soften_price_difference_on_charging:
+            return 0.0
+        return (self.calculation_parameters.min_price_difference /
+                self.soften_price_difference_on_charging_factor)
 
     def _calculate_min_dynamic_price_difference(self, price: float) -> float:
         """ Calculate the dynamic limit for the current price """

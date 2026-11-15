@@ -1,15 +1,20 @@
 """Tests for spreading grid charging over the charging window (issue #431).
 
 With soften_price_difference_on_charging enabled, consecutive slots with a
-price not higher than the current slot belong to the same charging window.
+price not higher than the current slot plus the soften margin
+(min_price_difference / soften factor) belong to the same charging window.
 The charge rate is calculated over the whole window instead of the remaining
 time of the current slot only.
 """
 import datetime
+import logging
 
 import pytest
 
-from batcontrol.logic.common import count_grid_charge_window_slots
+from batcontrol.logic.common import (
+    count_grid_charge_window_slots,
+    extend_to_grid_charge_window,
+)
 from batcontrol.logic.default import DefaultLogic
 from batcontrol.logic.logic import Logic
 from batcontrol.logic.next import NextLogic
@@ -23,13 +28,16 @@ CHARGE_RATE_MULTIPLIER = 1.1
 LOGIC_CLASSES = [DefaultLogic, NextLogic]
 
 
-def _setup_logic(logic_cls, interval_minutes=15, soften=True, spread=None):
+def _setup_logic(logic_cls, interval_minutes=15, soften=True, spread=None,
+                 charge_rate_multiplier=CHARGE_RATE_MULTIPLIER,
+                 max_grid_charge_rate=0.0):
     logic = make_logic(
         logic_cls,
         interval_minutes=interval_minutes,
         min_grid_charge_soc=None,
         preserve_min_grid_charge_soc=False,
-        charge_rate_multiplier=CHARGE_RATE_MULTIPLIER,
+        charge_rate_multiplier=charge_rate_multiplier,
+        max_grid_charge_rate=max_grid_charge_rate,
     )
     logic.set_soften_price_difference_on_charging(soften, 5)
     if spread is not None:
@@ -49,9 +57,10 @@ def _run(logic, prices, consumption_per_slot, calc_timestamp, soc=30):
     return logic.get_inverter_control_settings()
 
 
-def _expected_rate(logic, charge_time_hours):
+def _expected_rate(logic, charge_time_hours,
+                   multiplier=CHARGE_RATE_MULTIPLIER):
     recharge_energy = logic.get_calculation_output().required_recharge_energy
-    return int(round(recharge_energy / charge_time_hours * CHARGE_RATE_MULTIPLIER))
+    return int(round(recharge_energy / charge_time_hours * multiplier))
 
 
 # 12:15 -> 11 cheap slots until 15:00, then 6 hours expensive
@@ -77,6 +86,131 @@ class TestCountChargeWindowSlots:
         assert count_grid_charge_window_slots({0: 0.1}, 1) == 0
 
 
+class TestCountChargeWindowSlotsTolerance:
+    """price_tolerance: slots slightly above the current price."""
+
+    PRICES = [0.326, 0.326, 0.329, 0.326, 0.340, 0.326]
+
+    def test_zero_tolerance_identical_to_default(self):
+        cases = [
+            ([0.1, 0.1, 0.1, 0.5], 4),
+            ([0.1, 0.099, 0.1, 0.5], 4),
+            ([0.1, 0.1, 0.1001, 0.1, 0.5], 5),
+            ([0.1, 0.1, 0.1, 0.1, 0.5], 2),
+            ([0.1, 0.5], 2),
+            (self.PRICES, 6),
+        ]
+        for prices, window_end in cases:
+            assert (count_grid_charge_window_slots(prices, window_end, 0.0)
+                    == count_grid_charge_window_slots(prices, window_end))
+        assert count_grid_charge_window_slots(self.PRICES, 6, 0.0) == 1
+
+    def test_slot_within_tolerance_extends_window(self):
+        assert count_grid_charge_window_slots(
+            [0.1, 0.1, 0.101, 0.1, 0.5], 5, price_tolerance=0.01) == 3
+
+    def test_slot_above_tolerance_ends_window(self):
+        # 0.329 is within 0.326 + 0.005, 0.340 is not
+        assert count_grid_charge_window_slots(
+            self.PRICES, 6, price_tolerance=0.005) == 3
+
+    def test_slot_exactly_at_limit_is_part_of_window(self):
+        assert count_grid_charge_window_slots(
+            [0.25, 0.375, 0.5], 3, price_tolerance=0.125) == 1
+
+    def test_window_end_still_respected(self):
+        assert count_grid_charge_window_slots(
+            [0.1, 0.101, 0.101, 0.101, 0.101], 3, price_tolerance=0.01) == 2
+        assert count_grid_charge_window_slots(
+            [0.1, 0.101], 1, price_tolerance=0.01) == 0
+
+    def test_extend_passes_tolerance(self):
+        prices = [0.326, 0.329, 0.327, 0.5]
+        assert extend_to_grid_charge_window(0.25, prices, 4, 15) == 0.25
+        assert extend_to_grid_charge_window(
+            0.25, prices, 4, 15, price_tolerance=0.01) == pytest.approx(0.75)
+
+    def test_debug_log_names_tolerance(self, caplog):
+        with caplog.at_level(logging.DEBUG, logger='batcontrol.logic.common'):
+            extend_to_grid_charge_window(
+                0.25, [0.326, 0.329, 0.5], 3, 15, price_tolerance=0.01)
+        assert 'tolerance 0.010' in caplog.text
+
+
+# Case from 2026-11-15, 09:15: nearly flat curve (within 1 ct, 0.1-0.2 ct
+# noise) until the daily minimum, then an expensive evening block.
+FLAT_NOISY_PRICES = [
+    0.322, 0.322, 0.322, 0.323, 0.321, 0.322, 0.320, 0.321,
+    0.319, 0.320, 0.318, 0.317, 0.316, 0.317, 0.318, 0.319,
+] + [0.42] * 20
+TS_0915 = datetime.datetime(2026, 11, 15, 9, 15, 0, tzinfo=datetime.timezone.utc)
+MAX_GRID_CHARGE_RATE = 6000
+CASE_MULTIPLIER = 1.5
+
+
+@pytest.mark.parametrize('logic_cls', LOGIC_CLASSES)
+class TestChargeWindowSoftenMargin:
+    """The charging window tolerates slots up to the soften margin
+    (min_price_difference / soften factor) above the current price."""
+
+    def _setup(self, logic_cls, soften_factor=5, spread=None):
+        logic = _setup_logic(logic_cls, spread=spread,
+                             charge_rate_multiplier=CASE_MULTIPLIER,
+                             max_grid_charge_rate=MAX_GRID_CHARGE_RATE)
+        logic.set_soften_price_difference_on_charging(True, soften_factor)
+        return logic
+
+    def test_tolerance_is_soften_margin(self, logic_cls):
+        logic = self._setup(logic_cls)
+        # make_logic: min_price_difference 0.05, factor 5
+        assert logic._charge_window_price_tolerance() == pytest.approx(0.01)
+
+    def test_no_tolerance_without_soften(self, logic_cls):
+        logic = self._setup(logic_cls)
+        logic.set_soften_price_difference_on_charging(False, 5)
+        assert logic._charge_window_price_tolerance() == 0.0
+
+    def test_flat_noisy_curve_stays_below_max_rate(self, logic_cls):
+        """Case 2026-11-15: 0.1-ct noise must not end the window."""
+        logic = self._setup(logic_cls)
+        result = _run(logic, FLAT_NOISY_PRICES, 300, TS_0915, soc=20)
+
+        assert result.charge_from_grid
+        # current slot + all 15 following slots of the flat block
+        assert result.charge_rate == _expected_rate(logic, 4.0, CASE_MULTIPLIER)
+        assert result.charge_rate < MAX_GRID_CHARGE_RATE / 2
+
+    def test_small_margin_ends_window_at_noise(self, logic_cls):
+        """With a tiny margin (0.05 / 100) the 0.1-ct step ends the window,
+        which is the behaviour without tolerance."""
+        # no slot below the (now tiny) soften margin, so nothing is deferred
+        prices = [0.322] * 3 + [0.323] + [0.322] * 12 + [0.42] * 20
+        logic = self._setup(logic_cls, soften_factor=100)
+        result = _run(logic, prices, 300, TS_0915, soc=20)
+
+        assert result.charge_from_grid
+        # current slot + slots 1..2, slot 3 (0.323) ends the window
+        assert result.charge_rate == _expected_rate(logic, 0.75, CASE_MULTIPLIER)
+        assert result.charge_rate > MAX_GRID_CHARGE_RATE
+
+    def test_slot_above_margin_ends_window(self, logic_cls):
+        prices = list(FLAT_NOISY_PRICES)
+        prices[6] = 0.322 + 0.011
+        logic = self._setup(logic_cls)
+        result = _run(logic, prices, 300, TS_0915, soc=20)
+
+        assert result.charge_from_grid
+        # current slot + slots 1..5
+        assert result.charge_rate == _expected_rate(logic, 1.5, CASE_MULTIPLIER)
+
+    def test_no_effect_without_spread(self, logic_cls):
+        logic = self._setup(logic_cls, spread=False)
+        result = _run(logic, FLAT_NOISY_PRICES, 300, TS_0915, soc=20)
+
+        assert result.charge_from_grid
+        assert result.charge_rate == _expected_rate(logic, 0.25, CASE_MULTIPLIER)
+
+
 @pytest.mark.parametrize('logic_cls', LOGIC_CLASSES)
 class TestChargeWindow:
     def test_default_enabled(self, logic_cls):
@@ -99,15 +233,25 @@ class TestChargeWindow:
         assert result.charge_rate == _expected_rate(logic, 0.25)
 
     def test_more_expensive_slot_ends_window(self, logic_cls):
-        """A marginally more expensive slot is not part of the window."""
+        """A slot more expensive than the soften margin ends the window."""
+        prices = list(PRICES_15MIN)
+        prices[4] = CHEAP + 0.011  # margin is 0.05 / 5 = 0.01
+        logic = _setup_logic(logic_cls)
+        result = _run(logic, prices, 200, TS_1215)
+
+        assert result.charge_from_grid
+        # current slot + slots 1..3
+        assert result.charge_rate == _expected_rate(logic, 1.0)
+
+    def test_marginally_more_expensive_slot_is_part_of_window(self, logic_cls):
+        """A slot within the soften margin does not end the window."""
         prices = list(PRICES_15MIN)
         prices[4] = CHEAP + 0.001
         logic = _setup_logic(logic_cls)
         result = _run(logic, prices, 200, TS_1215)
 
         assert result.charge_from_grid
-        # current slot (0.25 h) + slots 1..3
-        assert result.charge_rate == _expected_rate(logic, 1.0)
+        assert result.charge_rate == _expected_rate(logic, 2.75)
 
     def test_cheaper_following_slot_is_part_of_window(self, logic_cls):
         """Slightly cheaper slots (within the soften margin) extend the window."""
@@ -164,3 +308,4 @@ def test_factory_sets_expert_parameter(logic_type, value):
     }
     logic = Logic.create_logic(15, config, datetime.timezone.utc)
     assert logic.spread_grid_charge_over_charge_window is value
+

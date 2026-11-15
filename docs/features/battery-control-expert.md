@@ -124,9 +124,18 @@ charged. Without a charging window, the charge rate is calculated for the remain
 `max_grid_charge_rate`) and the battery is full long before the cheap block ends.
 
 With the charging window enabled, all directly following slots with a price **lower than or equal
-to** the current price are treated as one charging opportunity. The window ends at the first more
-expensive slot (even if it is only marginally more expensive) or at the end of the recharge
-evaluation window.
+to** the current price **plus the soften margin** are treated as one charging opportunity:
+
+```
+soften_margin = min_price_difference / soften_price_difference_on_charging_factor
+slot belongs to the window while: slot_price <= current_price + soften_margin
+```
+
+The window ends at the first slot that is more expensive than that, or at the end of the recharge
+evaluation window. The soften margin is the same margin that already decides when charging is
+deferred to a cheaper slot: a slot that is cheaper by less than the margin is not worth waiting
+for, so a slot that is more expensive by less than the margin does not end the charging window
+either. With the defaults (`min_price_difference: 0.05`, factor 5) the margin is 0.01 €/kWh.
 
 ```
 charge_rate = recharge_energy / (remaining time of current slot + slots in window * slot length)
@@ -141,6 +150,19 @@ The charge rate is recalculated on every run. As the window gets shorter, the ra
 target energy is still reached before the expensive period starts. This leaves room for PV
 production during the cheap block. Set `spread_grid_charge_over_charge_window: false` to restore
 the previous behaviour (charge as fast as possible within the current slot).
+
+Why the margin matters on nearly flat price curves: neighbouring slots often differ by only a
+fraction of a cent. If a slot 0.1 ct above the current price ended the window, the window would
+shrink to one or two slots, and because the rate is recalculated on every run it would jump to
+`max_grid_charge_rate`. Example at 09:15, price 0.322 €/kWh, the following four hours move between
+0.316 and 0.323 €/kWh, 5.1 kWh to recharge, `charge_rate_multiplier` 1.5:
+
+* window cut at the 0.323 €/kWh slot (0.75 h): 5.1 kWh / 0.75 h × 1.5 ≈ 10 kW (capped at
+  `max_grid_charge_rate`)
+* window with the 0.01 €/kWh soften margin (4 h): 5.1 kWh / 4 h × 1.5 ≈ 1.9 kW
+
+The margin only changes the time the charge energy is spread over. It does not change how much
+energy is charged or when batcontrol decides to charge.
 
 # Granularity in price calculations:
 * Config option: `round_price_digits`
