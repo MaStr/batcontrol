@@ -237,7 +237,7 @@ class DefaultLogic(LogicInterface):
                     remaining_time = extend_to_grid_charge_window(
                         remaining_time, prices, self.recharge_window_end,
                         self.interval_minutes,
-                        self._charge_window_price_tolerance())
+                        price_tolerance=self._charge_window_price_tolerance())
 
                 # Calculate required charge rate: energy needed / time available
                 charge_rate = required_recharge_energy / remaining_time

@@ -7,10 +7,9 @@ The charge rate is calculated over the whole window instead of the remaining
 time of the current slot only.
 """
 import datetime
+import logging
 
 import pytest
-
-import logging
 
 from batcontrol.logic.common import (
     count_grid_charge_window_slots,
