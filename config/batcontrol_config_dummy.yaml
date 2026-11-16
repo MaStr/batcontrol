@@ -38,6 +38,7 @@ battery_control_expert:
   production_offset_percent: 1.0 # scale solar forecast (0.8 = 80%), e.g. snow-covered panels
   preserve_min_grid_charge_soc: false # also reserve min_grid_charge_soc during cheap slots
   # market_price_refresh_time: "12:30" # UTC "HH:MM" for the daily hard price refresh. Default: "12:30"
+  max_forecast_hours: 0 # use at most this many hours of forecast, 0 = no limit. Default: 0
 
 #--------------------------
 #  Peak Shaving - limits PV charging. Works with every battery_control.type.

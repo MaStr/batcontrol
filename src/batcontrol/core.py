@@ -14,6 +14,7 @@ import datetime
 import time
 import os
 import logging
+import math
 import platform
 from pathlib import Path
 import functools
@@ -358,6 +359,8 @@ class Batcontrol:
         self.round_price_digits = 4
         self.production_offset_percent = 1.0  # Default: no offset
         self.market_price_refresh_time = "12:30"
+        # Upper bound of the forecast horizon in hours, 0: unlimited
+        self.max_forecast_hours = 0.0
 
         # Validate the expert values at startup: an invalid one (e.g. a
         # soften factor of 0) must stop batcontrol here with a message that
@@ -377,6 +380,10 @@ class Batcontrol:
                 self.preserve_min_grid_charge_soc = parse_bool_config(
                     battery_control_expert['preserve_min_grid_charge_soc'],
                     'battery_control_expert.preserve_min_grid_charge_soc')
+            if 'max_forecast_hours' in battery_control_expert:
+                self.max_forecast_hours = parse_non_negative_number(
+                    battery_control_expert['max_forecast_hours'],
+                    'battery_control_expert.max_forecast_hours')
             raw_refresh_time = battery_control_expert.get(
                 'market_price_refresh_time',
                 self.market_price_refresh_time)
@@ -683,6 +690,20 @@ class Batcontrol:
         rate = as_number(rate, 0.0)
         return rate if rate > 0 else 0.0
 
+    def _max_forecast_slots(self) -> float:
+        """ Number of slots the forecast horizon may cover, the current
+        slot included. Infinite without battery_control_expert.
+        max_forecast_hours; at least the current slot otherwise.
+
+        Prices beyond the day-ahead auction are a prediction and the solar
+        forecast gets weaker with every day, yet the logic treats every
+        slot of the horizon alike.
+        """
+        if self.max_forecast_hours <= 0:
+            return math.inf
+        return max(MIN_FORECAST_SLOTS, math.ceil(
+            self.max_forecast_hours * 60 / self.time_resolution))
+
     @staticmethod
     def _validate_market_price_refresh_time(value: str) -> None:
         """Raise ValueError if value is not a valid HH:MM time string."""
@@ -805,6 +826,7 @@ class Batcontrol:
             # consumption forecast is requested in the same unit.
             fc_period = min(max(price_dict.keys()),
                             max(production_forecast.keys()))
+            fc_period = min(fc_period, self._max_forecast_slots() - 1)
             requested_slots = fc_period + 1
             consumption_forecast = self.fc_consumption.get_forecast(
                 requested_slots, now=cycle_now)
