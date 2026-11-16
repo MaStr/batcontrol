@@ -129,3 +129,37 @@ def test_timestamp_in_another_timezone_is_converted():
         now=CYCLE_NOW.astimezone(datetime.timezone.utc))
 
     assert prices[0] == 0.10
+
+
+NAIVE_NOW = datetime.datetime(2024, 1, 15, 10, 50, 0)
+
+
+def test_tariff_rejects_a_naive_timestamp():
+    """astimezone() would read it as system local time, not as the
+    configured timezone."""
+    provider = RecordingTariff(
+        BERLIN, target_resolution=15, native_resolution=60)
+
+    with pytest.raises(ValueError, match='timezone-aware'):
+        provider.get_prices(now=NAIVE_NOW)
+    assert provider.received_now == 'not called'
+
+
+def test_consumption_rejects_a_naive_timestamp():
+    provider = RecordingConsumption(
+        BERLIN, target_resolution=15, native_resolution=60)
+
+    with pytest.raises(ValueError, match='timezone-aware'):
+        provider.get_forecast(4, now=NAIVE_NOW)
+    assert provider.received_now == 'not called'
+
+
+def test_solar_rejects_a_naive_timestamp():
+    provider = RecordingSolar(
+        [{'name': 'single'}], BERLIN,
+        min_time_between_API_calls=900, delay_evaluation_by_seconds=0,
+        target_resolution=15, native_resolution=60)
+
+    with pytest.raises(ValueError, match='timezone-aware'):
+        provider.get_forecast(now=NAIVE_NOW)
+    assert provider.received_now == 'not called'

@@ -11,6 +11,17 @@ from typing import Dict, Iterator, Literal, Optional, Sequence, Tuple
 logger = logging.getLogger(__name__)
 
 
+def require_aware(now) -> None:
+    """Reject a naive datetime passed as the evaluation time.
+
+    astimezone() reads a naive datetime as system local time, which is
+    not necessarily the configured timezone - slot 0 would silently mean
+    another interval. None (read the clock) is fine.
+    """
+    if now is not None and now.utcoffset() is None:
+        raise ValueError('now must be a timezone-aware datetime')
+
+
 def align_to_interval(timestamp: float, interval_minutes: int) -> float:
     """Align an epoch timestamp down to the start of its interval.
 
