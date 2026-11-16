@@ -495,6 +495,10 @@ class BatteryControlConfig(BaseModel):
         ..., description='Whether min_grid_charge_soc counts as reserved energy.')
     production_offset_percent: Optional[float] = Field(
         None, description='Factor applied to the solar forecast (1.0 = unchanged).')
+    max_forecast_hours: Optional[float] = Field(
+        None, description='Upper bound of the forecast horizon in hours, '
+                          'counted from the start of the current slot. '
+                          '0 = not limited.')
 
 
 class PeakShavingConfigModel(BaseModel):

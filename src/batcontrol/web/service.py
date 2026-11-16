@@ -609,6 +609,9 @@ class BatcontrolService:
                 self._bc.preserve_min_grid_charge_soc),
             'production_offset_percent': _round(
                 self._bc.production_offset_percent, 4),
+            # Not rounded: 0 means not limited, a small limit must not
+            # turn into it.
+            'max_forecast_hours': float(self._bc.max_forecast_hours),
         }
         peak_shaving_payload = {
             'enabled': bool(peak_shaving.enabled),

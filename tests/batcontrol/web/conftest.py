@@ -133,6 +133,7 @@ class FakeBatcontrol:  # pylint: disable=too-many-instance-attributes
         self.min_grid_charge_soc = None
         self.preserve_min_grid_charge_soc = False
         self.production_offset_percent = 1.0
+        self.max_forecast_hours = 0.0
         self.batconfig = {'type': 'default'}
 
         self.inverter = FakeInverter()

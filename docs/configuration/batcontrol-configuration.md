@@ -120,6 +120,7 @@ battery_control_expert:
   production_offset_percent: 1.0
   preserve_min_grid_charge_soc: false
   market_price_refresh_time: "12:30"
+  max_forecast_hours: 0
 ```
 
 These expert parameters allow fine-tuning of Batcontrol's behavior. See [Battery Control Expert](../features/battery-control-expert.md) for detailed explanations of each parameter:
@@ -134,3 +135,4 @@ These expert parameters allow fine-tuning of Batcontrol's behavior. See [Battery
 | `production_offset_percent` | float | 1.0 | Multiplier to adjust solar production forecast (1.0 = no change, 0.8 = 80%, etc.) |
 | `preserve_min_grid_charge_soc` | boolean | false | Also preserve `min_grid_charge_soc` as reserved battery energy during cheap/pre-expensive windows |
 | `market_price_refresh_time` | string | "12:30" | UTC time ("HH:MM") of the daily forced price refresh that picks up newly published next-day prices. An invalid value aborts startup |
+| `max_forecast_hours` | float | 0 | Use at most this many hours of the forecasts, for example `48`. `0` does not limit the horizon |

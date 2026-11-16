@@ -680,6 +680,60 @@ class TestCoreRunDispatch:
         finally:
             bc.shutdown()
 
+    @pytest.mark.parametrize("hours, expected_slots", [
+        (0, 10),      # default: no limit
+        (4, 4),
+        (2.5, 3),     # a started slot is kept
+        (0.01, 1),    # the current slot always stays
+        (100, 10),    # longer than the forecasts: no effect
+    ])
+    def test_run_limits_horizon_to_max_forecast_hours(
+            self, mock_config, mocker, hours, expected_slots):
+        """battery_control_expert.max_forecast_hours cuts the horizon for
+        the consumption request and the logic."""
+        mock_config['battery_control_expert'] = {'max_forecast_hours': hours}
+        bc, fake_logic = self._make_batcontrol_for_grid_charge_target(
+            mock_config,
+            mocker,
+            prices={i: 0.3 for i in range(10)},
+            production={i: 0 for i in range(10)},
+            consumption={i: 500 for i in range(10)},
+        )
+        assert bc.time_resolution == 60
+        bc.fc_consumption.get_forecast.side_effect = (
+            lambda slots, now=None: {i: 500 for i in range(slots)})
+
+        try:
+            bc.run()
+
+            bc.fc_consumption.get_forecast.assert_called_once_with(
+                expected_slots, now=mocker.ANY)
+            calc_input = fake_logic.calculate.call_args.args[0]
+            assert len(calc_input.prices) == expected_slots
+            assert len(calc_input.production) == expected_slots
+            assert len(calc_input.consumption) == expected_slots
+        finally:
+            bc.shutdown()
+
+    def test_max_forecast_slots_follow_the_time_resolution(
+            self, mock_config, mocker):
+        """48 hours are 192 slots at 15 minutes."""
+        mock_config['battery_control_expert'] = {'max_forecast_hours': '48'}
+        bc, _ = self._make_batcontrol_for_grid_charge_target(
+            mock_config,
+            mocker,
+            prices={0: 0.3},
+            production={0: 0},
+            consumption={0: 500},
+        )
+        try:
+            assert bc.max_forecast_hours == 48
+            assert bc._max_forecast_slots() == 48
+            bc.time_resolution = 15
+            assert bc._max_forecast_slots() == 192
+        finally:
+            bc.shutdown()
+
     def test_run_uses_one_timestamp_per_cycle(self, mock_config, mocker):
         """Providers, the scaling of slot 0, the logic and the published run
         time all work on the same instant. Separate clock reads could land
@@ -1676,6 +1730,9 @@ class TestExpertConfigValidation:
         ('round_price_digits', True),
         ('production_offset_percent', -0.1),
         ('production_offset_percent', 'snow'),
+        ('max_forecast_hours', -1),
+        ('max_forecast_hours', 'two days'),
+        ('max_forecast_hours', True),
         ('preserve_min_grid_charge_soc', 'perhaps'),
     ])
     def test_invalid_expert_value_raises_at_startup(
@@ -1728,6 +1785,7 @@ class TestExpertConfigValidation:
             'round_price_digits': 4,
             'production_offset_percent': 1.0,
             'preserve_min_grid_charge_soc': False,
+            'max_forecast_hours': 0,
         }
         bc = Batcontrol(config)
         bc.shutdown()

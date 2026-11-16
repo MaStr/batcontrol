@@ -283,6 +283,32 @@ battery_control_expert:
 - The value is validated at startup. An invalid value (for example `"25:00"` or `"12.30"`) aborts startup with a `ValueError`.
 - When the refresh runs, batcontrol logs `Hard price refresh at HH:MM UTC - fetching fresh market prices`.
 
+# Limit the forecast horizon
+* Config option: `max_forecast_hours`
+* Default: `0` (no limit)
+
+## max_forecast_hours (since 0.10.2)
+
+Batcontrol plans over the time span that is covered by both the price and the solar forecast. Some providers deliver far more than the day-ahead prices: energyforecast.de predicts prices for up to 96 hours. Prices beyond the day-ahead auction are a prediction, not a fixed price, and the solar forecast gets weaker with every day. Batcontrol nevertheless treats every slot of the horizon alike.
+
+With a long horizon batcontrol
+
+- reserves energy for expensive hours that are several days away, and
+- charges from the grid now for demand that is several days away, if no cheaper slot comes before it.
+
+`max_forecast_hours` cuts the horizon. Slots behind it are ignored as if the forecasts ended there:
+
+```
+battery_control_expert:
+  max_forecast_hours: 48
+```
+
+- The value is a number of hours counted from the start of the current slot, at any `time_resolution_minutes`. `48` means 48 slots at 60 minutes and 192 slots at 15 minutes.
+- `0` (default) does not limit the horizon.
+- A limit longer than the available forecasts has no effect.
+- The cut applies to everything batcontrol calculates and publishes: the forecasts on MQTT, in the REST API and in the dashboard end at the same slot.
+- A very short horizon hides the next expensive hours from batcontrol. Values below 24 are rarely useful.
+
 # Valid values
 
 The expert values are checked when batcontrol starts. An invalid value stops the start with a
@@ -302,6 +328,7 @@ ValueError: battery_control_expert.soften_price_difference_on_charging_factor mu
 | `production_offset_percent` | number, 0 or greater |
 | `preserve_min_grid_charge_soc` | `true` / `false` |
 | `market_price_refresh_time` | time of day as `"HH:MM"` (UTC) |
+| `max_forecast_hours` | number, 0 or greater |
 
 Booleans may also be written as `yes` / `no`, `on` / `off` or `1` / `0`, and numbers as text
 (`"5"`), which is what a form field of the Home Assistant add-on delivers. The text `"false"` is

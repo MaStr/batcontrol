@@ -100,6 +100,14 @@ the current price in the window, 1 being the cheapest; equal prices share a rank
 tariff provider's prices end before the 24 hours do, `complete` is `false` and `slot_count` says
 how many slots the statistics cover.
 
+### Forecast horizon
+
+The forecast endpoints end where batcontrol's planning ends: at the last slot covered by both
+the price and the solar forecast, or earlier when
+[`max_forecast_hours`](../features/battery-control-expert.md#max_forecast_hours-since-0102) is
+set. `/config` reports that limit as `battery_control.max_forecast_hours` in hours; `0` means the
+horizon is not limited.
+
 ### Runtime overrides in `/config`
 
 The fields of `/config` always show the value **in effect**. Several of them can change at
