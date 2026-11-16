@@ -703,15 +703,29 @@ class DefaultLogic(LogicInterface):
                                              calc_timestamp: datetime.datetime) -> int:
         """Calculate PV charge rate limit (counter-linear ramp) to fill battery by target hour.
 
-        Assigns weight k+1 to slot k (k=0 = now, k=n-1 = last slot before target),
-        so the allowed charge rate *increases* linearly as the target hour approaches.
-        The current slot gets the lowest allocation; the last slot gets the highest.
+        The allowed charge rate *increases* linearly as the target hour
+        approaches: slot k (k=0 = now, k=n-1 = last slot before target) is
+        allowed (k+1) times the rate of the current slot. The current slot
+        gets the lowest rate, the last slot the highest.
 
-        Weight of current slot: 1
-        Total weight:           n*(n+1)/2
-        Wh for current slot:    free_capacity * 1 / (n*(n+1)/2)
-                              = 2 * free_capacity / (n*(n+1))
-        Charge rate [W]:        wh_current / interval_hours
+        The rate of the current slot is the lowest one that still fills the
+        battery by the target hour according to the forecast. A slot can
+        only take what its PV surplus delivers, so with the rate R of the
+        current slot the battery receives
+
+            sum over k of min(surplus_k, R * (k+1) * hours_k)
+
+        and R is chosen so that this equals the free capacity. hours_k is
+        the slot length; for slot 0 it is the time left in it (core.py
+        scales its forecast the same way).
+
+        As long as every slot has more surplus than the ramp gives it, this
+        is the plain ramp: at the start of a slot
+        R = 2 * free_capacity / (n*(n+1)) / interval_hours. Where the
+        surplus of a slot falls short (typically the last slots before the
+        target, when PV is already declining), the missing energy is moved
+        to the other slots and R rises accordingly. Spreading by time alone
+        would leave the battery short of full at the target hour.
 
         Returns:
             int: charge rate limit in W, or -1 if no limit needed.
@@ -756,17 +770,42 @@ class DefaultLogic(LogicInterface):
         if free_capacity <= 0:
             return 0  # Battery is full, block PV charging
 
-        # Counter-linear ramp: current slot gets weight 1, last slot before
-        # target gets weight n.  This lifts the charge limit progressively
-        # as the target hour approaches instead of applying a flat cap.
-        # Total weight = n*(n+1)/2, so current-slot allocation:
-        #   wh_current = free_capacity * 1 / (n*(n+1)/2)
-        #              = 2 * free_capacity / (n * (n+1))
-        n = slots_remaining
-        wh_current_slot = 2.0 * free_capacity / (n * (n + 1))
-        charge_rate_w = wh_current_slot / interval_hours  # Wh -> W
+        # Energy slot k takes per W of current-slot rate: (k+1) * hours_k.
+        # Slot 0 is only partly left, the other slots count in full.
+        wh_per_watt = np.arange(1, slots_remaining + 1) * interval_hours
+        wh_per_watt[0] = self._remaining_interval_hours(calc_timestamp)
+
+        charge_rate_w = self._lowest_rate_filling_capacity(
+            pv_surplus, wh_per_watt, free_capacity)
 
         return int(charge_rate_w)
+
+    @staticmethod
+    def _lowest_rate_filling_capacity(surplus_wh: np.ndarray,
+                                      wh_per_watt: np.ndarray,
+                                      capacity_wh: float) -> float:
+        """Lowest rate R with sum(min(surplus_k, R * wh_per_watt_k)) == capacity.
+
+        The sum grows with R until every slot is limited by its surplus, so
+        the caller has to make sure that sum(surplus_wh) > capacity_wh.
+
+        Slots are taken in the order in which a rising R runs into their
+        surplus. Those already limited contribute their surplus; the
+        remaining capacity is spread over the others. The first rate that
+        does not exceed the next slot's own limit is the answer.
+        """
+        saturation_rate = surplus_wh / wh_per_watt
+        order = np.argsort(saturation_rate)
+        remaining_capacity = float(capacity_wh)
+        remaining_wh_per_watt = float(np.sum(wh_per_watt))
+        for k in order:
+            rate = remaining_capacity / remaining_wh_per_watt
+            if rate <= saturation_rate[k]:
+                return rate
+            remaining_capacity -= float(surplus_wh[k])
+            remaining_wh_per_watt -= float(wh_per_watt[k])
+        # Not reached while sum(surplus_wh) > capacity_wh.
+        return float(saturation_rate[order[-1]])
 
     # ------------------------------------------------------------------ #
     #  Discharge evaluation                                               #

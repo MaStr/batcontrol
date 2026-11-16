@@ -242,6 +242,105 @@ class TestPeakShavingAlgorithm(unittest.TestCase):
         self.assertEqual(limit, 400)
 
 
+class TestPeakShavingTimeRuleFollowsForecast(unittest.TestCase):
+    """The ramp of the time rule only gives a slot what its PV surplus can
+    deliver; what a slot cannot take is moved to the other slots.
+
+    Regression: the ramp was spread by time alone and gives the last slot
+    before the target hour the largest share. With PV already declining
+    there, the battery was not full at the target hour.
+    """
+
+    def setUp(self):
+        self.max_capacity = 10000
+        self.logic = DefaultLogic(timezone=datetime.timezone.utc,
+                                  interval_minutes=60)
+        self.common = CommonLogic.get_instance(
+            charge_rate_multiplier=1.1,
+            always_allow_discharge_limit=0.90,
+            max_capacity=self.max_capacity,
+        )
+        self.logic.set_calculation_parameters(CalculationParameters(
+            max_charging_from_grid_limit=0.79,
+            min_price_difference=0.05,
+            min_price_difference_rel=0.2,
+            max_capacity=self.max_capacity,
+            peak_shaving=PeakShavingConfig(
+                enabled=True, allow_full_battery_after=14),
+        ))
+
+    def _limit(self, surplus, free_capacity, hour, minute=0):
+        """Time-rule limit for a surplus forecast (Wh per slot)."""
+        calc_input = CalculationInput(
+            production=np.array(surplus, dtype=float),
+            consumption=np.zeros(len(surplus)),
+            prices=np.zeros(len(surplus)),
+            stored_energy=self.max_capacity - free_capacity,
+            stored_usable_energy=self.max_capacity - free_capacity,
+            free_capacity=free_capacity,
+        )
+        ts = datetime.datetime(2025, 6, 20, hour, minute, 0,
+                               tzinfo=datetime.timezone.utc)
+        return self.logic._calculate_peak_shaving_charge_limit(calc_input, ts)
+
+    def test_declining_pv_before_target_raises_the_limit(self):
+        """12:00, two slots left: 3000 Wh surplus now, 500 Wh in the last
+        slot. The plain ramp allows 666 W now and 1333 W later - but the
+        last slot only delivers 500 Wh, so 1166 of 2000 Wh would be
+        charged. The last slot is planned with its 500 Wh, the other
+        1500 Wh have to be charged now."""
+        self.assertEqual(self._limit([3000, 500], 2000, hour=12), 1500)
+
+    def test_slot_without_surplus_gets_no_share(self):
+        """11:00, three slots, the middle one has no surplus. The 2000 Wh
+        are spread over the outer slots with weights 1 and 3."""
+        self.assertEqual(self._limit([3000, 0, 3000], 2000, hour=11), 500)
+
+    def test_enough_surplus_everywhere_is_the_plain_ramp(self):
+        """Every slot has more surplus than the ramp gives it: unchanged,
+        2 * 2000 / (4 * 5) = 200 W."""
+        self.assertEqual(
+            self._limit([3000, 3000, 3000, 3000], 2000, hour=10), 200)
+
+    def test_low_surplus_in_the_current_slot_moves_energy_later(self):
+        """12:00, the current slot delivers only 100 Wh. The remaining
+        1900 Wh go to the last slot (weight 2): 950 W now. The limit is
+        above this slot's surplus and therefore does not hold PV back."""
+        self.assertEqual(self._limit([100, 3000], 2000, hour=12), 950)
+
+    def test_slot_0_counts_with_its_remaining_time(self):
+        """12:30: half of slot 0 is left, core.py hands over half of its
+        forecast. At R W the battery gets R * 0.5 h now and 2 * R * 1 h in
+        the last slot: R = 2000 / 2.5 = 800 W."""
+        self.assertEqual(
+            self._limit(_scale_slot0([3000, 3000], 0.5), 2000,
+                        hour=12, minute=30), 800)
+
+    def test_following_the_limit_fills_the_battery_by_the_target_hour(self):
+        """Charge slot by slot with the limit of each cycle, forecast equal
+        to reality. PV declines towards the target hour."""
+        surplus = [4000, 3500, 2500, 1200, 400, 100]
+        free_capacity = 6000.0
+        for slot, hour in enumerate(range(8, 14)):
+            limit = self._limit(surplus[slot:], free_capacity, hour=hour)
+            charged = surplus[slot]
+            if limit >= 0:
+                charged = min(charged, limit)  # 60-minute slots: W == Wh
+            free_capacity -= min(charged, free_capacity)
+        # int() truncation of the limit: below 1 Wh per slot
+        self.assertLess(free_capacity, len(surplus))
+
+    def test_lowest_rate_filling_capacity(self):
+        """Spread evenly, 1500 Wh over the weights 1+2+3 would be 250 W.
+        Slot 1 cannot take that (400 Wh / 2 = 200 W), so it is planned
+        with its 400 Wh and the other 1100 Wh are spread over the weights
+        1 and 3."""
+        rate = DefaultLogic._lowest_rate_filling_capacity(
+            np.array([1000.0, 400.0, 3000.0]),
+            np.array([1.0, 2.0, 3.0]), 1500.0)
+        self.assertAlmostEqual(rate, 275.0)
+
+
 class TestPeakShavingDecision(unittest.TestCase):
     """Tests for _apply_peak_shaving decision logic."""
 
