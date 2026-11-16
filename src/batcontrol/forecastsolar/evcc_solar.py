@@ -87,7 +87,8 @@ class EvccSolar(ForecastSolarBaseclass):
         self.url = url
         logger.info('Initialized EvccSolar with URL: %s', self.url)
 
-    def get_forecast_from_raw_data(self) -> dict[int, float]:
+    def get_forecast_from_raw_data(
+            self, now: datetime.datetime | None = None) -> dict[int, float]:
         """
         Process the raw data from the evcc API and return a dictionary of forecast values.
 
@@ -108,7 +109,7 @@ class EvccSolar(ForecastSolarBaseclass):
             # Fallback for older evcc versions
             data = raw_data.get('result', {}).get('rates', [])
 
-        now = datetime.datetime.now().astimezone(self.timezone)
+        now = (now or datetime.datetime.now()).astimezone(self.timezone)
 
         # Calculate start of current hour for relative indexing
         current_hour_start = now.replace(minute=0, second=0, microsecond=0)

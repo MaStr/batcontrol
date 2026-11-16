@@ -314,8 +314,13 @@ class Batcontrol:
                 self.max_pv_charge_rate,
             )
 
-        self.max_charging_from_grid_limit = self.batconfig.get(
+        # The limit as configured or set at runtime. The value in effect is
+        # max_charging_from_grid_limit, derived from it by
+        # __update_effective_grid_charge_limit().
+        self._requested_max_charging_from_grid_limit = self.batconfig.get(
             'max_charging_from_grid_limit', 0.8)
+        self.max_charging_from_grid_limit = (
+            self._requested_max_charging_from_grid_limit)
         self.min_price_difference = self.batconfig.get(
             'min_price_difference', 0.05)
         self.min_price_difference_rel = self.batconfig.get(
@@ -772,31 +777,29 @@ class Batcontrol:
         # Reset some values
         self.__reset_run_data()
 
-        # Verify some constraints:
-        #   always_allow_discharge needs to be above max_charging from grid.
-        #   if not, it will oscillate between discharging and charging.
+        # One timestamp for the whole cycle. The providers align slot 0 to
+        # it, the elapsed part of slot 0 is scaled with it and the logic
+        # derives the remaining time from it. Separate clock reads could
+        # land on different sides of a slot boundary, because the loop
+        # starts on full minutes - and with that on :00/:15/:30/:45.
+        cycle_now = datetime.datetime.now().astimezone(self.timezone)
+
+        # always_allow_discharge needs to be above max_charging from grid.
+        # If not, it will oscillate between discharging and charging.
+        self.__update_effective_grid_charge_limit()
         always_allow_discharge_limit = self.general_logic.get_always_allow_discharge_limit()
-        if always_allow_discharge_limit < self.max_charging_from_grid_limit:
-            logger.warning("Always_allow_discharge_limit (%.2f) is"
-                           " below max_charging_from_grid_limit (%.2f)",
-                           always_allow_discharge_limit,
-                           self.max_charging_from_grid_limit
-                           )
-            self.max_charging_from_grid_limit = always_allow_discharge_limit - 0.01
-            logger.warning("Lowering max_charging_from_grid_limit to %.2f",
-                           self.max_charging_from_grid_limit)
 
         # for API
         self.refresh_static_values()
         self.set_discharge_limit(
             self.get_max_capacity() * always_allow_discharge_limit
         )
-        self.last_run_time = time.time()
+        self.last_run_time = cycle_now.timestamp()
 
         # get forecasts
         try:
-            price_dict = self.dynamic_tariff.get_prices()
-            production_forecast = self.fc_solar.get_forecast()
+            price_dict = self.dynamic_tariff.get_prices(now=cycle_now)
+            production_forecast = self.fc_solar.get_forecast(now=cycle_now)
             # harmonize forecast horizon
             # fc_period is a slot index at self.time_resolution, so the
             # consumption forecast is requested in the same unit.
@@ -804,7 +807,7 @@ class Batcontrol:
                             max(production_forecast.keys()))
             requested_slots = fc_period + 1
             consumption_forecast = self.fc_consumption.get_forecast(
-                requested_slots)
+                requested_slots, now=cycle_now)
             if len(consumption_forecast) < requested_slots:
                 # A shorter consumption forecast reduces the forecast horizon,
                 # like it does for prices and production
@@ -880,9 +883,9 @@ class Batcontrol:
         # Note: With Full-Hour Alignment, providers return data where [0] is already
         # the current interval (e.g., at 10:20, [0] represents 10:15-10:30 for 15-min)
         # We factorize based on elapsed time WITHIN the current interval
-        now = datetime.datetime.now().astimezone(self.timezone)
-        current_minute = now.minute
-        current_second = now.second
+        # cycle_now is the time the providers aligned slot 0 to.
+        current_minute = cycle_now.minute
+        current_second = cycle_now.second
 
         # Get interval resolution from config (default to 60 for backward
         # compatibility)
@@ -928,7 +931,7 @@ class Batcontrol:
         # an UnboundLocalError if peak shaving is disabled in config.
         evcc_disable_peak_shaving = False
         evcc_reason = None
-        decision_trace = self.__new_trace()
+        decision_trace = self.__new_trace(cycle_now)
         if peak_shaving_config_enabled:
             if self.evcc_api is not None:
                 evcc_disable_peak_shaving = (
@@ -979,7 +982,8 @@ class Batcontrol:
         # Calculate inverter mode
         logger.debug('Calculating inverter mode...')
         try:
-            calculation_ok = this_logic_run.calculate(calc_input)
+            calculation_ok = this_logic_run.calculate(
+                calc_input, cycle_now)
         except Exception:  # pylint: disable=broad-exception-caught
             # A defect in the logic must not end the process: the battery
             # would stay in whatever mode was set last. Fall back to the
@@ -1119,10 +1123,16 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_control_source(control_source)
 
-    def __new_trace(self) -> DecisionTrace:
-        """ Start the decision trace of a new control decision """
-        return DecisionTrace(
-            timestamp=datetime.datetime.now().astimezone(self.timezone))
+    def __new_trace(
+            self, timestamp: datetime.datetime | None = None) -> DecisionTrace:
+        """ Start the decision trace of a new control decision.
+
+            The control cycle passes its own timestamp; decisions outside
+            the cycle (external overrides) are stamped with the current time.
+        """
+        if timestamp is None:
+            timestamp = datetime.datetime.now().astimezone(self.timezone)
+        return DecisionTrace(timestamp=timestamp)
 
     @contextlib.contextmanager
     def __decision_scope(self, trace: DecisionTrace):
@@ -1398,32 +1408,67 @@ class Batcontrol:
         """ Set the always allow discharge limit for battery control """
         self.general_logic.set_always_allow_discharge_limit(
             always_allow_discharge_limit)
+        grid_limit_changed = self.__update_effective_grid_charge_limit()
         if self.mqtt_api is not None:
             self.mqtt_api.publish_always_allow_discharge_limit(
                 always_allow_discharge_limit)
+            if grid_limit_changed:
+                self.mqtt_api.publish_max_charging_from_grid_limit(
+                    self.max_charging_from_grid_limit)
 
     def get_always_allow_discharge_limit(self) -> float:
         """ Get the always allow discharge limit for battery control """
         return self.general_logic.get_always_allow_discharge_limit()
 
     def set_max_charging_from_grid_limit(self, limit: float) -> None:
-        """ Set the max charging from grid limit for battery control """
-        # tbh , we should raise an exception here.
-        if limit > self.get_always_allow_discharge_limit():
-            logger.error(
-                'Max charging from grid limit %.2f is '
-                'above always_allow_discharge_limit %.2f',
-                limit,
-                self.get_always_allow_discharge_limit()
-            )
-            return
-        self.max_charging_from_grid_limit = limit
+        """ Set the max charging from grid limit for battery control.
+
+            The value is kept as requested. A value that is not below
+            always_allow_discharge_limit is accepted as well; the limit in
+            effect then stays just below that limit and follows it.
+        """
+        self._requested_max_charging_from_grid_limit = limit
+        self.__update_effective_grid_charge_limit()
         if self.mqtt_api is not None:
-            self.mqtt_api.publish_max_charging_from_grid_limit(limit)
+            self.mqtt_api.publish_max_charging_from_grid_limit(
+                self.max_charging_from_grid_limit)
 
     def get_max_charging_from_grid_limit(self) -> float:
-        """ Get the max charging from grid limit for battery control """
-        return self.max_charging_from_grid_limit
+        """ Get the requested max charging from grid limit.
+
+            This is the value to save and restore (evcc does). The limit in
+            effect is the attribute max_charging_from_grid_limit.
+        """
+        return self._requested_max_charging_from_grid_limit
+
+    def __update_effective_grid_charge_limit(self) -> bool:
+        """ Derive the grid charge limit in effect from the requested one.
+
+            Grid charging has to stop below always_allow_discharge_limit,
+            otherwise the battery oscillates between charging and
+            discharging. The requested value is never overwritten, so the
+            limit returns to it as soon as always_allow_discharge_limit is
+            raised again.
+
+            Returns True if the limit in effect changed.
+        """
+        requested = self._requested_max_charging_from_grid_limit
+        discharge_limit = self.general_logic.get_always_allow_discharge_limit()
+        effective = requested
+        if discharge_limit < requested:
+            effective = max(0.0, discharge_limit - 0.01)
+        if effective == self.max_charging_from_grid_limit:
+            return False
+        if effective < requested:
+            logger.warning(
+                'always_allow_discharge_limit (%.2f) is below '
+                'max_charging_from_grid_limit (%.2f). Charging from grid is '
+                'limited to %.2f while this is the case.',
+                discharge_limit, requested, effective)
+        else:
+            logger.info('max_charging_from_grid_limit is %.2f', effective)
+        self.max_charging_from_grid_limit = effective
+        return True
 
     @_tolerate_inverter_outage
     def set_discharge_blocked(self, discharge_blocked) -> None:
@@ -1649,21 +1694,18 @@ class Batcontrol:
         self._grid_charge_locked = locked
         if locked:
             self._pre_lock_max_charging_from_grid_limit = (
-                self.max_charging_from_grid_limit)
+                self._requested_max_charging_from_grid_limit)
             if self.last_mode == MODE_FORCE_CHARGING:
                 with self.__override_scope(Reason.GRID_CHARGE_LOCK):
                     self.allow_discharging(CONTROL_SOURCE_API)
             self.set_max_charging_from_grid_limit(0.0)
         else:
             if self._pre_lock_max_charging_from_grid_limit is not None:
-                # Clamp to always_allow_discharge_limit: it may have been
-                # lowered while locked, which would otherwise make
-                # set_max_charging_from_grid_limit reject the restore and
-                # leave the limit stuck at 0.0.
-                restore_value = min(
-                    self._pre_lock_max_charging_from_grid_limit,
-                    self.get_always_allow_discharge_limit())
-                self.set_max_charging_from_grid_limit(restore_value)
+                # The requested value is restored as it was. Should
+                # always_allow_discharge_limit have been lowered while
+                # locked, the limit in effect stays below it.
+                self.set_max_charging_from_grid_limit(
+                    self._pre_lock_max_charging_from_grid_limit)
                 self._pre_lock_max_charging_from_grid_limit = None
         if self.mqtt_api is not None:
             self.mqtt_api.publish_grid_charge_locked(locked)

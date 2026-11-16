@@ -23,7 +23,7 @@ class ConcreteTariffProvider(DynamicTariffBaseclass):
         )
         self.mock_prices_func = mock_prices_func
 
-    def _get_prices_native(self) -> dict[int, float]:
+    def _get_prices_native(self, now=None) -> dict[int, float]:
         """Mock implementation returning test data"""
         if self.mock_prices_func:
             return self.mock_prices_func()

@@ -10,8 +10,13 @@ class ForecastSolarInterface(ABC):
         """ Initialize the SolarAPI class """
 
     @abstractmethod
-    def get_forecast(self) -> dict[int, float]:
-        """ Get solar production of all installations up to next 48 hours """
+    def get_forecast(self, now=None) -> dict[int, float]:
+        """ Get solar production of all installations up to next 48 hours
+
+        Args:
+            now: datetime the caller evaluates for, defaults to the
+                current time.
+        """
 
     @abstractmethod
     def refresh_data(self, force: bool = False) -> None:

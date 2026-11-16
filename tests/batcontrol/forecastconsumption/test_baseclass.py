@@ -18,7 +18,7 @@ class ConcreteConsumptionForecast(ForecastConsumptionBaseclass):
         self.mock_forecast_func = mock_forecast_func
         self.requested_hours = []
 
-    def _get_forecast_native(self, hours: int) -> dict[int, float]:
+    def _get_forecast_native(self, hours: int, now=None) -> dict[int, float]:
         """Mock implementation returning test data"""
         self.requested_hours.append(hours)
         if self.mock_forecast_func:

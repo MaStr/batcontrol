@@ -794,7 +794,9 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
         """
         self.refresh_data_with_limit(MAX_FORECAST_HOURS)
 
-    def _get_forecast_native(self, hours: int) -> Dict[int, float]:
+    def _get_forecast_native(
+            self, hours: int,
+            now: datetime.datetime | None = None) -> Dict[int, float]:
         """Get hour-aligned forecast at native (60-minute) resolution.
 
         Args:
@@ -815,7 +817,7 @@ class ForecastConsumptionHomeAssistant(ForecastConsumptionBaseclass):
         # boundaries
         missing_keys = False
         with self._cache_lock:
-            now = datetime.datetime.now(tz=self.timezone)
+            now = (now or datetime.datetime.now(tz=self.timezone)).astimezone(self.timezone)
             # Align to start of current hour
             now_aligned = now.replace(minute=0, second=0, microsecond=0)
             for h in range(hours):

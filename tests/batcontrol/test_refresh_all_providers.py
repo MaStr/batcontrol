@@ -17,7 +17,7 @@ class _DummySolar(ForecastSolarBaseclass):
         self.calls += 1
         return {'result': {}}
 
-    def get_forecast_from_raw_data(self):
+    def get_forecast_from_raw_data(self, now=None):
         return {}
 
     def schedule_next_refresh(self):

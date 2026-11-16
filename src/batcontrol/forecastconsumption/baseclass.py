@@ -56,7 +56,9 @@ class ForecastConsumptionBaseclass(ForecastConsumptionInterface):
         )
 
     @abstractmethod
-    def _get_forecast_native(self, hours: int) -> dict[int, float]:
+    def _get_forecast_native(
+            self, hours: int,
+            now: datetime.datetime | None = None) -> dict[int, float]:
         """Get forecast at native resolution, hour-aligned.
 
         Args:
@@ -79,7 +81,9 @@ class ForecastConsumptionBaseclass(ForecastConsumptionInterface):
         data (e.g., from APIs) should override this method.
         """
 
-    def get_forecast(self, requested_slots: int) -> dict[int, float]:
+    def get_forecast(
+            self, requested_slots: int,
+            now: datetime.datetime | None = None) -> dict[int, float]:
         """Get forecast with automatic resolution handling.
 
         The request is resolution-neutral: it asks for a number of slots at
@@ -92,6 +96,9 @@ class ForecastConsumptionBaseclass(ForecastConsumptionInterface):
                 target_resolution and starting with the current slot.
                 This matches the slot indices used by the price and
                 production forecasts in core.py.
+            now: Time the caller evaluates for. The control loop passes one
+                timestamp per cycle, so every provider agrees on the
+                current slot. Defaults to the current time.
 
         Returns:
             Dict where [0] = current slot, [1] = next slot, etc.
@@ -103,12 +110,12 @@ class ForecastConsumptionBaseclass(ForecastConsumptionInterface):
             # The slots already elapsed in the current hour are dropped by
             # _shift_to_current_interval, so they have to be fetched on top of
             # the requested ones.
-            offset = self._current_interval_in_hour()
+            offset = self._current_interval_in_hour(now)
             hours = math.ceil(
                 (requested_slots + offset) * self.target_resolution / 60)
 
             # Get hour-aligned forecast from provider at native resolution
-            native_forecast = self._get_forecast_native(hours)
+            native_forecast = self._get_forecast_native(hours, now=now)
 
             if not native_forecast:
                 logger.warning(
@@ -129,15 +136,16 @@ class ForecastConsumptionBaseclass(ForecastConsumptionInterface):
                     for idx, value in current_aligned_forecast.items()
                     if idx < requested_slots}
 
-    def _current_interval_in_hour(self) -> int:
+    def _current_interval_in_hour(
+            self, now: datetime.datetime | None = None) -> int:
         """Number of target-resolution intervals already elapsed in this hour.
 
         At 10:20 with a target resolution of 15 minutes this is 1, because the
         current interval 10:15-10:30 is the second one of the hour.
         """
-        now = datetime.datetime.now(
-            datetime.timezone.utc).astimezone(
-            self.timezone)
+        now = (now or datetime.datetime.now(
+                datetime.timezone.utc)
+               ).astimezone(self.timezone)
         return now.minute // self.target_resolution
 
     # pylint: disable=unused-argument

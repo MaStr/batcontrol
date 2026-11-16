@@ -33,7 +33,7 @@ class ConcreteForecastSolar(ForecastSolarBaseclass):
             return self.mock_provider_func(pvinstallation_name)
         return {'test': 'data'}
 
-    def get_forecast_from_raw_data(self):
+    def get_forecast_from_raw_data(self, now=None):
         if self.mock_forecast_func:
             return self.mock_forecast_func()
         return {0: 100.0, 1: 200.0, 18: 50.0}

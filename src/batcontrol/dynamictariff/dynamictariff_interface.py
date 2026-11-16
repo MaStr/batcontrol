@@ -9,8 +9,13 @@ class TariffInterface(ABC):
         """ Initialize the tariff class """
 
     @abstractmethod
-    def get_prices(self) -> dict[int, float]:
-        """ get prices in processable format with hours as keys """
+    def get_prices(self, now=None) -> dict[int, float]:
+        """ get prices in processable format with hours as keys
+
+        Args:
+            now: datetime the caller evaluates for, defaults to the
+                current time.
+        """
 
     @abstractmethod
     def refresh_data(self, force: bool = False) -> None:

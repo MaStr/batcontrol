@@ -130,7 +130,7 @@ Based on the forecasts and current battery state, batcontrol puts your inverter 
 
 The system validates configuration to prevent problematic behavior:
 - `always_allow_discharge_limit` must be > `max_charging_from_grid_limit`
-- If violated, `max_charging_from_grid_limit` is automatically lowered
+- If violated, grid charging stops one percentage point below `always_allow_discharge_limit` for as long as this is the case. The configured `max_charging_from_grid_limit` is kept and applies again as soon as `always_allow_discharge_limit` is raised above it - for example after it was lowered for a while via MQTT.
 
 ## External Integrations
 

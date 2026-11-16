@@ -672,10 +672,44 @@ class TestCoreRunDispatch:
             bc.run()
 
             handle_error.assert_not_called()
-            bc.fc_consumption.get_forecast.assert_called_once_with(10)
+            bc.fc_consumption.get_forecast.assert_called_once_with(
+                10, now=mocker.ANY)
             calc_input = fake_logic.calculate.call_args.args[0]
             assert len(calc_input.consumption) == 3
             assert len(calc_input.prices) == 3
+        finally:
+            bc.shutdown()
+
+    def test_run_uses_one_timestamp_per_cycle(self, mock_config, mocker):
+        """Providers, the scaling of slot 0, the logic and the published run
+        time all work on the same instant. Separate clock reads could land
+        on different sides of a slot boundary, since the loop starts on
+        full minutes."""
+        bc, fake_logic = self._make_batcontrol_for_grid_charge_target(
+            mock_config,
+            mocker,
+            prices={i: 0.3 for i in range(4)},
+            production={i: 0 for i in range(4)},
+            consumption={i: 500 for i in range(4)},
+        )
+
+        try:
+            bc.run()
+
+            cycle_now = bc.dynamic_tariff.get_prices.call_args.kwargs['now']
+            assert isinstance(cycle_now, datetime.datetime)
+            assert cycle_now.tzinfo is not None
+            assert bc.fc_solar.get_forecast.call_args.kwargs['now'] is cycle_now
+            assert (bc.fc_consumption.get_forecast.call_args.kwargs['now']
+                    is cycle_now)
+            calc_input, calc_timestamp = fake_logic.calculate.call_args.args
+            assert calc_timestamp is cycle_now
+            assert bc.last_run_time == cycle_now.timestamp()
+
+            elapsed = ((cycle_now.minute % bc.time_resolution
+                        + cycle_now.second / 60) / bc.time_resolution)
+            assert calc_input.consumption[0] == pytest.approx(
+                500 * (1 - elapsed))
         finally:
             bc.shutdown()
 
@@ -1810,20 +1844,106 @@ class TestApiSetGridChargeLock:
         assert bc.last_mode == MODE_ALLOW_DISCHARGING
         assert bc.max_charging_from_grid_limit == 0.0
 
-    def test_unlock_clamps_restore_to_always_allow_discharge_limit(self, bc):
+    def test_unlock_with_lowered_always_allow_discharge_limit(self, bc):
         """If always_allow_discharge_limit was lowered below the remembered
-        value while locked, set_max_charging_from_grid_limit would otherwise
-        reject the restore and leave the limit stuck at 0.0 (issue found in
-        PR #416 review)."""
+        value while locked, the unlock must not leave the limit stuck at 0.0
+        (issue found in PR #416 review). The limit in effect stays below
+        always_allow_discharge_limit and returns to the remembered value
+        once that is raised again."""
         bc.mqtt_api = MagicMock()
         bc.api_set_grid_charge_lock(True)
         bc.set_always_allow_discharge_limit(0.5)
 
         bc.api_set_grid_charge_lock(False)
 
-        assert bc.max_charging_from_grid_limit == 0.5
+        assert bc.max_charging_from_grid_limit == pytest.approx(0.49)
         assert bc._grid_charge_locked is False
         assert bc._pre_lock_max_charging_from_grid_limit is None
+
+        bc.set_always_allow_discharge_limit(0.9)
+        assert bc.max_charging_from_grid_limit == 0.8
+
+
+class TestEffectiveGridChargeLimit:
+    """max_charging_from_grid_limit in effect is derived from the requested
+    value and always_allow_discharge_limit, never written back over it."""
+
+    BASE_CONFIG = TestApiSetGridChargeLock.BASE_CONFIG
+    bc = TestApiSetGridChargeLock.bc
+
+    def test_limit_returns_after_discharge_limit_is_raised_again(self, bc):
+        """Regression: lowering always_allow_discharge_limit for a while
+        used to leave max_charging_from_grid_limit lowered until restart."""
+        bc.set_always_allow_discharge_limit(0.5)
+
+        assert bc.max_charging_from_grid_limit == pytest.approx(0.49)
+        assert bc.get_max_charging_from_grid_limit() == 0.8
+
+        bc.set_always_allow_discharge_limit(0.9)
+
+        assert bc.max_charging_from_grid_limit == 0.8
+
+    def test_control_cycle_keeps_the_requested_limit(self, bc, mocker):
+        """The cycle applies the constraint without overwriting the
+        requested value."""
+        bc.general_logic.set_always_allow_discharge_limit(0.5)
+        mocker.patch.object(bc, 'handle_forecast_error')
+
+        bc.run()
+
+        assert bc.max_charging_from_grid_limit == pytest.approx(0.49)
+        assert bc.get_max_charging_from_grid_limit() == 0.8
+
+        bc.general_logic.set_always_allow_discharge_limit(0.9)
+        bc.run()
+
+        assert bc.max_charging_from_grid_limit == 0.8
+
+    def test_equal_limits_are_not_lowered(self, bc):
+        bc.set_always_allow_discharge_limit(0.8)
+
+        assert bc.max_charging_from_grid_limit == 0.8
+
+    def test_effective_limit_is_published(self, bc):
+        bc.mqtt_api = MagicMock()
+
+        bc.set_always_allow_discharge_limit(0.5)
+
+        published = (
+            bc.mqtt_api.publish_max_charging_from_grid_limit.call_args.args[0])
+        assert published == pytest.approx(0.49)
+
+    def test_unchanged_limit_is_not_published_again(self, bc):
+        bc.set_always_allow_discharge_limit(0.9)
+        bc.mqtt_api = MagicMock()
+
+        bc.set_always_allow_discharge_limit(0.95)
+
+        bc.mqtt_api.publish_max_charging_from_grid_limit.assert_not_called()
+
+    def test_value_above_discharge_limit_is_kept_as_requested(self, bc):
+        """A requested value above always_allow_discharge_limit (0.9) is
+        accepted; the limit in effect stays below the discharge limit and
+        follows it."""
+        # CommonLogic is a singleton, so set the discharge limit explicitly.
+        bc.set_always_allow_discharge_limit(0.9)
+        bc.mqtt_api = MagicMock()
+
+        bc.set_max_charging_from_grid_limit(0.95)
+
+        assert bc.get_max_charging_from_grid_limit() == 0.95
+        assert bc.max_charging_from_grid_limit == pytest.approx(0.89)
+        published = (
+            bc.mqtt_api.publish_max_charging_from_grid_limit.call_args.args[0])
+        assert published == pytest.approx(0.89)
+
+        bc.set_always_allow_discharge_limit(1.0)
+        assert bc.max_charging_from_grid_limit == 0.95
+
+    def test_discharge_limit_of_zero_does_not_go_negative(self, bc):
+        bc.set_always_allow_discharge_limit(0.0)
+
+        assert bc.max_charging_from_grid_limit == 0.0
 
 
 class TestGridChargeLockTopicRegistration:

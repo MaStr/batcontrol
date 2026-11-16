@@ -125,7 +125,8 @@ class Energyforecast(DynamicTariffBaseclass):
 
         return response.json()
 
-    def _get_prices_native(self) -> dict[int, float]:
+    def _get_prices_native(
+            self, now: datetime.datetime | None = None) -> dict[int, float]:
         """Get hour-aligned prices at native (15-min) resolution.
 
         Expected API v2 response format:
@@ -152,7 +153,7 @@ class Energyforecast(DynamicTariffBaseclass):
         """
         raw_data = self.get_raw_data()
         data = raw_data.get('data', [])
-        now = datetime.datetime.now(self.timezone)
+        now = (now or datetime.datetime.now(self.timezone)).astimezone(self.timezone)
         current_hour_start = now.replace(minute=0, second=0, microsecond=0)
         prices = {}
 

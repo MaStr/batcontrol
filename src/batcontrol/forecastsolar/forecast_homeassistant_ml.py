@@ -445,7 +445,8 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
         finally:
             await self._websocket_disconnect(websocket)
 
-    def get_forecast_from_raw_data(self) -> Dict[int, float]:
+    def get_forecast_from_raw_data(
+            self, now: datetime.datetime | None = None) -> Dict[int, float]:
         """Parse forecast from cached raw data
 
         Returns hour-aligned forecast at native 60-minute resolution.
@@ -472,7 +473,8 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
                 attributes.get('unit_of_measurement'))
 
         try:
-            forecast_dict = self._parse_forecast_from_attributes(attributes)
+            forecast_dict = self._parse_forecast_from_attributes(
+                attributes, now=now)
 
             if forecast_dict:
                 values = list(forecast_dict.values())
@@ -540,7 +542,8 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
 
     def _parse_forecast_evcc(
         self,
-        forecast_list: list
+        forecast_list: list,
+        now: datetime.datetime | None = None
     ) -> Dict[int, float]:
         """Parse evcc 'forecast' list with {start, end, value} entries.
 
@@ -555,7 +558,7 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
             Empty dict if no future entries are found.
         """
         forecast_dict: Dict[int, float] = {}
-        now = datetime.datetime.now(self.timezone)
+        now = (now or datetime.datetime.now(self.timezone)).astimezone(self.timezone)
         current_hour = now.replace(minute=0, second=0, microsecond=0)
 
         logger_ha_details.debug(
@@ -604,7 +607,8 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
 
     def _parse_forecast_from_attributes(
         self,
-        attributes: dict
+        attributes: dict,
+        now: datetime.datetime | None = None
     ) -> Dict[int, float]:
         """Parse forecast data from sensor attributes.
 
@@ -634,7 +638,7 @@ class ForecastSolarHomeAssistantML(ForecastSolarBaseclass):
                 for entry in forecast_list
             )
             if has_expected_entry:
-                result = self._parse_forecast_evcc(forecast_list)
+                result = self._parse_forecast_evcc(forecast_list, now=now)
                 if result:
                     return result
 
