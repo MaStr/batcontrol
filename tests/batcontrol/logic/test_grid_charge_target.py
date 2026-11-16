@@ -17,7 +17,7 @@ def _recharge(**overrides):
         'required_energy': 3000.0,
         'stored_energy': 2000.0,
         'configured_min_grid_charge_soc': 0.50,
-        'max_capacity': CAPACITY_WH,
+        'soc_capacity': CAPACITY_WH,
         'max_charging_from_grid_limit': 0.90,
     }
     values.update(overrides)
@@ -30,7 +30,7 @@ def _reserve(**overrides):
         'reserved_energy': 3000.0,
         'min_soc_energy': 1000.0,
         'configured_min_grid_charge_soc': 0.50,
-        'max_capacity': CAPACITY_WH,
+        'soc_capacity': CAPACITY_WH,
         'max_charging_from_grid_limit': 0.90,
         'active': True,
     }

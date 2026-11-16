@@ -99,6 +99,7 @@ class DefaultLogic(LogicInterface):
         """ Set the calculation parameters for the logic """
         self.calculation_parameters = parameters
         self.common.max_capacity = parameters.max_capacity
+        self.common.gross_capacity = parameters.gross_capacity
 
     def set_timezone(self, timezone: datetime.timezone):
         """ Set the timezone for the logic calculations """
@@ -177,8 +178,7 @@ class DefaultLogic(LogicInterface):
             logger.debug('Discharging is NOT allowed')
             inverter_control_settings.allow_discharge = False
             charging_limit_percent = self.calculation_parameters.max_charging_from_grid_limit * 100
-            charge_limit_capacity = self.common.max_capacity * \
-                self.calculation_parameters.max_charging_from_grid_limit
+            charge_limit_capacity = self._grid_charge_limit_energy()
             is_charging_possible = calc_input.stored_energy < charge_limit_capacity
 
             # Defaults to 0, only calculate if charging is possible
@@ -829,7 +829,7 @@ class DefaultLogic(LogicInterface):
         if self.common.is_discharge_always_allowed_capacity(calc_input.stored_energy):
             self.decision_trace.add(discharge_always_allowed(
                 calc_input, self.common.get_always_allow_discharge_limit(),
-                self.common.max_capacity),
+                self.common.get_always_allow_discharge_energy()),
                 logger)
             return True
 
@@ -892,9 +892,8 @@ class DefaultLogic(LogicInterface):
             min_soc_energy=min_soc_energy,
             configured_min_grid_charge_soc=(
                 self.calculation_parameters.min_grid_charge_soc),
-            max_capacity=self.calculation_parameters.max_capacity,
-            max_charging_from_grid_limit=(
-                self.calculation_parameters.max_charging_from_grid_limit),
+            soc_capacity=self.common.get_soc_capacity(),
+            max_charging_from_grid_limit=self._grid_charge_limit_ratio(),
             active=min_grid_charge_soc_active,
         )
         reserved_storage = reserve_target.energy
@@ -986,9 +985,26 @@ class DefaultLogic(LogicInterface):
         are."""
         min_soc_energy = max(
             0.0, calc_input.stored_energy - calc_input.stored_usable_energy)
-        return (self.calculation_parameters.max_capacity
-                * self.calculation_parameters.max_charging_from_grid_limit
-                - min_soc_energy)
+        return self._grid_charge_limit_energy() - min_soc_energy
+
+    def _grid_charge_limit_energy(self) -> float:
+        """Stored energy in Wh at ``max_charging_from_grid_limit``.
+
+        The limit is a real SoC (see CommonLogic.get_soc_capacity), so it
+        does not move with MAX_SOC. The battery cannot be charged beyond
+        MAX_SOC, which bounds it."""
+        return min(
+            self.common.get_soc_capacity()
+            * self.calculation_parameters.max_charging_from_grid_limit,
+            self.calculation_parameters.max_capacity)
+
+    def _grid_charge_limit_ratio(self) -> float:
+        """``max_charging_from_grid_limit`` as a real SoC ratio, bounded
+        by MAX_SOC like :py:meth:`_grid_charge_limit_energy`."""
+        soc_capacity = self.common.get_soc_capacity()
+        if soc_capacity <= 0:
+            return self.calculation_parameters.max_charging_from_grid_limit
+        return self._grid_charge_limit_energy() / soc_capacity
 
     def _reserve_behind_cheaper_slots(self, prices: Union[np.ndarray, dict],  # pylint: disable=too-many-arguments,too-many-positional-arguments
                                       consumption: np.ndarray,
@@ -1248,9 +1264,8 @@ class DefaultLogic(LogicInterface):
             stored_energy=calc_input.stored_energy,
             configured_min_grid_charge_soc=(
                 self.calculation_parameters.min_grid_charge_soc),
-            max_capacity=self.calculation_parameters.max_capacity,
-            max_charging_from_grid_limit=(
-                self.calculation_parameters.max_charging_from_grid_limit),
+            soc_capacity=self.common.get_soc_capacity(),
+            max_charging_from_grid_limit=self._grid_charge_limit_ratio(),
         )
         # The target SoC has to be reached before the first high price slot.
         # If the window holds none, the cheaper slots before the first one

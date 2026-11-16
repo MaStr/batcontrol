@@ -163,7 +163,7 @@ See [Forecast Metrics](forecast-metrics.md) for a detailed explanation of these 
 ### Configuration Limits
 - `house/batcontrol/always_allow_discharge_limit` - Always discharge limit (0.0-1.0)
 - `house/batcontrol/always_allow_discharge_limit_percent` - Always discharge limit in %
-- `house/batcontrol/always_allow_discharge_limit_capacity` - Always discharge limit in Wh
+- `house/batcontrol/always_allow_discharge_limit_capacity` - Always discharge limit as stored energy in Wh: the limit times the capacity at 100% SOC, independent of the inverter's `max_soc`. Only while the inverter does not report a `max_soc`, the capacity it reports as maximum is used instead.
 - `house/batcontrol/max_charging_from_grid_limit` - Max charging from grid limit in effect (0.0-1.0)
 - `house/batcontrol/max_charging_from_grid_limit_percent` - Max charging from grid limit in effect in %
 - `house/batcontrol/min_grid_charge_soc` - Optional configured minimum grid-charge target (0.0-1.0)

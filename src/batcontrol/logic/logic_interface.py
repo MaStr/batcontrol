@@ -182,6 +182,11 @@ class CalculationParameters:
     # deferred to. <= 0 means unknown: the logic then defers as if a later
     # cheap slot could deliver any amount.
     max_grid_charge_rate: float = 0.0
+    # Capacity of the battery in Wh without the MAX_SOC reduction, i.e.
+    # the capacity at 100 % SoC. always_allow_discharge_limit refers to
+    # it, so the limit is a real SoC regardless of MAX_SOC. None or <= 0
+    # means unknown: max_capacity is used instead.
+    gross_capacity: Optional[float] = None
     # Peak shaving sub-configuration. evcc may set ``enabled=False`` for a
     # single calculation cycle via ``dataclasses.replace`` in core.py.
     peak_shaving: PeakShavingConfig = field(default_factory=PeakShavingConfig)

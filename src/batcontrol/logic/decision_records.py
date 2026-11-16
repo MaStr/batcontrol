@@ -11,10 +11,12 @@ from .logic_interface import CalculationInput, CalculationOutput
 
 def discharge_always_allowed(calc_input: CalculationInput,
                              always_allow_discharge_limit: float,
-                             max_capacity: float) -> DecisionRecord:
+                             always_allow_discharge_energy: float
+                             ) -> DecisionRecord:
     """Discharge is allowed because the battery is above the always allow
-    discharge limit. The limit is a ratio of ``max_capacity``; its energy
-    is recorded as well, so it can be compared with the stored energy."""
+    discharge limit. The limit is a real SoC; its energy (limit times the
+    capacity at 100 % SoC) is recorded as well, so it can be compared with
+    the stored energy."""
     return DecisionRecord(
         decision=Decision.DISCHARGE,
         outcome=Outcome.ALLOWED,
@@ -22,8 +24,7 @@ def discharge_always_allowed(calc_input: CalculationInput,
         inputs={
             'stored_energy': calc_input.stored_energy,
             'always_allow_discharge_limit': always_allow_discharge_limit,
-            'always_allow_discharge_energy':
-                max_capacity * always_allow_discharge_limit,
+            'always_allow_discharge_energy': always_allow_discharge_energy,
         },
         decisive=True,
     )
