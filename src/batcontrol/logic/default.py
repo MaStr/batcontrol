@@ -99,6 +99,7 @@ class DefaultLogic(LogicInterface):
         """ Set the calculation parameters for the logic """
         self.calculation_parameters = parameters
         self.common.max_capacity = parameters.max_capacity
+        self.common.gross_capacity = parameters.gross_capacity
 
     def set_timezone(self, timezone: datetime.timezone):
         """ Set the timezone for the logic calculations """
@@ -829,7 +830,7 @@ class DefaultLogic(LogicInterface):
         if self.common.is_discharge_always_allowed_capacity(calc_input.stored_energy):
             self.decision_trace.add(discharge_always_allowed(
                 calc_input, self.common.get_always_allow_discharge_limit(),
-                self.common.max_capacity),
+                self.common.get_always_allow_discharge_energy()),
                 logger)
             return True
 

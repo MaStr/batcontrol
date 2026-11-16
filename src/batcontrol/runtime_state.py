@@ -45,7 +45,8 @@ class BatteryState:  # pylint: disable=too-many-instance-attributes
     free_capacity: float = UNKNOWN         # Wh up to max_soc
     min_soc: float = UNKNOWN               # percent
     max_soc: float = UNKNOWN               # percent
-    # max_capacity * always_allow_discharge_limit, Wh
+    # gross capacity * always_allow_discharge_limit, Wh (a real SoC,
+    # not reduced by max_soc)
     always_allow_discharge_limit_capacity: float = UNKNOWN
 
     @property

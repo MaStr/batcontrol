@@ -5,6 +5,7 @@ It includes the handling of:
   - charge_rate multiplier
   """
 import logging
+from typing import Optional
 
 
 # Minimum charge rate to controlling loops between charging and
@@ -92,6 +93,9 @@ class CommonLogic:
     charge_rate_multiplier: float
     always_allow_discharge_limit: float
     max_capacity: float  # Maximum capacity of the battery in Wh
+    # Capacity in Wh at 100 % SoC (max_capacity is reduced by MAX_SOC).
+    # None: unknown, max_capacity is used instead.
+    gross_capacity: Optional[float] = None
     min_charge_energy: float = 100  # Minimum amount of energy before charging from grid in Wh
 
     @classmethod
@@ -123,6 +127,7 @@ class CommonLogic:
         self.charge_rate_multiplier = charge_rate_multiplier
         self.always_allow_discharge_limit = always_allow_discharge_limit
         self.max_capacity = max_capacity
+        self.gross_capacity = None
         self.min_charge_energy = min_charge_energy
 
     def set_charge_rate_multiplier(self, multiplier: float):
@@ -140,6 +145,19 @@ class CommonLogic:
         """ Get the always allowed discharge limit. """
         return self.always_allow_discharge_limit
 
+    def get_always_allow_discharge_energy(self) -> float:
+        """ The always allowed discharge limit as stored energy in Wh.
+
+        The limit is a real state of charge: 0.9 means 90 % SoC, whatever
+        MAX_SOC is set to. It therefore refers to the capacity at 100 % SoC
+        and not to max_capacity, which is reduced by MAX_SOC. This makes
+        the check on stored energy equal to the check on the SoC.
+        """
+        capacity = self.max_capacity
+        if self.gross_capacity is not None and self.gross_capacity > 0:
+            capacity = self.gross_capacity
+        return capacity * self.always_allow_discharge_limit
+
     def is_discharge_always_allowed_soc(self, soc: float) -> bool:
         """ Check if discharge is always allowed based on the state of charge (SOC).
         Args:
@@ -155,11 +173,11 @@ class CommonLogic:
     def is_discharge_always_allowed_capacity(self, capacity: float) -> bool:
         """ Check if discharge is always allowed based on the battery capacity.
         Args:
-            capacity (float): Battery capacity in Wh.
+            capacity (float): Stored energy of the battery in Wh.
         Returns:
             bool: True if discharge is always allowed, False otherwise."""
 
-        if capacity >= self.max_capacity * self.always_allow_discharge_limit:
+        if capacity >= self.get_always_allow_discharge_energy():
             logger.debug(
                 'Discharge is \'always allowed\' for current capacity: %.0f Wh', round(capacity,0))
             return True

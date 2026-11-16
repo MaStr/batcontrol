@@ -792,7 +792,7 @@ class Batcontrol:
         # for API
         self.refresh_static_values()
         self.set_discharge_limit(
-            self.get_max_capacity() * always_allow_discharge_limit
+            self.__gross_capacity() * always_allow_discharge_limit
         )
         self.last_run_time = cycle_now.timestamp()
 
@@ -971,6 +971,9 @@ class Batcontrol:
             # required energy at all. 0 (unknown) keeps the logic from
             # relying on it.
             max_grid_charge_rate=self._known_max_grid_charge_rate(),
+            # always_allow_discharge_limit is a real SoC and refers to the
+            # capacity at 100 % SoC, not to max_capacity.
+            gross_capacity=self.__gross_capacity(),
             min_grid_charge_soc=self.min_grid_charge_soc,
             preserve_min_grid_charge_soc=self.preserve_min_grid_charge_soc,
             peak_shaving=ps_runtime,
@@ -1345,6 +1348,19 @@ class Batcontrol:
                 self.mqtt_api.publish_gross_energy_capacity(
                     self.battery_state.gross_capacity)
         return self.battery_state.max_capacity
+
+    def __gross_capacity(self) -> float:
+        """ Capacity in Wh at 100 % SoC, from the values cached this cycle.
+
+            always_allow_discharge_limit refers to it: the configured value
+            is a real SoC and must not depend on MAX_SOC. Falls back to the
+            capacity reduced by MAX_SOC while MAX_SOC is unknown.
+        """
+        max_capacity = self.get_max_capacity()
+        gross_capacity = self.battery_state.gross_capacity
+        if gross_capacity > 0:
+            return gross_capacity
+        return max_capacity
 
     def get_stored_energy(self) -> float:
         """ Returns the stored eneregy in the battery in kWh without

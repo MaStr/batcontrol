@@ -153,8 +153,9 @@ class Battery(BaseModel):
         None, description='Capacity in Wh still free for charging.')
     always_allow_discharge_limit_capacity: Optional[float] = Field(
         None,
-        description='always_allow_discharge_limit as energy in Wh:'
-                    ' max_energy_capacity * limit.')
+        description='always_allow_discharge_limit as stored energy in Wh:'
+                    ' the limit is a real SoC, so this is the capacity at'
+                    ' 100 % SoC * limit, independent of max_soc.')
     always_allow_discharge_limit_percent: Optional[float] = Field(
         None,
         description='Above this SoC discharging is always allowed, percent.')

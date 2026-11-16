@@ -117,6 +117,7 @@ Based on the forecasts and current battery state, batcontrol puts your inverter 
 **`always_allow_discharge_limit`** (default: 90%)
 - Above this SOC, battery always discharges freely
 - Prevents over-charging and ensures availability
+- The value is the real state of charge of the battery: `0.90` switches at 90% SOC, regardless of the inverter's maximum SOC (`max_soc`)
 
 **`max_charging_from_grid_limit`** (default: 80%)
 - Maximum SOC for grid charging

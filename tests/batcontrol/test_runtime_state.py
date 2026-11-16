@@ -131,8 +131,10 @@ def test_a_cycle_fills_every_group_without_mqtt(core):
     assert battery.max_soc == 95.0
     assert battery.max_capacity == 9500
     assert battery.gross_capacity == pytest.approx(10000.0)
+    # The limit is a real SoC: 90 % of the capacity at 100 % SoC, not of
+    # the capacity reduced by max_soc (95 %).
     assert battery.always_allow_discharge_limit_capacity == pytest.approx(
-        9500 * 0.9)
+        10000 * 0.9)
     assert core.calculation_result is not None
     assert core.calculation_result.min_dynamic_price_difference is not None
     assert core.solar_metrics.solar_active is True
