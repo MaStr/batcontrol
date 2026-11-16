@@ -107,7 +107,16 @@ If pv_surplus > free_capacity:
     charge_limit    = wh_current_slot / interval_hours
 ```
 
-**Example** (free capacity = 2000 Wh, 1 h intervals):
+This is the ramp as long as every slot has more PV surplus than the ramp gives it. A slot can only take what its surplus delivers, so the rule plans with the forecast:
+
+```
+charge_limit R = lowest rate with
+    sum over the remaining slots k of min(surplus_k, R * (k+1) * hours_k) = free_capacity
+```
+
+`hours_k` is the slot length; for the current slot it is the time left in it. Where a slot's surplus falls short of its share, the missing energy is moved to the other slots and the limit rises. This matters when PV is already declining before `allow_full_battery_after`: the ramp gives the last slot the largest share, and without the forecast the battery would not be full at the target hour.
+
+**Example** (free capacity = 2000 Wh, 1 h intervals, enough surplus in every slot):
 
 | Hours to target | Computed limit | Applied |
 |-----------------|----------------|---------|
@@ -115,6 +124,8 @@ If pv_surplus > free_capacity:
 | 4 | 200 W | 0 W (PV charging blocked) |
 | 2 | 666 W | 666 W |
 | 1 | 2000 W | 2000 W (full rate) |
+
+**Example with declining PV** (free capacity = 2000 Wh, 2 h to target): the forecast surplus is 3000 Wh in the current hour and 500 Wh in the last one. The plain ramp would allow 666 W now and 1333 W in the last hour, which only delivers 500 Wh - 1166 Wh of the 2000 Wh would be charged. The rule plans the last hour with its 500 Wh and allows 1500 W now.
 
 Computed values below the [minimum charge rate](#charge-limit-and-minimum-charge-rate) of 500 W are applied as 0 W, so PV charging is blocked until the ramp reaches 500 W. The PV surplus is exported to the grid in the meantime.
 
@@ -283,7 +294,7 @@ When MQTT auto-discovery is enabled, the following Home Assistant entities are c
 
 ## Self-Correction
 
-The charge limit is recalculated every evaluation cycle (typically every 3 minutes). If clouds reduce PV production significantly, the free capacity stays higher at the next cycle and the counter-linear ramp automatically produces a higher allowed rate. This means the system self-corrects without manual intervention, though there is no intra-cycle adjustment.
+The charge limit is recalculated every evaluation cycle (typically every 3 minutes). If clouds reduce PV production significantly, the free capacity stays higher at the next cycle and the counter-linear ramp automatically produces a higher allowed rate. A lower forecast for the slots before the target hour raises the limit as well, because those slots are planned with less. This means the system self-corrects without manual intervention, though there is no intra-cycle adjustment.
 
 ## Quick-Start Examples
 
