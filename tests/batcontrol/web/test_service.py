@@ -265,6 +265,10 @@ def test_configuration_reports_the_forecast_horizon_limit(fake_bc):
     fake_bc.max_forecast_hours = 48.0
     assert service.configuration()['battery_control'][
         'max_forecast_hours'] == 48
+    # 0 is reserved for "not limited": a tiny limit is not rounded to it
+    fake_bc.max_forecast_hours = 0.001
+    assert service.configuration()['battery_control'][
+        'max_forecast_hours'] == 0.001
 
 
 def test_configuration_never_reads_the_config_dict(fake_bc):

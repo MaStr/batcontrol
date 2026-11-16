@@ -692,8 +692,10 @@ class Batcontrol:
 
     def _max_forecast_slots(self) -> float:
         """ Number of slots the forecast horizon may cover, the current
-        slot included. Infinite without battery_control_expert.
-        max_forecast_hours; at least the current slot otherwise.
+        slot included.
+
+        Not limited (infinite) while max_forecast_hours is 0. A limit
+        always keeps at least the current slot.
 
         Prices beyond the day-ahead auction are a prediction and the solar
         forecast gets weaker with every day, yet the logic treats every
