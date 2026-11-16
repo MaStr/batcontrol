@@ -12,7 +12,8 @@ import threading
 from abc import abstractmethod
 from typing import Optional
 from .forecastconsumption_interface import ForecastConsumptionInterface
-from ..interval_utils import upsample_forecast, downsample_to_hourly
+from ..interval_utils import (
+    upsample_forecast, downsample_to_hourly, require_aware)
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,8 @@ class ForecastConsumptionBaseclass(ForecastConsumptionInterface):
             now: Time the caller evaluates for. The control loop passes one
                 timestamp per cycle, so every provider agrees on the
                 current slot. Defaults to the current time.
+                Has to be timezone-aware, a naive datetime raises
+                ValueError.
 
         Returns:
             Dict where [0] = current slot, [1] = next slot, etc.
@@ -106,6 +109,7 @@ class ForecastConsumptionBaseclass(ForecastConsumptionInterface):
             less data. Ready for core.py to factorize [0] based on elapsed
             time.
         """
+        require_aware(now)
         with self._forecast_lock:
             # The slots already elapsed in the current hour are dropped by
             # _shift_to_current_interval, so they have to be fetched on top of

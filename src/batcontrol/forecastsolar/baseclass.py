@@ -11,7 +11,8 @@ from typing import Optional
 from .forecastsolar_interface import ForecastSolarInterface
 from ..fetcher.relaxed_caching import RelaxedCaching, CacheMissError
 from ..scheduler import schedule_once
-from ..interval_utils import upsample_forecast, downsample_to_hourly
+from ..interval_utils import (
+    upsample_forecast, downsample_to_hourly, require_aware)
 
 logger = logging.getLogger(__name__)
 
@@ -173,11 +174,14 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
                 timestamp per cycle, so the start of the hour, the current
                 interval and the padding to midnight are derived from the
                 same instant. Defaults to the current time.
+                Has to be timezone-aware, a naive datetime raises
+                ValueError.
 
         Returns:
             Dict where [0] = current interval, [1] = next interval, etc.
             Ready for core.py to factorize [0] based on elapsed time.
         """
+        require_aware(now)
         if not self._refresh_data_lock.locked():
             self.refresh_data()
 
