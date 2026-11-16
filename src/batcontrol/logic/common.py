@@ -145,18 +145,27 @@ class CommonLogic:
         """ Get the always allowed discharge limit. """
         return self.always_allow_discharge_limit
 
+    def get_soc_capacity(self) -> float:
+        """ Capacity in Wh that a configured SoC ratio refers to.
+
+        The SoC values of the configuration (always_allow_discharge_limit,
+        max_charging_from_grid_limit, min_grid_charge_soc) are real states
+        of charge: 0.9 means 90 % SoC, whatever MAX_SOC is set to. They
+        therefore refer to the capacity at 100 % SoC and not to
+        max_capacity, which is reduced by MAX_SOC. Falls back to
+        max_capacity while the capacity at 100 % SoC is unknown.
+        """
+        if self.gross_capacity is not None and self.gross_capacity > 0:
+            return self.gross_capacity
+        return self.max_capacity
+
     def get_always_allow_discharge_energy(self) -> float:
         """ The always allowed discharge limit as stored energy in Wh.
 
-        The limit is a real state of charge: 0.9 means 90 % SoC, whatever
-        MAX_SOC is set to. It therefore refers to the capacity at 100 % SoC
-        and not to max_capacity, which is reduced by MAX_SOC. This makes
-        the check on stored energy equal to the check on the SoC.
+        A real SoC, see get_soc_capacity(). This makes the check on stored
+        energy equal to the check on the SoC.
         """
-        capacity = self.max_capacity
-        if self.gross_capacity is not None and self.gross_capacity > 0:
-            capacity = self.gross_capacity
-        return capacity * self.always_allow_discharge_limit
+        return self.get_soc_capacity() * self.always_allow_discharge_limit
 
     def is_discharge_always_allowed_soc(self, soc: float) -> bool:
         """ Check if discharge is always allowed based on the state of charge (SOC).

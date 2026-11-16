@@ -1,10 +1,14 @@
-"""always_allow_discharge_limit is a real state of charge.
+"""The SoC values of the configuration are real states of charge.
 
-0.9 means 90 % SoC, whatever MAX_SOC is set to. The logic used to compare
-the stored energy with ``max_capacity * limit``; max_capacity is reduced by
-MAX_SOC, so with MAX_SOC 95 % the battery counted as "always allow
-discharge" from 85.5 % on, while the external discharge block (evcc), which
-checks the SoC, switched at 90 %.
+always_allow_discharge_limit, max_charging_from_grid_limit and
+min_grid_charge_soc: 0.9 means 90 % SoC, whatever MAX_SOC is set to. A
+configured value must not depend on a third parameter.
+
+The logic used to take them as ratios of ``max_capacity``, which is reduced
+by MAX_SOC. With MAX_SOC 95 % the battery counted as "always allow
+discharge" from 85.5 % on - while the external discharge block (evcc), which
+checks the SoC, switched at 90 % - and a grid charge limit of 0.80 stopped
+at 76 %.
 """
 import datetime
 
@@ -65,25 +69,27 @@ def test_unknown_gross_capacity_falls_back_to_max_capacity(common):
             MAX_CAPACITY * 0.9)
 
 
-def _logic(gross_capacity):
+def _logic(gross_capacity, max_charging_from_grid_limit=0.79,
+           min_grid_charge_soc=None):
     logic = DefaultLogic(timezone=datetime.timezone.utc, interval_minutes=60)
     logic.set_calculation_parameters(CalculationParameters(
-        max_charging_from_grid_limit=0.79,
+        max_charging_from_grid_limit=max_charging_from_grid_limit,
         min_price_difference=0.05,
         min_price_difference_rel=0.2,
         max_capacity=MAX_CAPACITY,
         gross_capacity=gross_capacity,
+        min_grid_charge_soc=min_grid_charge_soc,
     ))
     return logic
 
 
-def _calc_input(soc):
+def _calc_input(soc, consumption=3000.0):
     """Expensive hours ahead, no PV: the battery is held back unless it is
     in the always-allow-discharge region."""
     stored = _stored_energy(soc)
     return CalculationInput(
         production=np.zeros(4),
-        consumption=np.array([3000.0, 3000.0, 3000.0, 3000.0]),
+        consumption=np.array([consumption] * 4),
         prices=np.array([0.20, 0.40, 0.40, 0.40]),
         stored_energy=stored,
         stored_usable_energy=stored,
@@ -118,3 +124,69 @@ def test_logic_always_allows_discharge_from_the_real_limit(common):
     assert _discharge_reason(logic) == Reason.ALWAYS_ALLOW_DISCHARGE_LIMIT
     record = [r for r in logic.get_decision_trace().records if r.decisive][0]
     assert record.inputs['always_allow_discharge_energy'] == pytest.approx(9000)
+
+
+# ---- max_charging_from_grid_limit --------------------------------------- #
+
+def test_grid_charge_limit_is_the_real_soc(common):
+    del common
+    logic = _logic(GROSS_CAPACITY, max_charging_from_grid_limit=0.8)
+
+    assert logic._grid_charge_limit_energy() == pytest.approx(8000)
+    assert logic._grid_charge_limit_ratio() == pytest.approx(0.8)
+
+
+def test_grid_charging_continues_up_to_the_real_limit(common):
+    """78 % SoC with MAX_SOC 95 % and a limit of 0.80: above 76 % (limit of
+    max_capacity), below the configured 80 %. Regression: grid charging had
+    already stopped."""
+    del common
+    logic = _logic(GROSS_CAPACITY, max_charging_from_grid_limit=0.8)
+
+    assert logic.calculate(_calc_input(78), TS)
+
+    assert logic.get_inverter_control_settings().charge_from_grid is True
+
+
+def test_grid_charging_stops_at_the_real_limit(common):
+    del common
+    logic = _logic(GROSS_CAPACITY, max_charging_from_grid_limit=0.8)
+
+    assert logic.calculate(_calc_input(80), TS)
+
+    assert logic.get_inverter_control_settings().charge_from_grid is False
+
+
+def test_grid_charge_limit_is_bounded_by_max_soc(common):
+    """A limit above MAX_SOC cannot be reached: the battery is charged up
+    to MAX_SOC at most."""
+    del common
+    logic = _logic(GROSS_CAPACITY, max_charging_from_grid_limit=0.97)
+
+    assert logic._grid_charge_limit_energy() == pytest.approx(MAX_CAPACITY)
+    assert logic._grid_charge_limit_ratio() == pytest.approx(0.95)
+
+
+def test_grid_charge_limit_without_gross_capacity_uses_max_capacity(common):
+    del common
+    logic = _logic(None, max_charging_from_grid_limit=0.8)
+
+    assert logic._grid_charge_limit_energy() == pytest.approx(
+        MAX_CAPACITY * 0.8)
+
+
+# ---- min_grid_charge_soc ------------------------------------------------ #
+
+def test_min_grid_charge_soc_is_the_real_soc(common):
+    """40 % SoC, min_grid_charge_soc 0.50 (fixed): the target is 50 % SoC =
+    5000 Wh, so 1000 Wh are missing (plus min_charge_energy). As a ratio of
+    max_capacity the target was 4750 Wh."""
+    logic = _logic(GROSS_CAPACITY, max_charging_from_grid_limit=0.8,
+                   min_grid_charge_soc=0.5)
+
+    assert logic.calculate(_calc_input(40, consumption=1500.0), TS)
+
+    output = logic.get_calculation_output()
+    assert output.effective_min_grid_charge_soc == 0.5
+    assert output.required_recharge_energy == pytest.approx(
+        5000 - 4000 + common.min_charge_energy)

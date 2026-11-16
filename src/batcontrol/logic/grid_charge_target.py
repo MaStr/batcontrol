@@ -60,13 +60,17 @@ def _parse_grid_charge_target_strategy(value) -> str:
 def _capped_forecast_soc(
         configured_min_grid_charge_soc: float,
         additional_reserve_energy: float,
-        max_capacity: float,
+        soc_capacity: float,
         max_charging_from_grid_limit: float) -> float:
-    """Return floor-plus-reserve target SoC capped by the grid-charge limit."""
-    if max_capacity <= 0:
-        raise ValueError("max_capacity must be greater than 0")
+    """Return floor-plus-reserve target SoC capped by the grid-charge limit.
+
+    ``soc_capacity`` is the capacity the SoC ratios refer to: the capacity
+    at 100 % SoC, so the ratios are real states of charge and do not move
+    with MAX_SOC (see CommonLogic.get_soc_capacity)."""
+    if soc_capacity <= 0:
+        raise ValueError("soc_capacity must be greater than 0")
     target_soc = configured_min_grid_charge_soc + (
-        additional_reserve_energy / max_capacity)
+        additional_reserve_energy / soc_capacity)
     return min(target_soc, max_charging_from_grid_limit)
 
 
@@ -76,7 +80,7 @@ def apply_grid_charge_target_to_recharge(
         required_energy: float,
         stored_energy: float,
         configured_min_grid_charge_soc: Optional[float],
-        max_capacity: float,
+        soc_capacity: float,
         max_charging_from_grid_limit: float) -> GridChargeTargetResult:
     """Apply the configured grid-charge target to recharge energy.
 
@@ -104,18 +108,18 @@ def apply_grid_charge_target_to_recharge(
         effective_soc = _capped_forecast_soc(
             configured_min_grid_charge_soc,
             required_energy,
-            max_capacity,
+            soc_capacity,
             max_charging_from_grid_limit,
         )
 
-    target_energy = max_capacity * effective_soc
+    target_energy = soc_capacity * effective_soc
     soc_recharge_energy = max(0.0, target_energy - stored_energy)
     adjusted_recharge_energy = max(recharge_energy, soc_recharge_energy)
 
     if config.strategy == GRID_CHARGE_TARGET_STRATEGY_FORECAST:
         max_grid_charge_energy = max(
             0.0,
-            max_capacity * max_charging_from_grid_limit - stored_energy,
+            soc_capacity * max_charging_from_grid_limit - stored_energy,
         )
         adjusted_recharge_energy = min(
             adjusted_recharge_energy,
@@ -130,7 +134,7 @@ def apply_grid_charge_target_to_reserve(
         reserved_energy: float,
         min_soc_energy: float,
         configured_min_grid_charge_soc: Optional[float],
-        max_capacity: float,
+        soc_capacity: float,
         max_charging_from_grid_limit: float,
         active: bool) -> GridChargeTargetResult:
     """Apply the configured grid-charge target to protected reserve energy."""
@@ -144,11 +148,11 @@ def apply_grid_charge_target_to_reserve(
         effective_soc = _capped_forecast_soc(
             configured_min_grid_charge_soc,
             reserved_energy,
-            max_capacity,
+            soc_capacity,
             max_charging_from_grid_limit,
         )
 
-    target_energy = max_capacity * effective_soc
+    target_energy = soc_capacity * effective_soc
     target_usable_energy = max(0.0, target_energy - min_soc_energy)
     adjusted_reserved_energy = max(reserved_energy, target_usable_energy)
     return GridChargeTargetResult(adjusted_reserved_energy, effective_soc)
