@@ -26,7 +26,7 @@ class MockSolarProvider(ForecastSolarBaseclass):
         """Mock implementation."""
         return {'mock': 'data'}
 
-    def get_forecast_from_raw_data(self):
+    def get_forecast_from_raw_data(self, now=None):
         """Return mock data."""
         return self.mock_data
 

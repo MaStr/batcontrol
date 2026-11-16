@@ -164,9 +164,15 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
                                  type(e).__name__)
                     logger.warning('Using cached raw solar forecast data')
 
-    def get_forecast(self) -> dict[int, float]:
+    def get_forecast(self, now: datetime.datetime | None = None) -> dict[int, float]:
         """
         Get forecast with automatic resolution handling and current-interval alignment.
+
+        Args:
+            now: Time the caller evaluates for. The control loop passes one
+                timestamp per cycle, so the start of the hour, the current
+                interval and the padding to midnight are derived from the
+                same instant. Defaults to the current time.
 
         Returns:
             Dict where [0] = current interval, [1] = next interval, etc.
@@ -176,7 +182,7 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
             self.refresh_data()
 
         # Get hour-aligned forecast from provider at native resolution
-        native_forecast = self.get_forecast_from_raw_data()
+        native_forecast = self.get_forecast_from_raw_data(now=now)
 
         if not native_forecast:
             logger.warning('%s: No data returned from get_forecast_from_raw_data',
@@ -187,10 +193,12 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
         converted_forecast = self._convert_resolution(native_forecast)
 
         # Shift indices to start from CURRENT interval
-        current_aligned_forecast = self._shift_to_current_interval(converted_forecast)
+        current_aligned_forecast = self._shift_to_current_interval(
+            converted_forecast, now=now)
 
         # Pad with zeros to midnight so the forecast horizon always reaches end-of-day
-        current_aligned_forecast = self._pad_to_midnight(current_aligned_forecast)
+        current_aligned_forecast = self._pad_to_midnight(
+            current_aligned_forecast, now=now)
 
         # Validate minimum forecast length
         if self.target_resolution == 60:
@@ -246,7 +254,9 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
                      self.target_resolution)
         return forecast
 
-    def _shift_to_current_interval(self, forecast: dict[int, float]) -> dict[int, float]:
+    def _shift_to_current_interval(
+            self, forecast: dict[int, float],
+            now: datetime.datetime | None = None) -> dict[int, float]:
         """
         Shift hour-aligned indices to current-interval alignment.
 
@@ -261,7 +271,7 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
         Returns:
             Current-interval aligned forecast
         """
-        now = datetime.datetime.now(datetime.timezone.utc).astimezone(self.timezone)
+        now = (now or datetime.datetime.now(datetime.timezone.utc)).astimezone(self.timezone)
         current_minute = now.minute
 
         # Find which interval we're in within the current hour
@@ -281,7 +291,9 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
 
         return shifted_forecast
 
-    def _pad_to_midnight(self, forecast: dict[int, float]) -> dict[int, float]:
+    def _pad_to_midnight(
+            self, forecast: dict[int, float],
+            now: datetime.datetime | None = None) -> dict[int, float]:
         """
         Ensure the forecast reaches end-of-day by appending zero-valued intervals
         up to the midnight that follows the last provided entry.
@@ -293,7 +305,7 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
         if not forecast:
             return forecast
 
-        now = datetime.datetime.now(datetime.timezone.utc).astimezone(self.timezone)
+        now = (now or datetime.datetime.now(datetime.timezone.utc)).astimezone(self.timezone)
         # Snap to the start of the current interval (index 0 in the shifted forecast).
         interval_start = now.replace(
             minute=(now.minute // self.target_resolution) * self.target_resolution,
@@ -342,7 +354,8 @@ class ForecastSolarBaseclass(ForecastSolarInterface):
                            "'get_raw_data_from_provider' not implemented"
                            )
 
-    def get_forecast_from_raw_data(self) -> dict[int, float]:
+    def get_forecast_from_raw_data(
+            self, now: datetime.datetime | None = None) -> dict[int, float]:
         """ Prototype for get_forecast_from_raw_data """
         raise RuntimeError("[Forecast Solar Base Class] Function "
                            "'get_forecast_from_raw_data' not implemented"

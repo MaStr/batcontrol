@@ -102,7 +102,9 @@ class ForecastConsumptionCsv(ForecastConsumptionBaseclass):
         logger.info("[ForecastCSV] Reloaded load profile '%s'",
                     self.path_to_load_profile)
 
-    def _get_forecast_native(self, hours: int) -> dict[int, float]:
+    def _get_forecast_native(
+            self, hours: int,
+            now: datetime.datetime | None = None) -> dict[int, float]:
         """Get hour-aligned forecast at native (60-minute) resolution.
 
         Args:
@@ -112,9 +114,9 @@ class ForecastConsumptionCsv(ForecastConsumptionBaseclass):
             Dict mapping hour index to energy value (Wh per hour)
             Index 0 = start of current hour
         """
-        t0 = datetime.datetime.now().astimezone(self.timezone)
+        now = (now or datetime.datetime.now()).astimezone(self.timezone)
         # Align to start of current hour
-        t0 = t0.replace(minute=0, second=0, microsecond=0)
+        t0 = now.replace(minute=0, second=0, microsecond=0)
         df = self.dataframe
         prediction = {}
 

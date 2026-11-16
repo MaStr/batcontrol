@@ -75,7 +75,8 @@ class Solcast(ForecastSolarBaseclass):
                     f'[Solcast] percentile must be one of 10, 50, 90 '
                     f'for installation {name}, got {percentile}')
 
-    def get_forecast_from_raw_data(self) -> dict[int, float]:
+    def get_forecast_from_raw_data(
+            self, now: datetime.datetime | None = None) -> dict[int, float]:
         """ Get hour-aligned 30-minute forecast from cached raw data.
 
         Returns a dict mapping 30-minute interval index to energy in Wh.
@@ -84,7 +85,7 @@ class Solcast(ForecastSolarBaseclass):
         """
         results = self.get_all_raw_data()
 
-        now = datetime.datetime.now(datetime.timezone.utc).astimezone(self.timezone)
+        now = (now or datetime.datetime.now(datetime.timezone.utc)).astimezone(self.timezone)
         current_hour_start = now.replace(minute=0, second=0, microsecond=0)
 
         prediction = {}

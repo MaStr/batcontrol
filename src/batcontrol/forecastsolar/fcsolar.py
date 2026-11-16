@@ -47,7 +47,8 @@ class FCSolar(ForecastSolarBaseclass):
             persistent_cache_directory=persistent_cache_directory,
         )  # FCSolar provides hourly data
 
-    def get_forecast_from_raw_data(self) -> dict:
+    def get_forecast_from_raw_data(
+            self, now: datetime.datetime | None = None) -> dict:
         """ Get hourly forecast from previously fetched raw data """
         results = self.get_all_raw_data()
 
@@ -56,7 +57,7 @@ class FCSolar(ForecastSolarBaseclass):
             prediction[hour] = 0
 
         prediction = {}
-        now = datetime.datetime.now().astimezone(self.timezone)
+        now = (now or datetime.datetime.now()).astimezone(self.timezone)
         current_hour = datetime.datetime(
             now.year, now.month, now.day, now.hour).astimezone(self.timezone)
         result = next(iter(results.values()))

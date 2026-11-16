@@ -156,7 +156,8 @@ class TariffZones(DynamicTariffBaseclass):
                 'all 24 hours (0-23) must be covered'
             )
 
-    def _get_prices_native(self) -> dict[int, float]:
+    def _get_prices_native(
+            self, now: datetime.datetime | None = None) -> dict[int, float]:
         """Build hourly prices for the next 48 hours, hour-aligned.
 
         Returns a dict mapping interval index (0 = start of current hour)
@@ -174,7 +175,7 @@ class TariffZones(DynamicTariffBaseclass):
                 for h in hours:
                     hour_to_price[h] = price
 
-        now = datetime.datetime.now().astimezone(self.timezone)
+        now = (now or datetime.datetime.now()).astimezone(self.timezone)
         current_hour_start = now.replace(minute=0, second=0, microsecond=0)
 
         prices = {}

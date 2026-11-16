@@ -82,7 +82,8 @@ class Evcc(DynamicTariffBaseclass):
         raw_data = response.json()
         return raw_data
 
-    def _get_prices_native(self) -> dict[int, float]:
+    def _get_prices_native(
+            self, now: datetime.datetime | None = None) -> dict[int, float]:
         """Get hour-aligned prices at native (15-minute) resolution.
 
         Returns:
@@ -95,7 +96,7 @@ class Evcc(DynamicTariffBaseclass):
             # prior to evcc 0.207.0 the rates were in the 'result' field
             data = self.get_raw_data().get('result', {}).get('rates', None)
 
-        now = datetime.datetime.now().astimezone(self.timezone)
+        now = (now or datetime.datetime.now()).astimezone(self.timezone)
         # Align to start of current hour
         current_hour_start = now.replace(minute=0, second=0, microsecond=0)
 

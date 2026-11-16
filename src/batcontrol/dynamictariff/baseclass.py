@@ -115,8 +115,14 @@ class DynamicTariffBaseclass(TariffInterface):
                                  type(e).__name__)
                     logger.warning('Using cached raw tariff data')
 
-    def get_prices(self) -> dict[int, float]:
+    def get_prices(self, now: datetime.datetime | None = None) -> dict[int, float]:
         """Get prices with automatic resolution handling.
+
+        Args:
+            now: Time the caller evaluates for. The control loop passes one
+                timestamp per cycle, so the start of the hour and the
+                current interval are derived from the same instant here
+                and in every other provider. Defaults to the current time.
 
         Returns:
             Dict where [0] = current interval, [1] = next interval, etc.
@@ -126,7 +132,7 @@ class DynamicTariffBaseclass(TariffInterface):
             self.refresh_data()
 
         # Get hour-aligned prices at native resolution
-        native_prices = self._get_prices_native()
+        native_prices = self._get_prices_native(now=now)
 
         if not native_prices:
             logger.warning(
@@ -138,12 +144,14 @@ class DynamicTariffBaseclass(TariffInterface):
         converted_prices = self._convert_resolution(native_prices)
 
         # Shift indices to start from CURRENT interval
-        current_aligned_prices = self._shift_to_current_interval(converted_prices)
+        current_aligned_prices = self._shift_to_current_interval(
+            converted_prices, now=now)
 
         return current_aligned_prices
 
     @abstractmethod
-    def _get_prices_native(self) -> dict[int, float]:
+    def _get_prices_native(
+            self, now: datetime.datetime | None = None) -> dict[int, float]:
         """Get prices at native resolution, hour-aligned.
 
         Returns:
@@ -212,7 +220,9 @@ class DynamicTariffBaseclass(TariffInterface):
                 prices_15min[hour * 4 + quarter] = price
         return prices_15min
 
-    def _shift_to_current_interval(self, prices: dict[int, float]) -> dict[int, float]:
+    def _shift_to_current_interval(
+            self, prices: dict[int, float],
+            now: datetime.datetime | None = None) -> dict[int, float]:
         """Shift hour-aligned indices to current-interval alignment.
 
         At time 10:20, if target resolution is 15 min:
@@ -222,11 +232,12 @@ class DynamicTariffBaseclass(TariffInterface):
 
         Args:
             prices: Hour-aligned prices at target resolution
+            now: Time to align to, defaults to the current time
 
         Returns:
             Current-interval aligned prices
         """
-        now = datetime.datetime.now(datetime.timezone.utc).astimezone(self.timezone)
+        now = (now or datetime.datetime.now(datetime.timezone.utc)).astimezone(self.timezone)
         current_minute = now.minute
 
         # Find which interval we're in within the current hour

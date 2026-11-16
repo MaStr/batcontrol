@@ -66,10 +66,11 @@ class NetworkFeesFetcher(DynamicTariffBaseclass):
         logger.info('NetworkFees: Fetched %d slots from API', len(data))
         return data
 
-    def _get_prices_native(self) -> dict:
+    def _get_prices_native(
+            self, now: datetime.datetime | None = None) -> dict:
         """Return hour-aligned fee dict (NET EUR/kWh). Index 0 = start of current hour."""
         raw_data = self.get_raw_data()  # raises CacheMissError if no data
-        now = datetime.datetime.now().astimezone(self.timezone)
+        now = (now or datetime.datetime.now()).astimezone(self.timezone)
         current_hour_start = now.replace(minute=0, second=0, microsecond=0)
         prices = {}
         for slot in raw_data:

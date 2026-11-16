@@ -108,7 +108,8 @@ class Tibber(DynamicTariffBaseclass):
         raw_data = response.json()
         return raw_data
 
-    def _get_prices_native(self) -> dict[int, float]:
+    def _get_prices_native(
+            self, now: datetime.datetime | None = None) -> dict[int, float]:
         """Get hour-aligned prices at native resolution.
 
         Returns:
@@ -119,7 +120,7 @@ class Tibber(DynamicTariffBaseclass):
         homeid = 0
         raw_data = self.get_raw_data()
         rawdata = raw_data['data']
-        now = datetime.datetime.now().astimezone(self.timezone)
+        now = (now or datetime.datetime.now()).astimezone(self.timezone)
         # Align to start of current hour
         current_hour_start = now.replace(minute=0, second=0, microsecond=0)
         prices = {}
