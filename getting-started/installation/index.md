@@ -150,7 +150,7 @@ Add the [batcontrol_ha_addon](https://github.com/MaStr/batcontrol_ha_addon) repo
 
 ## Local Python
 
-Requires Python 3.11 or newer (3.11 - 3.14 are supported and tested in CI; the Docker image ships Python 3.14) and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.11 or newer (3.11 - 3.15 are supported and tested in CI; the Docker image ships Python 3.15) and [uv](https://docs.astral.sh/uv/).
 
 ```
 git clone https://github.com/MaStr/batcontrol.git
@@ -223,7 +223,7 @@ After the first successful start, work through this in order:
 1. **Switch to your real inverter.** Edit `config/batcontrol_config.yaml`, change `inverter.type` from `dummy` to `fronius_gen24` (or `fronius-modbus`), and add your inverter address and credentials.
 1. **Set your annual consumption.** Update `consumption_forecast.csv.annual_consumption` with your actual value in kWh. This scales the default load profile to your household.
 1. **Configure your tariff provider.** If you use a dynamic provider (Tibber, aWATTar, etc.), set the correct type and API key. For a flat rate, use `tariff_zones` with a single zone price — batcontrol will still run peak shaving.
-1. **Review battery charge limits.** The defaults (`max_charging_from_grid_limit: 89%`, `always_allow_discharge_limit: 90%`) are conservative starting values. Adjust them to match your usage patterns after a few days of observation.
+1. **Review battery charge limits.** The defaults (`max_charging_from_grid_limit: 80%`, `always_allow_discharge_limit: 90%`) are conservative starting values. Adjust them to match your usage patterns after a few days of observation.
 1. **Enable peak shaving** (optional). If your PV installation frequently reaches full battery charge before midday, enable peak shaving to spread the charging and keep buffer capacity for the afternoon. Requires `peak_shaving.enabled: true`. See [Peak Shaving](https://mastr.github.io/batcontrol/features/peak-shaving/index.md).
 1. **Connect to Home Assistant** (optional). Enable the MQTT API to get real-time state, price, and forecast data as Home Assistant entities, and to override battery limits at runtime. See [MQTT API](https://mastr.github.io/batcontrol/integrations/mqtt-api/index.md).
 1. **Connect evcc** (optional). If you charge an electric vehicle, the evcc integration can hold battery discharge while the car is charging. See [evcc Connection](https://mastr.github.io/batcontrol/integrations/evcc-connection/index.md).

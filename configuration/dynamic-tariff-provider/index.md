@@ -133,10 +133,10 @@ utility:
 
 ### Charging behaviour tips
 
-The charge rate is not evenly distributed across low-price hours by default.
+By default batcontrol charges as late as possible within a low-price block, but early enough: it starts as soon as the remaining low-price slots can no longer charge the required energy at `max_grid_charge_rate` (see [When grid charging starts](https://mastr.github.io/batcontrol/features/battery-control-expert/#when-grid-charging-starts)). `soften_price_difference_on_charging` is not needed to get the battery charged before the high-price zone begins; it only changes how the charging is distributed:
 
 - For **more even charging** across low-price hours, enable `soften_price_difference_on_charging`. With the charging window (`spread_grid_charge_over_charge_window`, enabled by default) the charge rate is spread over all remaining slots of the low-price block.
-- For a **late charging start** (optimise efficiency, keep the battery at high SOC for less time), disable `soften_price_difference_on_charging`.
+- For a **late charging start** (optimise efficiency, keep the battery at high SOC for less time), leave `soften_price_difference_on_charging` disabled. The last slots of the low-price block are then used at up to the maximum charge rate.
 
 In pure single-zone (static) mode, prices never differ between hours, so price-based scheduling has no effect — use it together with peak-shaving (see [#271](https://github.com/MaStr/batcontrol/issues/271)) or fixed charging-window settings.
 

@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -2109,7 +2109,7 @@ do not want the feature.</p>
 <td><code>price_limit</code></td>
 <td>float</td>
 <td>unset (<code>None</code>)</td>
-<td>Price threshold in Euro/kWh. The price rule only acts when a value is configured (e.g. <code>0.05</code>). Set <code>-1</code> to disable the price component explicitly.</td>
+<td>Price threshold in Euro/kWh. The price rule only acts when a value is configured (e.g. <code>0.05</code>). Set <code>-1</code> to disable the price component explicitly. The shipped config template sets <code>0.05</code>, so with <code>price_active: true</code> the price rule is active for anyone starting from the template.</td>
 </tr>
 <tr>
 <td><code>feed_in_limit_w</code></td>
@@ -2166,14 +2166,14 @@ value. See <a href="../../integrations/rest-api/">REST API</a>.</p>
 <h2 id="the-allow_full_battery_after-target-hour">The <code>allow_full_battery_after</code> Target Hour<a class="headerlink" href="#the-allow_full_battery_after-target-hour" title="Permanent link">&para;</a></h2>
 <p>This parameter controls when the battery is <strong>allowed</strong> to be 100% full:</p>
 <ul>
-<li><strong>Before this hour:</strong> the PV charge rate may be limited (depending on mode).</li>
+<li><strong>Before this hour:</strong> the PV charge rate may be limited (depending on which rules are active).</li>
 <li><strong>At or after this hour:</strong> no limit is applied -- the battery charges as fast as possible.</li>
 </ul>
-<p>The target hour applies globally to <strong>all three modes</strong>. Set it to the hour by which your PV system typically produces enough to fill the battery. For many Central European systems <code>14</code> (2 PM) is a good starting point; adjust based on your panel orientation and local conditions.</p>
+<p>The target hour applies to the time rule and the price rule. The solar cap rule deliberately ignores it (see <a href="#priority-rule-floor-overrides-caps">Priority Rule: Floor Overrides Caps</a>). Setting <code>allow_full_battery_after: 0</code> switches the time and price rule off entirely, because every hour is "at or after" 0. Set it to the hour by which your PV system typically produces enough to fill the battery. For many Central European systems <code>14</code> (2 PM) is a good starting point; adjust based on your panel orientation and local conditions.</p>
 <h2 id="rule-switches">Rule Switches<a class="headerlink" href="#rule-switches" title="Permanent link">&para;</a></h2>
 <p>Peak shaving has three independent rules that can be enabled or disabled via the <code>time_active</code>, <code>price_active</code>, and <code>solar_cap_active</code> switches:</p>
 <h3 id="time_active-target-time-rule"><code>time_active</code> -- Target-Time Rule<a class="headerlink" href="#time_active-target-time-rule" title="Permanent link">&para;</a></h3>
-<p>Distributes the remaining free battery capacity evenly over the slots between now and <code>allow_full_battery_after</code>, using a <strong>counter-linear ramp</strong>. The allowed charge rate starts low and increases as the target hour approaches, which mirrors the typical PV generation curve that rises towards midday.</p>
+<p>Distributes the remaining free battery capacity over the slots between now and <code>allow_full_battery_after</code>, using a <strong>counter-linear ramp</strong>. The distribution is not even: slot k gets weight k+1, so the allowed charge rate starts low and increases towards the target hour, which mirrors the typical PV generation curve that rises towards midday.</p>
 <p><strong>Formula:</strong></p>
 <div class="highlight"><pre><span></span><code>slots_remaining  = n  (slots until allow_full_battery_after)
 pv_surplus       = sum of max(production - consumption, 0) per remaining slot
@@ -2182,47 +2182,59 @@ If pv_surplus &gt; free_capacity:
     wh_current_slot = 2 * free_capacity / (n * (n + 1))
     charge_limit    = wh_current_slot / interval_hours
 </code></pre></div>
-<p><strong>Example</strong> (free capacity = 2000 Wh, 1 h intervals):</p>
+<p>This is the ramp as long as every slot has more PV surplus than the ramp gives it. A slot can only take what its surplus delivers, so the rule plans with the forecast:</p>
+<div class="highlight"><pre><span></span><code>charge_limit R = lowest rate with
+    sum over the remaining slots k of min(surplus_k, R * (k+1) * hours_k) = free_capacity
+</code></pre></div>
+<p><code>hours_k</code> is the slot length; for the current slot it is the time left in it. Where a slot's surplus falls short of its share, the missing energy is moved to the other slots and the limit rises. This matters when PV is already declining before <code>allow_full_battery_after</code>: the ramp gives the last slot the largest share, and without the forecast the battery would not be full at the target hour.</p>
+<p><strong>Example</strong> (free capacity = 2000 Wh, 1 h intervals, enough surplus in every slot):</p>
 <table>
 <thead>
 <tr>
 <th>Hours to target</th>
-<th>Allowed charge rate</th>
+<th>Computed limit</th>
+<th>Applied</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>8</td>
 <td>55 W</td>
+<td>0 W (PV charging blocked)</td>
 </tr>
 <tr>
 <td>4</td>
 <td>200 W</td>
+<td>0 W (PV charging blocked)</td>
 </tr>
 <tr>
 <td>2</td>
 <td>666 W</td>
+<td>666 W</td>
 </tr>
 <tr>
 <td>1</td>
+<td>2000 W</td>
 <td>2000 W (full rate)</td>
 </tr>
 </tbody>
 </table>
+<p><strong>Example with declining PV</strong> (free capacity = 2000 Wh, 2 h to target): the forecast surplus is 3000 Wh in the current hour and 500 Wh in the last one. The plain ramp would allow 666 W now and 1333 W in the last hour, which only delivers 500 Wh - 1166 Wh of the 2000 Wh would be charged. The rule plans the last hour with its 500 Wh and allows 1500 W now.</p>
+<p>Computed values below the <a href="#charge-limit-and-minimum-charge-rate">minimum charge rate</a> of 500 W are applied as 0 W, so PV charging is blocked until the ramp reaches 500 W. The PV surplus is exported to the grid in the meantime.</p>
 <p>If the expected PV surplus does not exceed the free capacity, no limit is applied -- the battery can absorb everything anyway.</p>
 <h3 id="price_active-price-rule"><code>price_active</code> -- Price Rule<a class="headerlink" href="#price_active-price-rule" title="Permanent link">&para;</a></h3>
 <p>Reserves free battery capacity for upcoming <strong>cheap-price</strong> slots where PV is still producing. A slot is "cheap" when its price is at or below <code>price_limit</code>. Requires a <code>price_limit</code> value (use <code>-1</code> to disable without changing the switch).</p>
-<p>Only slots within the <strong>production window</strong> are considered. The production window ends at the first forecast slot where PV production is zero. This prevents reserving capacity for a cheap slot at e.g. 03:00 that would never produce any solar energy.</p>
+<p>Only slots within the <strong>production window</strong> are considered. The production window ends at the first forecast slot (after the current one) whose average PV power is below 50 W. Providers that return tiny non-zero values at night therefore do not extend the window into the next day. The current slot is not compared against the threshold, because its forecast is scaled by the remaining time of the slot and becomes tiny near the slot end. This prevents reserving capacity for a cheap slot at e.g. 03:00 that would never produce any solar energy.</p>
 <p><strong>Before the cheap window:</strong>
 1. Sum the expected PV surplus during cheap slots to get the target reserve.
 2. Calculate how much additional charging is allowed: <code>additional_allowed = free_capacity - target_reserve</code>.
 3. If <code>additional_allowed &lt;= 0</code>: block PV charging entirely (rate = 0).
 4. Otherwise: spread <code>additional_allowed</code> evenly over the slots before the cheap window.</p>
 <p><strong>Inside the cheap window:</strong>
-- If total PV surplus during cheap slots exceeds free capacity, spread <code>free_capacity</code> evenly over cheap slots so the battery fills gradually.
+- If total PV surplus during cheap slots exceeds free capacity, spread <code>free_capacity</code> over the cheap slots that have a PV surplus, in proportion to time, so the battery fills gradually. The current slot counts only with the time that is left in it, all following slots count in full; the limit is <code>free_capacity</code> divided by the hours covered by these slots. Cheap slots without surplus are not counted.
 - If surplus fits in free capacity, no limit is applied.</p>
 <h3 id="combining-rules">Combining Rules<a class="headerlink" href="#combining-rules" title="Permanent link">&para;</a></h3>
-<p>When multiple rules are active, the <strong>strictest (lowest non-negative) limit wins</strong>. For example, if the time rule suggests 500 W and the price rule suggests 300 W, the applied limit is 300 W. This conservative approach prioritizes the rules in combination rather than overriding each other.</p>
+<p>When multiple rules are active, the <strong>strictest (lowest non-negative) limit wins</strong>. For example, if the time rule suggests 1200 W and the price rule suggests 800 W, the applied limit is 800 W. A combined result below the 500 W minimum charge rate is applied as 0 W (see <a href="#charge-limit-and-minimum-charge-rate">Charge Limit and Minimum Charge Rate</a>). This conservative approach prioritizes the rules in combination rather than overriding each other.</p>
 <p><strong>Migration:</strong> the old <code>mode</code> parameter was removed in 0.10.0. Replace it with the switches:
 - <code>mode: time</code> → <code>time_active: true</code>, <code>price_active: false</code>
 - <code>mode: price</code> → <code>time_active: false</code>, <code>price_active: true</code>
@@ -2286,9 +2298,14 @@ If pv_surplus &gt; free_capacity:
 <p>For a detailed evaluation of the algorithm including simulation results and sensitivity analysis, see <a href="../../development/solar-limit-evaluation/">Solar Limit Evaluation</a>.</p>
 <h2 id="charge-limit-and-minimum-charge-rate">Charge Limit and Minimum Charge Rate<a class="headerlink" href="#charge-limit-and-minimum-charge-rate" title="Permanent link">&para;</a></h2>
 <p>The calculated charge limit is applied via <strong>Mode 8</strong> (<code>LIMIT_BATTERY_CHARGE_RATE</code>). In this mode the inverter caps PV-to-battery charging at the given wattage while still allowing the battery to discharge normally.</p>
-<p>A minimum charge rate of <strong>500 W</strong> is enforced: any computed limit between 1 W and 499 W is raised to 500 W to avoid inefficient low-power charging. A limit of exactly <strong>0 W</strong> (block charging completely) is kept as-is and is not raised.</p>
+<p>A minimum charge rate of <strong>500 W</strong> applies to avoid inefficient low-power charging. How a computed limit below 500 W is handled depends on the rule:</p>
+<ul>
+<li><strong>Time and price rule:</strong> a computed limit between 1 W and 499 W is applied as <strong>0 W</strong> (PV charging blocked). Raising it to 500 W would defeat the ramp: with 2000 Wh free and 8 h to the target the ramp asks for 55 W, but 500 W would fill the battery after 4 h. The limit is recomputed every cycle and releases as soon as the computed value reaches 500 W. While it is blocked, PV surplus is exported to the grid. The <a href="../../development/decision-trace/">Decision sensor</a> shows this through <code>computed_limit_w</code> and <code>blocked_below_min_rate</code> in the <code>peak_shaving</code> record.</li>
+<li><strong>Solar cap rule:</strong> the result is still <strong>raised to 500 W</strong>, because a limit of 0 W could curtail clip energy (see below).</li>
+</ul>
+<p>A limit of exactly <strong>0 W</strong> (block charging completely) is always kept as-is.</p>
 <h3 id="interaction-with-the-minimum-charge-rate">Interaction with the minimum charge rate<a class="headerlink" href="#interaction-with-the-minimum-charge-rate" title="Permanent link">&para;</a></h3>
-<p>The minimum charge rate is applied <em>after</em> the rules have been merged, so it can override a deliberately low limit. This matters most for the solar cap rule when free capacity is scarce and the cap has been set equal to the floor.</p>
+<p>For the solar cap rule the minimum charge rate is applied <em>after</em> the rules have been merged, so it can override a deliberately low limit. This matters most for the solar cap rule when free capacity is scarce and the cap has been set equal to the floor.</p>
 <p>At the edges of the clip window the excess over the feed-in limit is only a few dozen watts. The rule therefore asks for a correspondingly small charge rate, but the 500 W minimum raises it -- and the battery consumes capacity that was reserved for the peak.</p>
 <p>The example day on the <a href="../peak-shaving-scenarios/">scenarios page</a> shows the effect for the "Solar cap only" configuration:</p>
 <table>
@@ -2402,6 +2419,7 @@ where it matters, and the example day reaches zero curtailment.</p>
 </tr>
 </tbody>
 </table>
+<p>Once the battery reaches <code>always_allow_discharge_limit</code>, the limits of the time and price rule are dropped. The remaining capacity above that SoC is therefore charged without a limit, even before the target hour.</p>
 <h2 id="evcc-interaction">evcc Interaction<a class="headerlink" href="#evcc-interaction" title="Permanent link">&para;</a></h2>
 <p>When an EV charger is managed by <a href="../../integrations/evcc-connection/">evcc</a>:</p>
 <ul>
@@ -2438,7 +2456,7 @@ where it matters, and the example day reaches zero curtailment.</p>
 </tbody>
 </table>
 <h2 id="self-correction">Self-Correction<a class="headerlink" href="#self-correction" title="Permanent link">&para;</a></h2>
-<p>The charge limit is recalculated every evaluation cycle (typically every 3 minutes). If clouds reduce PV production significantly, the free capacity stays higher at the next cycle and the counter-linear ramp automatically produces a higher allowed rate. This means the system self-corrects without manual intervention, though there is no intra-cycle adjustment.</p>
+<p>The charge limit is recalculated every evaluation cycle (typically every 3 minutes). If clouds reduce PV production significantly, the free capacity stays higher at the next cycle and the counter-linear ramp automatically produces a higher allowed rate. A lower forecast for the slots before the target hour raises the limit as well, because those slots are planned with less. This means the system self-corrects without manual intervention, though there is no intra-cycle adjustment.</p>
 <h2 id="quick-start-examples">Quick-Start Examples<a class="headerlink" href="#quick-start-examples" title="Permanent link">&para;</a></h2>
 <p><strong>Simple time-based setup</strong> -- spread charging until 14:00, no price or solar awareness:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">peak_shaving</span><span class="p">:</span>
@@ -2566,7 +2584,7 @@ where it matters, and the example day reaches zero curtailment.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../assets/js/vendor/chart.umd.js"></script>
       

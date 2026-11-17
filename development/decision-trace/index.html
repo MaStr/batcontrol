@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -1698,7 +1698,7 @@ explains why something did <strong>not</strong> happen.</p>
 <tr>
 <td><code>grid_recharge</code></td>
 <td><code>charge</code></td>
-<td><code>GRID_RECHARGE_REQUIRED</code></td>
+<td><code>GRID_RECHARGE_REQUIRED</code>, <code>GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT</code></td>
 <td>yes</td>
 </tr>
 <tr>
@@ -1763,6 +1763,34 @@ explains why something did <strong>not</strong> happen.</p>
 </tr>
 </tbody>
 </table>
+<p>The <code>limit_set</code> record of <code>peak_shaving</code> carries <code>computed_limit_w</code> (merged time/price limit before the minimum charge rate) and <code>blocked_below_min_rate</code>. When the computed limit was between 1 W and 499 W, <code>final_limit_w</code> is 0 and <code>blocked_below_min_rate</code> is true.</p>
+<p>The <code>discharge</code> record of the reserved energy rule lists <code>higher_price_slots</code>
+(before <code>cheaper_price_slot</code>, where the reserve window ends) and, since the
+reserve also looks behind a cheaper slot that is too short,
+<code>reserve_behind_cheaper_slot</code> (Wh, included in <code>reserved_energy</code>),
+<code>cheaper_slots_charge_capacity</code> (Wh the cheaper slots can recharge at
+<code>max_grid_charge_rate</code>) and <code>higher_price_slots_behind</code> (the slots that cause
+it). The three are 0/empty when the cheaper slots are long enough or the
+inverter reports no <code>max_grid_charge_rate</code>. The reason codes are unchanged.
+Both this look-ahead and the one of <code>grid_recharge</code> stop where the cheaper
+slots have filled the battery, so <code>higher_price_slots_behind</code>,
+<code>high_price_slots</code> and <code>deferrable_energy</code> do not reach beyond that point.</p>
+<p><code>grid_recharge</code>/<code>charge</code> has two reasons, told apart by <code>deferrable_energy</code>:
+- <code>GRID_RECHARGE_REQUIRED</code>: the high-price slots follow before any slot
+  that is not more expensive than the current one, so this is the moment to
+  charge for them (<code>deferrable_energy</code> is 0).
+- <code>GRID_RECHARGE_CHEAPER_SLOTS_INSUFFICIENT</code>: cheaper or equally cheap slots
+  follow first, but at <code>max_grid_charge_rate</code> they can only charge
+  <code>deferrable_energy</code> of the <code>high_price_energy_demand</code> behind them; the rest
+  is charged now. <code>high_price_slots</code> then also lists the slots behind
+  <code>recharge_window_end</code> that cause the recharge. Only possible when the
+  inverter reports a <code>max_grid_charge_rate</code>.
+  If the battery cannot take the whole rest on top of what the cheaper slots
+  charge, <code>battery_room_behind_cheaper_slots</code> (Wh) is the part that fits and
+  the explanation names it; otherwise it is 0. Example: the cheaper slots
+  charge 5682 Wh of 8500 Wh, the battery takes 8090 Wh from the grid, so
+  2408 Wh fit and are charged now (plus the minimum charge amount), not the
+  2818 Wh that are missing.</p>
 <p><code>grid_recharge</code>/<code>no_charge</code> has five reasons for the same outcome, told
 apart purely from <code>high_price_slots</code>/<code>high_price_energy_demand</code>/
 <code>recharge_energy_before_minimum</code> (relative slot indices again, with
@@ -2065,7 +2093,7 @@ point, so it is only logged as a warning.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../assets/js/vendor/chart.umd.js"></script>
       

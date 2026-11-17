@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -1839,8 +1839,10 @@ which makes batcontrol treat all of them as one aggregated battery. See
 <a href="../multiple-inverters/">Multiple Inverters</a>.</p>
 </div>
 <h3 id="max_grid_charge_rate">max_grid_charge_rate<a class="headerlink" href="#max_grid_charge_rate" title="Permanent link">&para;</a></h3>
-<p>This is the upper limit to charge the battery from grid. Value is WATT. This value should not be above the limit of your inverter.</p>
-<p>Default:
+<p><strong>Required.</strong> This is the upper limit to charge the battery from grid. Value is WATT. This value should not be above the limit of your inverter.</p>
+<p>The right value depends on your hardware, so batcontrol does not fill it in for you. 5000 W is a common starting point and is pre-filled in the configuration template and the Home Assistant add-on - check that it does not exceed the limit of your inverter. batcontrol does not start if the key is missing or the value is not a finite number greater than 0; the error names the inverter (index and type), also when you configure <a href="../multiple-inverters/">several inverters</a>.</p>
+<p>The older key <code>max_charge_rate</code> is still accepted as an alias. If both are set, <code>max_grid_charge_rate</code> wins.</p>
+<p>Suggested value:
 <div class="highlight"><pre><span></span><code>max_grid_charge_rate: 5000
 </code></pre></div></p>
 <h3 id="max_pv_charge_rate">max_pv_charge_rate<a class="headerlink" href="#max_pv_charge_rate" title="Permanent link">&para;</a></h3>
@@ -2050,7 +2052,7 @@ With adding <code>#</code> in front of the value, this limit is not set and will
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../assets/js/vendor/chart.umd.js"></script>
       

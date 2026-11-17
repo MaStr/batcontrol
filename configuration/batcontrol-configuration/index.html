@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -1698,7 +1698,7 @@ Amount of logsize bevore a logswitch is applied. The logs switches from log.1 to
   min_price_difference: 0.05 
   min_price_difference_rel: 0.10
   always_allow_discharge_limit: 0.90
-  max_charging_from_grid_limit: 0.89
+  max_charging_from_grid_limit: 0.80
   min_grid_charge_soc: 0.55 # optional: grid-charge to this SoC before expensive slots
   grid_charge_target_strategy: fixed # optional: fixed or forecast
   min_recharge_amount: 100          
@@ -1706,15 +1706,22 @@ Amount of logsize bevore a logswitch is applied. The logs switches from log.1 to
 Details about the Price configuration can be found on <a href="../../features/price-difference-calculation/">price difference calculation</a> page.
 <code>always_allow_discharge_limit</code> &amp; <code>max_charging_from_grid_limit</code> is explained <a href="../../getting-started/how-batcontrol-works/">here</a>.</p>
 <p><img alt="Picture of different parameters on battery soc" src="../../assets/battery_limits_parameter.png" /></p>
-<p><code>min_grid_charge_soc</code> is optional. When set as a ratio, for example <code>0.55</code>, batcontrol grid-charges toward this target when charging is economical. Leave it unset to keep the default behavior.</p>
+<p><code>min_grid_charge_soc</code> is optional. When set as a ratio, for example <code>0.55</code>, it is a minimum SoC that batcontrol secures from the grid <strong>independent of the forecast demand</strong>. Leave it unset to keep the default behavior.</p>
+<p>Without it, batcontrol only recharges the energy the upcoming expensive slots are expected to need, minus what is already stored. With it, every economical grid-charging opportunity charges the battery at least up to this SoC:</p>
+<ul>
+<li>The trigger is the price signal only: a later slot with consumption that is more expensive than the current one by at least <code>min_price_difference</code>, while discharging is currently held back.</li>
+<li>The amount is not tied to the demand. Even when the stored energy already covers the expensive slots, batcontrol still charges up to <code>min_grid_charge_soc</code>. Example: 25 % SoC, the expensive slots need less than what is stored, <code>min_grid_charge_soc: 0.55</code> - batcontrol charges to 55 %.</li>
+<li>If the demand calls for more than the target, the higher amount is charged, as usual.</li>
+<li>Without a price signal nothing is charged: the value is not a floor that is kept at any price.</li>
+</ul>
 <p><code>grid_charge_target_strategy</code> controls how <code>min_grid_charge_soc</code> is applied:</p>
 <ul>
-<li><code>fixed</code> (default): grid-charge toward <code>min_grid_charge_soc</code> when charging is economical.</li>
+<li><code>fixed</code> (default): charge at least up to <code>min_grid_charge_soc</code>, as described above.</li>
 <li><code>forecast</code>: use existing high-price-slot demand as an additional reserve. The target is roughly <code>min_grid_charge_soc</code> energy plus the calculated high-price required energy, capped by <code>max_charging_from_grid_limit</code>.</li>
 </ul>
 <p>To also preserve this target as reserved energy during cheap/pre-expensive windows, enable the expert option <code>preserve_min_grid_charge_soc</code>. Without that expert option, the strategy affects grid recharge only and does not add extra discharge blocking.</p>
 <p>If <code>min_grid_charge_soc</code> is higher than <code>max_charging_from_grid_limit</code>, grid charging cannot reach the configured minimum SoC target. Batcontrol will log a warning in this case; increase <code>max_charging_from_grid_limit</code> or lower <code>min_grid_charge_soc</code> so the settings correlate.</p>
-<p><code>min_recharge_amount</code> controls the minimum amount of Wh is needed to be recharged before batcontrol activates battery charging.</p>
+<p><code>min_recharge_amount</code> is the minimum amount of energy (Wh) that must be recharged before batcontrol activates battery charging. Once the required recharge energy reaches this minimum, batcontrol adds the same amount on top of the energy to charge, so it does not get stuck right at the threshold.</p>
 <h2 id="battery-control-expert-tuning-parameters">Battery Control Expert Tuning Parameters<a class="headerlink" href="#battery-control-expert-tuning-parameters" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>battery_control_expert:
   charge_rate_multiplier: 1.1
@@ -1724,6 +1731,8 @@ Details about the Price configuration can be found on <a href="../../features/pr
   round_price_digits: 4
   production_offset_percent: 1.0
   preserve_min_grid_charge_soc: false
+  market_price_refresh_time: "12:30"
+  max_forecast_hours: 0
 </code></pre></div>
 <p>These expert parameters allow fine-tuning of Batcontrol's behavior. See <a href="../../features/battery-control-expert/">Battery Control Expert</a> for detailed explanations of each parameter:</p>
 <table>
@@ -1758,7 +1767,7 @@ Details about the Price configuration can be found on <a href="../../features/pr
 <td><code>spread_grid_charge_over_charge_window</code></td>
 <td>boolean</td>
 <td>true</td>
-<td>With soften enabled: calculate the grid charge rate over all following slots that are not more expensive than the current slot, instead of the current slot only</td>
+<td>With soften enabled: calculate the grid charge rate over all following slots that are not more expensive than the current slot plus the soften margin (<code>min_price_difference / soften_price_difference_on_charging_factor</code>), instead of the current slot only</td>
 </tr>
 <tr>
 <td><code>round_price_digits</code></td>
@@ -1777,6 +1786,18 @@ Details about the Price configuration can be found on <a href="../../features/pr
 <td>boolean</td>
 <td>false</td>
 <td>Also preserve <code>min_grid_charge_soc</code> as reserved battery energy during cheap/pre-expensive windows</td>
+</tr>
+<tr>
+<td><code>market_price_refresh_time</code></td>
+<td>string</td>
+<td>"12:30"</td>
+<td>UTC time ("HH:MM") of the daily forced price refresh that picks up newly published next-day prices. An invalid value aborts startup</td>
+</tr>
+<tr>
+<td><code>max_forecast_hours</code></td>
+<td>float</td>
+<td>0</td>
+<td>Use at most this many hours of the forecasts, for example <code>48</code>. <code>0</code> does not limit the horizon</td>
 </tr>
 </tbody>
 </table>
@@ -1878,7 +1899,7 @@ Details about the Price configuration can be found on <a href="../../features/pr
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../assets/js/vendor/chart.umd.js"></script>
       

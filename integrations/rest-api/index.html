@@ -10,7 +10,7 @@
 <link href="../../features/dashboard/" rel="prev"/>
 <link href="../mcp-server/" rel="next"/>
 <link href="../../assets/images/favicon.png" rel="icon"/>
-<meta content="mkdocs-1.6.1, mkdocs-material-9.8.0" name="generator"/>
+<meta content="mkdocs-1.6.1, mkdocs-material-9.8.1" name="generator"/>
 <title>REST API - Batcontrol Documentation</title>
 <link href="../../assets/stylesheets/main.57a0d79d.min.css" rel="stylesheet"/>
 <link href="../../assets/stylesheets/palette.fb2fffe2.min.css" rel="stylesheet"/>
@@ -481,6 +481,15 @@
 </a>
 </li>
 <li class="md-nav__item">
+<a class="md-nav__link" href="#forecast-horizon">
+<span class="md-ellipsis">
+      
+        Forecast horizon
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
 <a class="md-nav__link" href="#runtime-overrides-in-config">
 <span class="md-ellipsis">
       
@@ -765,6 +774,15 @@
 </a>
 </li>
 <li class="md-nav__item">
+<a class="md-nav__link" href="#forecast-horizon">
+<span class="md-ellipsis">
+      
+        Forecast horizon
+      
+    </span>
+</a>
+</li>
+<li class="md-nav__item">
 <a class="md-nav__link" href="#runtime-overrides-in-config">
 <span class="md-ellipsis">
       
@@ -1008,11 +1026,18 @@ optimizer looks ahead. Every value is per slot at the configured resolution (<co
 the current price in the window, 1 being the cheapest; equal prices share a rank. When the
 tariff provider's prices end before the 24 hours do, <code>complete</code> is <code>false</code> and <code>slot_count</code> says
 how many slots the statistics cover.</p>
+<h3 id="forecast-horizon">Forecast horizon<a class="headerlink" href="#forecast-horizon" title="Permanent link">¶</a></h3>
+<p>The forecast endpoints end where batcontrol's planning ends: at the last slot covered by both
+the price and the solar forecast, or earlier when
+<a href="../../features/battery-control-expert/#max_forecast_hours-since-0102"><code>max_forecast_hours</code></a> is
+set. <code>/config</code> reports that limit as <code>battery_control.max_forecast_hours</code> in hours; <code>0</code> means the
+horizon is not limited.</p>
 <h3 id="runtime-overrides-in-config">Runtime overrides in <code>/config</code><a class="headerlink" href="#runtime-overrides-in-config" title="Permanent link">¶</a></h3>
 <p>The fields of <code>/config</code> always show the value <strong>in effect</strong>. Several of them can change at
 runtime - via MQTT, through evcc, by the grid charge lock (which sets
-<code>max_charging_from_grid_limit</code> to 0) or by the control loop itself (it lowers
-<code>max_charging_from_grid_limit</code> below <code>always_allow_discharge_limit</code>). <code>overrides</code> lists every
+<code>max_charging_from_grid_limit</code> to 0) or by the control loop itself (it keeps
+<code>max_charging_from_grid_limit</code> below <code>always_allow_discharge_limit</code> while that is lower than the
+requested value). <code>overrides</code> lists every
 parameter whose effective value differs from the configuration file:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">"overrides"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="nt">"peak_shaving.enabled"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"configured"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">"effective"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span>
@@ -1128,7 +1153,7 @@ consumption pattern looks like, when nobody is home.</p>
 <div class="md-dialog__inner md-typeset"></div>
 </div>
 <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
-<script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+<script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
 <script src="../../assets/js/vendor/chart.umd.js"></script>
 <script src="../../assets/js/peak-shaving-charts.js"></script>
 <script>document$.subscribe(() => {

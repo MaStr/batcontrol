@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -1894,7 +1894,7 @@ baseline) because it shifts capacity into the afternoon — but uncoordinated an
 without any guarantee.</p>
 <h2 id="proposed-algorithm-the-solar_cap-rule">Proposed algorithm: the "solar_cap" rule<a class="headerlink" href="#proposed-algorithm-the-solar_cap-rule" title="Permanent link">&para;</a></h2>
 <p>The rule works on the existing forecast arrays (Wh per interval, index 0 = now) and
-distinguishes two cases. Per slot <code>k</code> (up to the end of the production window):</p>
+distinguishes two cases. Per slot <code>k</code> (up to the end of the production window, i.e. the first slot from slot 1 on below 50 W average power):</p>
 <div class="highlight"><pre><span></span><code>surplus_wh[k]    = max(0, production[k] - consumption[k])
 surplus_hr_wh[k] = surplus_wh[k] * headroom          # headroom acts on the surplus
 feed_allow_wh[k] = feed_in_limit_w * slot_h[k]
@@ -1997,7 +1997,8 @@ production array, so a winter user at <code>0.7</code> automatically gets a cons
    battery reach 100% only after the target hour; lost energy weighs more than a
    late-full battery.</li>
 <li><strong>Static inverter clamps</strong> last (<code>max_pv_charge_rate</code> as upper bound, 500 W
-   minimum via <code>enforce_min_pv_charge_rate</code>). Caution: a configured
+   minimum via <code>enforce_min_pv_charge_rate</code>, which raises; the time/price rules use
+   <code>block_below_min_pv_charge_rate</code> instead and block below 500 W). Caution: a configured
    <code>max_pv_charge_rate</code> below the floor makes curtailment physically unavoidable
    -&gt; startup warning planned.</li>
 </ol>
@@ -2367,7 +2368,7 @@ limit can still clip briefly — partially covered by headroom).</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../assets/js/vendor/chart.umd.js"></script>
       

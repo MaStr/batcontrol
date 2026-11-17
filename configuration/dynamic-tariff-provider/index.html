@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -1964,14 +1964,21 @@ hours.</p>
   (single-zone / static mode, v0.8.0+).</li>
 </ul>
 <h3 id="charging-behaviour-tips">Charging behaviour tips<a class="headerlink" href="#charging-behaviour-tips" title="Permanent link">&para;</a></h3>
-<p>The charge rate is not evenly distributed across low-price hours by default.</p>
+<p>By default batcontrol charges as late as possible within a low-price block, but early enough: it
+starts as soon as the remaining low-price slots can no longer charge the required energy at
+<code>max_grid_charge_rate</code> (see
+<a href="../../features/battery-control-expert/#when-grid-charging-starts">When grid charging starts</a>).
+<code>soften_price_difference_on_charging</code> is not needed to get the battery charged before the
+high-price zone begins; it only changes how the charging is distributed:</p>
 <ul>
 <li>For <strong>more even charging</strong> across low-price hours, enable
   <code>soften_price_difference_on_charging</code>. With the charging window
   (<code>spread_grid_charge_over_charge_window</code>, enabled by default) the charge
   rate is spread over all remaining slots of the low-price block.</li>
 <li>For a <strong>late charging start</strong> (optimise efficiency, keep the battery at
-  high SOC for less time), disable <code>soften_price_difference_on_charging</code>.</li>
+  high SOC for less time), leave <code>soften_price_difference_on_charging</code>
+  disabled. The last slots of the low-price block are then used at up to the
+  maximum charge rate.</li>
 </ul>
 <p>In pure single-zone (static) mode, prices never differ between hours, so
 price-based scheduling has no effect — use it together with peak-shaving
@@ -2168,7 +2175,7 @@ and <strong>energyforecast_total_price</strong>) already deliver final prices an
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../assets/js/vendor/chart.umd.js"></script>
       

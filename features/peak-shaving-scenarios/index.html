@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -1876,8 +1876,9 @@ curtailed.</p>
 <h3 id="time-based-only">Time based only<a class="headerlink" href="#time-based-only" title="Permanent link">&para;</a></h3>
 <p><code>time_active: true</code></p>
 <p>The counter-linear ramp spreads the remaining free capacity over the slots
-until <code>allow_full_battery_after</code>. The limit starts at the 500 W minimum charge
-rate and rises steeply as 14:00 approaches, because the per-slot allocation is
+until <code>allow_full_battery_after</code>. While the computed ramp is below the 500 W
+minimum charge rate, PV charging is blocked (0 W) and the surplus is exported;
+the limit then releases and rises steeply as 14:00 approaches, because the per-slot allocation is
 <code>2 * free_capacity / (n * (n + 1))</code> with <code>n</code> shrinking. The battery reaches
 full exactly around the target hour instead of at lunchtime.</p>
 <div class="ps-chart" data-scenario="time"></div>
@@ -1887,10 +1888,11 @@ full exactly around the target hour instead of at lunchtime.</p>
 <p>Until 11:00 the rule returns <strong>0</strong> -- a hard block. The PV surplus expected
 during the cheap window exceeds the free capacity, so no charging at all is
 allowed beforehand and the whole battery is kept for the cheap hours. At 11:00
-the cheap window opens and the reserved capacity is spread evenly over the
-remaining cheap slots.</p>
+the cheap window opens and the free capacity is spread over the cheap slots
+that have a PV surplus.</p>
 <p>Note the difference to the time rule: the price rule distributes <strong>flat</strong>
-(<code>free_capacity / number of cheap slots</code>), not as a rising ramp. It is
+(<code>free_capacity / hours covered by the cheap slots with PV surplus</code>, the
+current slot counting only with its remaining time), not as a rising ramp. It is
 recomputed every cycle, so the value still drifts upward as cheap slots are
 used up and free capacity shrinks.</p>
 <div class="ps-chart" data-scenario="price"></div>
@@ -2076,7 +2078,7 @@ it in a page with <code>&lt;div class="ps-chart" data-scenario="NAME"&gt;&lt;/di
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../assets/js/vendor/chart.umd.js"></script>
       

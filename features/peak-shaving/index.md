@@ -38,16 +38,16 @@ peak_shaving:
 
 ### Parameter Reference
 
-| Parameter                  | Type  | Default        | Description                                                                                                                                         |
-| -------------------------- | ----- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`                  | bool  | `false`        | Master switch for peak shaving                                                                                                                      |
-| `time_active`              | bool  | `true`         | Enable target-time rule (spread charging until `allow_full_battery_after`)                                                                          |
-| `price_active`             | bool  | `true`         | Enable price rule (reserve capacity for cheap slots)                                                                                                |
-| `solar_cap_active`         | bool  | `false`        | Enable solar feed-in limit rule (absorb PV above `feed_in_limit_w`)                                                                                 |
-| `allow_full_battery_after` | int   | `14`           | Target hour (0-23) for the time rule                                                                                                                |
-| `price_limit`              | float | unset (`None`) | Price threshold in Euro/kWh. The price rule only acts when a value is configured (e.g. `0.05`). Set `-1` to disable the price component explicitly. |
-| `feed_in_limit_w`          | int   | `0`            | Absolute feed-in power limit in watts (solar rule). Formula: `0.6 * kWp * 1000`. Set to `0` to disable.                                             |
-| `feed_in_limit_headroom`   | float | `1.0`          | Safety factor (>= 1.0) on the forecast surplus (solar rule). Recommended: `1.1` if clipping is observed.                                            |
+| Parameter                  | Type  | Default        | Description                                                                                                                                                                                                                                                                               |
+| -------------------------- | ----- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                  | bool  | `false`        | Master switch for peak shaving                                                                                                                                                                                                                                                            |
+| `time_active`              | bool  | `true`         | Enable target-time rule (spread charging until `allow_full_battery_after`)                                                                                                                                                                                                                |
+| `price_active`             | bool  | `true`         | Enable price rule (reserve capacity for cheap slots)                                                                                                                                                                                                                                      |
+| `solar_cap_active`         | bool  | `false`        | Enable solar feed-in limit rule (absorb PV above `feed_in_limit_w`)                                                                                                                                                                                                                       |
+| `allow_full_battery_after` | int   | `14`           | Target hour (0-23) for the time rule                                                                                                                                                                                                                                                      |
+| `price_limit`              | float | unset (`None`) | Price threshold in Euro/kWh. The price rule only acts when a value is configured (e.g. `0.05`). Set `-1` to disable the price component explicitly. The shipped config template sets `0.05`, so with `price_active: true` the price rule is active for anyone starting from the template. |
+| `feed_in_limit_w`          | int   | `0`            | Absolute feed-in power limit in watts (solar rule). Formula: `0.6 * kWp * 1000`. Set to `0` to disable.                                                                                                                                                                                   |
+| `feed_in_limit_headroom`   | float | `1.0`          | Safety factor (>= 1.0) on the forecast surplus (solar rule). Recommended: `1.1` if clipping is observed.                                                                                                                                                                                  |
 
 **Removed in 0.10.0:** The old `mode` parameter (`time` / `price` / `combined`) is no longer supported; a configuration containing it is rejected at startup. Use the switches above instead (`time` = `time_active` only, `price` = `price_active` only, `combined` = both).
 
@@ -73,10 +73,10 @@ Runtime changes are temporary and are not written back to the configuration file
 
 This parameter controls when the battery is **allowed** to be 100% full:
 
-- **Before this hour:** the PV charge rate may be limited (depending on mode).
+- **Before this hour:** the PV charge rate may be limited (depending on which rules are active).
 - **At or after this hour:** no limit is applied -- the battery charges as fast as possible.
 
-The target hour applies globally to **all three modes**. Set it to the hour by which your PV system typically produces enough to fill the battery. For many Central European systems `14` (2 PM) is a good starting point; adjust based on your panel orientation and local conditions.
+The target hour applies to the time rule and the price rule. The solar cap rule deliberately ignores it (see [Priority Rule: Floor Overrides Caps](#priority-rule-floor-overrides-caps)). Setting `allow_full_battery_after: 0` switches the time and price rule off entirely, because every hour is "at or after" 0. Set it to the hour by which your PV system typically produces enough to fill the battery. For many Central European systems `14` (2 PM) is a good starting point; adjust based on your panel orientation and local conditions.
 
 ## Rule Switches
 
@@ -84,7 +84,7 @@ Peak shaving has three independent rules that can be enabled or disabled via the
 
 ### `time_active` -- Target-Time Rule
 
-Distributes the remaining free battery capacity evenly over the slots between now and `allow_full_battery_after`, using a **counter-linear ramp**. The allowed charge rate starts low and increases as the target hour approaches, which mirrors the typical PV generation curve that rises towards midday.
+Distributes the remaining free battery capacity over the slots between now and `allow_full_battery_after`, using a **counter-linear ramp**. The distribution is not even: slot k gets weight k+1, so the allowed charge rate starts low and increases towards the target hour, which mirrors the typical PV generation curve that rises towards midday.
 
 **Formula:**
 
@@ -97,14 +97,27 @@ If pv_surplus > free_capacity:
     charge_limit    = wh_current_slot / interval_hours
 ```
 
-**Example** (free capacity = 2000 Wh, 1 h intervals):
+This is the ramp as long as every slot has more PV surplus than the ramp gives it. A slot can only take what its surplus delivers, so the rule plans with the forecast:
 
-| Hours to target | Allowed charge rate |
-| --------------- | ------------------- |
-| 8               | 55 W                |
-| 4               | 200 W               |
-| 2               | 666 W               |
-| 1               | 2000 W (full rate)  |
+```
+charge_limit R = lowest rate with
+    sum over the remaining slots k of min(surplus_k, R * (k+1) * hours_k) = free_capacity
+```
+
+`hours_k` is the slot length; for the current slot it is the time left in it. Where a slot's surplus falls short of its share, the missing energy is moved to the other slots and the limit rises. This matters when PV is already declining before `allow_full_battery_after`: the ramp gives the last slot the largest share, and without the forecast the battery would not be full at the target hour.
+
+**Example** (free capacity = 2000 Wh, 1 h intervals, enough surplus in every slot):
+
+| Hours to target | Computed limit | Applied                   |
+| --------------- | -------------- | ------------------------- |
+| 8               | 55 W           | 0 W (PV charging blocked) |
+| 4               | 200 W          | 0 W (PV charging blocked) |
+| 2               | 666 W          | 666 W                     |
+| 1               | 2000 W         | 2000 W (full rate)        |
+
+**Example with declining PV** (free capacity = 2000 Wh, 2 h to target): the forecast surplus is 3000 Wh in the current hour and 500 Wh in the last one. The plain ramp would allow 666 W now and 1333 W in the last hour, which only delivers 500 Wh - 1166 Wh of the 2000 Wh would be charged. The rule plans the last hour with its 500 Wh and allows 1500 W now.
+
+Computed values below the [minimum charge rate](#charge-limit-and-minimum-charge-rate) of 500 W are applied as 0 W, so PV charging is blocked until the ramp reaches 500 W. The PV surplus is exported to the grid in the meantime.
 
 If the expected PV surplus does not exceed the free capacity, no limit is applied -- the battery can absorb everything anyway.
 
@@ -112,7 +125,7 @@ If the expected PV surplus does not exceed the free capacity, no limit is applie
 
 Reserves free battery capacity for upcoming **cheap-price** slots where PV is still producing. A slot is "cheap" when its price is at or below `price_limit`. Requires a `price_limit` value (use `-1` to disable without changing the switch).
 
-Only slots within the **production window** are considered. The production window ends at the first forecast slot where PV production is zero. This prevents reserving capacity for a cheap slot at e.g. 03:00 that would never produce any solar energy.
+Only slots within the **production window** are considered. The production window ends at the first forecast slot (after the current one) whose average PV power is below 50 W. Providers that return tiny non-zero values at night therefore do not extend the window into the next day. The current slot is not compared against the threshold, because its forecast is scaled by the remaining time of the slot and becomes tiny near the slot end. This prevents reserving capacity for a cheap slot at e.g. 03:00 that would never produce any solar energy.
 
 **Before the cheap window:**
 
@@ -123,12 +136,12 @@ Only slots within the **production window** are considered. The production windo
 
 **Inside the cheap window:**
 
-- If total PV surplus during cheap slots exceeds free capacity, spread `free_capacity` evenly over cheap slots so the battery fills gradually.
+- If total PV surplus during cheap slots exceeds free capacity, spread `free_capacity` over the cheap slots that have a PV surplus, in proportion to time, so the battery fills gradually. The current slot counts only with the time that is left in it, all following slots count in full; the limit is `free_capacity` divided by the hours covered by these slots. Cheap slots without surplus are not counted.
 - If surplus fits in free capacity, no limit is applied.
 
 ### Combining Rules
 
-When multiple rules are active, the **strictest (lowest non-negative) limit wins**. For example, if the time rule suggests 500 W and the price rule suggests 300 W, the applied limit is 300 W. This conservative approach prioritizes the rules in combination rather than overriding each other.
+When multiple rules are active, the **strictest (lowest non-negative) limit wins**. For example, if the time rule suggests 1200 W and the price rule suggests 800 W, the applied limit is 800 W. A combined result below the 500 W minimum charge rate is applied as 0 W (see [Charge Limit and Minimum Charge Rate](#charge-limit-and-minimum-charge-rate)). This conservative approach prioritizes the rules in combination rather than overriding each other.
 
 **Migration:** the old `mode` parameter was removed in 0.10.0. Replace it with the switches:
 
@@ -190,11 +203,16 @@ For a detailed evaluation of the algorithm including simulation results and sens
 
 The calculated charge limit is applied via **Mode 8** (`LIMIT_BATTERY_CHARGE_RATE`). In this mode the inverter caps PV-to-battery charging at the given wattage while still allowing the battery to discharge normally.
 
-A minimum charge rate of **500 W** is enforced: any computed limit between 1 W and 499 W is raised to 500 W to avoid inefficient low-power charging. A limit of exactly **0 W** (block charging completely) is kept as-is and is not raised.
+A minimum charge rate of **500 W** applies to avoid inefficient low-power charging. How a computed limit below 500 W is handled depends on the rule:
+
+- **Time and price rule:** a computed limit between 1 W and 499 W is applied as **0 W** (PV charging blocked). Raising it to 500 W would defeat the ramp: with 2000 Wh free and 8 h to the target the ramp asks for 55 W, but 500 W would fill the battery after 4 h. The limit is recomputed every cycle and releases as soon as the computed value reaches 500 W. While it is blocked, PV surplus is exported to the grid. The [Decision sensor](https://mastr.github.io/batcontrol/development/decision-trace/index.md) shows this through `computed_limit_w` and `blocked_below_min_rate` in the `peak_shaving` record.
+- **Solar cap rule:** the result is still **raised to 500 W**, because a limit of 0 W could curtail clip energy (see below).
+
+A limit of exactly **0 W** (block charging completely) is always kept as-is.
 
 ### Interaction with the minimum charge rate
 
-The minimum charge rate is applied *after* the rules have been merged, so it can override a deliberately low limit. This matters most for the solar cap rule when free capacity is scarce and the cap has been set equal to the floor.
+For the solar cap rule the minimum charge rate is applied *after* the rules have been merged, so it can override a deliberately low limit. This matters most for the solar cap rule when free capacity is scarce and the cap has been set equal to the floor.
 
 At the edges of the clip window the excess over the feed-in limit is only a few dozen watts. The rule therefore asks for a correspondingly small charge rate, but the 500 W minimum raises it -- and the battery consumes capacity that was reserved for the peak.
 
@@ -241,6 +259,8 @@ Peak shaving cap rules (time and price) are automatically bypassed in the follow
 | EV connected in PV-surplus mode (evcc: `pv`, `minpv`, `smart`) | Bypassed            | Not applied                                                                                  |
 | `price_limit` not configured                                   | Price rule inactive | Not affected                                                                                 |
 
+Once the battery reaches `always_allow_discharge_limit`, the limits of the time and price rule are dropped. The remaining capacity above that SoC is therefore charged without a limit, even before the target hour.
+
 ## evcc Interaction
 
 When an EV charger is managed by [evcc](https://mastr.github.io/batcontrol/integrations/evcc-connection/index.md):
@@ -261,7 +281,7 @@ When MQTT auto-discovery is enabled, the following Home Assistant entities are c
 
 ## Self-Correction
 
-The charge limit is recalculated every evaluation cycle (typically every 3 minutes). If clouds reduce PV production significantly, the free capacity stays higher at the next cycle and the counter-linear ramp automatically produces a higher allowed rate. This means the system self-corrects without manual intervention, though there is no intra-cycle adjustment.
+The charge limit is recalculated every evaluation cycle (typically every 3 minutes). If clouds reduce PV production significantly, the free capacity stays higher at the next cycle and the counter-linear ramp automatically produces a higher allowed rate. A lower forecast for the slots before the target hour raises the limit as well, because those slots are planned with less. This means the system self-corrects without manual intervention, though there is no intra-cycle adjustment.
 
 ## Quick-Start Examples
 

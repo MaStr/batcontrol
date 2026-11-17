@@ -13,7 +13,7 @@
                 "type": "null"
               }
             ],
-            "description": "always_allow_discharge_limit as energy in Wh: max_energy_capacity * limit.",
+            "description": "always_allow_discharge_limit as stored energy in Wh: the limit is a real SoC, so this is the capacity at 100 % SoC * limit, independent of max_soc. Only while max_soc is unknown, max_energy_capacity * limit.",
             "title": "Always Allow Discharge Limit Capacity"
           },
           "always_allow_discharge_limit_percent": {
@@ -185,6 +185,18 @@
             ],
             "description": "SoC ratio (0-1) up to which grid charging is allowed.",
             "title": "Max Charging From Grid Limit"
+          },
+          "max_forecast_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Upper bound of the forecast horizon in hours, counted from the start of the current slot. 0 = not limited.",
+            "title": "Max Forecast Hours"
           },
           "min_grid_charge_soc": {
             "anyOf": [
@@ -2049,7 +2061,7 @@
     "description": "\nRead-only access to a running batcontrol instance: control state, battery,\nprice/solar/consumption forecasts and the decision trace that explains why\nbatcontrol chose the current inverter mode.\n\n**This API never changes anything.** Every endpoint is a GET. Runtime\noverrides stay on the MQTT API.\n\nConventions:\n\n* Timestamps are epoch **milliseconds** (the MQTT API uses seconds).\n* Energy is **Wh per forecast slot**; energy series also carry `power_w`, the\n  average power over the slot. At 15-minute resolution those differ by a\n  factor of four.\n* Prices are EUR/kWh with 4 decimals.\n* Forecast slot 0 is the interval containing the current time. Slots that\n  have passed since the last control cycle are not returned.\n",
     "summary": "Read-only API of a running batcontrol instance",
     "title": "batcontrol",
-    "version": "0.10.1"
+    "version": "0.11.0"
   },
   "openapi": "3.1.0",
   "paths": {

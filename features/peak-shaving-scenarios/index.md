@@ -44,15 +44,15 @@ The battery charges as fast as the PV allows and is full at 11:45 -- well before
 
 `time_active: true`
 
-The counter-linear ramp spreads the remaining free capacity over the slots until `allow_full_battery_after`. The limit starts at the 500 W minimum charge rate and rises steeply as 14:00 approaches, because the per-slot allocation is `2 * free_capacity / (n * (n + 1))` with `n` shrinking. The battery reaches full exactly around the target hour instead of at lunchtime.
+The counter-linear ramp spreads the remaining free capacity over the slots until `allow_full_battery_after`. While the computed ramp is below the 500 W minimum charge rate, PV charging is blocked (0 W) and the surplus is exported; the limit then releases and rises steeply as 14:00 approaches, because the per-slot allocation is `2 * free_capacity / (n * (n + 1))` with `n` shrinking. The battery reaches full exactly around the target hour instead of at lunchtime.
 
 ### Price based only
 
 `price_active: true`, `price_limit: 0.05`
 
-Until 11:00 the rule returns **0** -- a hard block. The PV surplus expected during the cheap window exceeds the free capacity, so no charging at all is allowed beforehand and the whole battery is kept for the cheap hours. At 11:00 the cheap window opens and the reserved capacity is spread evenly over the remaining cheap slots.
+Until 11:00 the rule returns **0** -- a hard block. The PV surplus expected during the cheap window exceeds the free capacity, so no charging at all is allowed beforehand and the whole battery is kept for the cheap hours. At 11:00 the cheap window opens and the free capacity is spread over the cheap slots that have a PV surplus.
 
-Note the difference to the time rule: the price rule distributes **flat** (`free_capacity / number of cheap slots`), not as a rising ramp. It is recomputed every cycle, so the value still drifts upward as cheap slots are used up and free capacity shrinks.
+Note the difference to the time rule: the price rule distributes **flat** (`free_capacity / hours covered by the cheap slots with PV surplus`, the current slot counting only with its remaining time), not as a rising ramp. It is recomputed every cycle, so the value still drifts upward as cheap slots are used up and free capacity shrinks.
 
 ### Solar cap only
 

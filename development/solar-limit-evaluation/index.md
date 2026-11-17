@@ -28,7 +28,7 @@ Conversely, time-based shaving already helps partially (76% recovery vs. 0% base
 
 ## Proposed algorithm: the "solar_cap" rule
 
-The rule works on the existing forecast arrays (Wh per interval, index 0 = now) and distinguishes two cases. Per slot `k` (up to the end of the production window):
+The rule works on the existing forecast arrays (Wh per interval, index 0 = now) and distinguishes two cases. Per slot `k` (up to the end of the production window, i.e. the first slot from slot 1 on below 50 W average power):
 
 ```
 surplus_wh[k]    = max(0, production[k] - consumption[k])
@@ -96,7 +96,7 @@ Documented, fixed order of precedence (no configuration needed):
 1. **Force-charge from grid (MODE -1)** overrides all peak shaving (as today).
 1. **All active cap rules** (target-time ramp, price reserve, solar reservation) each emit a limit; the **strictest wins** (`min`, like today's `combined`).
 1. **The solar floor overrides every cap**: `final = max(floor, min(caps))`. Rationale: caps optimize economics (shift charging), the floor prevents **physical loss** (curtailment). A cap below the floor would destroy energy. The floor therefore also applies **after** `allow_full_battery_after` and at high SoC (`always_allow_discharge` region) — the clip window physically lasts longer than the target hour. Consequence: the solar reservation may let the battery reach 100% only after the target hour; lost energy weighs more than a late-full battery.
-1. **Static inverter clamps** last (`max_pv_charge_rate` as upper bound, 500 W minimum via `enforce_min_pv_charge_rate`). Caution: a configured `max_pv_charge_rate` below the floor makes curtailment physically unavoidable -> startup warning planned.
+1. **Static inverter clamps** last (`max_pv_charge_rate` as upper bound, 500 W minimum via `enforce_min_pv_charge_rate`, which raises; the time/price rules use `block_below_min_pv_charge_rate` instead and block below 500 W). Caution: a configured `max_pv_charge_rate` below the floor makes curtailment physically unavoidable -> startup warning planned.
 
 Sentinel semantics stay unchanged: `-1` = no limit, `0` = block charging. `-1` automatically satisfies every floor because the inverter then charges surplus greedily anyway — **no new inverter mode** is needed; the floor is the guarantee `applied cap >= floor`.
 

@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -4575,6 +4575,10 @@ If core.py factorizes [0] thinking it's the current interval:
 2. <strong>Simpler core.py</strong> - less error-prone
 3. <strong>Baseclass handles complexity</strong> - providers stay simple
 4. <strong>MQTT can round to hour</strong> - if needed for display purposes</p>
+<div class="admonition note">
+<p class="admonition-title">One timestamp per control cycle</p>
+<p>The sketches in this document read the clock inside each function. The code does not: <code>core._run_once</code> takes one timestamp per cycle and passes it as <code>now</code> to <code>get_prices()</code> and both <code>get_forecast()</code> methods, uses it to scale slot 0 and hands it to the logic as <code>calc_timestamp</code>. The control loop starts on full minutes, so separate clock reads could land on different sides of a slot boundary and make slot 0 mean different intervals for prices, forecasts and the elapsed-time scaling. A provider reads the clock only when it is called without <code>now</code>; new providers must derive both the start of the hour and the current interval from the <code>now</code> they are given.</p>
+</div>
 <p><strong>Implementation</strong> (in baseclass):
 <div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ForecastSolarBase</span><span class="p">(</span><span class="n">ABC</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_forecast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">intervals</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
@@ -7201,7 +7205,7 @@ FCSolar │  evcc│ Awattar Tibber evcc│  CSV  │  HA
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../assets/js/vendor/chart.umd.js"></script>
       

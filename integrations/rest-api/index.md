@@ -89,9 +89,13 @@ Forecast endpoints accept `limit` and `offset` and report `total_count`, `has_mo
 
 `/price/status` covers the **next 24 hours from the current slot**, independent of how far the optimizer looks ahead. Every value is per slot at the configured resolution (`interval_minutes`): `min` is the cheapest slot, so there is no separate "cheapest window". `rank` is the position of the current price in the window, 1 being the cheapest; equal prices share a rank. When the tariff provider's prices end before the 24 hours do, `complete` is `false` and `slot_count` says how many slots the statistics cover.
 
+### Forecast horizon
+
+The forecast endpoints end where batcontrol's planning ends: at the last slot covered by both the price and the solar forecast, or earlier when [`max_forecast_hours`](https://mastr.github.io/batcontrol/features/battery-control-expert/#max_forecast_hours-since-0102) is set. `/config` reports that limit as `battery_control.max_forecast_hours` in hours; `0` means the horizon is not limited.
+
 ### Runtime overrides in `/config`
 
-The fields of `/config` always show the value **in effect**. Several of them can change at runtime - via MQTT, through evcc, by the grid charge lock (which sets `max_charging_from_grid_limit` to 0) or by the control loop itself (it lowers `max_charging_from_grid_limit` below `always_allow_discharge_limit`). `overrides` lists every parameter whose effective value differs from the configuration file:
+The fields of `/config` always show the value **in effect**. Several of them can change at runtime - via MQTT, through evcc, by the grid charge lock (which sets `max_charging_from_grid_limit` to 0) or by the control loop itself (it keeps `max_charging_from_grid_limit` below `always_allow_discharge_limit` while that is lower than the requested value). `overrides` lists every parameter whose effective value differs from the configuration file:
 
 ```
 "overrides": {

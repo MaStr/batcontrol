@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -876,6 +876,45 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#discharge-reserve-and-grid-recharge-use-different-comparisons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discharge reserve and grid recharge use different comparisons
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Discharge reserve and grid recharge use different comparisons">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-a-short-price-dip-before-an-expensive-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: a short price dip before an expensive block
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1504,6 +1543,45 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#discharge-reserve-and-grid-recharge-use-different-comparisons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discharge reserve and grid recharge use different comparisons
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Discharge reserve and grid recharge use different comparisons">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-a-short-price-dip-before-an-expensive-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: a short price dip before an expensive block
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limitations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1532,7 +1610,7 @@
   <h1>Price Difference Calculation</h1>
 
 <h2 id="understanding-min_price_difference-and-the-relative-approach">Understanding <code>min_price_difference</code> and the Relative Approach<a class="headerlink" href="#understanding-min_price_difference-and-the-relative-approach" title="Permanent link">&para;</a></h2>
-<p>In <a href="https://github.com/muexxl/batcontrol/issues/84">Issue #84</a>, the idea arose to make the parameter <code>min_price_difference</code> more flexible. Originally, it was a fixed absolute value, like <code>€0.03</code>, meaning Batcontrol would only consider future prices “high enough” if they exceeded the current price by at least <code>€0.03</code>. However, when prices vary a lot (e.g., from <code>€0.20</code> to <code>€1.00</code>), a fixed amount may not always make sense.</p>
+<p>In <a href="https://github.com/MaStr/batcontrol/issues/84">Issue #84</a>, the idea arose to make the parameter <code>min_price_difference</code> more flexible. Originally, it was a fixed absolute value, like <code>€0.03</code>, meaning Batcontrol would only consider future prices “high enough” if they exceeded the current price by at least <code>€0.03</code>. However, when prices vary a lot (e.g., from <code>€0.20</code> to <code>€1.00</code>), a fixed amount may not always make sense.</p>
 <p>This feature is introduced in version 0.4.0, but defaults to <code>0%</code> (disabled).</p>
 <h3 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h3>
 <ol>
@@ -1571,6 +1649,59 @@
 <li><strong>Relative Plus Absolute</strong>: Scales automatically with the current price, ensuring Batcontrol’s logic remains balanced across a wide range of price levels.</li>
 </ul>
 <p>This change helps prevent overreacting at high prices (where a small amount like <code>€0.03</code> is negligible) and avoids unnecessary waiting at low prices (where a large absolute amount might never occur).</p>
+<h2 id="discharge-reserve-and-grid-recharge-use-different-comparisons">Discharge reserve and grid recharge use different comparisons<a class="headerlink" href="#discharge-reserve-and-grid-recharge-use-different-comparisons" title="Permanent link">&para;</a></h2>
+<p>The two decisions that depend on future prices do not look at the same slots. Both start from the current price and use the dynamic minimum price difference (<code>max(min_price_difference, min_price_difference_rel * current price)</code>).</p>
+<p><strong>Discharge reserve</strong> (should the battery keep its energy instead of discharging?):</p>
+<ul>
+<li>The look-ahead window ends at the first slot whose price is lower than the current price by at least the dynamic minimum price difference (<code>price &lt;= current price - min difference</code>).</li>
+<li>Within that window <strong>every</strong> slot with a price above the current price counts, with no minimum difference. The net consumption of these slots (reduced by PV production in earlier slots) is reserved.</li>
+<li>
+<p>A cheaper slot ends the window because the battery can be recharged there. That only holds for what the inverter can charge in it. If more expensive slots follow behind the cheaper ones, the part of their net consumption that the cheaper slots cannot recharge at <code>max_grid_charge_rate</code> is reserved as well:</p>
+<div class="highlight"><pre><span></span><code>capacity of one cheaper slot = max_grid_charge_rate / max(charge_rate_multiplier, 1) * slot length
+reserved in addition         = demand of the more expensive slots behind - capacity of the cheaper slots before them
+</code></pre></div>
+<p>This looks at the rest of the forecast, in time order: every cheaper slot adds capacity, every slot above the current price adds demand, and the largest gap between the two is reserved. Energy kept now only helps as long as the battery has room for it on top of what the cheaper slots charge, so the reserve is never larger than that room (battery filled to <code>max_charging_from_grid_limit</code>, minus what the cheaper slots charge). Once the cheaper slots can fill the battery, nothing more is reserved.</p>
+<p>A single cheap 15-minute slot recharges about 1.1 kWh at 5000 W, so this mostly matters at 15-minute resolution. It applies to 60-minute slots in the same way: one cheap hour (about 4.5 kWh) in front of a long, more expensive stretch reserves energy too.
+- Discharge is allowed only while the usable stored energy exceeds this reserve.</p>
+</li>
+</ul>
+<p><strong>Grid recharge</strong> (should the battery be charged from the grid?):</p>
+<ul>
+<li>The look-ahead window ends at the first slot whose price is lower than or equal to the current price. With <code>soften_price_difference_on_charging</code> enabled, the slot must be lower by <code>min_price_difference / soften_price_difference_on_charging_factor</code> instead.</li>
+<li>Within that window only slots <strong>more expensive than the current price plus the dynamic minimum price difference</strong> count. Their net consumption (reduced by PV production in earlier slots), minus the usable stored energy, is the energy to charge.</li>
+</ul>
+<p><strong>Consequence:</strong> energy can be held back (no discharge) without any grid charging happening. A slot that is only slightly more expensive than the current one reserves energy for the discharge decision but is too close in price to justify buying energy from the grid.</p>
+<h3 id="example-a-short-price-dip-before-an-expensive-block">Example: a short price dip before an expensive block<a class="headerlink" href="#example-a-short-price-dip-before-an-expensive-block" title="Permanent link">&para;</a></h3>
+<p>15-minute slots, <code>max_grid_charge_rate: 5000</code>, <code>charge_rate_multiplier: 1.1</code>. The current price is 0.30 €/kWh, the next slot costs 0.20 €/kWh, the eight slots after it cost 0.40 €/kWh and need 4 kWh in total.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Reserve</th>
+<th>Result with 2 kWh usable energy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Before</td>
+<td>0 kWh - the window ends at the cheap slot</td>
+<td>Discharge allowed now; the cheap slot recharges 1.1 kWh, the rest of the expensive block is bought at 0.40 €/kWh</td>
+</tr>
+<tr>
+<td>Now</td>
+<td>4 kWh - 1.1 kWh = 2.9 kWh</td>
+<td>Discharge is held back; the grid recharge rule then decides whether charging at 0.30 €/kWh pays off</td>
+</tr>
+</tbody>
+</table>
+<p>The decision trace shows this in the inputs <code>reserve_behind_cheaper_slot</code>, <code>cheaper_slots_charge_capacity</code> and <code>higher_price_slots_behind</code> of the discharge decision.</p>
+<h3 id="known-limitations">Known limitations<a class="headerlink" href="#known-limitations" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The charge capacity of a cheaper slot is an estimate. It is not reduced by consumption that is only expensive seen from the price of that cheaper slot.</li>
+<li>The grid recharge rule uses the same capacity estimate and the same limit: for demand behind cheaper slots it charges at most the room the battery has left after those slots, and nothing if they can fill it.</li>
+<li>With <code>preserve_min_grid_charge_soc</code>, only a reserve inside the window activates the SoC target, as before; the reserve behind a cheaper slot is added without it.</li>
+<li>If the inverter does not report a <code>max_grid_charge_rate</code>, a cheaper slot is assumed to recharge any amount, as in earlier versions.</li>
+</ul>
 
 
 
@@ -1669,7 +1800,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../assets/js/vendor/chart.umd.js"></script>
       

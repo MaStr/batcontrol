@@ -159,9 +159,9 @@ See [Forecast Metrics](https://mastr.github.io/batcontrol/integrations/forecast-
 
 - `house/batcontrol/always_allow_discharge_limit` - Always discharge limit (0.0-1.0)
 - `house/batcontrol/always_allow_discharge_limit_percent` - Always discharge limit in %
-- `house/batcontrol/always_allow_discharge_limit_capacity` - Always discharge limit in Wh
-- `house/batcontrol/max_charging_from_grid_limit` - Max charging from grid limit (0.0-1.0)
-- `house/batcontrol/max_charging_from_grid_limit_percent` - Max charging from grid limit in %
+- `house/batcontrol/always_allow_discharge_limit_capacity` - Always discharge limit as stored energy in Wh: the limit times the capacity at 100% SOC, independent of the inverter's `max_soc`. Only while the inverter does not report a `max_soc`, the capacity it reports as maximum is used instead.
+- `house/batcontrol/max_charging_from_grid_limit` - Max charging from grid limit in effect (0.0-1.0)
+- `house/batcontrol/max_charging_from_grid_limit_percent` - Max charging from grid limit in effect in %
 - `house/batcontrol/min_grid_charge_soc` - Optional configured minimum grid-charge target (0.0-1.0)
 - `house/batcontrol/min_grid_charge_soc_percent` - Optional configured minimum grid-charge target in %
 - `house/batcontrol/effective_min_grid_charge_soc` - Runtime effective grid-charge target after strategy calculation (0.0-1.0)
@@ -220,7 +220,7 @@ Batcontrol listens to the following `/set` topics for remote control:
 ### Configuration
 
 - `house/batcontrol/always_allow_discharge_limit/set` - Set always discharge limit (0.0-1.0)
-- `house/batcontrol/max_charging_from_grid_limit/set` - Set max charging from grid limit (0.0-1.0)
+- `house/batcontrol/max_charging_from_grid_limit/set` - Set max charging from grid limit (0.0-1.0). The published value is the limit in effect: while `always_allow_discharge_limit` is lower than the value set here, it stays one percentage point below that limit and returns to the set value once `always_allow_discharge_limit` is raised again.
 - `house/batcontrol/min_price_difference/set` - Set minimum price difference in EUR
 - `house/batcontrol/min_price_difference_rel/set` - Set relative minimum price difference (e.g. `0.10` for 10%)
 - `house/batcontrol/production_offset/set` - Set production offset multiplier (0.0-2.0)
@@ -270,7 +270,7 @@ The forecast topics (`/FCST/*`) publish JSON data with the following structure:
 Where:
 
 - `time_start` - Unix timestamp for start of the interval
-- `time_end` - Unix timestamp for end of the interval (15 or 60 minutes later, depending on `general.time_resolution_minutes`)
+- `time_end` - Unix timestamp for end of the interval (15 or 60 minutes later, depending on `time_resolution_minutes`)
 - `value` - Forecasted value for that interval: Wh for production/consumption/net_consumption, EUR for prices
 - `power_w` - Only present for production/consumption/net_consumption: the same quantity expressed as average power in W (`value / interval_hours`), so it stays comparable regardless of the configured interval length
 

@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -2400,6 +2400,7 @@
 <li><strong>Limit Restoration</strong>: Original discharge limit is restored</li>
 <li><strong>Logging</strong>: Batcontrol logs: <code>"evcc is not charging, remove block"</code></li>
 </ol>
+<p>The battery is not released at that moment. The end of the block does not tell batcontrol which mode would be right, so discharging stays avoided until the next evaluation (at most 3 minutes later) decides. During that time the Decision sensor shows the reason <code>EXTERNAL_DISCHARGE_UNBLOCK</code>. Above <code>always_allow_discharge_limit</code> nothing is held back.</p>
 <h3 id="when-evcc-goes-offline">When evcc Goes Offline<a class="headerlink" href="#when-evcc-goes-offline" title="Permanent link">&para;</a></h3>
 <ol>
 <li><strong>Safety Mechanism</strong>: If evcc goes offline while charging, blocks are automatically removed</li>
@@ -2605,7 +2606,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "navigation.footer", "content.action.edit", "content.code.copy", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../assets/js/vendor/chart.umd.js"></script>
       

@@ -256,6 +256,10 @@ Two approaches to handle the timing/indexing issue:
 1. **Baseclass handles complexity** - providers stay simple
 1. **MQTT can round to hour** - if needed for display purposes
 
+One timestamp per control cycle
+
+The sketches in this document read the clock inside each function. The code does not: `core._run_once` takes one timestamp per cycle and passes it as `now` to `get_prices()` and both `get_forecast()` methods, uses it to scale slot 0 and hands it to the logic as `calc_timestamp`. The control loop starts on full minutes, so separate clock reads could land on different sides of a slot boundary and make slot 0 mean different intervals for prices, forecasts and the elapsed-time scaling. A provider reads the clock only when it is called without `now`; new providers must derive both the start of the hour and the current interval from the `now` they are given.
+
 **Implementation** (in baseclass):
 
 ```
