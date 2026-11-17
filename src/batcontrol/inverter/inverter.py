@@ -194,8 +194,8 @@ class Inverter:
             RuntimeError: if the value is missing, not a number or <= 0.
         """
         inverter_type = config.get('type', 'unknown')
-        if 'max_grid_charge_rate' not in config \
-                and 'max_charge_rate' in config:
+        if ('max_grid_charge_rate' not in config
+                and 'max_charge_rate' in config):
             config['max_grid_charge_rate'] = config['max_charge_rate']
 
         value = config.get('max_grid_charge_rate')
