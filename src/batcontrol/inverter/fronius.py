@@ -20,6 +20,8 @@ with MD5, nounce etc.
 import time
 import os
 import logging
+import warnings
+from urllib.parse import urlsplit
 import json
 import hashlib
 import math
@@ -27,6 +29,7 @@ from dataclasses import dataclass
 import requests
 from packaging import version
 from cachetools import TTLCache
+from urllib3.exceptions import InsecureRequestWarning
 from ..value_utils import mask_sensitive_headers
 from .baseclass import DEFAULT_MAX_SOC, DEFAULT_MIN_SOC, InverterBaseclass
 
@@ -185,6 +188,9 @@ class FroniusWR(InverterBaseclass):
         self.cnonce = hashlib.md5(os.urandom(8)).hexdigest()
         self.login_attempts = 0
         self.address = config['address']
+        # Some firmware versions redirect http -> https at times. Once we see
+        # such a redirect, we stay on https for all subsequent requests.
+        self.scheme = 'http'
         # Optional override: use a fixed capacity from config instead of
         # querying it from the inverter (DesignedCapacity via Solar.API).
         self.capacity = self._parse_capacity_config(config.get('capacity', -1))
@@ -873,7 +879,6 @@ class FroniusWR(InverterBaseclass):
         """
         if not headers:
             headers = {}
-        url = 'http://' + self.address + path
         fullpath = path
         if params:
             fullpath += '?' + \
@@ -885,17 +890,22 @@ class FroniusWR(InverterBaseclass):
             logger_auth.debug("Requesting %s , header: %s",
                               fullpath, mask_sensitive_headers(headers))
 
-        for i in range(3):
+        redirect_followed = False
+        i = 0
+        while i < 3:
             # 3 retries if connection can't be established
+            url = self.scheme + '://' + self.address + path
             try:
-                response = requests.request(
-                    method=method,
-                    url=url,
-                    params=params,
-                    headers=headers,
-                    data=payload,
-                    timeout=30
-                )
+                response = self.__http_request(
+                    method, url, params, headers, payload)
+                if (not redirect_followed
+                        and self.__switch_to_https_on_redirect(response)):
+                    # Resend the same request (method, payload, auth header)
+                    # directly via https instead of letting requests follow
+                    # the redirect. That would verify the inverter's
+                    # self-signed certificate and turn POST into GET.
+                    redirect_followed = True
+                    continue
                 return response
             except requests.exceptions.ConnectionError as err:
                 logger.error(
@@ -906,6 +916,7 @@ class FroniusWR(InverterBaseclass):
                     err
                 )
                 time.sleep(60)
+                i += 1
 
         logger.error('Request failed without response.')
         raise RuntimeError(
@@ -914,6 +925,41 @@ class FroniusWR(InverterBaseclass):
             f"\tnonce {self.nonce} \n"
             f"\tpayload {payload}"
         )
+
+    def __http_request(self, method, url, params, headers, payload):
+        """ Execute a single HTTP request without following redirects.
+            The inverter ships a self-signed certificate, so certificate
+            verification is disabled for https.
+        """
+        use_https = url.startswith('https://')
+        with warnings.catch_warnings():
+            if use_https:
+                warnings.simplefilter('ignore', InsecureRequestWarning)
+            return requests.request(
+                method=method,
+                url=url,
+                params=params,
+                headers=headers,
+                data=payload,
+                timeout=30,
+                allow_redirects=False,
+                verify=not use_https
+            )
+
+    def __switch_to_https_on_redirect(self, response) -> bool:
+        """ Detect a http -> https redirect of the inverter.
+            Returns True if the scheme was switched to https.
+        """
+        if self.scheme == 'https' or not response.is_redirect:
+            return False
+        location = response.headers.get('Location', '')
+        if urlsplit(location).scheme != 'https':
+            return False
+        logger.warning(
+            'Inverter at %s redirects to https, switching to https '
+            '(certificate verification disabled)', self.address)
+        self.scheme = 'https'
+        return True
 
     def login(self):
         """Login to Fronius API"""
