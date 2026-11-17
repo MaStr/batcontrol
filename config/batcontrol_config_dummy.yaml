@@ -101,7 +101,7 @@ inverter:
   # cache_ttl: 120 # seconds an SOC value stays valid before get_SOC() blocks. Default: 120
   #
   # capacity: 10000 # Wh, required for fronius-modbus and mqtt; optional override for fronius_gen24
-  max_grid_charge_rate: 5000 # Watt, grid -> battery upper limit
+  max_grid_charge_rate: 5000 # Watt, grid -> battery upper limit, required, 5000 is a suggestion
   max_pv_charge_rate: 0 # Watt, static PV -> battery upper limit. 0 = unlimited
   min_pv_charge_rate: 0 # Watt, static floor for mode 8; only applied when the limit is > 0
   min_charge_rate: 500 # Watt, grid charge floor of THIS inverter. Only relevant with several
