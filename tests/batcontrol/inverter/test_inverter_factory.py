@@ -490,11 +490,18 @@ class TestMaxGridChargeRateRequired:
 
     @pytest.mark.parametrize("value", [0, -1, -5000.5])
     def test_zero_or_negative_is_rejected(self, value):
-        with pytest.raises(RuntimeError, match="must be greater than 0 W"):
+        with pytest.raises(RuntimeError, match="finite number greater than 0 W"):
+            Inverter.create_inverter(self._dummy(max_grid_charge_rate=value))
+
+    @pytest.mark.parametrize(
+        "value", [float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_is_rejected(self, value):
+        """YAML .nan / .inf parse as float; NaN would pass a '<= 0' check."""
+        with pytest.raises(RuntimeError, match="finite number greater than"):
             Inverter.create_inverter(self._dummy(max_grid_charge_rate=value))
 
     def test_zero_via_legacy_alias_is_rejected(self):
-        with pytest.raises(RuntimeError, match="must be greater than 0 W"):
+        with pytest.raises(RuntimeError, match="finite number greater than 0 W"):
             Inverter.create_inverter(self._dummy(max_charge_rate=0))
 
     @pytest.mark.parametrize("value", ["5000", True, None])

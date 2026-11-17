@@ -1,6 +1,7 @@
 """ Factory for inverter providers """
 
 import logging
+import math
 from contextlib import suppress
 from .baseclass import (
     DEFAULT_MAX_SOC,
@@ -191,7 +192,8 @@ class Inverter:
         key wins when both are set.
 
         Raises:
-            RuntimeError: if the value is missing, not a number or <= 0.
+            RuntimeError: if the value is missing, not a number, not
+                finite or <= 0.
         """
         inverter_type = config.get('type', 'unknown')
         if ('max_grid_charge_rate' not in config
@@ -211,10 +213,12 @@ class Inverter:
                 f'[Inverter] Inverter {index} (type {inverter_type}): '
                 f'max_grid_charge_rate must be a number in W, got {value!r}'
             )
-        if value <= 0:
+        # NaN passes 'value <= 0', and inf would scale every rate to 0 %.
+        if not math.isfinite(value) or value <= 0:
             raise RuntimeError(
                 f'[Inverter] Inverter {index} (type {inverter_type}): '
-                f'max_grid_charge_rate must be greater than 0 W, got {value}'
+                'max_grid_charge_rate must be a finite number greater than '
+                f'0 W, got {value}'
             )
 
     @staticmethod
