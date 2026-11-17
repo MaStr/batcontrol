@@ -7,9 +7,13 @@
 
 
 ### max_grid_charge_rate
-This is the upper limit to charge the battery from grid. Value is WATT. This value should not be above the limit of your inverter.
+**Required.** This is the upper limit to charge the battery from grid. Value is WATT. This value should not be above the limit of your inverter.
 
-Default:
+The right value depends on your hardware, so batcontrol does not fill it in for you. 5000 W is a common starting point and is pre-filled in the configuration template and the Home Assistant add-on - check that it does not exceed the limit of your inverter. batcontrol does not start if the key is missing or the value is not a finite number greater than 0; the error names the inverter (index and type), also when you configure [several inverters](multiple-inverters.md).
+
+The older key `max_charge_rate` is still accepted as an alias. If both are set, `max_grid_charge_rate` wins.
+
+Suggested value:
 ```
 max_grid_charge_rate: 5000
 ```

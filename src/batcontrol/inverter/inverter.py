@@ -1,6 +1,7 @@
 """ Factory for inverter providers """
 
 import logging
+import math
 from contextlib import suppress
 from .baseclass import (
     DEFAULT_MAX_SOC,
@@ -107,9 +108,11 @@ class Inverter:
             inverter_num: explicit index used for the MQTT topic of this
                 inverter. If omitted, a process-wide counter is used.
         """
-        # renaming of parameters max_charge_rate -> max_grid_charge_rate
-        if not 'max_grid_charge_rate' in config.keys():
-            config['max_grid_charge_rate'] = config['max_charge_rate']
+        Inverter._require_max_grid_charge_rate(
+            config,
+            inverter_num if inverter_num is not None
+            else Inverter.num_inverters,
+        )
 
         # introducing parameter max_pv_charge_rate. Assign default value here,
         # in case there is no value defined in the config file to avoid a KeyError
@@ -179,6 +182,44 @@ class Inverter:
         inverter.min_pv_charge_rate = config.get('min_pv_charge_rate', 0)
 
         return Inverter._wrap_resilient(inverter, config)
+
+    @staticmethod
+    def _require_max_grid_charge_rate(config: dict, index: int) -> None:
+        """ Resolve and validate max_grid_charge_rate of one inverter.
+
+        The value depends on the hardware, so there is no default. The
+        legacy key max_charge_rate is still accepted as an alias; the new
+        key wins when both are set.
+
+        Raises:
+            RuntimeError: if the value is missing, not a number, not
+                finite or <= 0.
+        """
+        inverter_type = config.get('type', 'unknown')
+        if ('max_grid_charge_rate' not in config
+                and 'max_charge_rate' in config):
+            config['max_grid_charge_rate'] = config['max_charge_rate']
+
+        value = config.get('max_grid_charge_rate')
+        if value is None:
+            raise RuntimeError(
+                f'[Inverter] Inverter {index} (type {inverter_type}): '
+                'max_grid_charge_rate is required. Set it to the maximum '
+                'power in W your inverter may charge the battery from the '
+                'grid, e.g. max_grid_charge_rate: 5000'
+            )
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise RuntimeError(
+                f'[Inverter] Inverter {index} (type {inverter_type}): '
+                f'max_grid_charge_rate must be a number in W, got {value!r}'
+            )
+        # NaN passes 'value <= 0', and inf would scale every rate to 0 %.
+        if not math.isfinite(value) or value <= 0:
+            raise RuntimeError(
+                f'[Inverter] Inverter {index} (type {inverter_type}): '
+                'max_grid_charge_rate must be a finite number greater than '
+                f'0 W, got {value}'
+            )
 
     @staticmethod
     def _create_fronius_modbus(config: dict):

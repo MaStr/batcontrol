@@ -444,3 +444,72 @@ class TestCreateInverters:
             ])
 
         assert shutdown.call_count == 1
+
+
+class TestMaxGridChargeRateRequired:
+    """max_grid_charge_rate has no default and must be a positive number."""
+
+    @staticmethod
+    def _dummy(**extra):
+        config = {"type": "dummy", "enable_resilient_wrapper": False}
+        config.update(extra)
+        return config
+
+    def test_missing_key_fails_with_readable_error(self):
+        with pytest.raises(
+                RuntimeError,
+                match=r"Inverter 0 \(type dummy\): max_grid_charge_rate "
+                      r"is required"):
+            Inverter.create_inverter(self._dummy())
+
+    def test_missing_key_is_no_key_error(self):
+        """The old code crashed with KeyError: 'max_charge_rate'."""
+        with pytest.raises(RuntimeError):
+            Inverter.create_inverter(self._dummy())
+
+    def test_missing_key_in_list_names_the_entry(self):
+        with pytest.raises(
+                RuntimeError,
+                match=r"Inverter 1 \(type dummy\): max_grid_charge_rate "
+                      r"is required"):
+            Inverter.create_inverters([
+                self._dummy(max_grid_charge_rate=5000),
+                self._dummy(),
+            ])
+
+    def test_missing_key_for_mqtt_names_the_type(self):
+        with pytest.raises(RuntimeError, match=r"\(type mqtt\)"):
+            Inverter.create_inverter(
+                {"type": "mqtt", "capacity": 10000,
+                 "enable_resilient_wrapper": False},
+                inverter_num=0)
+
+    def test_legacy_alias_is_still_accepted(self):
+        inverter = Inverter.create_inverter(self._dummy(max_charge_rate=3000))
+        assert inverter.max_grid_charge_rate == 3000
+
+    @pytest.mark.parametrize("value", [0, -1, -5000.5])
+    def test_zero_or_negative_is_rejected(self, value):
+        with pytest.raises(RuntimeError, match="finite number greater than 0 W"):
+            Inverter.create_inverter(self._dummy(max_grid_charge_rate=value))
+
+    @pytest.mark.parametrize(
+        "value", [float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_is_rejected(self, value):
+        """YAML .nan / .inf parse as float; NaN would pass a '<= 0' check."""
+        with pytest.raises(RuntimeError, match="finite number greater than"):
+            Inverter.create_inverter(self._dummy(max_grid_charge_rate=value))
+
+    def test_zero_via_legacy_alias_is_rejected(self):
+        with pytest.raises(RuntimeError, match="finite number greater than 0 W"):
+            Inverter.create_inverter(self._dummy(max_charge_rate=0))
+
+    @pytest.mark.parametrize("value", ["5000", True, None])
+    def test_non_number_is_rejected(self, value):
+        with pytest.raises(RuntimeError, match="max_grid_charge_rate"):
+            Inverter.create_inverter(self._dummy(max_grid_charge_rate=value))
+
+    def test_float_value_is_accepted(self):
+        inverter = Inverter.create_inverter(
+            self._dummy(max_grid_charge_rate=4600.5))
+        assert inverter.max_grid_charge_rate == 4600.5
