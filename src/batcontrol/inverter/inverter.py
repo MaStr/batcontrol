@@ -162,13 +162,14 @@ class Inverter:
         if config['type'].lower() == 'fronius_gen24':
             from .fronius import FroniusWR
 
-            if not str(config.get('address') or '').strip():
+            address = str(config.get('address') or '').strip()
+            if not address:
                 raise RuntimeError(
                     '[Inverter] fronius_gen24 requires an address '
                     '(IP or hostname of the inverter)'
                 )
             iv_config = {
-                'address': config['address'],
+                'address': address,
                 'user': config['user'],
                 'password': config['password'],
                 'max_grid_charge_rate': config['max_grid_charge_rate'],
