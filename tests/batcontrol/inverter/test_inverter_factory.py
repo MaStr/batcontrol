@@ -186,6 +186,7 @@ def test_factory_builds_fronius_with_expected_config(mocker):
             "fronius_inverter_id": 3,
             "fronius_controller_id": 4,
             "capacity": -1,
+            "backup_directory": None,
         }
     )
     assert inverter is mock_instance
@@ -220,6 +221,7 @@ def test_factory_defaults_max_pv_charge_rate_for_fronius(mocker):
             "fronius_inverter_id": 1,
             "fronius_controller_id": 0,
             "capacity": -1,
+            "backup_directory": None,
         }
     )
 
@@ -254,6 +256,7 @@ def test_factory_applies_fronius_id_defaults(mocker):
             "fronius_inverter_id": 1,
             "fronius_controller_id": 0,
             "capacity": -1,
+            "backup_directory": None,
         }
     )
 
@@ -289,6 +292,7 @@ def test_factory_forwards_fronius_capacity_override(mocker):
             "fronius_inverter_id": 1,
             "fronius_controller_id": 0,
             "capacity": 9600,
+            "backup_directory": None,
         }
     )
 
@@ -513,3 +517,43 @@ class TestMaxGridChargeRateRequired:
         inverter = Inverter.create_inverter(
             self._dummy(max_grid_charge_rate=4600.5))
         assert inverter.max_grid_charge_rate == 4600.5
+
+
+def test_factory_puts_fronius_backups_below_data_directory(mocker, tmp_path):
+    """With a data directory, Fronius backups go to <data_dir>/fronius."""
+    mock_fronius = mocker.patch(
+        "batcontrol.inverter.fronius.FroniusWR",
+        autospec=True,
+        return_value=mocker.MagicMock(),
+    )
+    config = {
+        "type": "fronius_gen24",
+        "address": "192.168.1.100",
+        "user": "customer",
+        "password": "secret",
+        "max_grid_charge_rate": 5000,
+        "enable_resilient_wrapper": False,
+    }
+
+    Inverter.create_inverters(config, data_directory=tmp_path)
+
+    iv_config = mock_fronius.call_args.args[0]
+    assert iv_config["backup_directory"] == str(tmp_path / "fronius")
+
+
+def test_factory_rejects_fronius_inverters_with_same_address(mocker):
+    """Two entries for one device would overwrite each other's backups."""
+    mock_fronius = mocker.patch(
+        "batcontrol.inverter.fronius.FroniusWR", autospec=True)
+    entry = {
+        "type": "fronius_gen24",
+        "address": "192.168.1.100",
+        "user": "customer",
+        "password": "secret",
+        "max_grid_charge_rate": 5000,
+    }
+
+    with pytest.raises(RuntimeError, match="share the address"):
+        Inverter.create_inverters(
+            [entry, dict(entry, address=" 192.168.1.100 ")])
+    mock_fronius.assert_not_called()

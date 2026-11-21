@@ -101,15 +101,31 @@ inverter:
 At startup, batcontrol:
 
 - **Enables the Solar.API** (`SolarAPIv1Enabled`), which is required to read SoC and power values.
-- **Saves a backup** of the current battery settings (min/max SoC, energy-management mode/power, grid-charging flag) to `config/battery_config.json` and of the time-of-use schedule to `config/timeofuse_config.json`. Both files are only written if they do not already exist — after an unclean stop the existing files are preserved.
+- **Saves a backup** of the current battery settings (min/max SoC, energy-management mode/power, grid-charging flag) to `battery_config_<id>.json` and of the time-of-use schedule to `timeofuse_config_<id>.json`. Both files are only written if they do not already exist — after an unclean stop the existing files are preserved.
 - **Enables charging from grid** (`HYB_EVU_CHARGEFROMGRID`), so batcontrol can charge the battery during cheap price windows.
 
 During operation, batcontrol controls the battery by writing battery settings (min/max SoC in manual mode, energy-management mode and power) and time-of-use schedules.
 
+**Where the backups are stored:** in the `fronius/` folder of the
+[data directory](../getting-started/installation.md#application-data-and-provider-caches)
+(`./data/fronius/` locally, `/app/data/fronius/` in Docker, `/data/data/fronius/` in the
+Home Assistant add-on). `<id>` is derived from the inverter's `address` (a short
+URL-safe base64 SHA-256 hash), so every inverter has its own files and changing the
+order of several inverters in the config does not mix them up.
+
+!!! note "Upgrading from 0.11.0 or older"
+    Older versions stored a single shared `config/timeofuse_config.json` and
+    `config/battery_config.json` (relative to the working directory). On the first start,
+    the first Fronius inverter in the config moves these files into the data directory,
+    so a backup left by a crash is not lost. With several Fronius inverters, older
+    versions only backed up the first one; the others could stay on batcontrol's
+    time-of-use rules after a shutdown and may need to be checked once in the inverter
+    web UI.
+
 On a clean shutdown, batcontrol restores the original settings. The two backup files behave differently:
 
-- **`config/timeofuse_config.json`** is read from disk and used for the time-of-use restore. If the file was preserved after a crash, the original time-of-use schedule is correctly restored on the next clean shutdown.
-- **`config/battery_config.json`** is written as a reference, but the battery restore uses the settings fetched live from the inverter at startup — the file is not read back. If batcontrol crashed and the inverter still holds batcontrol-modified settings, the live fetch captures those modified settings, so battery settings are not automatically restored to the original pre-crash state. The file can be inspected manually to see what the original settings were.
+- **`timeofuse_config_<id>.json`** is read from disk and used for the time-of-use restore. If the file was preserved after a crash, the original time-of-use schedule is correctly restored on the next clean shutdown.
+- **`battery_config_<id>.json`** is written as a reference, but the battery restore uses the settings fetched live from the inverter at startup — the file is not read back. If batcontrol crashed and the inverter still holds batcontrol-modified settings, the live fetch captures those modified settings, so battery settings are not automatically restored to the original pre-crash state. The file can be inspected manually to see what the original settings were.
 
 Both files are deleted after a successful restore. The Solar.API stays enabled — disable it manually in the inverter web UI if no other software needs it (note: the Fronius Wattpilot wallbox requires the Solar.API).
 
