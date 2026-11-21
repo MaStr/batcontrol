@@ -115,12 +115,7 @@ order of several inverters in the config does not mix them up.
 
 !!! note "Upgrading from 0.11.0 or older"
     Older versions stored a single shared `config/timeofuse_config.json` and
-    `config/battery_config.json` (relative to the working directory). On the first start,
-    the first Fronius inverter in the config moves these files into the data directory,
-    so a backup left by a crash is not lost. With several Fronius inverters, older
-    versions only backed up the first one; the others could stay on batcontrol's
-    time-of-use rules after a shutdown and may need to be checked once in the inverter
-    web UI.
+    `config/battery_config.json`. These files are no longer read and can be deleted.
 
 On a clean shutdown, batcontrol restores the original settings. The two backup files behave differently:
 
