@@ -239,7 +239,7 @@ class Batcontrol:
         )
 
         self.inverter = inverter_factory.create_inverters(
-            config['inverter'])
+            config['inverter'], data_directory=data_directory)
 
         self.max_pv_charge_rate, self.min_pv_charge_rate = (
             self._aggregate_pv_charge_rates(config['inverter'], self.inverter)

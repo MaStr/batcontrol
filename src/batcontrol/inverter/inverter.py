@@ -2,6 +2,7 @@
 
 import logging
 import math
+from pathlib import Path
 from contextlib import suppress
 from .baseclass import (
     DEFAULT_MAX_SOC,
@@ -27,18 +28,24 @@ class Inverter:
     num_inverters = 0
 
     @staticmethod
-    def create_inverters(config) -> InverterInterface:
+    def create_inverters(config, data_directory=None) -> InverterInterface:
         """ Create the inverter(s) described by the 'inverter' config section.
 
         The section is either a single mapping (one inverter) or a list of
         mappings (several inverters). Several inverters are combined into an
         InverterGroup, which behaves like a single, larger battery.
 
+        Args:
+            config: the 'inverter' config section.
+            data_directory: application data directory; inverters that keep
+                backup files store them below it.
+
         Returns:
             InverterInterface: a single inverter or an InverterGroup.
         """
         if isinstance(config, dict):
-            return Inverter.create_inverter(config)
+            return Inverter.create_inverter(
+                config, data_directory=data_directory)
 
         if not isinstance(config, list):
             raise RuntimeError(
@@ -57,15 +64,19 @@ class Inverter:
                 )
 
         Inverter._check_unique_mqtt_topics(config)
+        Inverter._check_unique_fronius_addresses(config)
 
         if len(config) == 1:
-            return Inverter.create_inverter(config[0], inverter_num=0)
+            return Inverter.create_inverter(
+                config[0], inverter_num=0, data_directory=data_directory)
 
         inverters = []
         try:
             for num, entry in enumerate(config):
                 inverters.append(
-                    Inverter.create_inverter(entry, inverter_num=num))
+                    Inverter.create_inverter(
+                        entry, inverter_num=num,
+                        data_directory=data_directory))
         except Exception:
             # Release whatever was already opened before re-raising.
             for created in inverters:
@@ -100,13 +111,40 @@ class Inverter:
             seen[base_topic] = index
 
     @staticmethod
-    def create_inverter(config: dict, inverter_num: int = None) -> InverterInterface:
+    def _check_unique_fronius_addresses(config: list) -> None:
+        """ Reject Fronius GEN24 entries that share the same address.
+
+        Both would control the same device, and their settings backups are
+        named after the address, so they would overwrite each other.
+        """
+        seen = {}
+        for index, entry in enumerate(config):
+            if str(entry.get('type', '')).lower() != 'fronius_gen24':
+                continue
+            address = str(entry.get('address') or '').strip().lower()
+            if not address:
+                # Reported with a clear message by create_inverter.
+                continue
+            if address in seen:
+                raise RuntimeError(
+                    f'[Inverter] Fronius inverters {seen[address]} and {index} '
+                    f'share the address "{address}". Every Fronius GEN24 '
+                    'inverter needs its own address.'
+                )
+            seen[address] = index
+
+    @staticmethod
+    def create_inverter(config: dict, inverter_num: int = None,
+                        data_directory=None) -> InverterInterface:
         """ Select and configure an inverter based on the given configuration
 
         Args:
             config: the configuration of this single inverter.
             inverter_num: explicit index used for the MQTT topic of this
                 inverter. If omitted, a process-wide counter is used.
+            data_directory: application data directory. Fronius GEN24 keeps
+                its settings backups in <data_directory>/fronius; without it
+                they go to ./config as before.
         """
         Inverter._require_max_grid_charge_rate(
             config,
@@ -124,15 +162,25 @@ class Inverter:
         if config['type'].lower() == 'fronius_gen24':
             from .fronius import FroniusWR
 
+            address = str(config.get('address') or '').strip()
+            if not address:
+                raise RuntimeError(
+                    '[Inverter] fronius_gen24 requires an address '
+                    '(IP or hostname of the inverter)'
+                )
             iv_config = {
-                'address': config['address'],
+                'address': address,
                 'user': config['user'],
                 'password': config['password'],
                 'max_grid_charge_rate': config['max_grid_charge_rate'],
                 'max_pv_charge_rate': config['max_pv_charge_rate'],
                 'fronius_inverter_id': config.get('fronius_inverter_id', 1),
                 'fronius_controller_id': config.get('fronius_controller_id', 0),
-                'capacity': config.get('capacity', -1)
+                'capacity': config.get('capacity', -1),
+                'backup_directory': (
+                    str(Path(data_directory) / 'fronius')
+                    if data_directory is not None else None
+                ),
             }
             inverter=FroniusWR(iv_config)
         elif config['type'].lower() == 'dummy':
