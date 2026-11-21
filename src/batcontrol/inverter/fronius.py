@@ -24,6 +24,9 @@ import warnings
 from urllib.parse import urlsplit
 import json
 import hashlib
+import base64
+import shutil
+from pathlib import Path
 import math
 from dataclasses import dataclass
 import requests
@@ -67,8 +70,24 @@ def strip_dict(original):
     return stripped_copy
 
 
-TIMEOFUSE_CONFIG_FILENAME = 'config/timeofuse_config.json'
-BATTERY_CONFIG_FILENAME = 'config/battery_config.json'
+# Backup files of the original inverter settings. Before 0.11.1 they were
+# written to fixed paths relative to the working directory, shared by all
+# Fronius inverters. Now each inverter gets its own file below the data
+# directory, named after its address.
+LEGACY_TIMEOFUSE_CONFIG_FILENAME = 'config/timeofuse_config.json'
+LEGACY_BATTERY_CONFIG_FILENAME = 'config/battery_config.json'
+DEFAULT_BACKUP_DIRECTORY = 'config'
+
+
+def backup_file_id(address: str) -> str:
+    """ Stable, filename-safe id derived from the inverter address.
+
+    URL-safe base64 of the SHA-256 of the normalized address, shortened to
+    16 characters (96 bit). Contains only [A-Za-z0-9_-].
+    """
+    normalized = str(address).strip().lower()
+    digest = hashlib.sha256(normalized.encode('utf-8')).digest()
+    return base64.urlsafe_b64encode(digest).decode('ascii')[:16]
 
 
 class MockResponse:
@@ -188,6 +207,7 @@ class FroniusWR(InverterBaseclass):
         self.cnonce = hashlib.md5(os.urandom(8)).hexdigest()
         self.login_attempts = 0
         self.address = config['address']
+        self._setup_backup_files(config.get('backup_directory'))
         # Some firmware versions redirect http -> https at times. Once we see
         # such a redirect, we stay on https for all subsequent requests.
         self.scheme = 'http'
@@ -313,6 +333,75 @@ class FroniusWR(InverterBaseclass):
         logger.debug("Cached SOC value: %s", soc)
         return soc
 
+    def _setup_backup_files(self, backup_directory) -> None:
+        """ Resolve the per-inverter backup file names and take over backups
+        left at the legacy location by an older version.
+
+        Raises:
+            RuntimeError: if the backup directory cannot be created. Without
+                it the original settings could not be saved, so starting
+                would risk leaving the inverter on batcontrol's rules.
+        """
+        directory = Path(backup_directory or DEFAULT_BACKUP_DIRECTORY)
+        file_id = backup_file_id(self.address)
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            raise RuntimeError(
+                f'[Fronius] Could not create backup directory {directory}: {e}'
+            ) from e
+        self.timeofuse_config_filename = self._migrate_legacy_backup(
+            LEGACY_TIMEOFUSE_CONFIG_FILENAME,
+            str(directory / f'timeofuse_config_{file_id}.json'))
+        self.battery_config_filename = self._migrate_legacy_backup(
+            LEGACY_BATTERY_CONFIG_FILENAME,
+            str(directory / f'battery_config_{file_id}.json'))
+
+    @staticmethod
+    def _migrate_legacy_backup(legacy: str, target: str) -> str:
+        """ Move a backup from the old shared location to the new file.
+
+        Older versions wrote one shared file, from the first Fronius inverter
+        started. Inverters start in config order, so the first one to get
+        here takes it over - the same inverter that wrote it. Keeping it
+        matters: after a crash it holds the original time-of-use schedule.
+
+        Returns:
+            The file name this inverter should use: normally ``target``. If
+            the legacy file cannot be moved away (e.g. read-only config
+            volume), the legacy file stays in use, so no stale copy of it
+            could be migrated again later.
+        """
+        if not os.path.exists(legacy):
+            return target
+        if os.path.exists(target):
+            logger.warning(
+                'Legacy backup %s left in place, %s already exists',
+                legacy, target)
+            return target
+        try:
+            # Copy and remove explicitly: /app/config and /app/data may be
+            # different volumes, so a rename is not always possible.
+            shutil.copy2(legacy, target)
+        except OSError as e:
+            logger.error(
+                'Could not copy legacy backup %s to %s, keep using it: %s',
+                legacy, target, e)
+            return legacy
+        try:
+            os.remove(legacy)
+        except OSError as e:
+            logger.error(
+                'Could not remove legacy backup %s after copying it, keep '
+                'using it: %s', legacy, e)
+            try:
+                os.remove(target)
+            except OSError:
+                pass
+            return legacy
+        logger.info('Moved legacy backup %s to %s', legacy, target)
+        return target
+
     def get_battery_config(self):
         """ Get battery configuration from inverter and keep a backup."""
         path = self.api_config.config_battery_path
@@ -325,13 +414,13 @@ class FroniusWR(InverterBaseclass):
 
         result = json.loads(response.text)
         # only write file if it does not exist
-        if not os.path.exists(BATTERY_CONFIG_FILENAME):
-            with open(BATTERY_CONFIG_FILENAME, 'w', encoding='utf-8') as f:
+        if not os.path.exists(self.battery_config_filename):
+            with open(self.battery_config_filename, 'w', encoding='utf-8') as f:
                 f.write(response.text)
         else:
             logger.warning(
                 'Battery config file already exists. Not writing to %s',
-                BATTERY_CONFIG_FILENAME
+                self.battery_config_filename
             )
 
         return result
@@ -387,10 +476,10 @@ class FroniusWR(InverterBaseclass):
                 raise RuntimeError(f'failed to set {expected_write_success}')
         # Remove after successful restore
         try:
-            os.remove(BATTERY_CONFIG_FILENAME)
+            os.remove(self.battery_config_filename)
         except OSError:
             logger.error(
-                'Could not remove battery config file %s', BATTERY_CONFIG_FILENAME)
+                'Could not remove battery config file %s', self.battery_config_filename)
         return response
 
     def set_allow_grid_charging(self, value: bool):
@@ -476,13 +565,13 @@ class FroniusWR(InverterBaseclass):
         """ Get time of use configuration from inverter and keep a backup."""
         result = self.get_time_of_use()
         # only write file if it does not exist
-        if not os.path.exists(TIMEOFUSE_CONFIG_FILENAME):
-            with open(TIMEOFUSE_CONFIG_FILENAME, 'w', encoding='utf-8') as f:
+        if not os.path.exists(self.timeofuse_config_filename):
+            with open(self.timeofuse_config_filename, 'w', encoding='utf-8') as f:
                 f.write(json.dumps(result))
         else:
             logger.warning(
                 'Time of use config file already exists. Not writing to %s',
-                TIMEOFUSE_CONFIG_FILENAME
+                self.timeofuse_config_filename
             )
 
         return result
@@ -596,7 +685,7 @@ class FroniusWR(InverterBaseclass):
     def restore_time_of_use_config(self):
         """ Restore the previous time of use config from a backup file."""
         try:
-            with open(TIMEOFUSE_CONFIG_FILENAME, 'r', encoding="utf-8") as f:
+            with open(self.timeofuse_config_filename, 'r', encoding="utf-8") as f:
                 time_of_use_config_json = f.read()
         except OSError:
             logger.error('Could not restore timeofuse config')
@@ -607,7 +696,7 @@ class FroniusWR(InverterBaseclass):
         except:  # pylint: disable=bare-except
             logger.error(
                 'Could not parse timeofuse config from %s',
-                TIMEOFUSE_CONFIG_FILENAME
+                self.timeofuse_config_filename
             )
             return
 
@@ -630,10 +719,10 @@ class FroniusWR(InverterBaseclass):
         self.set_time_of_use(stripped_time_of_use_config)
         # After restoring the time of use config, delete the backup
         try:
-            os.remove(TIMEOFUSE_CONFIG_FILENAME)
+            os.remove(self.timeofuse_config_filename)
         except OSError:
             logger.error(
-                'Could not remove timeofuse config file %s', TIMEOFUSE_CONFIG_FILENAME
+                'Could not remove timeofuse config file %s', self.timeofuse_config_filename
             )
 
     def _compare_timeofuse_essentials(self, current_timeofuse, new_timeofuse):
