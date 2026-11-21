@@ -270,11 +270,10 @@ class MqttInverter(InverterBaseclass):
         Subscribe to all status topics.
         Called after MQTT API is activated.
         """
-        if self.mqtt_client:
+        if self.mqtt_api:
             status_topic = f'{self.inverter_topic}/status/#'
-            self.mqtt_client.message_callback_add(
-                f'{self.inverter_topic}/status/#', self._on_message)
-            self.mqtt_client.subscribe(status_topic)
+            # Registered via MqttApi so the subscription survives a reconnect.
+            self.mqtt_api.register_raw_subscription(status_topic, self._on_message)
             logger.info('Subscribed to %s', status_topic)
 
     def _on_message(self, client, userdata, message):  # pylint: disable=unused-argument
@@ -518,10 +517,10 @@ class MqttInverter(InverterBaseclass):
         """
         logger.info('Shutting down MQTT Inverter')
         # Unsubscribe from topics
-        if self.mqtt_client:
+        if self.mqtt_api:
             try:
                 status_topic = f'{self.inverter_topic}/status/#'
-                self.mqtt_client.unsubscribe(status_topic)
+                self.mqtt_api.unregister_raw_subscription(status_topic)
                 logger.info('Unsubscribed from %s', status_topic)
             except Exception as e:
                 logger.error('Error during MQTT Inverter shutdown: %s', e)

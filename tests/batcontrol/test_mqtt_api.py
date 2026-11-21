@@ -24,6 +24,7 @@ def _make_handler_stub():
     """
     stub = MagicMock(spec=MqttApi)
     stub.callbacks = {}
+    stub.raw_subscriptions = {}
     # Bind the real _handle_message to our stub
     stub._handle_message = MqttApi._handle_message.__get__(stub, MqttApi)
     return stub
@@ -236,6 +237,57 @@ class TestReconnectSubscriptions:
             call('batcontrol/mode/set'),
             call('batcontrol/charge_rate/set'),
         ]
+
+
+class TestRawSubscriptions:
+    """Subscriptions with their own callback (MQTT inverter status/#) must be
+    renewed after a reconnect, paho does not do that on a clean session."""
+
+    def _api(self):
+        api = _make_handler_stub()
+        api.base_topic = 'batcontrol'
+        api.auto_discover_enable = False
+        api.client = MagicMock()
+        for name in ('on_connect', 'register_raw_subscription',
+                     'unregister_raw_subscription'):
+            setattr(api, name, getattr(MqttApi, name).__get__(api, MqttApi))
+        return api
+
+    def test_register_subscribes_and_adds_callback(self):
+        api = self._api()
+        callback = MagicMock()
+
+        api.register_raw_subscription('inv/status/#', callback)
+
+        api.client.message_callback_add.assert_called_once_with(
+            'inv/status/#', callback)
+        api.client.subscribe.assert_called_once_with('inv/status/#')
+
+    def test_on_connect_resubscribes_raw_subscription(self):
+        """Regression: status/# was lost after a broker reconnect."""
+        api = self._api()
+        api.callbacks = {'batcontrol/mode/set': {}}
+        api.register_raw_subscription('inv/status/#', MagicMock())
+        client = MagicMock()
+
+        api.on_connect(client, None, None, 0)
+
+        assert client.subscribe.call_args_list == [
+            call('batcontrol/mode/set'),
+            call('inv/status/#'),
+        ]
+
+    def test_unregister_removes_subscription(self):
+        api = self._api()
+        api.register_raw_subscription('inv/status/#', MagicMock())
+
+        api.unregister_raw_subscription('inv/status/#')
+
+        api.client.message_callback_remove.assert_called_once_with('inv/status/#')
+        api.client.unsubscribe.assert_called_once_with('inv/status/#')
+        client = MagicMock()
+        api.on_connect(client, None, None, 0)
+        client.subscribe.assert_not_called()
 
 
 class TestRegisterExternalTopicCallback:
