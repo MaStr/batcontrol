@@ -119,6 +119,10 @@ class MqttApi:
             self.auto_discover_topic = "homeassistant"
 
         self.callbacks = {}
+        # Subscriptions with their own paho message callback (e.g. wildcard
+        # topics of the MQTT inverter). Kept here so on_connect can renew them
+        # after a reconnect - paho does not resubscribe on a clean session.
+        self.raw_subscriptions = {}
 
         # Remove trailing slashes if present to avoid double slashes in topics
         self.base_topic = self.base_topic.rstrip('/')
@@ -196,8 +200,12 @@ class MqttApi:
         # publish HA mqtt AutoDiscovery messages at startup
         if self.auto_discover_enable:
             self.send_mqtt_discovery_messages()
-        # Handle reconnect case
-        for topic in self.callbacks:
+        # Handle reconnect case. Iterate over copies: this runs on paho's
+        # network thread while the main thread may register new topics.
+        for topic in list(self.callbacks):
+            logger.debug('Subscribing topic: %s', topic)
+            client.subscribe(topic)
+        for topic in list(self.raw_subscriptions):
             logger.debug('Subscribing topic: %s', topic)
             client.subscribe(topic)
 
@@ -273,6 +281,24 @@ class MqttApi:
         self.callbacks[topic] = {'function': callback, 'convert': convert}
         self.client.subscribe(topic)
         self.client.message_callback_add(topic, self._handle_message)
+
+    def register_raw_subscription(self, topic: str, callback: callable) -> None:
+        """ Subscribe to an absolute topic (wildcards allowed) and hand every
+            matching message unchanged to a paho-style callback
+            ``callback(client, userdata, message)``.
+            The subscription is renewed by on_connect after a reconnect.
+        """
+        logger.debug('Registering raw subscription for %s', topic)
+        self.raw_subscriptions[topic] = callback
+        self.client.message_callback_add(topic, callback)
+        self.client.subscribe(topic)
+
+    def unregister_raw_subscription(self, topic: str) -> None:
+        """ Remove a subscription registered with register_raw_subscription. """
+        logger.debug('Removing raw subscription for %s', topic)
+        self.raw_subscriptions.pop(topic, None)
+        self.client.message_callback_remove(topic)
+        self.client.unsubscribe(topic)
 
     def publish_mode(self, mode: int) -> None:
         """ Publish the mode (charge, lock, discharge) to MQTT

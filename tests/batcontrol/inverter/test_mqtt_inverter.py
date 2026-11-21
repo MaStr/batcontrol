@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch, call
 
 from batcontrol.inverter.mqtt_inverter import MqttInverter
+from batcontrol.mqtt_api import MqttApi
 from batcontrol.inverter.inverter import Inverter
 
 
@@ -61,7 +62,8 @@ class TestMqttInverter:
         inverter = MqttInverter(config)
 
         # Create mock MQTT API
-        mock_mqtt_api = MagicMock()
+        mock_mqtt_api = MagicMock(spec=MqttApi)
+        mock_mqtt_api.base_topic = 'batcontrol'
         mock_client = MagicMock()
         mock_mqtt_api.client = mock_client
 
@@ -72,9 +74,10 @@ class TestMqttInverter:
         assert inverter.mqtt_client == mock_client
         assert inverter.mqtt_api == mock_mqtt_api
 
-        # Verify subscription
-        mock_client.subscribe.assert_called_once_with('test/inverter/status/#')
-        mock_client.message_callback_add.assert_called_once()
+        # Verify subscription goes through MqttApi so it survives a reconnect
+        mock_mqtt_api.register_raw_subscription.assert_called_once_with(
+            'test/inverter/status/#', inverter._on_message)
+        mock_client.subscribe.assert_not_called()
 
     def test_mqtt_message_updates_soc(self):
         """Test that incoming SOC messages update the cached value"""
@@ -349,7 +352,8 @@ class TestMqttInverter:
         inverter = MqttInverter(config)
 
         # Setup mock MQTT client
-        mock_mqtt_api = MagicMock()
+        mock_mqtt_api = MagicMock(spec=MqttApi)
+        mock_mqtt_api.base_topic = 'batcontrol'
         mock_client = MagicMock()
         mock_mqtt_api.client = mock_client
         inverter.activate_mqtt(mock_mqtt_api)
@@ -358,7 +362,8 @@ class TestMqttInverter:
         inverter.shutdown()
 
         # Verify unsubscribe was called
-        mock_client.unsubscribe.assert_called_once_with('inverter/status/#')
+        mock_mqtt_api.unregister_raw_subscription.assert_called_once_with(
+            'inverter/status/#')
 
     def test_mqtt_message_invalid_payload_handled_gracefully(self):
         """Test that invalid message payloads are handled without crashing"""
@@ -432,3 +437,33 @@ class TestMqttInverter:
 
         free_capacity = inverter.get_free_capacity()
         assert free_capacity == 3000  # (95% - 65%) of 10000 Wh
+
+    def test_status_subscription_survives_reconnect(self):
+        """Regression: after a broker reconnect status/# must be subscribed
+        again, otherwise SOC updates stop until batcontrol is restarted."""
+        config = {
+            'base_topic': 'inverter',
+            'capacity': 10000,
+            'max_grid_charge_rate': 5000
+        }
+        inverter = MqttInverter(config)
+
+        api = MagicMock(spec=MqttApi)
+        api.base_topic = 'batcontrol'
+        api.auto_discover_enable = False
+        api.callbacks = {}
+        api.raw_subscriptions = {}
+        api.client = MagicMock()
+        for name in ('on_connect', 'register_raw_subscription',
+                     'unregister_raw_subscription'):
+            setattr(api, name, getattr(MqttApi, name).__get__(api, MqttApi))
+
+        inverter.activate_mqtt(api)
+
+        reconnect_client = MagicMock()
+        api.on_connect(reconnect_client, None, None, 0)
+        reconnect_client.subscribe.assert_called_once_with('inverter/status/#')
+        reconnect_client.message_callback_remove.assert_not_called()
+
+        inverter.shutdown()
+        assert api.raw_subscriptions == {}
