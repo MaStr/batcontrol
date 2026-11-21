@@ -576,3 +576,24 @@ def test_factory_rejects_fronius_without_address(mocker, address):
     with pytest.raises(RuntimeError, match="requires an address"):
         Inverter.create_inverters([entry, dict(entry)])
     mock_fronius.assert_not_called()
+
+
+def test_factory_strips_fronius_address(mocker):
+    """The validated, stripped address is what reaches FroniusWR."""
+    mock_fronius = mocker.patch(
+        "batcontrol.inverter.fronius.FroniusWR",
+        autospec=True,
+        return_value=mocker.MagicMock(),
+    )
+    config = {
+        "type": "fronius_gen24",
+        "address": "  192.168.1.100 ",
+        "user": "customer",
+        "password": "secret",
+        "max_grid_charge_rate": 5000,
+        "enable_resilient_wrapper": False,
+    }
+
+    Inverter.create_inverter(config)
+
+    assert mock_fronius.call_args.args[0]["address"] == "192.168.1.100"
