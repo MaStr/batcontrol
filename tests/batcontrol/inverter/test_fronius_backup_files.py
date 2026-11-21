@@ -15,6 +15,9 @@ import pytest
 from batcontrol.inverter import fronius
 from batcontrol.inverter.fronius import FroniusWR, backup_file_id
 
+# Captured at import, before the autouse conftest fixture patches it.
+ORIGINAL_DEFAULT_BACKUP_DIRECTORY = fronius.DEFAULT_BACKUP_DIRECTORY
+
 TOU_ORIGINAL = [{
     'Active': True, 'Power': 1234, 'ScheduleType': 'DISCHARGE_MAX',
     'TimeTable': {'Start': '00:00', 'End': '06:00'},
@@ -69,10 +72,16 @@ class TestBackupLocation:
         assert os.path.dirname(inverter.timeofuse_config_filename) == \
             fronius.DEFAULT_BACKUP_DIRECTORY
 
-    def test_default_directory_is_config(self):
-        # The conftest fixture patches the module value; check the source.
-        assert 'DEFAULT_BACKUP_DIRECTORY = \'config\'' in Path(
-            fronius.__file__).read_text(encoding='utf-8')
+    def test_default_directory_is_config(self, tmp_path, monkeypatch):
+        """Without a data directory the backups stay in ./config."""
+        monkeypatch.setattr(fronius, 'DEFAULT_BACKUP_DIRECTORY',
+                            ORIGINAL_DEFAULT_BACKUP_DIRECTORY)
+        monkeypatch.chdir(tmp_path)
+
+        inverter = _bare_inverter('192.168.1.100', None)
+
+        assert os.path.dirname(inverter.timeofuse_config_filename) == 'config'
+        assert (tmp_path / 'config').is_dir()
 
     def test_unusable_backup_directory_fails_fast(self, tmp_path):
         blocker = tmp_path / 'not-a-dir'
