@@ -25,7 +25,6 @@ from urllib.parse import urlsplit
 import json
 import hashlib
 import base64
-import shutil
 from pathlib import Path
 import math
 from dataclasses import dataclass
@@ -70,12 +69,8 @@ def strip_dict(original):
     return stripped_copy
 
 
-# Backup files of the original inverter settings. Before 0.11.1 they were
-# written to fixed paths relative to the working directory, shared by all
-# Fronius inverters. Now each inverter gets its own file below the data
-# directory, named after its address.
-LEGACY_TIMEOFUSE_CONFIG_FILENAME = 'config/timeofuse_config.json'
-LEGACY_BATTERY_CONFIG_FILENAME = 'config/battery_config.json'
+# Backup files of the original inverter settings: one pair per inverter,
+# named after its address, below the data directory.
 DEFAULT_BACKUP_DIRECTORY = 'config'
 
 
@@ -334,8 +329,7 @@ class FroniusWR(InverterBaseclass):
         return soc
 
     def _setup_backup_files(self, backup_directory) -> None:
-        """ Resolve the per-inverter backup file names and take over backups
-        left at the legacy location by an older version.
+        """ Resolve the per-inverter backup file names.
 
         Raises:
             RuntimeError: if the backup directory cannot be created. Without
@@ -350,57 +344,10 @@ class FroniusWR(InverterBaseclass):
             raise RuntimeError(
                 f'[Fronius] Could not create backup directory {directory}: {e}'
             ) from e
-        self.timeofuse_config_filename = self._migrate_legacy_backup(
-            LEGACY_TIMEOFUSE_CONFIG_FILENAME,
-            str(directory / f'timeofuse_config_{file_id}.json'))
-        self.battery_config_filename = self._migrate_legacy_backup(
-            LEGACY_BATTERY_CONFIG_FILENAME,
-            str(directory / f'battery_config_{file_id}.json'))
-
-    @staticmethod
-    def _migrate_legacy_backup(legacy: str, target: str) -> str:
-        """ Move a backup from the old shared location to the new file.
-
-        Older versions wrote one shared file, from the first Fronius inverter
-        started. Inverters start in config order, so the first one to get
-        here takes it over - the same inverter that wrote it. Keeping it
-        matters: after a crash it holds the original time-of-use schedule.
-
-        Returns:
-            The file name this inverter should use: normally ``target``. If
-            the legacy file cannot be moved away (e.g. read-only config
-            volume), the legacy file stays in use, so no stale copy of it
-            could be migrated again later.
-        """
-        if not os.path.exists(legacy):
-            return target
-        if os.path.exists(target):
-            logger.warning(
-                'Legacy backup %s left in place, %s already exists',
-                legacy, target)
-            return target
-        try:
-            # Copy and remove explicitly: /app/config and /app/data may be
-            # different volumes, so a rename is not always possible.
-            shutil.copy2(legacy, target)
-        except OSError as e:
-            logger.error(
-                'Could not copy legacy backup %s to %s, keep using it: %s',
-                legacy, target, e)
-            return legacy
-        try:
-            os.remove(legacy)
-        except OSError as e:
-            logger.error(
-                'Could not remove legacy backup %s after copying it, keep '
-                'using it: %s', legacy, e)
-            try:
-                os.remove(target)
-            except OSError:
-                pass
-            return legacy
-        logger.info('Moved legacy backup %s to %s', legacy, target)
-        return target
+        self.timeofuse_config_filename = str(
+            directory / f'timeofuse_config_{file_id}.json')
+        self.battery_config_filename = str(
+            directory / f'battery_config_{file_id}.json')
 
     def get_battery_config(self):
         """ Get battery configuration from inverter and keep a backup."""

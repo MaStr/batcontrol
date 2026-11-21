@@ -7,7 +7,6 @@ second one was left on batcontrol's rules after shutdown.
 import json
 import os
 import re
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -32,14 +31,6 @@ def _bare_inverter(address, backup_directory):
     inverter.address = address
     inverter._setup_backup_files(backup_directory)
     return inverter
-
-
-@pytest.fixture(name='legacy_cwd')
-def fixture_legacy_cwd(tmp_path):
-    """Base directory; the autouse conftest fixture points the legacy file
-    names to <tmp_path>/legacy-config."""
-    (tmp_path / 'legacy-config').mkdir()
-    return tmp_path
 
 
 class TestBackupFileId:
@@ -143,76 +134,3 @@ class TestBackupLocation:
         assert second.set_time_of_use.call_args.args[0][0]['Power'] == 4321
         assert not os.path.exists(first.timeofuse_config_filename)
         assert not os.path.exists(second.timeofuse_config_filename)
-
-
-class TestLegacyMigration:
-    def test_legacy_files_are_taken_over(self, legacy_cwd):
-        legacy_tou = Path(fronius.LEGACY_TIMEOFUSE_CONFIG_FILENAME)
-        legacy_bat = Path(fronius.LEGACY_BATTERY_CONFIG_FILENAME)
-        legacy_tou.write_text(json.dumps(TOU_ORIGINAL), encoding='utf-8')
-        legacy_bat.write_text('{"BAT_M0_SOC_MIN": 5}', encoding='utf-8')
-
-        inverter = _bare_inverter('192.168.1.100', legacy_cwd / 'data' / 'fronius')
-
-        assert not legacy_tou.exists()
-        assert not legacy_bat.exists()
-        with open(inverter.timeofuse_config_filename, encoding='utf-8') as f:
-            assert json.load(f) == TOU_ORIGINAL
-        assert os.path.exists(inverter.battery_config_filename)
-
-    def test_only_first_inverter_takes_over_legacy_file(self, legacy_cwd):
-        legacy_tou = Path(fronius.LEGACY_TIMEOFUSE_CONFIG_FILENAME)
-        legacy_tou.write_text(json.dumps(TOU_ORIGINAL), encoding='utf-8')
-        backup_dir = legacy_cwd / 'data' / 'fronius'
-
-        first = _bare_inverter('192.168.1.100', backup_dir)
-        second = _bare_inverter('192.168.1.101', backup_dir)
-
-        assert os.path.exists(first.timeofuse_config_filename)
-        assert not os.path.exists(second.timeofuse_config_filename)
-
-    def test_existing_new_backup_wins_over_legacy(self, legacy_cwd):
-        backup_dir = legacy_cwd / 'data' / 'fronius'
-        first = _bare_inverter('192.168.1.100', backup_dir)
-        with open(first.timeofuse_config_filename, 'w', encoding='utf-8') as f:
-            f.write('"new"')
-        legacy_tou = Path(fronius.LEGACY_TIMEOFUSE_CONFIG_FILENAME)
-        legacy_tou.write_text('"old"', encoding='utf-8')
-
-        _bare_inverter('192.168.1.100', backup_dir)
-
-        assert legacy_tou.exists()
-        with open(first.timeofuse_config_filename, encoding='utf-8') as f:
-            assert f.read() == '"new"'
-
-    def test_legacy_file_kept_in_use_if_it_cannot_be_removed(self, legacy_cwd):
-        """Read-only legacy location: no stale copy may be left behind,
-        otherwise it would be migrated again after the next clean shutdown."""
-        legacy_tou = Path(fronius.LEGACY_TIMEOFUSE_CONFIG_FILENAME)
-        legacy_tou.write_text(json.dumps(TOU_ORIGINAL), encoding='utf-8')
-        real_remove = os.remove
-
-        def remove(path):
-            if str(path) == str(legacy_tou):
-                raise PermissionError('read-only')
-            real_remove(path)
-
-        with patch('batcontrol.inverter.fronius.os.remove', side_effect=remove):
-            inverter = _bare_inverter(
-                '192.168.1.100', legacy_cwd / 'data' / 'fronius')
-
-        assert inverter.timeofuse_config_filename == str(legacy_tou)
-        assert legacy_tou.exists()
-        assert not any((legacy_cwd / 'data' / 'fronius').iterdir())
-
-    def test_legacy_file_kept_in_use_if_copy_fails(self, legacy_cwd):
-        legacy_tou = Path(fronius.LEGACY_TIMEOFUSE_CONFIG_FILENAME)
-        legacy_tou.write_text('"old"', encoding='utf-8')
-
-        with patch('batcontrol.inverter.fronius.shutil.copy2',
-                   side_effect=OSError('disk full')):
-            inverter = _bare_inverter(
-                '192.168.1.100', legacy_cwd / 'data' / 'fronius')
-
-        assert inverter.timeofuse_config_filename == str(legacy_tou)
-        assert legacy_tou.exists()
