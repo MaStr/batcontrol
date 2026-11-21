@@ -557,3 +557,22 @@ def test_factory_rejects_fronius_inverters_with_same_address(mocker):
         Inverter.create_inverters(
             [entry, dict(entry, address=" 192.168.1.100 ")])
     mock_fronius.assert_not_called()
+
+
+@pytest.mark.parametrize("address", [None, "", "   "])
+def test_factory_rejects_fronius_without_address(mocker, address):
+    """A missing address gets a clear error, not a duplicate-address one."""
+    mock_fronius = mocker.patch(
+        "batcontrol.inverter.fronius.FroniusWR", autospec=True)
+    entry = {
+        "type": "fronius_gen24",
+        "user": "customer",
+        "password": "secret",
+        "max_grid_charge_rate": 5000,
+    }
+    if address is not None:
+        entry["address"] = address
+
+    with pytest.raises(RuntimeError, match="requires an address"):
+        Inverter.create_inverters([entry, dict(entry)])
+    mock_fronius.assert_not_called()

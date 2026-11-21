@@ -121,7 +121,10 @@ class Inverter:
         for index, entry in enumerate(config):
             if str(entry.get('type', '')).lower() != 'fronius_gen24':
                 continue
-            address = str(entry.get('address', '')).strip().lower()
+            address = str(entry.get('address') or '').strip().lower()
+            if not address:
+                # Reported with a clear message by create_inverter.
+                continue
             if address in seen:
                 raise RuntimeError(
                     f'[Inverter] Fronius inverters {seen[address]} and {index} '
@@ -159,6 +162,11 @@ class Inverter:
         if config['type'].lower() == 'fronius_gen24':
             from .fronius import FroniusWR
 
+            if not str(config.get('address') or '').strip():
+                raise RuntimeError(
+                    '[Inverter] fronius_gen24 requires an address '
+                    '(IP or hostname of the inverter)'
+                )
             iv_config = {
                 'address': config['address'],
                 'user': config['user'],
