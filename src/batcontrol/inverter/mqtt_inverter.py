@@ -48,9 +48,19 @@ These topics are published by batcontrol and MUST NOT be retained:
 - <batcontrol_base_topic>/inverters/$num/command/mode                - Set mode:
                                              'force_charge',
                                              'allow_discharge',
-                                             'avoid_discharge'
-- <batcontrol_base_topic>/inverters/$num/command/charge_rate         - Set charge rate in W
-                                             (float)
+                                             'avoid_discharge',
+                                             'limit_battery_charge'
+- <batcontrol_base_topic>/inverters/$num/command/charge_rate         - Grid charge rate in W
+                                             for force_charge (number)
+- <batcontrol_base_topic>/inverters/$num/command/limit_battery_charge_rate
+                                           - Max battery charge rate in W
+                                             for limit_battery_charge
+                                             (number, 0 = no charging)
+
+batcontrol publishes command/mode first, then the matching rate topic; apply
+a rate when its message arrives. Commands are re-sent every control cycle.
+limit_battery_charge (peak shaving) means: battery may discharge, but charges
+at most at limit_battery_charge_rate. The limit ends with the next other mode.
 
 WHY RETENTION MATTERS:
 - Status topics MUST be RETAINED so batcontrol can read the current state
@@ -95,8 +105,12 @@ Your external system (inverter, bridge script, etc.) must:
 2. Current soc as normal message (non-retained) to allow timely updates
 
 3. Subscribe to command topics (non-retained):
-   - Mode changes (force_charge, allow_discharge, avoid_discharge)
-   - Charge rate adjustments
+   - Mode changes (force_charge, allow_discharge, avoid_discharge,
+     limit_battery_charge)
+   - Charge rate adjustments (charge_rate, limit_battery_charge_rate)
+   - A bridge that cannot limit charging should treat limit_battery_charge
+     like allow_discharge; ignoring it keeps the previous mode (possibly
+     force_charge or avoid_discharge).
 
 4. Handle reconnection gracefully:
    - Re-publish all status topics as RETAINED on reconnect
@@ -129,8 +143,12 @@ def on_message(client, userdata, message):
         # Implement your inverter control here
 
     elif topic == "batcontrol/inverters/0/command/charge_rate":
-        print(f"Setting charge rate to: {value}W")
+        print(f"Setting grid charge rate to: {value}W")
         # Implement your charge rate control here
+
+    elif topic == "batcontrol/inverters/0/command/limit_battery_charge_rate":
+        print(f"Limiting battery charge rate to: {value}W")
+        # Implement your battery charge limit here (0 = no charging)
 
 client.on_message = on_message
 client.subscribe("batcontrol/inverters/0/command/#")
