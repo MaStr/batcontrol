@@ -1185,8 +1185,11 @@ class Batcontrol:
             solar_limit_outcome=solar_record.outcome if solar_record else None,
             solar_limit_reason=solar_record.reason if solar_record else None,
         )
-        if self.mqtt_api is not None and config_enabled:
-            self.mqtt_api.publish_peak_shaving_charge_limit(charge_limit)
+        # Always publish, so MQTT shows -1 like REST when peak shaving is off
+        # (and not the last limit from before it was switched off).
+        if self.mqtt_api is not None:
+            self.mqtt_api.publish_peak_shaving_charge_limit(
+                self.peak_shaving_state.charge_limit_w)
 
     def __set_charge_rate(self, charge_rate: int):
         """ Set charge rate and publish to mqtt """
