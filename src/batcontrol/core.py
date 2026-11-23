@@ -513,19 +513,7 @@ class Batcontrol:
         if config.get('evcc', None) is not None:
             if config.get('evcc').get('enabled', False):
                 logger.info('evcc Connection enabled')
-                self.evcc_api = EvccApi(config['evcc'])
-                self.evcc_api.register_block_function(
-                    self.set_discharge_blocked)
-                self.evcc_api.register_always_allow_discharge_limit(
-                    self.set_always_allow_discharge_limit,
-                    self.get_always_allow_discharge_limit
-                )
-                self.evcc_api.register_max_charge_limit(
-                    self.set_max_charging_from_grid_limit,
-                    self.get_max_charging_from_grid_limit
-                )
-                self.evcc_api.start()
-                self.evcc_api.wait_ready()
+                self.__start_evcc_api(config['evcc'])
                 logger.info('evcc Connection ready')
 
         # Read-only web API, dashboard and MCP server. Started last, so a
@@ -633,17 +621,49 @@ class Batcontrol:
         except Exception:
             # Any startup failure here (unreachable broker, invalid mqtt
             # settings) ends batcontrol: restore the inverter first.
-            if self.mqtt_api is not None:
-                with contextlib.suppress(Exception):
-                    self.mqtt_api.shutdown()
-                self.mqtt_api = None
-            try:
-                self.inverter.shutdown()
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                logger.error(
-                    'Could not restore inverter settings after MQTT '
-                    'startup failure: %s', exc)
+            self.__abort_broker_startup('MQTT')
             raise
+
+    def __start_evcc_api(self, evcc_config: dict) -> None:
+        """ Set up evcc and connect to its broker or stop batcontrol, like
+        __start_mqtt_api.
+
+        Raises:
+            MqttConnectionError: if the evcc broker is not reachable.
+            ValueError: on invalid evcc settings.
+        """
+        try:
+            self.evcc_api = EvccApi(evcc_config)
+            self.evcc_api.register_block_function(
+                self.set_discharge_blocked)
+            self.evcc_api.register_always_allow_discharge_limit(
+                self.set_always_allow_discharge_limit,
+                self.get_always_allow_discharge_limit
+            )
+            self.evcc_api.register_max_charge_limit(
+                self.set_max_charging_from_grid_limit,
+                self.get_max_charging_from_grid_limit
+            )
+            self.evcc_api.start()
+        except Exception:
+            self.__abort_broker_startup('evcc')
+            raise
+
+    def __abort_broker_startup(self, what: str) -> None:
+        """ Undo what __init__ started before a broker connection failed:
+        disconnect the MQTT clients and restore the inverter settings. """
+        for attr in ('evcc_api', 'mqtt_api'):
+            api = getattr(self, attr, None)
+            if api is not None:
+                with contextlib.suppress(Exception):
+                    api.shutdown()
+                setattr(self, attr, None)
+        try:
+            self.inverter.shutdown()
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.error(
+                'Could not restore inverter settings after %s startup '
+                'failure: %s', what, exc)
 
     def shutdown(self):
         """ Shutdown Batcontrol and dependent modules (inverter..) """

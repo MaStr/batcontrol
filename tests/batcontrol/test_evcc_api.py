@@ -1,9 +1,10 @@
-"""Tests for EvccApi TLS configuration."""
-from unittest.mock import patch
+"""Tests for EvccApi TLS configuration and broker connection."""
+from unittest.mock import call, patch
 
 import pytest
 
 from batcontrol.evcc_api import EvccApi
+from batcontrol.mqtt_api import MqttConnectionError
 
 
 BASE_CONFIG = {
@@ -83,3 +84,62 @@ class TestTlsSetup:
             )
             with pytest.raises(ValueError, match='certfile and keyfile'):
                 EvccApi(cfg)
+
+
+class TestBrokerUnreachable:
+    """An unreachable evcc broker is retried (5 x 10 s), then start() raises
+    MqttConnectionError instead of crashing with a raw OSError."""
+
+    def test_oserror_is_retried_until_success(self):
+        with patch('batcontrol.evcc_api.mqtt.Client') as MockClient, \
+                patch('batcontrol.mqtt_api.time.sleep') as sleep:
+            client = MockClient.return_value
+            client.connect.side_effect = [
+                ConnectionRefusedError(111, 'Connection refused'), None]
+            client.is_connected.return_value = True
+            EvccApi(_make_config()).start()
+
+        assert client.connect.call_count == 2
+        assert sleep.call_args_list == [call(10)]
+        client.loop_start.assert_called_once()
+
+    def test_raises_after_five_attempts(self):
+        with patch('batcontrol.evcc_api.mqtt.Client') as MockClient, \
+                patch('batcontrol.mqtt_api.time.sleep'):
+            client = MockClient.return_value
+            client.connect.side_effect = OSError('timed out')
+            api = EvccApi(_make_config())
+            with pytest.raises(MqttConnectionError,
+                               match=r'evcc MQTT broker localhost:8883 '
+                                     r'after 5 attempt'):
+                api.start()
+
+        assert client.connect.call_count == 5
+        client.loop_start.assert_not_called()
+
+    def test_not_ready_raises(self):
+        with patch('batcontrol.evcc_api.mqtt.Client') as MockClient, \
+                patch('batcontrol.evcc_api.time.sleep'):
+            client = MockClient.return_value
+            client.is_connected.return_value = False
+            api = EvccApi(_make_config())
+            with pytest.raises(MqttConnectionError, match='did not accept'):
+                api.start()
+
+        # The loop runs, so shutdown() must stop it - core calls it.
+        client.loop_start.assert_called_once()
+
+    def test_port_as_numeric_string_is_accepted(self):
+        with patch('batcontrol.evcc_api.mqtt.Client') as MockClient:
+            client = MockClient.return_value
+            client.is_connected.return_value = True
+            EvccApi(_make_config(port='1883')).start()
+
+        client.connect.assert_called_once_with('localhost', 1883, 60)
+
+    def test_invalid_port_names_the_key(self):
+        with patch('batcontrol.evcc_api.mqtt.Client') as MockClient:
+            api = EvccApi(_make_config(port='abc'))
+            with pytest.raises(ValueError, match='evcc: port'):
+                api.start()
+            MockClient.return_value.connect.assert_not_called()

@@ -7,6 +7,9 @@ import re
 import logging
 import paho.mqtt.client as mqtt
 
+from .mqtt_api import (
+    MqttConnectionError, connect_with_retry, parse_int_setting)
+
 logger = logging.getLogger(__name__)
 logger.info('Loading module')
 
@@ -166,10 +169,27 @@ class EvccApi():
         self.client.on_connect = self.on_connect
 
     def start(self):
-        """ Start MQTT connection after all init is completed"""
+        """ Start MQTT connection after all init is completed.
+
+        Retries an unreachable broker like the MQTT API (fixed defaults:
+        5 attempts, 10 s apart), then waits for the broker to accept the
+        connection.
+
+        Raises:
+            MqttConnectionError: if the broker is unreachable or does not
+                accept the connection.
+            ValueError: if port is not an integer.
+        """
+        broker = self.config['broker']
+        port = parse_int_setting(self.config, 'port', section='evcc')
+        connect_with_retry(self.client, broker, port, name='evcc MQTT broker')
+        # After the first successful connect, see connect_with_retry.
         self.client.loop_start()
-        self.client.connect(self.config['broker'], self.config['port'], 60)
-        self.wait_ready()
+        if not self.wait_ready():
+            raise MqttConnectionError(
+                f'evcc MQTT broker {broker}:{port} did not accept the '
+                'connection (check credentials and TLS)'
+            )
 
     def shutdown(self):
         """ Shutdown the evcc mqtt client """

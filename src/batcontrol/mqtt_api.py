@@ -109,18 +109,61 @@ class MqttConnectionError(RuntimeError):
     """
 
 
-def _parse_number(config: dict, key: str, kind, default=None):
-    """ Read a numeric mqtt setting, accepting numeric strings.
+DEFAULT_RETRY_ATTEMPTS = 5
+DEFAULT_RETRY_DELAY = 10  # seconds
+
+
+def parse_int_setting(config: dict, key: str, default=None,
+                      section: str = 'mqtt') -> int:
+    """ Read an integer setting, accepting numeric strings (HA add-on form).
 
     Raises:
-        ValueError: naming the key, if the value is missing or not a number.
+        ValueError: naming the key, if the value is missing or not an integer.
     """
     value = config.get(key, default)
     try:
-        return kind(value)
+        return int(value)
     except (TypeError, ValueError) as e:
         raise ValueError(
-            f'mqtt: {key} must be a number, got {value!r}') from e
+            f'{section}: {key} must be an integer, got {value!r}') from e
+
+
+def connect_with_retry(client, broker, port: int,
+                       attempts: int = DEFAULT_RETRY_ATTEMPTS,
+                       delay: int = DEFAULT_RETRY_DELAY,
+                       name: str = 'MQTT broker') -> None:
+    """ Connect a paho client, retrying while the broker is unreachable.
+
+    paho raises OSError (connection refused, timeout, DNS) when the
+    broker is unreachable - only that is retried. ValueError/TypeError
+    mean invalid arguments and fail at once. Call loop_start() only after
+    this returned, so paho's own reconnect does not race with the retries.
+
+    Raises:
+        MqttConnectionError: after the last failed attempt, or at once
+            if paho rejects the arguments.
+    """
+    attempts = max(1, attempts)
+    delay = max(0, delay)
+    for attempt in range(1, attempts + 1):
+        try:
+            client.connect(broker, port, 60)
+            return
+        except (ValueError, TypeError) as e:
+            raise MqttConnectionError(
+                f'Invalid {name} settings {broker}:{port}: {e}'
+            ) from e
+        except OSError as e:
+            if attempt == attempts:
+                raise MqttConnectionError(
+                    f'Could not connect to {name} {broker}:{port} '
+                    f'after {attempts} attempt(s): {e}'
+                ) from e
+            logger.error(
+                'Connection to %s %s:%s failed (attempt %d/%d): %s. '
+                'Retrying in %d seconds',
+                name, broker, port, attempt, attempts, e, delay)
+            time.sleep(delay)
 
 
 class MqttApi:
@@ -194,45 +237,15 @@ class MqttApi:
         self.client.on_connect = self.on_connect
         # Validate before connecting: values from the HA add-on form may be
         # strings, and a config error must not look like an unreachable broker.
-        port = _parse_number(config, 'port', int)
-        attempts = max(1, _parse_number(config, 'retry_attempts', int, 5))
-        delay = max(0, _parse_number(config, 'retry_delay', int, 10))
-        self._connect_with_retry(config['broker'], port, attempts, delay)
+        port = parse_int_setting(config, 'port')
+        attempts = parse_int_setting(
+            config, 'retry_attempts', DEFAULT_RETRY_ATTEMPTS)
+        delay = parse_int_setting(config, 'retry_delay', DEFAULT_RETRY_DELAY)
+        connect_with_retry(self.client, config['broker'], port, attempts, delay)
         # Started after the first successful connect, so paho's own
         # reconnect logic does not race with the retries above. From here
         # on paho handles reconnects.
         self.client.loop_start()
-
-    def _connect_with_retry(self, broker, port, attempts, delay) -> None:
-        """ Connect to the broker, retrying while it is unreachable.
-
-        paho raises OSError (connection refused, timeout, DNS) when the
-        broker is unreachable - only that is retried. ValueError/TypeError
-        mean invalid arguments and fail at once.
-
-        Raises:
-            MqttConnectionError: after the last failed attempt, or at once
-                if paho rejects the arguments.
-        """
-        for attempt in range(1, attempts + 1):
-            try:
-                self.client.connect(broker, port, 60)
-                return
-            except (ValueError, TypeError) as e:
-                raise MqttConnectionError(
-                    f'Invalid MQTT broker settings {broker}:{port}: {e}'
-                ) from e
-            except OSError as e:
-                if attempt == attempts:
-                    raise MqttConnectionError(
-                        f'Could not connect to MQTT broker {broker}:{port} '
-                        f'after {attempts} attempt(s): {e}'
-                    ) from e
-                logger.error(
-                    'Connection to MQTT broker %s:%s failed (attempt %d/%d): '
-                    '%s. Retrying in %d seconds',
-                    broker, port, attempt, attempts, e, delay)
-                time.sleep(delay)
 
     def on_connect(self, client, userdata, flags, rc):
         """ Callback for MQTT connection to serve /status"""
