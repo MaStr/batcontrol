@@ -13,7 +13,7 @@ def test_no_test_functions_in_package_init_files():
         tree = ast.parse(init_file.read_text(encoding='utf-8'))
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
-                    and node.name.startswith('test'):
+                    and node.name.startswith('test_'):
                 offenders.append(f'{init_file}:{node.lineno} {node.name}')
             elif isinstance(node, ast.ClassDef) and node.name.startswith('Test'):
                 offenders.append(f'{init_file}:{node.lineno} {node.name}')

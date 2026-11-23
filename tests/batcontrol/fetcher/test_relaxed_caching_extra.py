@@ -163,15 +163,15 @@ class TestRelaxedCachingExtra:
         cache = RelaxedCaching(max_entries=5, wall_clock=fake_clock)
         cache.store_new_entry({'initial': 'data'})
 
+        reads = []
+
         def worker(worker_id):
             for i in range(5):
                 if i % 2 == 0:
                     cache.store_new_entry({'worker': worker_id, 'iteration': i})
                 else:
-                    try:
-                        cache.get_last_entry()
-                    except CacheMissError:
-                        pass  # Can happen during concurrent operations
+                    # No expiry with the fake clock: every read must succeed
+                    reads.append(cache.get_last_entry())
 
         threads = [threading.Thread(target=worker, args=(i,))
                    for i in range(5)]
@@ -181,6 +181,7 @@ class TestRelaxedCachingExtra:
             t.join()
 
         # Cache should be valid after all operations
+        assert len(reads) == 10
         assert cache.entry_key is not None
         assert len(cache.cache_store) <= cache.max_entries
 

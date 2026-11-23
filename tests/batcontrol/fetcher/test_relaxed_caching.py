@@ -71,11 +71,7 @@ class TestRelaxedCaching:
 
         def worker(thread_id):
             cache.store_new_entry({'thread': thread_id})
-            try:
-                data = cache.get_last_entry()
-                results.append(data)
-            except CacheMissError:
-                pass
+            results.append(cache.get_last_entry())
 
         threads = [threading.Thread(target=worker, args=(i,)) for i in range(10)]
         for t in threads:
@@ -83,5 +79,6 @@ class TestRelaxedCaching:
         for t in threads:
             t.join()
 
-        # Should have succeeded without errors
+        # Every read succeeded (no expiry with the fake clock)
+        assert len(results) == 10
         assert len(cache.cache_store) <= cache.max_entries
