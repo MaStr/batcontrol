@@ -180,6 +180,28 @@ def test_mqtt_gets_the_stored_values(core, mocker):
         pytest.approx(10000.0))
 
 
+def test_mqtt_charge_limit_is_minus_one_when_peak_shaving_off(core, mocker):
+    """R-M03: MQTT publishes -1 like REST, not only while enabled."""
+    core.mqtt_api = mocker.MagicMock()
+    core.run()
+    assert core.peak_shaving_state.enabled is False
+    assert core.peak_shaving_state.charge_limit_w == -1
+    core.mqtt_api.publish_peak_shaving_charge_limit.assert_called_once_with(-1)
+
+
+def test_mqtt_charge_limit_follows_rest_after_switching_off(core, mocker):
+    core.mqtt_api = mocker.MagicMock()
+    core.api_set_peak_shaving_enabled('true')
+    core.run()
+    publish = core.mqtt_api.publish_peak_shaving_charge_limit
+    publish.assert_called_with(core.peak_shaving_state.charge_limit_w)
+    core.api_set_peak_shaving_enabled('false')
+    core.run()
+    assert publish.call_count == 2  # also published while switched off
+    publish.assert_called_with(-1)
+    assert core.peak_shaving_state.charge_limit_w == -1
+
+
 def test_configured_parameters_are_the_startup_values(core):
     core.api_set_min_price_difference(0.2)
     core.api_set_peak_shaving_enabled('true')
