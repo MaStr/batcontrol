@@ -660,12 +660,26 @@ class Batcontrol:
                 with contextlib.suppress(Exception):
                     api.shutdown()
                 setattr(self, attr, None)
+        self.__shutdown_inverter(f'after {what} startup failure')
+
+    def __shutdown_inverter(self, context: str) -> None:
+        """ Restore the inverter settings, never raise.
+
+        The ResilientInverterWrapper and InverterGroup already log a failed
+        shutdown with the inverter identity. This catch covers an inverter
+        without the wrapper (enable_resilient_wrapper: false), so a failed
+        restore neither stays invisible nor skips the shutdown of the MQTT
+        and evcc connections.
+        """
+        inverter = getattr(self, 'inverter', None)
+        if inverter is None:
+            return
         try:
-            self.inverter.shutdown()
+            inverter.shutdown()
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error(
-                'Could not restore inverter settings after %s startup '
-                'failure: %s', what, exc)
+                'Could not restore inverter settings %s: %s: %s',
+                context, type(exc).__name__, exc)
 
     def shutdown(self):
         """ Shutdown Batcontrol and dependent modules (inverter..) """
@@ -678,7 +692,7 @@ class Batcontrol:
                 self.scheduler.clear_jobs()
                 del self.scheduler
 
-            self.inverter.shutdown()
+            self.__shutdown_inverter('during shutdown')
             del self.inverter
             if self.evcc_api is not None:
                 self.evcc_api.shutdown()
