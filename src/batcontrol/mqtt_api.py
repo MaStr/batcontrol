@@ -115,20 +115,28 @@ DEFAULT_RETRY_DELAY = 10  # seconds
 
 def parse_int_setting(config: dict, key: str, default=None,
                       section: str = 'mqtt') -> int:
-    """ Read an integer setting, accepting numeric strings (HA add-on form).
+    """ Read an integer setting, accepting integer strings (HA add-on form).
+
+    Booleans and fractional numbers are rejected instead of being coerced
+    silently (``True`` -> 1, ``2.7`` -> 2), so a config typo is reported.
 
     Raises:
         ValueError: naming the key, if the value is missing or not an integer.
     """
     value = config.get(key, default)
-    try:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, float) and value.is_integer():
         return int(value)
-    except (TypeError, ValueError) as e:
-        raise ValueError(
-            f'{section}: {key} must be an integer, got {value!r}') from e
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            pass
+    raise ValueError(f'{section}: {key} must be an integer, got {value!r}')
 
 
-def connect_with_retry(client, broker, port: int,
+def connect_with_retry(client, broker, port: int, *,
                        attempts: int = DEFAULT_RETRY_ATTEMPTS,
                        delay: int = DEFAULT_RETRY_DELAY,
                        name: str = 'MQTT broker') -> None:
@@ -241,7 +249,8 @@ class MqttApi:
         attempts = parse_int_setting(
             config, 'retry_attempts', DEFAULT_RETRY_ATTEMPTS)
         delay = parse_int_setting(config, 'retry_delay', DEFAULT_RETRY_DELAY)
-        connect_with_retry(self.client, config['broker'], port, attempts, delay)
+        connect_with_retry(
+            self.client, config['broker'], port, attempts=attempts, delay=delay)
         # Started after the first successful connect, so paho's own
         # reconnect logic does not race with the retries above. From here
         # on paho handles reconnects.

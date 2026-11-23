@@ -1180,9 +1180,20 @@ class TestBrokerUnreachable:
         client.connect.assert_called_with('mqtt.lan', 1883, 60)
         sleep.assert_called_once_with(3)
 
+    @pytest.mark.parametrize('value', ['abc', True, 2.7, '2.5', None])
     @pytest.mark.parametrize('key', ['port', 'retry_attempts', 'retry_delay'])
-    def test_non_numeric_setting_names_the_key(self, key):
+    def test_non_integer_setting_names_the_key(self, key, value):
+        """No silent coercion: True -> 1 or 2.7 -> 2 would hide a typo."""
         with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient:
             with pytest.raises(ValueError, match=key):
-                MqttApi(dict(self.CONFIG, **{key: 'abc'}))
+                MqttApi(dict(self.CONFIG, **{key: value}))
             MockClient.return_value.connect.assert_not_called()
+
+    @pytest.mark.parametrize('value, expected', [
+        (5, 5), ('5', 5), (' 5 ', 5), (5.0, 5)])
+    def test_integer_values_are_accepted(self, value, expected):
+        with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient, \
+                patch('batcontrol.mqtt_api.time.sleep') as sleep:
+            MockClient.return_value.connect.side_effect = [OSError(), None]
+            MqttApi(dict(self.CONFIG, retry_delay=value))
+        sleep.assert_called_once_with(expected)
