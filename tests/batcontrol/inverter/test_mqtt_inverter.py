@@ -4,6 +4,9 @@ import time
 import pytest
 from unittest.mock import Mock, MagicMock, patch, call
 
+from paho.mqtt.packettypes import PacketTypes
+from paho.mqtt.reasoncodes import ReasonCode
+
 from batcontrol.inverter import mqtt_inverter, resilient_wrapper
 from batcontrol.inverter.exceptions import InverterCommunicationError, InverterOutageError
 from batcontrol.inverter.resilient_wrapper import ResilientInverterWrapper
@@ -443,7 +446,8 @@ class TestMqttInverter:
         inverter.activate_mqtt(api)
 
         reconnect_client = MagicMock()
-        api.on_connect(reconnect_client, None, None, 0)
+        api.on_connect(reconnect_client, None, None,
+                      ReasonCode(PacketTypes.CONNACK, 'Success'), None)
         reconnect_client.subscribe.assert_called_once_with('inverter/status/#')
         reconnect_client.message_callback_remove.assert_not_called()
 

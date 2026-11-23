@@ -121,8 +121,8 @@ EXAMPLE BRIDGE IMPLEMENTATION (Python + paho-mqtt)
 ```python
 import paho.mqtt.client as mqtt
 
-# Connect to MQTT broker
-client = mqtt.Client()
+# Connect to MQTT broker (paho-mqtt 2.x callback API)
+client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
 client.username_pw_set("batcontrol", "secret")
 client.connect("192.168.1.100", 1883, 60)
 

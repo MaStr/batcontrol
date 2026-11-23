@@ -1,11 +1,14 @@
 """Tests for MqttApi._handle_message, focusing on bytes payload decoding."""
 import dataclasses
 import json
+import warnings
 from unittest.mock import MagicMock, call, patch
 
 import numpy as np
 import paho.mqtt.client as mqtt
 import pytest
+from paho.mqtt.packettypes import PacketTypes
+from paho.mqtt.reasoncodes import ReasonCode
 
 from batcontrol.core import Batcontrol
 from batcontrol.decision_journal import StatusChangeEvent
@@ -28,6 +31,11 @@ def _make_handler_stub():
     # Bind the real _handle_message to our stub
     stub._handle_message = MqttApi._handle_message.__get__(stub, MqttApi)
     return stub
+
+
+CONNACK_SUCCESS = ReasonCode(PacketTypes.CONNACK, 'Success')
+CONNACK_BAD_CREDENTIALS = ReasonCode(
+    PacketTypes.CONNACK, 'Bad user name or password')
 
 
 def _make_message(topic: str, payload):
@@ -54,7 +62,9 @@ class TestClientIdConfig:
             mock_client.return_value.is_connected.return_value = False
             MqttApi(config)
 
-        mock_client.assert_called_once_with(client_id='batcontrol')
+        mock_client.assert_called_once_with(
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            client_id='batcontrol')
 
     def test_uses_configured_client_id(self):
         config = {
@@ -70,7 +80,9 @@ class TestClientIdConfig:
             mock_client.return_value.is_connected.return_value = False
             MqttApi(config)
 
-        mock_client.assert_called_once_with(client_id='house-batcontrol-1')
+        mock_client.assert_called_once_with(
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            client_id='house-batcontrol-1')
 
     def test_rejects_empty_client_id(self):
         config = {
@@ -231,12 +243,54 @@ class TestReconnectSubscriptions:
         api.on_connect = MqttApi.on_connect.__get__(api, MqttApi)
         client = MagicMock()
 
-        api.on_connect(client, None, None, 0)
+        api.on_connect(client, None, None, CONNACK_SUCCESS, None)
 
         assert client.subscribe.call_args_list == [
             call('batcontrol/mode/set'),
             call('batcontrol/charge_rate/set'),
         ]
+        client.publish.assert_called_once_with(
+            'batcontrol/status', 'online', retain=True)
+
+    def test_on_connect_refused_is_handled_as_failure(self, caplog):
+        """A refused connect (bad credentials) must not publish online or
+        subscribe, and must be logged as an error with the reason."""
+        api = _make_handler_stub()
+        api.base_topic = 'batcontrol'
+        api.auto_discover_enable = True
+        api.callbacks = {'batcontrol/mode/set': {}}
+        api.raw_subscriptions = {'inv/status/#': MagicMock()}
+        api.on_connect = MqttApi.on_connect.__get__(api, MqttApi)
+        client = MagicMock()
+
+        with caplog.at_level('ERROR', logger='batcontrol.mqtt_api'):
+            api.on_connect(client, None, None, CONNACK_BAD_CREDENTIALS, None)
+
+        client.publish.assert_not_called()
+        client.subscribe.assert_not_called()
+        api.send_mqtt_discovery_messages.assert_not_called()
+        assert 'Bad user name or password' in caplog.text
+
+
+class TestCallbackApiVersion:
+    """The client must use paho's callback API v2 (v1 is deprecated)."""
+
+    def test_real_client_uses_version2_without_deprecation_warning(self):
+        config = {
+            'broker': 'localhost',
+            'port': 1883,
+            'topic': 'house/batcontrol',
+            'auto_discover_enable': False,
+            'tls': False,
+        }
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', DeprecationWarning)
+            with patch('batcontrol.mqtt_api.connect_with_retry'), \
+                    patch.object(mqtt.Client, 'loop_start'):
+                api = MqttApi(config)
+
+        assert api.client.callback_api_version == \
+            mqtt.CallbackAPIVersion.VERSION2
 
 
 class TestRawSubscriptions:
@@ -270,7 +324,7 @@ class TestRawSubscriptions:
         api.register_raw_subscription('inv/status/#', MagicMock())
         client = MagicMock()
 
-        api.on_connect(client, None, None, 0)
+        api.on_connect(client, None, None, CONNACK_SUCCESS, None)
 
         assert client.subscribe.call_args_list == [
             call('batcontrol/mode/set'),
@@ -286,7 +340,7 @@ class TestRawSubscriptions:
         api.client.message_callback_remove.assert_called_once_with('inv/status/#')
         api.client.unsubscribe.assert_called_once_with('inv/status/#')
         client = MagicMock()
-        api.on_connect(client, None, None, 0)
+        api.on_connect(client, None, None, CONNACK_SUCCESS, None)
         client.subscribe.assert_not_called()
 
 

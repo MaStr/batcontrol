@@ -210,7 +210,9 @@ class MqttApi:
         else:
             client_id = 'batcontrol'
 
-        self.client = mqtt.Client(client_id=client_id)
+        self.client = mqtt.Client(
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            client_id=client_id)
         if 'logger' in config and config['logger'] is True:
             self.client.enable_logger(logger)
 
@@ -256,9 +258,17 @@ class MqttApi:
         # on paho handles reconnects.
         self.client.loop_start()
 
-    def on_connect(self, client, userdata, flags, rc):
-        """ Callback for MQTT connection to serve /status"""
-        logger.info('Connected with result code %s', rc)
+    def on_connect(self, client, userdata, flags, reason_code, properties):  # pylint: disable=unused-argument,too-many-arguments,too-many-positional-arguments
+        """ Callback for MQTT connection to serve /status
+
+        paho callback API v2: reason_code is a paho ReasonCode. MQTT 3.1.1
+        connack codes are mapped to v5 reason codes, so a refused
+        connection (e.g. bad credentials) reports is_failure.
+        """
+        if reason_code.is_failure:
+            logger.error('MQTT broker refused the connection: %s', reason_code)
+            return
+        logger.info('Connected with result code %s', reason_code)
         # Make public, that we are running.
         client.publish(self.base_topic + '/status', 'online', retain=True)
         # publish HA mqtt AutoDiscovery messages at startup

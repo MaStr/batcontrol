@@ -111,7 +111,9 @@ class EvccApi():
         self.block_battery_while_charging = config.get(
             'block_battery_while_charging', True)
 
-        self.client = mqtt.Client(clean_session=True)
+        self.client = mqtt.Client(
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            clean_session=True)
 
         if 'logger' in config and config['logger'] is True:
             self.client.enable_logger(logger)
@@ -205,9 +207,17 @@ class EvccApi():
         self.client.loop_stop()
         self.client.disconnect()
 
-    def on_connect(self, client, userdata, flags, rc):  # pylint: disable=unused-argument
-        """ Callback function for MQTT on_connect """
-        logger.info('Connected to MQTT Broker with result code %s', rc)
+    def on_connect(self, client, userdata, flags, reason_code, properties):  # pylint: disable=unused-argument,too-many-arguments,too-many-positional-arguments
+        """ Callback function for MQTT on_connect (paho callback API v2)
+
+        reason_code is a paho ReasonCode; a refused connection (e.g. bad
+        credentials) reports is_failure and must not subscribe.
+        """
+        if reason_code.is_failure:
+            logger.error(
+                'evcc MQTT broker refused the connection: %s', reason_code)
+            return
+        logger.info('Connected to MQTT Broker with result code %s', reason_code)
         # Subscribe to status and loadpoint(s)
         self.client.subscribe(self.topic_status, qos=1)
         if self.topic_battery_halt_soc is not None:
