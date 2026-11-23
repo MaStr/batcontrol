@@ -165,7 +165,11 @@ class Batcontrol:
     inverter is read and commanded: normally well below a second, with a
     failing Fronius inverter up to the HTTP timeouts and retries of one
     cycle (minutes). Commands that wait meanwhile would talk to the same
-    inverter anyway.
+    inverter anyway. With the MQTT inverter, the first cycle after startup
+    can also hold the lock for up to 180 s while get_SOC() waits for the
+    first SOC message; evcc is already connected then, so its retained
+    messages block the evcc network thread for that time (see
+    docs/development/threading.md).
 
     Rules that keep this free of deadlocks: never hold the lock while
     waiting for another thread that may need it - so no MQTT/evcc client
@@ -736,7 +740,16 @@ class Batcontrol:
                 'failure: %s', what, exc)
 
     def shutdown(self):
-        """ Shutdown Batcontrol and dependent modules (inverter..) """
+        """ Shutdown Batcontrol and dependent modules (inverter..)
+
+        Idempotent: a second call (e.g. from a signal handler and the main
+        loop's cleanup) returns without touching the already removed
+        inverter and clients.
+        """
+        with self._control_lock:
+            if self._shutting_down:
+                logger.debug('Batcontrol shutdown already in progress or done')
+                return
         logger.info('Shutting down Batcontrol')
         try:
             # Stop scheduler thread first, then clear jobs.

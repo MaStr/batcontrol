@@ -65,8 +65,10 @@ Publishing to MQTT only queues the message in paho and does not wait.
   the cycle on the first failing call, which bounds it to roughly one such
   retry sequence.
 - MQTT inverter at startup: `get_SOC()` waits up to 180 s for the first SOC
-  message. That message arrives on the MQTT network thread, which is why
-  `/set` callbacks never wait for the lock on that thread (see below).
+  message, in the first cycle, under the lock. That message arrives on the
+  MQTT network thread, which is why `/set` callbacks never wait for the lock
+  on that thread (see below). This happens on every startup with an MQTT
+  inverter whose SOC is late, not only with a failing inverter.
 
 ## Why MQTT commands run on their own thread
 
@@ -80,10 +82,16 @@ them, and the worker runs them one by one, in arrival order, under the lock.
 
 evcc callbacks run directly on the evcc client's network thread and block it
 while a cycle holds the lock. That is safe because the cycle never waits for
-the evcc client - it only reads the evcc state attributes. If the lock is held
-longer than the evcc keepalive (failing inverter), the broker may drop the evcc
-connection; paho reconnects, resubscribes, and evcc's retained topics restore
-the state.
+the evcc client - it only reads the evcc state attributes. The lock can be held
+long in two situations: a failing inverter (see above) and the first cycle
+with an MQTT inverter, while `get_SOC()` waits up to 180 s for the first SOC
+message. evcc is started in `Batcontrol.__init__`, before the first cycle, so
+its retained messages arrive right then and the evcc network thread waits for
+the lock until the SOC arrives. The evcc client uses paho's default keepalive
+of 60 s; a network thread blocked for more than about 90 s sends no ping, and
+the broker may drop the evcc connection. paho reconnects, resubscribes, and
+evcc's retained topics restore the state; the evcc block reaches the inverter
+only after the wait.
 
 ## Rules for new code
 
@@ -94,6 +102,9 @@ the state.
   particular, do not stop the MQTT or evcc client under the lock: their
   `shutdown()` joins the network thread, which may be waiting for the lock in
   an evcc callback.
+- Raw MQTT subscriptions (`MqttApi.register_raw_subscription`, used by the
+  MQTT inverter for its state topics) run on paho's network thread. They must
+  never take the control lock and must only update cached state.
 - Decision journal listeners run synchronously while the lock is held and must
   not block.
 - Slow I/O that reads no control state (forecast providers) belongs before the
