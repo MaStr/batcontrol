@@ -63,8 +63,8 @@ mqtt:
   topic: house/batcontrol
   tls: true
   cafile: /etc/ssl/certs/ca-certificates.crt   # required when tls: true
-  certfile: /etc/ssl/certs/client.crt           # optional, for mutual TLS
-  keyfile: /etc/ssl/certs/client.key            # optional, for mutual TLS
+  # certfile: /etc/ssl/certs/client.crt         # only for mutual TLS
+  # keyfile: /etc/ssl/certs/client.key          # only for mutual TLS
 ```
 
 | Parameter | Type | Default | Description |
@@ -73,6 +73,11 @@ mqtt:
 | `cafile` | string | — | Path to the CA certificate file (required when `tls: true`) |
 | `certfile` | string | — | Path to the client certificate (optional, for mutual TLS) |
 | `keyfile` | string | — | Path to the client private key (optional, for mutual TLS) |
+| `ciphers` | string | — | Optional OpenSSL cipher string (e.g. `ECDHE+AESGCM`); default: Python's ssl defaults |
+
+All configured files must exist; otherwise batcontrol stops at startup with an error naming the
+missing file (e.g. `mqtt: certfile not found or not a file: /etc/ssl/certs/client.crt`). Leave `certfile` and
+`keyfile` unset unless your broker requires client certificates.
 
 ### Grid Charge Lock (external HEMS/grid operator signal)
 

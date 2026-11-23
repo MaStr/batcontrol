@@ -162,8 +162,9 @@ mqtt:
   retry_delay: 10 # seconds. Default: 10
   tls: false # true requires cafile; certfile/keyfile only for mutual TLS
   cafile: /etc/ssl/certs/ca-certificates.crt
-  certfile: /etc/ssl/certs/client.crt
-  keyfile: /etc/ssl/certs/client.key
+  # certfile: /etc/ssl/certs/client.crt # mutual TLS only, together with keyfile
+  # keyfile: /etc/ssl/certs/client.key # mutual TLS only, together with certfile
+  # ciphers: ECDHE+AESGCM # optional OpenSSL cipher string. Default: Python ssl default
   auto_discover_enable: true # Home Assistant MQTT discovery
   auto_discover_topic: homeassistant # discovery base topic. Default: homeassistant
   # grid_charge_lock_topic: hems/batcontrol/grid_charge_lock
@@ -257,6 +258,7 @@ evcc:
   password: password
   tls: false # true requires cafile; certfile/keyfile only for mutual TLS
   cafile: /etc/ssl/certs/ca-certificates.crt
-  certfile: /etc/ssl/certs/client.crt
-  keyfile: /etc/ssl/certs/client.key
+  # certfile: /etc/ssl/certs/client.crt # mutual TLS only, together with keyfile
+  # keyfile: /etc/ssl/certs/client.key # mutual TLS only, together with certfile
+  # ciphers: ECDHE+AESGCM # optional OpenSSL cipher string. Default: Python ssl default
   battery_halt_topic: evcc/site/bufferSoc # optional, battery is locked below this limit

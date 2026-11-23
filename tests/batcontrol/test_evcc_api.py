@@ -27,6 +27,13 @@ def _make_config(**overrides):
 class TestTlsSetup:
     """EvccApi.__init__ must configure TLS correctly and reject bad configs."""
 
+    @pytest.fixture(autouse=True)
+    def _cert_files(self, tmp_path, monkeypatch):
+        """Configured TLS files must exist; create them in a temp cwd."""
+        monkeypatch.chdir(tmp_path)
+        for name in ('ca.crt', 'client.crt', 'client.key'):
+            (tmp_path / name).write_text('dummy', encoding='ascii')
+
     def test_tls_disabled_does_not_call_tls_set(self):
         with patch('batcontrol.evcc_api.mqtt.Client') as MockClient:
             client = MockClient.return_value
@@ -37,10 +44,10 @@ class TestTlsSetup:
     def test_tls_true_calls_tls_set_with_cafile(self):
         with patch('batcontrol.evcc_api.mqtt.Client') as MockClient:
             client = MockClient.return_value
-            cfg = _make_config(tls=True, cafile='/etc/ssl/ca.crt')
+            cfg = _make_config(tls=True, cafile='ca.crt')
             EvccApi(cfg)
             client.tls_set.assert_called_once_with(
-                ca_certs='/etc/ssl/ca.crt',
+                ca_certs='ca.crt',
                 certfile=None,
                 keyfile=None,
                 ciphers=None,
@@ -51,15 +58,15 @@ class TestTlsSetup:
             client = MockClient.return_value
             cfg = _make_config(
                 tls=True,
-                cafile='/etc/ssl/ca.crt',
-                certfile='/etc/ssl/client.crt',
-                keyfile='/etc/ssl/client.key',
+                cafile='ca.crt',
+                certfile='client.crt',
+                keyfile='client.key',
             )
             EvccApi(cfg)
             client.tls_set.assert_called_once_with(
-                ca_certs='/etc/ssl/ca.crt',
-                certfile='/etc/ssl/client.crt',
-                keyfile='/etc/ssl/client.key',
+                ca_certs='ca.crt',
+                certfile='client.crt',
+                keyfile='client.key',
                 ciphers=None,
             )
 
@@ -73,8 +80,8 @@ class TestTlsSetup:
         with patch('batcontrol.evcc_api.mqtt.Client'):
             cfg = _make_config(
                 tls=True,
-                cafile='/etc/ssl/ca.crt',
-                certfile='/etc/ssl/client.crt',
+                cafile='ca.crt',
+                certfile='client.crt',
             )
             with pytest.raises(ValueError, match='certfile and keyfile'):
                 EvccApi(cfg)
@@ -83,11 +90,43 @@ class TestTlsSetup:
         with patch('batcontrol.evcc_api.mqtt.Client'):
             cfg = _make_config(
                 tls=True,
-                cafile='/etc/ssl/ca.crt',
-                keyfile='/etc/ssl/client.key',
+                cafile='ca.crt',
+                keyfile='client.key',
             )
             with pytest.raises(ValueError, match='certfile and keyfile'):
                 EvccApi(cfg)
+
+    @pytest.mark.parametrize('key, overrides', [
+        ('cafile', {'cafile': 'missing-ca.crt'}),
+        ('certfile', {'certfile': 'missing.crt', 'keyfile': 'client.key'}),
+        ('keyfile', {'certfile': 'client.crt', 'keyfile': 'missing.key'}),
+    ])
+    def test_tls_missing_file_raises_with_path(self, key, overrides):
+        """R-K02: a wrong path is reported by name before tls_set()."""
+        with patch('batcontrol.evcc_api.mqtt.Client') as MockClient:
+            cfg = _make_config(tls=True, **{'cafile': 'ca.crt', **overrides})
+            with pytest.raises(ValueError, match=f'{key} not found or not a file: missing'):
+                EvccApi(cfg)
+            MockClient.return_value.tls_set.assert_not_called()
+
+    def test_tls_passes_ciphers(self):
+        with patch('batcontrol.evcc_api.mqtt.Client') as MockClient:
+            client = MockClient.return_value
+            client.is_connected.return_value = True
+            cfg = _make_config(tls=True, cafile='ca.crt', ciphers='ECDHE+AESGCM')
+            EvccApi(cfg)
+            assert client.tls_set.call_args.kwargs['ciphers'] == 'ECDHE+AESGCM'
+
+    def test_tls_disabled_ignores_missing_files(self):
+        """Template paths must not matter while tls is false."""
+        with patch('batcontrol.evcc_api.mqtt.Client') as MockClient:
+            client = MockClient.return_value
+            client.is_connected.return_value = True
+            cfg = _make_config(
+                tls=False, cafile='/nope/ca.crt',
+                certfile='/nope/c.crt', keyfile='/nope/c.key')
+            EvccApi(cfg)
+            client.tls_set.assert_not_called()
 
 
 class TestBrokerUnreachable:
