@@ -1,6 +1,12 @@
+import threading
+import time
+
 import pytest
 from unittest.mock import Mock, MagicMock, patch, call
 
+from batcontrol.inverter import mqtt_inverter, resilient_wrapper
+from batcontrol.inverter.exceptions import InverterCommunicationError, InverterOutageError
+from batcontrol.inverter.resilient_wrapper import ResilientInverterWrapper
 from batcontrol.inverter.mqtt_inverter import MqttInverter
 from batcontrol.mqtt_api import MqttApi
 from batcontrol.inverter.inverter import Inverter
@@ -383,32 +389,8 @@ class TestMqttInverter:
         # Should not crash
         inverter._on_message(None, None, mock_message)
 
-        # SOC should raise RuntimeError after timeout (patch to 2 iterations for fast test)
-        with patch.object(inverter, 'get_SOC') as mock_get_soc:
-            # Override max_iterations in the actual method
-            original_get_soc = MqttInverter.get_SOC.__get__(inverter, MqttInverter)
-
-            def fast_get_soc():
-                soc_value = None
-                max_iterations = 2  # Fast test: only wait 2 seconds
-                iteration = 0
-
-                while soc_value is None:
-                    if inverter.soc_key and inverter.soc_key in inverter.soc_value:
-                        soc_value = inverter.soc_value[inverter.soc_key]
-                    else:
-                        iteration += 1
-                        if iteration >= max_iterations:
-                            raise RuntimeError(
-                                f'No SOC data available from MQTT after {max_iterations} attempts '
-                                f'(waited {max_iterations} seconds). Check MQTT connection and '
-                                f'verify that {inverter.inverter_topic}/status/soc is being published.'
-                            )
-                return soc_value
-
-            # Test that RuntimeError is raised when no SOC data is available
-            with pytest.raises(RuntimeError, match='No SOC data available from MQTT after 2 attempts'):
-                fast_get_soc()
+        # Invalid payload must not create a SOC value
+        assert inverter._soc is None
 
     def test_inherited_energy_calculations_work(self):
         """Test that inherited energy calculation methods work"""
@@ -467,3 +449,178 @@ class TestMqttInverter:
 
         inverter.shutdown()
         assert api.raw_subscriptions == {}
+
+
+def _soc_message(inverter, value):
+    message = Mock()
+    message.topic = f'{inverter.inverter_topic}/status/soc'
+    message.payload = str(value).encode('utf-8')
+    inverter._on_message(None, None, message)
+
+
+def _activated_inverter(**extra):
+    config = {'base_topic': 'inverter', 'capacity': 10000,
+              'max_grid_charge_rate': 5000}
+    config.update(extra)
+    inverter = MqttInverter(config)
+    mqtt_api = MagicMock(spec=MqttApi)
+    mqtt_api.base_topic = 'batcontrol'
+    mqtt_api.client = MagicMock()
+    inverter.activate_mqtt(mqtt_api)
+    return inverter
+
+
+class FakeClock:
+    """Monotonic clock; time only moves when the test says so."""
+
+    def __init__(self):
+        self.now = 1000.0
+
+    def monotonic(self):
+        return self.now
+
+
+class FakeEvent:
+    """Stands in for threading.Event; wait() advances the fake clock."""
+
+    def __init__(self, clock, on_wait=None):
+        self.clock = clock
+        self.on_wait = on_wait
+        self.flag = False
+        self.waits = []
+
+    def is_set(self):
+        return self.flag
+
+    def set(self):
+        self.flag = True
+
+    def wait(self, timeout):
+        self.waits.append(timeout)
+        if self.on_wait:
+            self.on_wait()
+        if not self.flag:
+            self.clock.now += timeout
+        return self.flag
+
+
+class TestGetSocWaiting:
+    """get_SOC waits only inside the startup window (R-M23)."""
+
+    @pytest.fixture
+    def clock(self, monkeypatch):
+        clock = FakeClock()
+        monkeypatch.setattr(mqtt_inverter.time, 'monotonic', clock.monotonic)
+        return clock
+
+    def _fake_event(self, inverter, clock, on_wait=None):
+        event = FakeEvent(clock, on_wait)
+        inverter._soc_received = event
+        return event
+
+    def test_cached_value_returned_without_waiting(self, clock):
+        inverter = _activated_inverter()
+        event = self._fake_event(inverter, clock)
+        _soc_message(inverter, 42.0)
+        assert inverter.get_SOC() == 42.0
+        assert event.waits == []
+
+    def test_waits_until_soc_arrives(self, clock):
+        inverter = _activated_inverter()
+        event = self._fake_event(
+            inverter, clock, on_wait=lambda: _soc_message(inverter, 55.0))
+        assert inverter.get_SOC() == 55.0
+        assert event.waits == [mqtt_inverter.SOC_STARTUP_WAIT_SECONDS]
+
+    def test_wait_is_limited_to_window_after_activation(self, clock):
+        inverter = _activated_inverter()
+        event = self._fake_event(inverter, clock)
+        clock.now += 100
+        with pytest.raises(RuntimeError, match='within 180 seconds after startup'):
+            inverter.get_SOC()
+        assert event.waits == [mqtt_inverter.SOC_STARTUP_WAIT_SECONDS - 100]
+
+    def test_no_wait_after_window_passed(self, clock):
+        inverter = _activated_inverter()
+        event = self._fake_event(inverter, clock)
+        with pytest.raises(RuntimeError, match='after startup'):
+            inverter.get_SOC()
+        with pytest.raises(RuntimeError, match='after startup'):
+            inverter.get_SOC()
+        assert len(event.waits) == 1
+
+    def test_read_before_activation_starts_window(self, clock):
+        inverter = MqttInverter({'base_topic': 'inverter', 'capacity': 10000,
+                                 'max_grid_charge_rate': 5000})
+        event = self._fake_event(inverter, clock)
+        with pytest.raises(RuntimeError, match='after startup'):
+            inverter.get_SOC()
+        assert event.waits == [mqtt_inverter.SOC_STARTUP_WAIT_SECONDS]
+
+    def test_expired_soc_raises_immediately(self, clock):
+        inverter = _activated_inverter(cache_ttl=60)
+        event = self._fake_event(inverter, clock)
+        _soc_message(inverter, 70.0)
+        assert inverter.get_SOC() == 70.0
+
+        clock.now += 61  # value expired
+        with pytest.raises(RuntimeError, match='within 60 seconds'):
+            inverter.get_SOC()
+        assert event.waits == []
+
+        _soc_message(inverter, 71.0)  # bridge recovers
+        assert inverter.get_SOC() == 71.0
+
+    def test_soc_at_ttl_boundary_is_still_current(self, clock):
+        inverter = _activated_inverter(cache_ttl=60)
+        _soc_message(inverter, 70.0)
+        clock.now += 60
+        assert inverter.get_SOC() == 70.0
+
+
+def test_concurrent_callers_share_startup_window(monkeypatch):
+    """A first read from another thread (e.g. evcc) must not use up the wait."""
+    monkeypatch.setattr(mqtt_inverter, 'SOC_STARTUP_WAIT_SECONDS', 5)
+    inverter = _activated_inverter()
+    results = {}
+
+    def read(name):
+        try:
+            results[name] = inverter.get_SOC()
+        except RuntimeError as e:  # pragma: no cover - reported via assert
+            results[name] = e
+
+    threads = [threading.Thread(target=read, args=(n,)) for n in ('evcc', 'main')]
+    for t in threads:
+        t.start()
+    time.sleep(0.1)
+    _soc_message(inverter, 63.0)
+    for t in threads:
+        t.join(timeout=5)
+    assert results == {'evcc': 63.0, 'main': 63.0}
+
+
+class TestGetSocWithResilientWrapper:
+    """Missing SOC after initialization is a tolerated outage (R-M23)."""
+
+    def test_missing_soc_skips_cycle_then_terminates(self, monkeypatch):
+        clock = FakeClock()
+        monkeypatch.setattr(mqtt_inverter.time, 'monotonic', clock.monotonic)
+        monkeypatch.setattr(resilient_wrapper.time, 'monotonic', clock.monotonic)
+
+        inverter = _activated_inverter(cache_ttl=120)
+        event = FakeEvent(clock)
+        inverter._soc_received = event
+        wrapper = ResilientInverterWrapper(inverter, outage_tolerance_seconds=600)
+
+        _soc_message(inverter, 50.0)
+        assert wrapper.get_SOC() == 50.0
+        wrapper.set_mode_allow_discharge()  # initialization complete
+
+        clock.now += 200  # bridge stopped publishing
+        with pytest.raises(InverterCommunicationError):
+            wrapper.get_SOC()
+        clock.now += 601
+        with pytest.raises(InverterOutageError):
+            wrapper.get_SOC()
+        assert event.waits == []

@@ -169,13 +169,20 @@ TROUBLESHOOTING
 """
 
 import logging
+import threading
 import time
-from cachetools import TTLCache
 from .baseclass import DEFAULT_MAX_SOC, DEFAULT_MIN_SOC, InverterBaseclass
 from ..mqtt_api import MqttApi
 
 logger = logging.getLogger(__name__)
 logger.info('Loading module')
+
+# How long get_SOC() waits for the first SOC message after the MQTT API is
+# activated. The window is fixed per instance (not per caller), so concurrent
+# callers such as the evcc thread share it. Once SOC was received or the window
+# has passed, missing data is reported at once, so the control cycle is not
+# blocked and ResilientInverterWrapper handles the outage.
+SOC_STARTUP_WAIT_SECONDS = 180
 
 
 class MqttInverter(InverterBaseclass):
@@ -223,10 +230,13 @@ class MqttInverter(InverterBaseclass):
 
         self.last_mode = "allow_discharge"
 
-        # Cached state from MQTT
-        self.soc_value = TTLCache(maxsize=2, ttl=config.get('cache_ttl', 120))
-        # use timestamp as key to store latest soc value
-        self.soc_key = None
+        # Latest SOC from MQTT as (value, monotonic timestamp). Written by the
+        # paho network thread, read by the main thread: a single tuple
+        # assignment is atomic, so readers never see a torn update.
+        self._soc = None
+        self._soc_received = threading.Event()
+        # End of the startup wait window, set on activation (or first read).
+        self._soc_wait_deadline = None
         self.charge_rate = 0  # Current charge rate in W
 
         # MQTT client reference (will be set via activate_mqtt)
@@ -257,6 +267,9 @@ class MqttInverter(InverterBaseclass):
 
         # Remove trailing slash(es) if present to avoid double slashes in topics
         self.inverter_topic = self.inverter_topic.rstrip('/')
+
+        # Startup wait window for the first SOC message starts now.
+        self._soc_wait_deadline = time.monotonic() + SOC_STARTUP_WAIT_SECONDS
 
         # Now self.inverter_topic is guaranteed to be set correctly for the following methods
         self._setup_subscriptions()
@@ -289,10 +302,10 @@ class MqttInverter(InverterBaseclass):
         try:
             # Parse topic
             if topic == f'{self.inverter_topic}/status/soc':
-                new_soc_key = time.time()
-                self.soc_value[new_soc_key] = float(payload)
-                self.soc_key = new_soc_key
-                logger.debug('Updated SOC: %s%%', self.soc_value[new_soc_key])
+                soc = float(payload)
+                self._soc = (soc, time.monotonic())
+                self._soc_received.set()
+                logger.debug('Updated SOC: %s%%', soc)
 
             elif topic == f'{self.inverter_topic}/status/capacity':
                 self.capacity = float(payload)
@@ -417,34 +430,58 @@ class MqttInverter(InverterBaseclass):
         """
         Get current state of charge.
 
+        Until the first SOC message arrives, callers wait for it, but only
+        within SOC_STARTUP_WAIT_SECONDS after the MQTT API was activated.
+        Afterwards the call returns at once and raises if no SOC newer than
+        cache_ttl seconds is available.
+
         Returns:
             float: State of charge in percentage (0-100)
 
         Raises:
-            RuntimeError: If SOC data is not available after 180 attempts
+            RuntimeError: If no current SOC data is available
         """
+        soc_value = self._current_soc()
+        if soc_value is not None:
+            return soc_value
 
-        soc_value = None
-        max_iterations = 180
-        iteration = 0
+        if not self._soc_received.is_set():
+            if self._soc_wait_deadline is None:
+                # Read before activate_mqtt(): the window starts now.
+                self._soc_wait_deadline = time.monotonic() + SOC_STARTUP_WAIT_SECONDS
+            remaining = self._soc_wait_deadline - time.monotonic()
+            if remaining > 0:
+                logger.warning(
+                    'No SOC data available from MQTT yet, waiting up to %.0f seconds...',
+                    remaining)
+                self._soc_received.wait(remaining)
+                soc_value = self._current_soc()
+                if soc_value is not None:
+                    return soc_value
+            if not self._soc_received.is_set():
+                raise RuntimeError(
+                    f'No SOC data received from MQTT within '
+                    f'{SOC_STARTUP_WAIT_SECONDS} seconds after startup. Check MQTT '
+                    f'connection and verify that {self.inverter_topic}/status/soc '
+                    f'is being published.'
+                )
 
-        while soc_value is None:
-            if self.soc_key and self.soc_key in self.soc_value:
-                soc_value = self.soc_value[self.soc_key]
-                logger.debug('Current SOC value: %s', soc_value)
-            else:
-                iteration += 1
-                if iteration >= max_iterations:
-                    raise RuntimeError(
-                        f'No SOC data available from MQTT after {max_iterations} attempts '
-                        f'(waited {max_iterations} seconds). Check MQTT connection and '
-                        f'verify that {self.inverter_topic}/status/soc is being published.'
-                    )
-                logger.warning('No SOC data available from MQTT, waiting... (attempt %d/%d)',
-                             iteration, max_iterations)
-                time.sleep(1)  # Wait before retrying
+        raise RuntimeError(
+            f'No current SOC data from MQTT (no update within '
+            f'{self.cache_ttl} seconds). Verify that '
+            f'{self.inverter_topic}/status/soc is being published.'
+        )
 
-        return soc_value
+    def _current_soc(self):
+        """Return the latest SOC if it is not older than cache_ttl, else None."""
+        soc = self._soc  # single read: consistent (value, timestamp) pair
+        if soc is None:
+            return None
+        value, received_at = soc
+        if time.monotonic() - received_at > self.cache_ttl:
+            return None
+        logger.debug('Current SOC value: %s', value)
+        return value
 
     def publish_inverter_discovery_messages(self):
         """Publish Home Assistant MQTT Auto Discovery messages for MQTT inverter sensors"""

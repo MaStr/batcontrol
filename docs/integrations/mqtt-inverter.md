@@ -108,6 +108,16 @@ Your external system (inverter bridge script, inverter firmware, etc.) must:
 
 2. **Publish current SOC regularly (at least every 2 minutes):**
    - Current State of Charge as a normal message (can be retained or non-retained)
+   - Set `cache_ttl` above the interval at which your bridge publishes SOC.
+     A SOC value older than `cache_ttl` counts as missing.
+   - At startup batcontrol waits up to 3 minutes for the first SOC value. If
+     none arrives, batcontrol terminates with an error.
+   - Once running, a missing SOC does not block: batcontrol skips the control
+     cycle and retries on the next run. If the outage lasts longer than
+     [`outage_tolerance_minutes`](../configuration/inverter-configuration.md#outage_tolerance_minutes)
+     (default 24, counted from the first skipped cycle), batcontrol terminates.
+     With `enable_resilient_wrapper: false` the first missing SOC terminates
+     batcontrol.
 
 3. **Subscribe to command topics (non-retained):**
    - Mode changes (`force_charge`, `allow_discharge`, `avoid_discharge`)
