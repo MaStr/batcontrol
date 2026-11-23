@@ -82,7 +82,6 @@ RUN mkdir -p /app /app/logs /app/config /app/data
 WORKDIR /app
 
 COPY config/load_profile_default.csv ./config/load_profile.csv
-COPY config/load_profile_default.csv ./default_load_profile.csv
 
 # Copy all the other necessary runtime files
 COPY LICENSE THIRD-PARTY-LICENSES.md entrypoint.sh ./

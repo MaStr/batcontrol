@@ -90,7 +90,10 @@ docker kill --signal=HUP batcontrol   # Docker container
 
 ### Default Load Profile
 
-If no load profile is specified, batcontrol uses `default_load_profile.csv` as a fallback.
+If no `load_profile` is specified (or it is empty), batcontrol uses a default load profile that
+ships with batcontrol itself, independent of your `config/` folder. It is the same generic
+household profile as `load_profile_default.csv` in the config template; for a better forecast,
+provide your own (see below).
 
 ### Creating a Load Profile from a Fronius Solar.web Export
 
@@ -402,9 +405,10 @@ The script will:
 
 **Solution:** This is just informational. The profile will be automatically scaled to match your `annual_consumption` setting.
 
-**Problem:** "No load profile specified, using default"
+**Problem:** "No load profile specified, using the bundled default"
 
-**Solution:** Specify a valid `load_profile` filename in your configuration.
+**Solution:** This is a warning, not an error: batcontrol falls back to its bundled generic
+household profile. For a better forecast, set `load_profile` to a file in your `config/` folder.
 
 ### HomeAssistant API Method
 
