@@ -8,7 +8,7 @@ import logging
 import paho.mqtt.client as mqtt
 
 from .mqtt_api import (
-    MqttConnectionError, connect_with_retry, parse_int_setting)
+    MqttConnectionError, configure_tls, connect_with_retry, parse_int_setting)
 
 logger = logging.getLogger(__name__)
 logger.info('Loading module')
@@ -121,24 +121,7 @@ class EvccApi():
         if 'username' in config and 'password' in config:
             self.client.username_pw_set(config['username'], config['password'])
 
-        if config.get('tls') is True:
-            cafile = config.get('cafile')
-            if not cafile:
-                raise ValueError(
-                    'evcc: tls is enabled but cafile is missing or empty'
-                )
-            certfile = config.get('certfile') or None
-            keyfile = config.get('keyfile') or None
-            if bool(certfile) != bool(keyfile):
-                raise ValueError(
-                    'evcc: certfile and keyfile must both be set or both be absent'
-                )
-            self.client.tls_set(
-                ca_certs=cafile,
-                certfile=certfile,
-                keyfile=keyfile,
-                ciphers=config.get('ciphers') or None,
-            )
+        configure_tls(self.client, config, 'evcc')
 
         # Register callback functions, survives reconnects
         self.client.message_callback_add(

@@ -63,8 +63,8 @@ evcc:
   port: 8883
   tls: true
   cafile: /etc/ssl/certs/ca-certificates.crt   # path to CA certificate (required when tls: true)
-  certfile: /etc/ssl/certs/client.crt           # path to client certificate (optional, for mutual TLS)
-  keyfile: /etc/ssl/certs/client.key            # path to client private key (optional, for mutual TLS)
+  # certfile: /etc/ssl/certs/client.crt         # only for mutual TLS
+  # keyfile: /etc/ssl/certs/client.key          # only for mutual TLS
 ```
 
 | Parameter | Type | Description |
@@ -73,8 +73,12 @@ evcc:
 | `cafile` | string | Path to the CA certificate file. **Required** when `tls: true` |
 | `certfile` | string | Path to the client certificate file. Optional; required for mutual TLS |
 | `keyfile` | string | Path to the client private key file. Optional; required for mutual TLS (must be set together with `certfile`) |
+| `ciphers` | string | Optional OpenSSL cipher string (e.g. `ECDHE+AESGCM`); default: Python's ssl defaults |
 
 > **Note**: `certfile` and `keyfile` must both be set or both be absent — partial mutual TLS configuration raises an error at startup.
+> All configured files must exist; otherwise batcontrol stops at startup with an error naming the
+> missing file (e.g. `evcc: certfile not found: /etc/ssl/certs/client.crt`). Leave `certfile` and
+> `keyfile` unset unless your broker requires client certificates.
 
 ### Battery Management Options
 

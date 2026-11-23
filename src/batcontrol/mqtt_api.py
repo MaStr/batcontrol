@@ -74,6 +74,7 @@ grid_charge_lock_topic config option.
 
 The module uses the paho-mqtt library for MQTT communication and numpy for handling arrays.
 """
+import os
 import time
 import json
 import logging
@@ -174,6 +175,40 @@ def connect_with_retry(client, broker, port: int, *,
             time.sleep(delay)
 
 
+def configure_tls(client, config: dict, section: str) -> None:
+    """Apply the TLS settings of a broker config section to a paho client.
+
+    Does nothing unless ``tls`` is true. ``cafile`` is required, ``certfile``
+    and ``keyfile`` are only for mutual TLS and must be set together. Every
+    configured file must exist, so a wrong path is reported by name instead
+    of as a bare FileNotFoundError from the ssl module.
+
+    Raises:
+        ValueError: on missing, incomplete or non-existent TLS settings.
+    """
+    if config.get('tls') is not True:
+        return
+    cafile = config.get('cafile')
+    if not cafile:
+        raise ValueError(f'{section}: tls is enabled but cafile is missing or empty')
+    certfile = config.get('certfile') or None
+    keyfile = config.get('keyfile') or None
+    if bool(certfile) != bool(keyfile):
+        raise ValueError(
+            f'{section}: certfile and keyfile must both be set or both be absent'
+        )
+    for key, path in (('cafile', cafile), ('certfile', certfile),
+                      ('keyfile', keyfile)):
+        if path and not os.path.isfile(path):
+            raise ValueError(f'{section}: {key} not found: {path}')
+    client.tls_set(
+        ca_certs=cafile,
+        certfile=certfile,
+        keyfile=keyfile,
+        ciphers=config.get('ciphers') or None,
+    )
+
+
 class MqttApi:
     """ MQTT API to publish data from batcontrol to MQTT for further processing+visualization"""
 
@@ -225,24 +260,7 @@ class MqttApi:
             'offline',
             retain=True)
 
-        if config.get('tls') is True:
-            cafile = config.get('cafile')
-            if not cafile:
-                raise ValueError(
-                    'mqtt: tls is enabled but cafile is missing or empty'
-                )
-            certfile = config.get('certfile') or None
-            keyfile = config.get('keyfile') or None
-            if bool(certfile) != bool(keyfile):
-                raise ValueError(
-                    'mqtt: certfile and keyfile must both be set or both be absent'
-                )
-            self.client.tls_set(
-                ca_certs=cafile,
-                certfile=certfile,
-                keyfile=keyfile,
-                ciphers=config.get('ciphers') or None,
-            )
+        configure_tls(self.client, config, 'mqtt')
 
         self.client.on_connect = self.on_connect
         # Validate before connecting: values from the HA add-on form may be
