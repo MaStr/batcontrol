@@ -1,7 +1,11 @@
 """Tests for EvccApi TLS configuration and broker connection."""
+import warnings
 from unittest.mock import call, patch
 
+import paho.mqtt.client as mqtt
 import pytest
+from paho.mqtt.packettypes import PacketTypes
+from paho.mqtt.reasoncodes import ReasonCode
 
 from batcontrol.evcc_api import EvccApi
 from batcontrol.mqtt_api import MqttConnectionError
@@ -143,3 +147,52 @@ class TestBrokerUnreachable:
             with pytest.raises(ValueError, match='evcc: port'):
                 api.start()
             MockClient.return_value.connect.assert_not_called()
+
+
+class TestOnConnect:
+    """paho callback API v2: on_connect gets a ReasonCode."""
+
+    def test_client_created_with_callback_api_version2(self):
+        with patch('batcontrol.evcc_api.mqtt.Client') as MockClient:
+            EvccApi(_make_config())
+
+        MockClient.assert_called_once_with(
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            clean_session=True)
+
+    def test_real_client_emits_no_deprecation_warning(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', DeprecationWarning)
+            api = EvccApi(_make_config())
+
+        assert api.client._callback_api_version == \
+            mqtt.CallbackAPIVersion.VERSION2
+
+    def test_success_subscribes_topics(self):
+        with patch('batcontrol.evcc_api.mqtt.Client') as MockClient:
+            client = MockClient.return_value
+            api = EvccApi(_make_config())
+            api.on_connect(client, None, None,
+                           ReasonCode(PacketTypes.CONNACK, 'Success'), None)
+
+        subscribed = [c.args[0] for c in client.subscribe.call_args_list]
+        assert subscribed == [
+            'evcc/status',
+            'evcc/loadpoints/1/charging',
+            'evcc/loadpoints/1/mode',
+            'evcc/loadpoints/1/connected',
+        ]
+
+    def test_refused_connection_is_handled_as_failure(self, caplog):
+        with patch('batcontrol.evcc_api.mqtt.Client') as MockClient:
+            client = MockClient.return_value
+            api = EvccApi(_make_config())
+            with caplog.at_level('ERROR', logger='batcontrol.evcc_api'):
+                api.on_connect(
+                    client, None, None,
+                    ReasonCode(PacketTypes.CONNACK,
+                               'Bad user name or password'),
+                    None)
+
+        client.subscribe.assert_not_called()
+        assert 'Bad user name or password' in caplog.text

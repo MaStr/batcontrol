@@ -160,9 +160,12 @@ MQTT_USER = "batcontrol"
 MQTT_PASSWORD = "secret"
 BASE_TOPIC = "batcontrol/inverters/0"
 
-def on_connect(client, userdata, flags, rc):
-    """Called when connected to MQTT broker"""
-    print(f"Connected with result code {rc}")
+def on_connect(client, userdata, flags, reason_code, properties):
+    """Called when the broker answered the connection request"""
+    if reason_code.is_failure:
+        print(f"Connection refused: {reason_code}")
+        return
+    print(f"Connected with result code {reason_code}")
     
     # Publish initial state (RETAINED)
     client.publish(f"{BASE_TOPIC}/status/capacity", "10000", retain=True)
@@ -204,8 +207,8 @@ def publish_soc(client, soc_value):
     """Publish current State of Charge"""
     client.publish(f"{BASE_TOPIC}/status/soc", str(soc_value))
 
-# Create MQTT client
-client = mqtt.Client()
+# Create MQTT client (paho-mqtt 2.x callback API)
+client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
 client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
 client.on_connect = on_connect
 client.on_message = on_message
