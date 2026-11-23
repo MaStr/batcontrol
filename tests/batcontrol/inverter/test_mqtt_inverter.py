@@ -638,3 +638,16 @@ class TestGetSocWithResilientWrapper:
         with pytest.raises(InverterOutageError):
             wrapper.get_SOC()
         assert event.waits == []
+
+
+def test_discovery_includes_limit_battery_charge_rate():
+    """The peak shaving command topic is announced to Home Assistant (R-M12)."""
+    inverter = _activated_inverter()
+    calls = inverter.mqtt_api.publish_mqtt_discovery_message.call_args_list
+    by_topic = {c.args[5]: c for c in calls}
+    topic = 'inverter/command/limit_battery_charge_rate'
+    assert topic in by_topic
+    args = by_topic[topic].args
+    assert args[1] == 'batcontrol_mqtt_inverter_0_command_limit_battery_charge_rate'
+    assert args[2:5] == ('sensor', 'power', 'W')
+    assert by_topic[topic].kwargs['entity_category'] == 'diagnostic'
