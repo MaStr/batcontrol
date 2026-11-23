@@ -2345,7 +2345,9 @@ class TestInverterShutdownFailure:
         mock_mqtt_api.shutdown.assert_called_once()
         errors = self._errors(caplog)
         assert len(errors) == 1
+        assert 'Inverter 0 (fronius_gen24)' in errors[0]
         assert 'during shutdown' in errors[0]
+        assert 'RuntimeError: failed to restore battery config' in errors[0]
 
 
 if __name__ == '__main__':

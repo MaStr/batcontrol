@@ -57,6 +57,7 @@ from .dynamictariff import DynamicTariff as tariff_factory
 from .inverter import Inverter as inverter_factory
 from .inverter import InverterError, InverterCommunicationError
 from .inverter import inverter_members
+from .inverter import log_shutdown_failure
 from .forecastsolar import ForecastSolar as solar_factory
 
 from .forecastconsumption import Consumption as consumption_factory
@@ -677,9 +678,7 @@ class Batcontrol:
         try:
             inverter.shutdown()
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            logger.error(
-                'Could not restore inverter settings %s: %s: %s',
-                context, type(exc).__name__, exc)
+            log_shutdown_failure(logger, inverter, exc, context)
 
     def shutdown(self):
         """ Shutdown Batcontrol and dependent modules (inverter..) """

@@ -49,6 +49,24 @@ _BEST_EFFORT_METHODS = frozenset({'refresh_api_values', 'shutdown'})
 _LOUD_BEST_EFFORT_METHODS = frozenset({'shutdown'})
 
 
+def describe_inverter(inverter):
+    """Identify an inverter in log messages, e.g. '0 (fronius_gen24)'."""
+    num = getattr(inverter, 'inverter_num', '?')
+    inverter_type = (getattr(inverter, 'inverter_type', None)
+                     or type(inverter).__name__)
+    return f'{num} ({inverter_type})'
+
+
+def log_shutdown_failure(log, inverter, error, context=None):
+    """Log a swallowed shutdown failure as an error with the inverter
+    identity, so a restore that did not happen is visible in the log."""
+    where = f' {context}' if context else ''
+    log.error(
+        "Inverter %s: 'shutdown' failed%s, inverter settings may not have "
+        "been restored: %s: %s",
+        describe_inverter(inverter), where, type(error).__name__, error)
+
+
 def _remaining_failures(failed_methods, successful_method):
     """Resolve one operation, or supersede failed modes with an accepted mode."""
     recovered = (_COMMAND_METHODS if successful_method in _COMMAND_METHODS
@@ -108,24 +126,14 @@ class ResilientInverterWrapper:
             return result
         return guarded
 
-    def _describe_inverter(self):
-        """Identify the wrapped inverter in log messages."""
-        num = getattr(self._inverter, 'inverter_num', '?')
-        inverter_type = (getattr(self._inverter, 'inverter_type', None)
-                         or type(self._inverter).__name__)
-        return f'{num} ({inverter_type})'
-
     def _log_best_effort_failure(self, name, error):
         """Log a swallowed best-effort failure at the level it deserves."""
         if name in _LOUD_BEST_EFFORT_METHODS:
-            logger.error(
-                "Inverter %s: '%s' failed, inverter settings may not have "
-                "been restored: %s: %s",
-                self._describe_inverter(), name, type(error).__name__, error)
+            log_shutdown_failure(logger, self._inverter, error)
             return
         logger.debug(
             "Inverter %s: '%s' failed (best-effort, ignored): %s",
-            self._describe_inverter(), name, error)
+            describe_inverter(self._inverter), name, error)
 
     def _on_failure(self, name, error):
         """Classify a failure. Never returns - always raises."""

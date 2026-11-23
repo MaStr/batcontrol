@@ -34,6 +34,7 @@ Idle members during grid charging:
 import logging
 
 from .inverter_interface import InverterInterface
+from .resilient_wrapper import log_shutdown_failure
 
 logger = logging.getLogger(__name__)
 
@@ -394,10 +395,4 @@ class InverterGroup(InverterInterface):
             try:
                 inverter.shutdown()
             except Exception as exc:  # pylint: disable=broad-exception-caught
-                logger.error(
-                    "Inverter %s (%s): 'shutdown' failed, inverter settings "
-                    'may not have been restored: %s: %s',
-                    getattr(inverter, 'inverter_num', '?'),
-                    getattr(inverter, 'inverter_type', None)
-                    or type(inverter).__name__,
-                    type(exc).__name__, exc)
+                log_shutdown_failure(logger, inverter, exc)
