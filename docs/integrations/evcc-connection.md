@@ -77,7 +77,7 @@ evcc:
 
 > **Note**: `certfile` and `keyfile` must both be set or both be absent — partial mutual TLS configuration raises an error at startup.
 > All configured files must exist; otherwise batcontrol stops at startup with an error naming the
-> missing file (e.g. `evcc: certfile not found: /etc/ssl/certs/client.crt`). Leave `certfile` and
+> missing file (e.g. `evcc: certfile not found or not a file: /etc/ssl/certs/client.crt`). Leave `certfile` and
 > `keyfile` unset unless your broker requires client certificates.
 
 ### Battery Management Options

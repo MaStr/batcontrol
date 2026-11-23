@@ -200,7 +200,7 @@ def configure_tls(client, config: dict, section: str) -> None:
     for key, path in (('cafile', cafile), ('certfile', certfile),
                       ('keyfile', keyfile)):
         if path and not os.path.isfile(path):
-            raise ValueError(f'{section}: {key} not found: {path}')
+            raise ValueError(f'{section}: {key} not found or not a file: {path}')
     client.tls_set(
         ca_certs=cafile,
         certfile=certfile,

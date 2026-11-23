@@ -76,7 +76,7 @@ mqtt:
 | `ciphers` | string | — | Optional OpenSSL cipher string (e.g. `ECDHE+AESGCM`); default: Python's ssl defaults |
 
 All configured files must exist; otherwise batcontrol stops at startup with an error naming the
-missing file (e.g. `mqtt: certfile not found: /etc/ssl/certs/client.crt`). Leave `certfile` and
+missing file (e.g. `mqtt: certfile not found or not a file: /etc/ssl/certs/client.crt`). Leave `certfile` and
 `keyfile` unset unless your broker requires client certificates.
 
 ### Grid Charge Lock (external HEMS/grid operator signal)

@@ -1125,7 +1125,7 @@ class TestTlsSetup:
         """R-K02: a wrong path is reported by name before tls_set()."""
         with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient:
             cfg = self._make_config(tls=True, **{'cafile': 'ca.crt', **overrides})
-            with pytest.raises(ValueError, match=f'{key} not found: missing'):
+            with pytest.raises(ValueError, match=f'{key} not found or not a file: missing'):
                 MqttApi(cfg)
             MockClient.return_value.tls_set.assert_not_called()
 
@@ -1142,8 +1142,9 @@ class TestTlsSetup:
         with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient:
             client = MockClient.return_value
             client.is_connected.return_value = True
-            cfg = self._make_config(tls=False, cafile='/nope/ca.crt',
-                         certfile='/nope/c.crt', keyfile='/nope/c.key')
+            cfg = self._make_config(
+                tls=False, cafile='/nope/ca.crt',
+                certfile='/nope/c.crt', keyfile='/nope/c.key')
             MqttApi(cfg)
             client.tls_set.assert_not_called()
 
