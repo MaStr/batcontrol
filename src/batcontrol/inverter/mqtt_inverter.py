@@ -433,7 +433,8 @@ class MqttInverter(InverterBaseclass):
         Get current state of charge.
 
         Until the first SOC message arrives, callers wait for it, but only
-        within SOC_STARTUP_WAIT_SECONDS after the MQTT API was activated.
+        within SOC_STARTUP_WAIT_SECONDS after the wait window started: on
+        activate_mqtt(), or on the first get_SOC() call if that comes earlier.
         Afterwards the call returns at once and raises if no SOC newer than
         cache_ttl seconds is available.
 
