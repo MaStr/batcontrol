@@ -27,7 +27,7 @@ from typing import Optional
 import pytz
 import numpy as np
 
-from .mqtt_api import MqttApi
+from .mqtt_api import MqttApi, MqttConnectionError
 from .evcc_api import EvccApi
 from .scheduler import SchedulerThread
 
@@ -436,11 +436,7 @@ class Batcontrol:
         if config.get('mqtt', None) is not None:
             if config.get('mqtt').get('enabled', False):
                 logger.info('MQTT Connection enabled')
-                self.mqtt_api = MqttApi(
-                    config.get('mqtt'),
-                    interval_minutes=self.time_resolution
-                )
-                self.mqtt_api.wait_ready()
+                self.__start_mqtt_api(config.get('mqtt'))
                 # The "Decision" sensor follows the status changes of the
                 # decision journal, plus the refreshes that keep the numbers
                 # and the reason in its text current
@@ -614,6 +610,40 @@ class Batcontrol:
                 refresh()
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 logger.error("Refresh of %s failed: %s", name, exc)
+
+    def __start_mqtt_api(self, mqtt_config: dict) -> None:
+        """ Connect to the MQTT broker or stop batcontrol.
+
+        The inverter is already set up at this point (e.g. Fronius changed
+        its settings and wrote backups), so it is shut down - restoring its
+        settings - before the error is raised.
+
+        Raises:
+            MqttConnectionError: if the broker is not reachable.
+        """
+        try:
+            self.mqtt_api = MqttApi(
+                mqtt_config, interval_minutes=self.time_resolution)
+            if not self.mqtt_api.wait_ready():
+                raise MqttConnectionError(
+                    'MQTT broker '
+                    f"{mqtt_config.get('broker')}:{mqtt_config.get('port')} "
+                    'did not accept the connection (check credentials and TLS)'
+                )
+        except Exception:
+            # Any startup failure here (unreachable broker, invalid mqtt
+            # settings) ends batcontrol: restore the inverter first.
+            if self.mqtt_api is not None:
+                with contextlib.suppress(Exception):
+                    self.mqtt_api.shutdown()
+                self.mqtt_api = None
+            try:
+                self.inverter.shutdown()
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.error(
+                    'Could not restore inverter settings after MQTT '
+                    'startup failure: %s', exc)
+            raise
 
     def shutdown(self):
         """ Shutdown Batcontrol and dependent modules (inverter..) """

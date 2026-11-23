@@ -101,6 +101,28 @@ TOPIC_GRID_CHARGE_LOCKED = 'grid_charge_locked'
 TOPIC_SET_SUFFIX = '/set'
 
 
+class MqttConnectionError(RuntimeError):
+    """The MQTT broker could not be reached at startup.
+
+    batcontrol does not run without a configured broker: it exits with an
+    error, so a supervisor (Docker, HA add-on, systemd) can restart it.
+    """
+
+
+def _parse_number(config: dict, key: str, kind, default=None):
+    """ Read a numeric mqtt setting, accepting numeric strings.
+
+    Raises:
+        ValueError: naming the key, if the value is missing or not a number.
+    """
+    value = config.get(key, default)
+    try:
+        return kind(value)
+    except (TypeError, ValueError) as e:
+        raise ValueError(
+            f'mqtt: {key} must be a number, got {value!r}') from e
+
+
 class MqttApi:
     """ MQTT API to publish data from batcontrol to MQTT for further processing+visualization"""
 
@@ -170,27 +192,47 @@ class MqttApi:
             )
 
         self.client.on_connect = self.on_connect
+        # Validate before connecting: values from the HA add-on form may be
+        # strings, and a config error must not look like an unreachable broker.
+        port = _parse_number(config, 'port', int)
+        attempts = max(1, _parse_number(config, 'retry_attempts', int, 5))
+        delay = max(0.0, _parse_number(config, 'retry_delay', float, 10))
+        self._connect_with_retry(config['broker'], port, attempts, delay)
+        # Started after the first successful connect, so paho's own
+        # reconnect logic does not race with the retries above. From here
+        # on paho handles reconnects.
         self.client.loop_start()
-        retry_attempts = config.get('retry_attempts', 5)
-        retry_delay = config.get('retry_delay', 10)
-        while retry_attempts > 0:
+
+    def _connect_with_retry(self, broker, port, attempts, delay) -> None:
+        """ Connect to the broker, retrying while it is unreachable.
+
+        paho raises OSError (connection refused, timeout, DNS) when the
+        broker is unreachable - only that is retried. ValueError/TypeError
+        mean invalid arguments and fail at once.
+
+        Raises:
+            MqttConnectionError: after the last failed attempt, or at once
+                if paho rejects the arguments.
+        """
+        for attempt in range(1, attempts + 1):
             try:
-                self.client.connect(config['broker'], config['port'], 60)
-                break
+                self.client.connect(broker, port, 60)
+                return
             except (ValueError, TypeError) as e:
+                raise MqttConnectionError(
+                    f'Invalid MQTT broker settings {broker}:{port}: {e}'
+                ) from e
+            except OSError as e:
+                if attempt == attempts:
+                    raise MqttConnectionError(
+                        f'Could not connect to MQTT broker {broker}:{port} '
+                        f'after {attempts} attempt(s): {e}'
+                    ) from e
                 logger.error(
-                    'Connection failed: %s, retrying[%d]x in [%d] seconds',
-                    e,
-                    retry_attempts,
-                    retry_delay)
-                retry_attempts -= 1
-                if retry_attempts == 0:
-                    logger.error('All retry attempts failed')
-                    raise
-                logger.info(
-                    'Retrying connection in %d seconds...',
-                    retry_delay)
-                time.sleep(retry_delay)
+                    'Connection to MQTT broker %s:%s failed (attempt %d/%d): '
+                    '%s. Retrying in %s seconds',
+                    broker, port, attempt, attempts, e, delay)
+                time.sleep(delay)
 
     def on_connect(self, client, userdata, flags, rc):
         """ Callback for MQTT connection to serve /status"""
