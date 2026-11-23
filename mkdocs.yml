@@ -94,6 +94,7 @@ plugins:
           - development/frontend-build.md: Building the dashboard and how it reaches the wheel
           - development/mcp-spec.md: Design contract for the read-only MCP server
           - development/mcp-evaluation.md: Questions for checking the MCP tools against real use
+          - development/pydantic-config-migration.md: Plan for moving the configuration to Pydantic models, section by section
 
 nav:
   - Home: index.md
@@ -129,6 +130,7 @@ nav:
       - Frontend Build: development/frontend-build.md
       - MCP Server Specification: development/mcp-spec.md
       - MCP Evaluation: development/mcp-evaluation.md
+      - Pydantic Config Migration: development/pydantic-config-migration.md
 
 extra_javascript:
   - assets/js/vendor/chart.umd.js
