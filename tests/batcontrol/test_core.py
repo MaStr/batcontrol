@@ -19,6 +19,7 @@ from batcontrol.inverter import (
 from batcontrol.logic.logic import Logic as LogicFactory
 from batcontrol.logic.common import CommonLogic
 from batcontrol.value_utils import parse_bool_flag
+from batcontrol.mqtt_api import MqttConnectionError
 
 
 class TestModeLimitBatteryChargeRate:
@@ -2149,6 +2150,113 @@ class TestPeakShavingStartupAnnouncement:
         text = self._build(mocker, caplog, logic_type, False)
 
         assert 'Peak shaving is ENABLED' not in text
+
+class TestMqttBrokerUnreachable:
+    """R-M01: without a reachable broker batcontrol stops, after restoring
+    the inverter settings it has already changed."""
+
+    CONFIG = dict(TestGridChargeLockTopicRegistration.BASE_CONFIG, mqtt={
+        'enabled': True,
+        'broker': 'mqtt.lan',
+        'port': 1883,
+        'topic': 'house/batcontrol',
+    })
+
+    def _patch_core(self, mocker):
+        mock_inverter = mocker.MagicMock()
+        mock_inverter.max_pv_charge_rate = 3000
+        mock_inverter.get_max_capacity.return_value = 10000
+        mocker.patch('batcontrol.core.tariff_factory.create_tarif_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.inverter_factory.create_inverter',
+                     autospec=True, return_value=mock_inverter)
+        mocker.patch('batcontrol.core.solar_factory.create_solar_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.consumption_factory.create_consumption',
+                     autospec=True, return_value=mocker.MagicMock())
+        return mock_inverter
+
+    def test_connect_failure_restores_inverter_and_raises(self, mocker):
+        inverter = self._patch_core(mocker)
+        mocker.patch('batcontrol.core.MqttApi',
+                     side_effect=MqttConnectionError('unreachable'))
+
+        with pytest.raises(MqttConnectionError, match='unreachable'):
+            Batcontrol(dict(self.CONFIG))
+
+        inverter.shutdown.assert_called_once()
+
+    def test_not_ready_restores_inverter_and_raises(self, mocker):
+        """R-M27: wait_ready() == False (e.g. bad credentials) also stops."""
+        inverter = self._patch_core(mocker)
+        mock_mqtt_api = mocker.MagicMock()
+        mock_mqtt_api.wait_ready.return_value = False
+        mocker.patch('batcontrol.core.MqttApi', return_value=mock_mqtt_api)
+
+        with pytest.raises(MqttConnectionError, match='mqtt.lan:1883'):
+            Batcontrol(dict(self.CONFIG))
+
+        mock_mqtt_api.shutdown.assert_called_once()
+        inverter.shutdown.assert_called_once()
+        inverter.activate_mqtt.assert_not_called()
+
+    def test_invalid_mqtt_settings_also_restore_inverter(self, mocker):
+        inverter = self._patch_core(mocker)
+        mocker.patch('batcontrol.core.MqttApi',
+                     side_effect=ValueError('mqtt: port must be a number'))
+
+        with pytest.raises(ValueError, match='port'):
+            Batcontrol(dict(self.CONFIG))
+
+        inverter.shutdown.assert_called_once()
+
+    def test_failed_inverter_restore_is_logged(self, mocker, caplog):
+        inverter = self._patch_core(mocker)
+        inverter.shutdown.side_effect = RuntimeError('fronius offline')
+        mocker.patch('batcontrol.core.MqttApi',
+                     side_effect=MqttConnectionError('unreachable'))
+
+        with pytest.raises(MqttConnectionError):
+            Batcontrol(dict(self.CONFIG))
+
+        assert 'fronius offline' in caplog.text
+
+    def test_evcc_broker_failure_restores_inverter_and_disconnects(
+            self, mocker):
+        inverter = self._patch_core(mocker)
+        mock_mqtt_api = mocker.MagicMock()
+        mock_mqtt_api.wait_ready.return_value = True
+        mocker.patch('batcontrol.core.MqttApi', return_value=mock_mqtt_api)
+        mock_evcc = mocker.MagicMock()
+        mock_evcc.start.side_effect = MqttConnectionError('evcc unreachable')
+        mocker.patch('batcontrol.core.EvccApi', return_value=mock_evcc)
+        config = dict(self.CONFIG, evcc={
+            'enabled': True, 'broker': 'evcc.lan', 'port': 1883,
+            'status_topic': 'evcc/status',
+            'loadpoint_topic': ['evcc/loadpoints/1/charging'],
+        })
+
+        with pytest.raises(MqttConnectionError, match='evcc unreachable'):
+            Batcontrol(config)
+
+        mock_evcc.shutdown.assert_called_once()
+        mock_mqtt_api.shutdown.assert_called_once()
+        inverter.shutdown.assert_called_once()
+
+    def test_invalid_evcc_config_restores_inverter(self, mocker):
+        inverter = self._patch_core(mocker)
+        mock_mqtt_api = mocker.MagicMock()
+        mock_mqtt_api.wait_ready.return_value = True
+        mocker.patch('batcontrol.core.MqttApi', return_value=mock_mqtt_api)
+        mocker.patch('batcontrol.core.EvccApi', side_effect=ValueError(
+            'evcc: tls is enabled but cafile is missing or empty'))
+        config = dict(self.CONFIG, evcc={'enabled': True})
+
+        with pytest.raises(ValueError, match='cafile'):
+            Batcontrol(config)
+
+        mock_mqtt_api.shutdown.assert_called_once()
+        inverter.shutdown.assert_called_once()
 
 
 if __name__ == '__main__':

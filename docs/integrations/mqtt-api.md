@@ -34,14 +34,22 @@ mqtt:
 
 ```yaml
 mqtt:
-  retry_attempts: 5    # Number of connection retry attempts
-  retry_delay: 10      # Delay in seconds between retry attempts
+  retry_attempts: 5    # Number of connection attempts at startup
+  retry_delay: 10      # Delay in seconds between attempts
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `retry_attempts` | integer | `5` | Number of times to retry connection on failure |
-| `retry_delay` | integer | `10` | Seconds to wait between retry attempts |
+| `retry_attempts` | integer | `5` | Number of connection attempts at startup (at least 1) |
+| `retry_delay` | integer | `10` | Seconds to wait between attempts |
+
+**Broker not reachable at startup:** batcontrol tries to connect `retry_attempts` times
+(connection refused, timeout, DNS errors). If the broker is still not reachable, or does
+not accept the connection within 30 seconds (e.g. wrong credentials or TLS settings),
+batcontrol restores the inverter settings it has already changed and exits with an error
+(exit code 1). It does not run without the configured broker. Let your supervisor restart
+it: Docker with a `restart:` policy, the Home Assistant add-on with its watchdog enabled, or systemd with
+`Restart=on-failure`. Once running, a lost connection is handled by automatic reconnects.
 
 ### TLS/SSL Configuration
 

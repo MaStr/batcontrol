@@ -13,6 +13,7 @@ import time
 from .banner import log_startup_banner
 from .core import Batcontrol
 from .inverter import InverterOutageError
+from .mqtt_api import MqttConnectionError
 from .setup import setup_logging, load_config
 
 
@@ -121,7 +122,13 @@ def main() -> int:
             return 1
         logger.info('Cleared persisted provider caches')
 
-    bc = Batcontrol(config, data_directory=args.data_dir)
+    try:
+        bc = Batcontrol(config, data_directory=args.data_dir)
+    except MqttConnectionError as e:
+        # Clean exit: a supervisor (Docker, HA add-on, systemd) restarts
+        # batcontrol; running without the configured broker is not supported.
+        logger.critical('%s. Terminating batcontrol.', e)
+        return 1
 
     # SIGHUP (kill -HUP <pid>) requests a refresh of all providers. The
     # handler only logs and sets a flag; the refresh happens at the start of

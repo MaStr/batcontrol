@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from batcontrol import __main__ as cli
+from batcontrol.mqtt_api import MqttConnectionError
 
 
 def test_default_data_directory_is_independent_of_config(tmp_path, monkeypatch):
@@ -124,3 +125,13 @@ def test_clear_does_not_follow_cache_directory_symlink(
     assert cli.main() == 1
     runtime.assert_not_called()
     assert protected.read_text(encoding='utf-8') == 'keep'
+
+
+def test_unreachable_mqtt_broker_exits_with_error(runtime, caplog):
+    """R-M01: no traceback, a clear log line and exit code 1."""
+    runtime.side_effect = MqttConnectionError(
+        'Could not connect to MQTT broker mqtt.lan:1883 after 5 attempt(s)')
+
+    assert cli.main() == 1
+    assert 'mqtt.lan:1883' in caplog.text
+    assert 'Terminating batcontrol' in caplog.text

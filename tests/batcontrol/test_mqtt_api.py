@@ -13,7 +13,7 @@ from batcontrol.logic.decision_trace import (
     Decision, DecisionRecord, DecisionTrace, Outcome, Reason,
 )
 from batcontrol.logic import PeakShavingConfig
-from batcontrol.mqtt_api import MqttApi
+from batcontrol.mqtt_api import MqttApi, MqttConnectionError
 
 
 def _make_handler_stub():
@@ -1106,3 +1106,94 @@ class TestShutdown:
         api.client.loop_stop.assert_called_once()
         api.client.publish.assert_not_called()
         api.client.disconnect.assert_not_called()
+
+
+class TestBrokerUnreachable:
+    """R-M01: an unreachable broker is retried, then batcontrol stops with
+    a clear MqttConnectionError instead of a traceback on the first try."""
+
+    CONFIG = {
+        'topic': 'house/batcontrol',
+        'broker': 'mqtt.lan',
+        'port': 1883,
+        'retry_attempts': 3,
+        'retry_delay': 7,
+    }
+
+    def test_oserror_is_retried_until_success(self):
+        with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient, \
+                patch('batcontrol.mqtt_api.time.sleep') as sleep:
+            client = MockClient.return_value
+            client.connect.side_effect = [
+                ConnectionRefusedError(111, 'Connection refused'),
+                OSError(113, 'No route to host'),
+                None,
+            ]
+            MqttApi(dict(self.CONFIG))
+
+        assert client.connect.call_count == 3
+        assert sleep.call_args_list == [call(7), call(7)]
+        client.loop_start.assert_called_once()
+
+    def test_raises_connection_error_after_last_attempt(self):
+        with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient, \
+                patch('batcontrol.mqtt_api.time.sleep'):
+            client = MockClient.return_value
+            client.connect.side_effect = ConnectionRefusedError(
+                111, 'Connection refused')
+            with pytest.raises(MqttConnectionError,
+                               match=r'mqtt\.lan:1883 after 3 attempt'):
+                MqttApi(dict(self.CONFIG))
+
+        assert client.connect.call_count == 3
+        client.loop_start.assert_not_called()
+
+    def test_zero_attempts_still_tries_once(self):
+        with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient, \
+                patch('batcontrol.mqtt_api.time.sleep'):
+            client = MockClient.return_value
+            client.connect.side_effect = OSError('timed out')
+            with pytest.raises(MqttConnectionError):
+                MqttApi(dict(self.CONFIG, retry_attempts=0))
+
+        assert client.connect.call_count == 1
+
+    def test_invalid_arguments_are_not_retried(self):
+        with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient, \
+                patch('batcontrol.mqtt_api.time.sleep') as sleep:
+            client = MockClient.return_value
+            client.connect.side_effect = ValueError('Invalid host.')
+            with pytest.raises(MqttConnectionError, match='Invalid MQTT'):
+                MqttApi(dict(self.CONFIG))
+
+        assert client.connect.call_count == 1
+        sleep.assert_not_called()
+
+    def test_numeric_strings_from_ha_form_are_accepted(self):
+        with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient, \
+                patch('batcontrol.mqtt_api.time.sleep') as sleep:
+            client = MockClient.return_value
+            client.connect.side_effect = [OSError('refused'), None]
+            MqttApi(dict(self.CONFIG, port='1883', retry_attempts='2',
+                         retry_delay='3'))
+
+        client.connect.assert_called_with('mqtt.lan', 1883, 60)
+        sleep.assert_called_once_with(3)
+
+    @pytest.mark.parametrize('value', ['abc', True, 2.7, '2.5', None])
+    @pytest.mark.parametrize('key', ['port', 'retry_attempts', 'retry_delay'])
+    def test_non_integer_setting_names_the_key(self, key, value):
+        """No silent coercion: True -> 1 or 2.7 -> 2 would hide a typo."""
+        with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient:
+            with pytest.raises(ValueError, match=key):
+                MqttApi(dict(self.CONFIG, **{key: value}))
+            MockClient.return_value.connect.assert_not_called()
+
+    @pytest.mark.parametrize('value, expected', [
+        (5, 5), ('5', 5), (' 5 ', 5), (5.0, 5)])
+    def test_integer_values_are_accepted(self, value, expected):
+        with patch('batcontrol.mqtt_api.mqtt.Client') as MockClient, \
+                patch('batcontrol.mqtt_api.time.sleep') as sleep:
+            MockClient.return_value.connect.side_effect = [OSError(), None]
+            MqttApi(dict(self.CONFIG, retry_delay=value))
+        sleep.assert_called_once_with(expected)
