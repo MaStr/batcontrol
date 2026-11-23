@@ -30,6 +30,7 @@ import numpy as np
 from .mqtt_api import MqttApi, MqttConnectionError
 from .evcc_api import EvccApi
 from .scheduler import SchedulerThread
+from .serial_executor import SerialExecutor
 
 from .logic import Logic as LogicFactory
 from .logic.logic import parse_logic_expert_settings
@@ -94,6 +95,26 @@ class _PendingTrace(threading.local):
     trace = None
 
 
+def _serialized(func):
+    """Run a method under the control lock (see Batcontrol docstring).
+
+    Entry points called from other threads (MQTT, evcc) and the methods that
+    command the inverter use it, so they never interleave with the decide-
+    and-apply part of a control cycle or with each other. The lock is
+    re-entrant, so these methods may call each other. After shutdown() has
+    started, calls are ignored: the inverter settings are being restored.
+    """
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        # pylint: disable=protected-access
+        with self._control_lock:
+            if self._shutting_down:
+                logger.info("Shutting down, ignoring '%s'", func.__name__)
+                return None
+            return func(self, *args, **kwargs)
+    return wrapper
+
+
 def _tolerate_inverter_outage(func):
     """Swallow inverter outages for externally triggered (API/evcc) actions.
 
@@ -117,10 +138,49 @@ def _tolerate_inverter_outage(func):
 
 
 class Batcontrol:
-    """ Main class for Batcontrol, handles the logic and control of the battery system """
+    """ Main class for Batcontrol, handles the logic and control of the battery system
+
+    Threading model:
+
+    - The main thread runs the control cycle (run()).
+    - The MQTT API's set callbacks (api_set_*, the grid charge lock and the
+      inverters' own set topics) run on one worker thread, a SerialExecutor,
+      in arrival order - never on paho's network thread, see
+      serial_executor.py.
+    - evcc callbacks (set_discharge_blocked and the limit setters) run on
+      the evcc client's network thread.
+    - The scheduler thread refreshes the forecast providers; the web server
+      threads only read.
+
+    One re-entrant control lock (_control_lock) serializes everything that
+    reads or changes control state or talks to the inverter: the decide-and-
+    apply part of a cycle (inverter readings, override and block checks,
+    calculation, mode command, publishing the result) and every external
+    entry point (@_serialized). An external command that arrives while a
+    cycle runs waits for the cycle and is applied after it, so it is never
+    overwritten by a decision made before it arrived.
+
+    Fetching the forecasts (HTTP) happens before the lock is taken, so
+    external commands never wait for a provider. The lock is held while the
+    inverter is read and commanded: normally well below a second, with a
+    failing Fronius inverter up to the HTTP timeouts and retries of one
+    cycle (minutes). Commands that wait meanwhile would talk to the same
+    inverter anyway.
+
+    Rules that keep this free of deadlocks: never hold the lock while
+    waiting for another thread that may need it - so no MQTT/evcc client
+    shutdown (it joins the network thread) under the lock; decision journal
+    listeners run under the lock and must not block; the web layer never
+    takes the lock, it reads the frozen per-cycle state.
+    """
     general_logic = None  # type: CommonLogic
 
     def __init__(self, configdict: dict, data_directory=None):
+        # Serializes the control cycle and external commands, see the class
+        # docstring. Created first: shutdown() may run after a failed init.
+        self._control_lock = threading.RLock()
+        self._shutting_down = False
+        self._command_executor = None
         # For API
         self.api_overwrite = False
         # -1 = charge from grid, 0 = avoid discharge,
@@ -437,6 +497,11 @@ class Batcontrol:
             if config.get('mqtt').get('enabled', False):
                 logger.info('MQTT Connection enabled')
                 self.__start_mqtt_api(config.get('mqtt'))
+                # Set callbacks run on their own thread under the control
+                # lock, never on paho's network thread (serial_executor.py)
+                self._command_executor = SerialExecutor(
+                    'batcontrol-commands', lock=self._control_lock)
+                self.mqtt_api.set_command_executor(self._command_executor)
                 # The "Decision" sensor follows the status changes of the
                 # decision journal, plus the refreshes that keep the numbers
                 # and the reason in its text current
@@ -654,6 +719,9 @@ class Batcontrol:
     def __abort_broker_startup(self, what: str) -> None:
         """ Undo what __init__ started before a broker connection failed:
         disconnect the MQTT clients and restore the inverter settings. """
+        if self._command_executor is not None:
+            self._command_executor.shutdown()
+            self._command_executor = None
         for attr in ('evcc_api', 'mqtt_api'):
             api = getattr(self, attr, None)
             if api is not None:
@@ -678,8 +746,20 @@ class Batcontrol:
                 self.scheduler.clear_jobs()
                 del self.scheduler
 
-            self.inverter.shutdown()
-            del self.inverter
+            # No new MQTT commands; waits for one that is running
+            if getattr(self, '_command_executor', None) is not None:
+                self._command_executor.shutdown()
+                self._command_executor = None
+            # Under the control lock, so no external command (evcc) is
+            # halfway through an inverter call while the settings are
+            # restored; commands arriving later are ignored. The MQTT/evcc
+            # clients are stopped after the lock is released: their
+            # shutdown joins the network thread, which may be waiting for
+            # the lock in an evcc callback.
+            with self._control_lock:
+                self._shutting_down = True
+                self.inverter.shutdown()
+                del self.inverter
             if self.evcc_api is not None:
                 self.evcc_api.shutdown()
                 del self.evcc_api
@@ -849,9 +929,6 @@ class Batcontrol:
         """ Main calculation & control loop """
         logger.debug('Timeslots are in %d-minute intervals', self.time_resolution)
 
-        # Reset some values
-        self.__reset_run_data()
-
         # One timestamp for the whole cycle. The providers align slot 0 to
         # it, the elapsed part of slot 0 is scaled with it and the logic
         # derives the remaining time from it. Separate clock reads could
@@ -859,19 +936,23 @@ class Batcontrol:
         # starts on full minutes - and with that on :00/:15/:30/:45.
         cycle_now = datetime.datetime.now().astimezone(self.timezone)
 
-        # always_allow_discharge needs to be above max_charging from grid.
-        # If not, it will oscillate between discharging and charging.
-        self.__update_effective_grid_charge_limit()
-        always_allow_discharge_limit = self.general_logic.get_always_allow_discharge_limit()
+        # The forecasts are fetched before the control lock is taken: the
+        # providers may wait for HTTP, and external commands must not wait
+        # for that (see the class docstring).
+        forecasts, forecast_error = self.__fetch_forecasts(cycle_now)
 
-        # for API
-        self.refresh_static_values()
-        self.set_discharge_limit(
-            self.__gross_capacity() * always_allow_discharge_limit
-        )
-        self.last_run_time = cycle_now.timestamp()
+        with self._control_lock:
+            self.__control_cycle(cycle_now, forecasts, forecast_error)
 
-        # get forecasts
+    def __fetch_forecasts(self, cycle_now):
+        """ Fetch prices, production and consumption forecast for the cycle.
+
+        Reads no control state, so it runs without the control lock.
+
+        Returns:
+            ((price_dict, production_forecast, consumption_forecast,
+            fc_period), None) or (None, exception) if a provider failed.
+        """
         try:
             price_dict = self.dynamic_tariff.get_prices(now=cycle_now)
             production_forecast = self.fc_solar.get_forecast(now=cycle_now)
@@ -896,19 +977,55 @@ class Batcontrol:
                     "Insufficient consumption forecast data available, reducing "
                     "forecast to %d slots", len(consumption_forecast))
                 fc_period = len(consumption_forecast) - 1
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            return None, e
+        return (price_dict, production_forecast, consumption_forecast,
+                fc_period), None
 
-            # Build the arrays inside the try block: a gap in a provider's
-            # data (missing slot key, non-numeric value) is a forecast
-            # error like a failed fetch, not a reason to end the process.
-            production = np.zeros(fc_period + 1)
-            consumption = np.zeros(fc_period + 1)
-            prices = np.zeros(fc_period + 1)
+    def __forecast_arrays(self, forecasts):
+        """ Build the production, consumption and price arrays.
 
-            for h in range(fc_period + 1):
-                production[h] = production_forecast[h] * \
-                    self.production_offset_percent
-                consumption[h] = consumption_forecast[h]
-                prices[h] = round(price_dict[h], self.round_price_digits)
+        Raises on a gap in a provider's data (missing slot key, non-numeric
+        value); the caller treats that as a forecast error.
+        """
+        price_dict, production_forecast, consumption_forecast, fc_period = \
+            forecasts
+        production = np.zeros(fc_period + 1)
+        consumption = np.zeros(fc_period + 1)
+        prices = np.zeros(fc_period + 1)
+
+        for h in range(fc_period + 1):
+            production[h] = production_forecast[h] * \
+                self.production_offset_percent
+            consumption[h] = consumption_forecast[h]
+            prices[h] = round(price_dict[h], self.round_price_digits)
+        return production, consumption, prices
+
+    def __control_cycle(self, cycle_now, forecasts, forecast_error):
+        """ Decide and apply the inverter mode. Runs under the control lock. """
+        # Reset some values
+        self.__reset_run_data()
+
+        # always_allow_discharge needs to be above max_charging from grid.
+        # If not, it will oscillate between discharging and charging.
+        self.__update_effective_grid_charge_limit()
+        always_allow_discharge_limit = self.general_logic.get_always_allow_discharge_limit()
+
+        # for API
+        self.refresh_static_values()
+        self.set_discharge_limit(
+            self.__gross_capacity() * always_allow_discharge_limit
+        )
+        self.last_run_time = cycle_now.timestamp()
+
+        try:
+            if forecast_error is not None:
+                raise forecast_error
+            # Inside the try block: a gap in a provider's data is a
+            # forecast error like a failed fetch, not a reason to end the
+            # process.
+            production, consumption, prices = self.__forecast_arrays(
+                forecasts)
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.warning(
                 'Following Exception occurred when trying to get forecasts: %s',
@@ -999,7 +1116,10 @@ class Batcontrol:
             self.get_stored_usable_energy(),
             self.get_free_capacity()
         )
-        peak_shaving_config_enabled = self.peak_shaving_config.enabled
+        # Read once: the enabled flag and the rest of the config must come
+        # from the same object, also if a setter replaced it meanwhile.
+        peak_shaving_config = self.peak_shaving_config
+        peak_shaving_config_enabled = peak_shaving_config.enabled
 
         # Determine whether evcc conditions require peak shaving to be disabled.
         # This must happen before building calc_parameters so the logic never
@@ -1034,7 +1154,7 @@ class Batcontrol:
         # evcc may force peak shaving off for a single cycle; the underlying
         # peak_shaving_config is left untouched.
         ps_runtime = dataclasses.replace(
-            self.peak_shaving_config,
+            peak_shaving_config,
             enabled=peak_shaving_config_enabled and not evcc_disable_peak_shaving,
         )
         max_capacity = self.get_max_capacity()
@@ -1305,18 +1425,21 @@ class Batcontrol:
             self.__set_charge_rate(0)
         self.__commit_decision(mode, control_source, value)
 
+    @_serialized
     def allow_discharging(self, control_source: str = CONTROL_SOURCE_OPTIMIZER):
         """ Allow unlimited discharging of the battery """
         logger.info('Mode: Allow Discharging')
         self.inverter.set_mode_allow_discharge()
         self.__set_mode(MODE_ALLOW_DISCHARGING, control_source)
 
+    @_serialized
     def avoid_discharging(self, control_source: str = CONTROL_SOURCE_OPTIMIZER):
         """ Avoid discharging the battery """
         logger.info('Mode: Avoid Discharging')
         self.inverter.set_mode_avoid_discharge()
         self.__set_mode(MODE_AVOID_DISCHARGING, control_source)
 
+    @_serialized
     def force_charge(
             self,
             charge_rate=500,
@@ -1333,6 +1456,7 @@ class Batcontrol:
         self.__set_mode(MODE_FORCE_CHARGING, control_source, charge_rate)
         self.__set_charge_rate(charge_rate)
 
+    @_serialized
     def limit_battery_charge_rate(
             self,
             limit_charge_rate: int = 0,
@@ -1498,6 +1622,7 @@ class Batcontrol:
             self.mqtt_api.publish_always_allow_discharge_limit_capacity(
                 discharge_limit)
 
+    @_serialized
     def set_always_allow_discharge_limit(
             self, always_allow_discharge_limit: float) -> None:
         """ Set the always allow discharge limit for battery control """
@@ -1515,6 +1640,7 @@ class Batcontrol:
         """ Get the always allow discharge limit for battery control """
         return self.general_logic.get_always_allow_discharge_limit()
 
+    @_serialized
     def set_max_charging_from_grid_limit(self, limit: float) -> None:
         """ Set the max charging from grid limit for battery control.
 
@@ -1565,6 +1691,7 @@ class Batcontrol:
         self.max_charging_from_grid_limit = effective
         return True
 
+    @_serialized
     @_tolerate_inverter_outage
     def set_discharge_blocked(self, discharge_blocked) -> None:
         """ Avoid discharging if an external block is received,
@@ -1591,6 +1718,7 @@ class Batcontrol:
                     else Reason.EXTERNAL_DISCHARGE_UNBLOCK):
                 self.avoid_discharging()
 
+    @_serialized
     def refresh_static_values(self) -> None:
         """ Refresh static and some dynamic values for API.
             Collected data is stored, that it is not fetched again.
@@ -1663,6 +1791,7 @@ class Batcontrol:
             self.mqtt_api.publish_peak_shaving_price_limit(
                 self.peak_shaving_config.price_limit)
 
+    @_serialized
     @_tolerate_inverter_outage
     def api_set_mode(self, mode: int):
         """ Log and change config run mode of inverter(s) from external call """
@@ -1703,6 +1832,7 @@ class Batcontrol:
         else:
             self.__set_control_source(CONTROL_SOURCE_API)
 
+    @_serialized
     @_tolerate_inverter_outage
     def api_set_charge_rate(self, charge_rate: int):
         """ Log and change config charge_rate and activate charging."""
@@ -1721,6 +1851,7 @@ class Batcontrol:
         else:
             self.__set_control_source(CONTROL_SOURCE_API)
 
+    @_serialized
     @_tolerate_inverter_outage
     def api_set_limit_battery_charge_rate(self, limit: int):
         """ Set dynamic battery charge rate limit from external call
@@ -1748,6 +1879,7 @@ class Batcontrol:
         """ Get current dynamic battery charge rate limit """
         return self._limit_battery_charge_rate
 
+    @_serialized
     def api_set_always_allow_discharge_limit(self, limit: float):
         """ Set always allow discharge limit for battery control via external API request.
             The change is temporary and will not be written to the config file.
@@ -1760,6 +1892,7 @@ class Batcontrol:
             'API: Setting always allow discharge limit to %.2f', limit)
         self.set_always_allow_discharge_limit(limit)
 
+    @_serialized
     def api_set_max_charging_from_grid_limit(self, limit: float):
         """ Set max charging from grid limit for battery control via external API request.
             The change is temporary and will not be written to the config file.
@@ -1772,6 +1905,7 @@ class Batcontrol:
             'API: Setting max charging from grid limit to %.2f', limit)
         self.set_max_charging_from_grid_limit(limit)
 
+    @_serialized
     @_tolerate_inverter_outage
     def api_set_grid_charge_lock(self, locked: bool) -> None:
         """ Block/unblock charging from the grid on request of an external
@@ -1805,6 +1939,7 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_grid_charge_locked(locked)
 
+    @_serialized
     def api_set_min_price_difference(self, min_price_difference: float):
         """ Set min price difference for battery control via external API request.
             The change is temporary and will not be written to the config file.
@@ -1819,6 +1954,7 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_min_price_difference(min_price_difference)
 
+    @_serialized
     def api_set_min_price_difference_rel(
             self, min_price_difference_rel: float):
         """ Log and change config min_price_difference_rel from external call """
@@ -1836,6 +1972,7 @@ class Batcontrol:
                 min_price_difference_rel
             )
 
+    @_serialized
     def api_set_production_offset(self, production_offset: float):
         """ Set production offset percentage from external API request.
             The change is temporary and will not be written to the config file.
@@ -1852,6 +1989,7 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_production_offset(production_offset)
 
+    @_serialized
     def api_set_peak_shaving_enabled(self, enabled_str: str):
         """ Set peak shaving enabled/disabled via external API request.
             The change is temporary and will not be written to the config file.
@@ -1863,6 +2001,7 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_peak_shaving_enabled(enabled)
 
+    @_serialized
     def api_set_peak_shaving_allow_full_after(self, hour: int):
         """ Set peak shaving target hour via external API request.
             The change is temporary and will not be written to the config file.
@@ -1881,6 +2020,7 @@ class Batcontrol:
         if self.mqtt_api is not None:
             self.mqtt_api.publish_peak_shaving_allow_full_after(hour)
 
+    @_serialized
     def api_set_peak_shaving_price_limit(self, price_limit: float):
         """ Set peak shaving price limit via external API request.
             The change is temporary and will not be written to the config file.
