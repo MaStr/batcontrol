@@ -1132,7 +1132,7 @@ class TestBrokerUnreachable:
             MqttApi(dict(self.CONFIG))
 
         assert client.connect.call_count == 3
-        assert sleep.call_args_list == [call(7.0), call(7.0)]
+        assert sleep.call_args_list == [call(7), call(7)]
         client.loop_start.assert_called_once()
 
     def test_raises_connection_error_after_last_attempt(self):
@@ -1178,7 +1178,7 @@ class TestBrokerUnreachable:
                          retry_delay='3'))
 
         client.connect.assert_called_with('mqtt.lan', 1883, 60)
-        sleep.assert_called_once_with(3.0)
+        sleep.assert_called_once_with(3)
 
     @pytest.mark.parametrize('key', ['port', 'retry_attempts', 'retry_delay'])
     def test_non_numeric_setting_names_the_key(self, key):

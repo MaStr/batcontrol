@@ -41,7 +41,7 @@ mqtt:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `retry_attempts` | integer | `5` | Number of connection attempts at startup (at least 1) |
-| `retry_delay` | number | `10` | Seconds to wait between attempts (decimals allowed) |
+| `retry_delay` | integer | `10` | Seconds to wait between attempts |
 
 **Broker not reachable at startup:** batcontrol tries to connect `retry_attempts` times
 (connection refused, timeout, DNS errors). If the broker is still not reachable, or does

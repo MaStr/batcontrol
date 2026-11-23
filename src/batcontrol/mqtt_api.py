@@ -196,7 +196,7 @@ class MqttApi:
         # strings, and a config error must not look like an unreachable broker.
         port = _parse_number(config, 'port', int)
         attempts = max(1, _parse_number(config, 'retry_attempts', int, 5))
-        delay = max(0.0, _parse_number(config, 'retry_delay', float, 10))
+        delay = max(0, _parse_number(config, 'retry_delay', int, 10))
         self._connect_with_retry(config['broker'], port, attempts, delay)
         # Started after the first successful connect, so paho's own
         # reconnect logic does not race with the retries above. From here
@@ -230,7 +230,7 @@ class MqttApi:
                     ) from e
                 logger.error(
                     'Connection to MQTT broker %s:%s failed (attempt %d/%d): '
-                    '%s. Retrying in %s seconds',
+                    '%s. Retrying in %d seconds',
                     broker, port, attempt, attempts, e, delay)
                 time.sleep(delay)
 
