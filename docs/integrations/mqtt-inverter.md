@@ -166,7 +166,7 @@ def on_connect(client, userdata, flags, reason_code, properties):
         print(f"Connection refused: {reason_code}")
         return
     print(f"Connected with result code {reason_code}")
-    
+
     # Publish initial state (RETAINED)
     client.publish(f"{BASE_TOPIC}/status/capacity", "10000", retain=True)
     client.publish(f"{BASE_TOPIC}/status/min_soc", "5", retain=True)
