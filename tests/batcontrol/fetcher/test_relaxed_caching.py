@@ -1,6 +1,5 @@
 """Unit tests for fetcher.relaxed_caching module"""
 
-import time
 import threading
 import pytest
 from batcontrol.fetcher import RelaxedCaching, CacheMissError
@@ -31,33 +30,43 @@ class TestRelaxedCaching:
         """Test CacheMissError when cache is empty"""
         cache = RelaxedCaching()
 
-        with pytest.raises(CacheMissError):
+        with pytest.raises(CacheMissError) as exc_info:
             cache.get_last_entry()
 
-    def test_cache_expiration(self):
+        assert 'entry_key is None' in str(exc_info.value)
+
+    def test_cache_expiration(self, fake_clock):
         """Test cache expiration after TTL"""
-        cache = RelaxedCaching(ttl_hours=0.001)  # ~3.6 seconds
+        # ttl_seconds is truncated to int: int(0.001 * 3600) == 3
+        cache = RelaxedCaching(ttl_hours=0.001, wall_clock=fake_clock)
+        assert cache.ttl_seconds == 3
         cache.store_new_entry({'data': 'test'})
 
-        time.sleep(4)
+        fake_clock.advance(2.9)
+        assert cache.get_last_entry() == {'data': 'test'}
 
-        with pytest.raises(CacheMissError):
+        fake_clock.advance(0.1)
+
+        with pytest.raises(CacheMissError) as exc_info:
             cache.get_last_entry()
 
-    def test_max_entries_limit(self):
+        assert 'expired' in str(exc_info.value)
+
+    def test_max_entries_limit(self, fake_clock):
         """Test that cache respects max_entries limit"""
-        cache = RelaxedCaching(max_entries=3)
+        cache = RelaxedCaching(max_entries=3, wall_clock=fake_clock)
 
         for i in range(4):
             cache.store_new_entry({'entry': i})
-            time.sleep(0.01)
+            fake_clock.advance(1)
 
         assert len(cache.cache_store) == 3
         assert cache.get_last_entry() == {'entry': 3}
 
-    def test_thread_safety(self):
+    def test_thread_safety(self, fake_clock):
         """Test thread safety with concurrent operations"""
-        cache = RelaxedCaching()
+        fake_clock.tick = 0.001  # distinct key per call
+        cache = RelaxedCaching(wall_clock=fake_clock)
         results = []
 
         def worker(thread_id):
