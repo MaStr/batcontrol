@@ -1,5 +1,6 @@
 """ Factory for creating consumption forecasters. """
 import logging
+from importlib import resources
 from ..value_utils import get_config_value
 from .forecastconsumption_interface import ForecastConsumptionInterface
 from .forecast_csv import ForecastConsumptionCsv
@@ -8,7 +9,18 @@ from .forecast_homeassistant import ForecastConsumptionHomeAssistant
 logger = logging.getLogger(__name__)
 logger.info('Loading module')
 
+# Fallback profile shipped as package data, so it exists in every install
+# (source checkout, Docker image, wheel-only Home Assistant add-on).
 DEFAULT_CSV_FILE = 'default_load_profile.csv'
+
+
+def default_load_profile_path() -> str:
+    """Path of the load profile bundled with batcontrol.
+
+    Wheels install unpacked, so this is a real file that can be re-read on
+    SIGHUP (resources.as_file() would only be valid inside its context).
+    """
+    return str(resources.files(__package__).joinpath(DEFAULT_CSV_FILE))
 
 # pylint: disable=too-few-public-methods
 
@@ -137,15 +149,17 @@ def _create_csv_forecast(
         csv_config['annual_consumption'] = config.get('annual_consumption', 0)
         csv_config['load_profile'] = config.get('load_profile', None)
 
-    if csv_config.get('load_profile', None) is None:
-        logger.error(
-            "No load profile specified, using default: %s",
-            DEFAULT_CSV_FILE
+    if not csv_config.get('load_profile'):
+        load_profile = default_load_profile_path()
+        logger.warning(
+            "No load profile specified, using the bundled default: %s",
+            load_profile
         )
-        csv_config['load_profile'] = DEFAULT_CSV_FILE
+    else:
+        load_profile = 'config/' + csv_config['load_profile']
 
     consumption = ForecastConsumptionCsv(
-        'config/' + csv_config['load_profile'],
+        load_profile,
         tz,
         csv_config.get('annual_consumption', 0),
         target_resolution=target_resolution

@@ -59,6 +59,9 @@ where = ["./src"]
 # Includes the bundled fonts and their OFL license texts, which the build
 # emits into static/assets - see THIRD-PARTY-LICENSES.md.
 "batcontrol.web" = ["static/**/*"]
+# Fallback load profile when consumption_forecast sets no load_profile.
+# Keep in sync with config/load_profile_default.csv (checked by a test).
+"batcontrol.forecastconsumption" = ["default_load_profile.csv"]
 
 [tool.setuptools.dynamic]
 version = {attr = "batcontrol.__pkginfo__.__version__"}
