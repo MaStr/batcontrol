@@ -3,6 +3,7 @@
 These helpers are independent of the Batcontrol core and raise ValueError
 for values that cannot be interpreted.
 """
+import datetime
 import logging
 import math
 from typing import Any, Optional
@@ -235,6 +236,18 @@ def parse_integer(value, config_key: str) -> int:
             f"{config_key} must be an integer, got {value!r}"
         )
     return int(number)
+
+
+def parse_time_of_day(value, config_key: str) -> str:
+    """Validate an "HH:MM" time of day config value and return it unchanged."""
+    try:
+        datetime.datetime.strptime(value, "%H:%M")
+    except (ValueError, TypeError) as exc:
+        raise ValueError(
+            f"{config_key} must be "
+            f"a valid HH:MM time string (e.g. '12:30'), got: {value!r}"
+        ) from exc
+    return value
 
 
 def parse_bool_config(value, config_key: str) -> bool:

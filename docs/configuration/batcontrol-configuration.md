@@ -136,3 +136,31 @@ These expert parameters allow fine-tuning of Batcontrol's behavior. See [Battery
 | `preserve_min_grid_charge_soc` | boolean | false | Also preserve `min_grid_charge_soc` as reserved battery energy during cheap/pre-expensive windows |
 | `market_price_refresh_time` | string | "12:30" | UTC time ("HH:MM") of the daily forced price refresh that picks up newly published next-day prices. An invalid value aborts startup |
 | `max_forecast_hours` | float | 0 | Use at most this many hours of the forecasts, for example `48`. `0` does not limit the horizon |
+
+## Configuration check at startup (with 0.11.1)
+
+At startup batcontrol checks `battery_control` and `battery_control_expert` and reports its findings in the log, with the prefix `[Config]`. This is the first step of moving the configuration to typed models ([plan](../development/pydantic-config-migration.md)); the other sections follow later.
+
+**Warnings** - the value is used as before, but it is very likely wrong:
+
+| Key | Warning when | Typical cause |
+|-----|--------------|---------------|
+| `always_allow_discharge_limit` | outside 0..1 | `90` instead of `0.90` - Always-Allow would never trigger |
+| `max_charging_from_grid_limit` | outside 0..1 | `80` instead of `0.80` |
+| `min_price_difference`, `min_price_difference_rel` | below 0 | |
+| `min_recharge_amount` | below 0 | |
+| `battery_control_expert.round_price_digits` | below 0 | a negative value rounds every price to 0, so no grid charging happens |
+| `battery_control_expert.production_offset_percent` | above 2.0 | `80` instead of `0.8`; MQTT and the API accept only 0..2 |
+| inverter `max_soc` | below `always_allow_discharge_limit` | the battery never reaches the SoC above which discharging is always allowed |
+| any key the two sections do not know | always | a typo, e.g. `production_ofset_percent`, which batcontrol would otherwise ignore silently |
+
+The ranges are the same ones that the MQTT/API setters already enforce.
+
+**Errors** - values batcontrol cannot use, for example a text such as `"0.05"` (in quotes) for `min_price_difference`, or an empty value. Values that already stopped batcontrol before (for example `round_price_digits: four`) still stop it with the same message.
+
+The environment variable `BATCONTROL_CONFIG_VALIDATION` controls how errors are handled:
+
+- `warn` (default): errors are logged, batcontrol starts as it did before. A configuration that started with an earlier version keeps starting.
+- `strict`: batcontrol stops at startup with a message that names the key. Warnings stay warnings.
+
+`time_resolution_minutes` given as a text that is not a number (e.g. `"quarter"`) now stops startup with a message that names the key, instead of `invalid literal for int()`.
