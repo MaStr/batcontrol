@@ -607,7 +607,9 @@ class Batcontrol:
         settings - before the error is raised.
 
         Raises:
-            MqttConnectionError: if the broker is not reachable.
+            MqttConnectionError: if the broker is not reachable or does not
+                accept the connection.
+            ValueError: on invalid mqtt settings (e.g. port, TLS).
         """
         try:
             self.mqtt_api = MqttApi(
