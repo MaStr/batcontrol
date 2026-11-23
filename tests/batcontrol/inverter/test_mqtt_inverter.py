@@ -557,6 +557,20 @@ class TestGetSocWaiting:
             inverter.get_SOC()
         assert event.waits == [mqtt_inverter.SOC_STARTUP_WAIT_SECONDS]
 
+    def test_activation_does_not_restart_window(self, clock):
+        inverter = MqttInverter({'base_topic': 'inverter', 'capacity': 10000,
+                                 'max_grid_charge_rate': 5000})
+        event = self._fake_event(inverter, clock)
+        with pytest.raises(RuntimeError, match='after startup'):
+            inverter.get_SOC()  # starts and uses up the window
+        mqtt_api = MagicMock(spec=MqttApi)
+        mqtt_api.base_topic = 'batcontrol'
+        mqtt_api.client = MagicMock()
+        inverter.activate_mqtt(mqtt_api)
+        with pytest.raises(RuntimeError, match='after startup'):
+            inverter.get_SOC()
+        assert event.waits == [mqtt_inverter.SOC_STARTUP_WAIT_SECONDS]
+
     def test_expired_soc_raises_immediately(self, clock):
         inverter = _activated_inverter(cache_ttl=60)
         event = self._fake_event(inverter, clock)

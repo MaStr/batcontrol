@@ -268,8 +268,10 @@ class MqttInverter(InverterBaseclass):
         # Remove trailing slash(es) if present to avoid double slashes in topics
         self.inverter_topic = self.inverter_topic.rstrip('/')
 
-        # Startup wait window for the first SOC message starts now.
-        self._soc_wait_deadline = time.monotonic() + SOC_STARTUP_WAIT_SECONDS
+        # Startup wait window for the first SOC message starts now, unless an
+        # earlier get_SOC() call already started it.
+        if self._soc_wait_deadline is None:
+            self._soc_wait_deadline = time.monotonic() + SOC_STARTUP_WAIT_SECONDS
 
         # Now self.inverter_topic is guaranteed to be set correctly for the following methods
         self._setup_subscriptions()
