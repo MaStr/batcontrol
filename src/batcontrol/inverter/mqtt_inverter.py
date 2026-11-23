@@ -564,6 +564,14 @@ class MqttInverter(InverterBaseclass):
                 f"{self.inverter_topic}/command/charge_rate",
                 entity_category="diagnostic")
 
+            self.mqtt_api.publish_mqtt_discovery_message(
+                f"MQTT Inverter {self.inverter_num} Command Limit Battery Charge Rate",
+                f"batcontrol_mqtt_inverter_{self.inverter_num}"
+                "_command_limit_battery_charge_rate",
+                "sensor", "power", "W",
+                f"{self.inverter_topic}/command/limit_battery_charge_rate",
+                entity_category="diagnostic")
+
         logger.info('Published MQTT inverter discovery messages')
 
     def shutdown(self):

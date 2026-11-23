@@ -284,7 +284,7 @@ the limit.
 
 ## Home Assistant Integration
 
-The MQTT inverter automatically publishes Home Assistant MQTT Discovery messages for the status topics and the `command/mode` and `command/charge_rate` command topics. This allows you to monitor your inverter's status and commands in Home Assistant without manual configuration.
+The MQTT inverter automatically publishes Home Assistant MQTT Discovery messages for all status and command topics. This allows you to monitor your inverter's status and commands in Home Assistant without manual configuration.
 
 Discovered entities include:
 - MQTT Inverter Status SOC
@@ -294,10 +294,11 @@ Discovered entities include:
 - MQTT Inverter Status Max Charge Rate
 - MQTT Inverter Command Mode
 - MQTT Inverter Command Charge Rate
+- MQTT Inverter Command Limit Battery Charge Rate
 
-`command/limit_battery_charge_rate` is not discovered. The active limit is
-available as `<batcontrol_base>/limit_battery_charge_rate` and
-`<batcontrol_base>/peak_shaving/charge_limit` (see [MQTT API](mqtt-api.md)).
+The command sensors show the last value batcontrol sent. Commands are not
+retained, so after a Home Assistant or broker restart they stay unknown until
+batcontrol sends the next command.
 
 
 ## Limitations
