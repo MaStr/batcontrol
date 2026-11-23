@@ -283,9 +283,10 @@ continue.
     | `battery_control_expert.round_price_digits` | below 0 (rounds every price to 0) | — |
     | `battery_control_expert.production_offset_percent` | above 2.0 | `api_set_production_offset` |
 
-- **Type problems** in the five unvalidated numeric fields (a string, a boolean, an empty
-  value) are logged as errors in `warn` and stop startup in `strict`; today they start
-  and fail in every control cycle. Fields that the core already parses at startup keep
+- **Type problems** in the five unvalidated numeric fields (a string, an empty value) are
+  logged as errors in `warn` and stop startup in `strict`; today they start and fail in
+  every control cycle. A boolean is only a warning: it is an `int` subclass and every
+  consumer computes with it as 0 or 1 today. Fields that the core already parses at startup keep
   their existing hard errors, the model reports them with the same parser.
 - **Unknown keys** in both sections are warned about (typos are silently ignored today).
 - **Cross-check:** inverter `max_soc` below `always_allow_discharge_limit` warns, because

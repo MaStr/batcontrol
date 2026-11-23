@@ -152,7 +152,7 @@ def validate_battery_control(config: dict, inverter_max_soc=None,
             'Invalid configuration: ' + '; '.join(report.errors))
     for error in report.errors:
         logger.error(
-            '[Config] %s. batcontrol continues because %s=%s; this value '
-            'is expected to fail at startup or in the control cycle.',
-            error, VALIDATION_ENV, MODE_WARN)
+            '[Config] %s (%s=%s: not stopping here; the existing checks '
+            'may still stop startup, or the value fails in the control '
+            'cycle)', error, VALIDATION_ENV, MODE_WARN)
     return report

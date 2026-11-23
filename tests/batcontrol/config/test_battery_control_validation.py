@@ -212,7 +212,7 @@ class TestUnknownKeys:
 class TestErrors:
     """Values the code cannot use are errors."""
 
-    @pytest.mark.parametrize('value', ['0.05', 'abc', True, None, [0.05]])
+    @pytest.mark.parametrize('value', ['0.05', 'abc', None, [0.05]])
     @pytest.mark.parametrize('key', [
         'min_price_difference', 'min_price_difference_rel',
         'always_allow_discharge_limit', 'max_charging_from_grid_limit',
@@ -222,7 +222,21 @@ class TestErrors:
         with a TypeError in the control cycle."""
         report = check_battery_control(with_value(key, value))
         assert len(report.errors) == 1
-        assert report.errors[0].startswith(f'battery_control.{key}: ')
+        assert report.errors[0].startswith(f'battery_control.{key} ')
+
+    @pytest.mark.parametrize('value', [True, False])
+    @pytest.mark.parametrize('key', [
+        'min_price_difference', 'min_price_difference_rel',
+        'always_allow_discharge_limit', 'max_charging_from_grid_limit',
+        'min_recharge_amount'])
+    def test_bool_is_only_a_warning(self, key, value):
+        """A bool is an int subclass; the core computes with it today,
+        so it must not stop startup, not even in strict mode."""
+        report = check_battery_control(with_value(key, value))
+        assert report.errors == []
+        assert len(report.warnings) == 1
+        assert f'battery_control.{key} is {value!r}' in report.warnings[0]
+        validate_battery_control(with_value(key, value), mode=MODE_STRICT)
 
     @pytest.mark.parametrize('value', ['DEFAULT', 'Next', 'default'])
     def test_logic_type_is_case_insensitive(self, value):
@@ -307,6 +321,12 @@ class TestMaxSocCrossCheck:
         """Unknown max_soc or a limit with its own warning: no second
         message."""
         assert check_max_soc(limit, max_soc) is None
+
+    @pytest.mark.parametrize('percent', range(1, 101))
+    def test_limit_equal_to_max_soc_is_reachable(self, percent):
+        """Same comparison as the runtime check: 0.55 * 100 is
+        55.00000000000001, but 55 / 100 >= 0.55 holds."""
+        assert check_max_soc(percent / 100, percent) is None
 
     def test_check_uses_the_default_limit(self):
         config = make_config({})

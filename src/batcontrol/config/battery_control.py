@@ -10,7 +10,7 @@ Three kinds of findings:
 - Errors: values the code cannot use. Either it already rejects them at
   startup (the expert values, min_grid_charge_soc, ...), then the model
   uses the very same parser, or it reads them unparsed and fails later in
-  the control cycle (a string as min_price_difference).
+  the control cycle (a string or an empty value as min_price_difference).
 - Warnings: values the code accepts but that are almost certainly wrong.
   The limits are the ones the MQTT/API setters apply to the same values.
   They never stop batcontrol.
@@ -26,7 +26,6 @@ from pydantic import (
     BaseModel,
     BeforeValidator,
     ConfigDict,
-    StrictFloat,
     ValidationInfo,
     field_validator,
 )
@@ -80,6 +79,33 @@ def _add_warning(info: ValidationInfo, message: str) -> None:
         info.context.setdefault('warnings', []).append(message)
 
 
+def _unparsed_number(value, info: ValidationInfo) -> float:
+    """Accept what the core can compute with: int, float and bool.
+
+    The core reads these values without conversion. A string, None or a
+    list fails later in the control cycle (TypeError), so it is an error.
+    A bool is an int subclass and works in every consumer, so it is only
+    a plausibility warning: a configuration that runs today keeps running,
+    in strict mode as well.
+    """
+    key = f'{SECTION}.{info.field_name}'
+    if isinstance(value, bool):
+        _add_warning(
+            info,
+            f'{key} is {value!r}, expected a number; it is used as '
+            f'{int(value)}.')
+        return float(value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    raise ValueError(
+        f'{key} must be a number, got {value!r} '
+        f'({type(value).__name__})')
+
+
+# A number read by the core without conversion, see _unparsed_number
+UnparsedNumber = Annotated[float, BeforeValidator(_unparsed_number)]
+
+
 def _warn_outside(info: ValidationInfo, value: float, key: str,
                   limits: tuple, hint: str = '') -> None:
     """Warn if value is not finite or outside limits (lower, upper).
@@ -107,17 +133,18 @@ class BatteryControlSection(BaseModel):
     """The battery_control section.
 
     The five numeric values are read by the core without conversion, so
-    they must already be numbers: StrictFloat rejects strings and booleans
-    that would otherwise fail later in the control cycle.
+    they must already be numbers: UnparsedNumber rejects strings and empty
+    values that would otherwise fail later in the control cycle, and only
+    warns about booleans, which the code computes with as 0 and 1.
     """
     model_config = ConfigDict(extra='allow')
 
     type: Annotated[str, BeforeValidator(_parse_logic_type)] = 'default'
-    min_price_difference: StrictFloat = 0.05
-    min_price_difference_rel: StrictFloat = 0.0
-    always_allow_discharge_limit: StrictFloat = 0.9
-    max_charging_from_grid_limit: StrictFloat = 0.8
-    min_recharge_amount: StrictFloat = 100.0
+    min_price_difference: UnparsedNumber = 0.05
+    min_price_difference_rel: UnparsedNumber = 0.0
+    always_allow_discharge_limit: UnparsedNumber = 0.9
+    max_charging_from_grid_limit: UnparsedNumber = 0.8
+    min_recharge_amount: UnparsedNumber = 100.0
     min_grid_charge_soc: Annotated[
         Optional[float],
         _with_parser(parse_optional_ratio, f'{SECTION}.min_grid_charge_soc'),
@@ -250,14 +277,17 @@ def check_max_soc(always_allow_discharge_limit, inverter_max_soc) -> Optional[st
         # max_soc unknown (-1 until the inverter reported it), or a limit
         # that already got its own warning
         return None
-    if inverter_max_soc >= always_allow_discharge_limit * 100:
+    # Same comparison as CommonLogic.is_discharge_always_allowed_soc();
+    # limit * 100 would round 0.55 to 55.00000000000001 and warn wrongly
+    if inverter_max_soc / 100 >= always_allow_discharge_limit:
         return None
     return (
         f'The inverter max_soc ({inverter_max_soc:g} %) is below '
         f'{SECTION}.always_allow_discharge_limit '
         f'({always_allow_discharge_limit:g}); the battery never reaches '
         'the SoC above which discharging is always allowed. Lower '
-        'always_allow_discharge_limit or raise max_soc.')
+        'always_allow_discharge_limit or raise max_soc, unless Always-Allow '
+        'is meant to stay off.')
 
 
 def _is_number(value) -> bool:
