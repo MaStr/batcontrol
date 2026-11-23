@@ -165,7 +165,7 @@ class TestOnConnect:
             warnings.simplefilter('error', DeprecationWarning)
             api = EvccApi(_make_config())
 
-        assert api.client._callback_api_version == \
+        assert api.client.callback_api_version == \
             mqtt.CallbackAPIVersion.VERSION2
 
     def test_success_subscribes_topics(self):

@@ -1,6 +1,7 @@
 """Tests for MqttApi._handle_message, focusing on bytes payload decoding."""
 import dataclasses
 import json
+import warnings
 from unittest.mock import MagicMock, call, patch
 
 import numpy as np
@@ -275,7 +276,6 @@ class TestCallbackApiVersion:
     """The client must use paho's callback API v2 (v1 is deprecated)."""
 
     def test_real_client_uses_version2_without_deprecation_warning(self):
-        import warnings
         config = {
             'broker': 'localhost',
             'port': 1883,
@@ -289,7 +289,7 @@ class TestCallbackApiVersion:
                     patch.object(mqtt.Client, 'loop_start'):
                 api = MqttApi(config)
 
-        assert api.client._callback_api_version == \
+        assert api.client.callback_api_version == \
             mqtt.CallbackAPIVersion.VERSION2
 
 
