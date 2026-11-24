@@ -58,6 +58,7 @@ from .dynamictariff import DynamicTariff as tariff_factory
 from .inverter import Inverter as inverter_factory
 from .inverter import InverterError, InverterCommunicationError
 from .inverter import inverter_members
+from .inverter import log_shutdown_failure
 from .forecastsolar import ForecastSolar as solar_factory
 
 from .forecastconsumption import Consumption as consumption_factory
@@ -732,12 +733,24 @@ class Batcontrol:
                 with contextlib.suppress(Exception):
                     api.shutdown()
                 setattr(self, attr, None)
+        self.__shutdown_inverter(f'after {what} startup failure')
+
+    def __shutdown_inverter(self, context: str) -> None:
+        """ Restore the inverter settings, never raise.
+
+        The ResilientInverterWrapper and InverterGroup already log a failed
+        shutdown with the inverter identity. This catch covers an inverter
+        without the wrapper (enable_resilient_wrapper: false), so a failed
+        restore neither stays invisible nor skips the shutdown of the MQTT
+        and evcc connections.
+        """
+        inverter = getattr(self, 'inverter', None)
+        if inverter is None:
+            return
         try:
-            self.inverter.shutdown()
+            inverter.shutdown()
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            logger.error(
-                'Could not restore inverter settings after %s startup '
-                'failure: %s', what, exc)
+            log_shutdown_failure(logger, inverter, exc, context)
 
     def shutdown(self):
         """ Shutdown Batcontrol and dependent modules (inverter..)
@@ -772,9 +785,10 @@ class Batcontrol:
             # restored (later commands are ignored, see above). The MQTT/evcc
             # clients are stopped after the lock is released: their
             # shutdown joins the network thread, which may be waiting for
-            # the lock in an evcc callback.
+            # the lock in an evcc callback. __shutdown_inverter never raises,
+            # so a failed restore cannot skip the client shutdown below.
             with self._control_lock:
-                self.inverter.shutdown()
+                self.__shutdown_inverter('during shutdown')
                 del self.inverter
             if self.evcc_api is not None:
                 self.evcc_api.shutdown()

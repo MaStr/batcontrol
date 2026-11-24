@@ -5,4 +5,4 @@ from .exceptions import (
     InverterCommunicationError,
     InverterOutageError,
 )
-from .resilient_wrapper import ResilientInverterWrapper
+from .resilient_wrapper import ResilientInverterWrapper, log_shutdown_failure

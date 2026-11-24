@@ -1,10 +1,13 @@
 """Tests for InverterGroup - several inverters presented as one battery."""
+import logging
+
 import pytest
 
 from batcontrol.inverter.baseclass import (
     DEFAULT_MIN_CHARGE_RATE,
     InverterBaseclass,
 )
+from batcontrol.inverter.resilient_wrapper import ResilientInverterWrapper
 from batcontrol.inverter.group import (
     InverterGroup,
     distribute_rate,
@@ -356,6 +359,41 @@ class TestGroupPlumbing:
         InverterGroup([failing, healthy]).shutdown()
 
         assert healthy.shutdown_calls == 1
+
+    def test_failed_wrapped_member_shutdown_is_logged(self, caplog):
+        """R-I17: members are wrapped by ResilientInverterWrapper, which
+        swallows the error, so the wrapper must log it itself."""
+        failing = RecordingInverter(soc=50, inverter_num=0)
+        failing.inverter_type = 'fronius_gen24'
+        failing.shutdown = lambda: (_ for _ in ()).throw(
+            RuntimeError('time of use restore failed'))
+        healthy = RecordingInverter(soc=50, inverter_num=1)
+
+        with caplog.at_level(logging.DEBUG):
+            InverterGroup([ResilientInverterWrapper(failing),
+                           ResilientInverterWrapper(healthy)]).shutdown()
+
+        assert healthy.shutdown_calls == 1
+        errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert len(errors) == 1
+        message = errors[0].getMessage()
+        assert 'Inverter 0 (fronius_gen24)' in message
+        assert 'time of use restore failed' in message
+
+    def test_failed_unwrapped_member_shutdown_is_logged(self, caplog):
+        """enable_resilient_wrapper: false - the group logs the error."""
+        failing = RecordingInverter(soc=50, inverter_num=0)
+        failing.shutdown = lambda: (_ for _ in ()).throw(RuntimeError('boom'))
+        healthy = RecordingInverter(soc=50, inverter_num=1)
+
+        with caplog.at_level(logging.DEBUG):
+            InverterGroup([failing, healthy]).shutdown()
+
+        assert healthy.shutdown_calls == 1
+        errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert len(errors) == 1
+        assert 'Inverter 0 (RecordingInverter)' in errors[0].getMessage()
+        assert 'RuntimeError: boom' in errors[0].getMessage()
 
     def test_inverters_property_returns_a_copy(self):
         members = [RecordingInverter(soc=50)]

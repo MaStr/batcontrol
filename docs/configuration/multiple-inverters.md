@@ -210,7 +210,11 @@ control cycle — it does not keep controlling the remaining batteries on a part
 picture, because the aggregated SoC would be wrong.
 
 `refresh_api_values` (MQTT publishing) and `shutdown` are best-effort: a failing
-inverter is logged and the remaining ones are still served.
+inverter is logged and the remaining ones are still served. A failed MQTT refresh
+only shows up in the debug log. A failed `shutdown` is logged as an `ERROR` naming
+the inverter (`Inverter <n> (<type>): 'shutdown' failed, inverter settings may not
+have been restored: ...`), because that inverter may still run on batcontrol's
+settings.
 
 ## Limitations
 

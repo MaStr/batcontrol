@@ -122,6 +122,8 @@ On a clean shutdown, batcontrol restores the original settings. The two backup f
 - **`timeofuse_config_<id>.json`** is read from disk and used for the time-of-use restore. If the file was preserved after a crash, the original time-of-use schedule is correctly restored on the next clean shutdown.
 - **`battery_config_<id>.json`** is written as a reference, but the battery restore uses the settings fetched live from the inverter at startup — the file is not read back. If batcontrol crashed and the inverter still holds batcontrol-modified settings, the live fetch captures those modified settings, so battery settings are not automatically restored to the original pre-crash state. The file can be inspected manually to see what the original settings were.
 
+batcontrol always attempts all restore steps (battery settings, time-of-use schedule, logout), even if an earlier one fails. If any step fails, batcontrol still shuts down, but logs an `ERROR` with the inverter number, its address and the failed steps, for example `Inverter 0 (fronius_gen24): 'shutdown' failed, inverter settings may not have been restored: RuntimeError: Fronius 192.168.1.100: battery config restore: ...`. The inverter then still runs on batcontrol's settings for the failed steps. A time-of-use backup that was not restored stays on disk and is restored on the next clean shutdown; failed battery settings have to be checked in the inverter web UI (see `battery_config_<id>.json` above).
+
 Both files are deleted after a successful restore. The Solar.API stays enabled — disable it manually in the inverter web UI if no other software needs it (note: the Fronius Wattpilot wallbox requires the Solar.API).
 
 ### Additional Parameters (since 0.5.6)
