@@ -141,8 +141,11 @@ string becomes a number.
 **Policy, binding for every section of the migration: a numeric string is a number.**
 `"0.05"`, `" 5 "` and `"60"` are accepted and coerced to the field's number type, in
 `warn` and `strict` mode alike, without a warning (a debug log line at most). Only a
-string that is not a number (`"abc"`, `"0,05"`, `""`, `"nan"`) stays an error naming the
-key. Coercion only makes more configurations work, so the guard rail holds. As long as a
+string that is not a number (`"abc"`, `"0,05"`, `"nan"`) stays an error naming the
+key. An empty string `""` is an error only for a field that must hold a number (all
+numeric fields of stage 1: an empty value replaces the default the core would use); for
+an optional field, quirk 5 (`EmptyStrNone`, a cleared add-on field) decides and `""`
+means "not set". Coercion only makes more configurations work, so the guard rail holds. As long as a
 section's consumers still read the dict, the coerced value is **written back into the
 dict** (the existing key only, never a new one), so the code after the validation reads
 numbers too. Booleans are not covered by this rule: `"true"` stays a string for a numeric
@@ -309,10 +312,19 @@ continue.
 
 ### Stage 1 — `battery_control` + `battery_control_expert` (warn mode)
 
-- **Hook:** `Batcontrol.__init__` calls the validator right before it reads
-  `battery_control`. At that point logging is configured with the user's loglevel and
-  logfile, so — unlike validating inside `load_config()` — the messages reach the
-  logfile, and the inverter exists, so its `max_soc` is available for the cross-check.
+- **Hook:** `Batcontrol.__init__` calls the validator right after the `time_resolution_minutes`
+  and `timezone` checks, before any provider or inverter is created. At that point logging
+  is configured with the user's loglevel and logfile, so — unlike validating inside
+  `load_config()` — the messages reach the logfile. It runs before the inverter because
+  the inverter constructors already write to the device (Fronius: Solar API, time-of-use
+  backup, grid charging); a configuration that stops startup must not leave the inverter
+  changed without restoring it. Only the `max_soc` cross-check needs the inverter; it runs
+  separately after `create_inverters()` (`warn_unreachable_always_allow()`) and only warns.
+- **Stopping messages are logged before the raise.** Every message that stops startup is
+  logged at `CRITICAL` with the `[Config]` prefix, so it reaches the logfile, then
+  `ConfigValidationError` (a `ValueError`) is raised. `__main__` catches it and exits with
+  code 1 without a traceback. When startup stops, the other errors are logged without the
+  `warn` hint "not stopping here".
 - **No change to the accesses.** The models only validate; the core keeps reading the
   dict exactly as before. Defaults in the models mirror the `.get()` defaults of the core.
 - **New limits are warnings only**, using the ranges the MQTT/API setters already apply:

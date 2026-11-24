@@ -135,3 +135,13 @@ def test_unreachable_mqtt_broker_exits_with_error(runtime, caplog):
     assert cli.main() == 1
     assert 'mqtt.lan:1883' in caplog.text
     assert 'Terminating batcontrol' in caplog.text
+
+
+def test_invalid_configuration_exits_with_error(runtime, caplog):
+    """always_allow_discharge_limit 0 and similar: no traceback, exit 1.
+    The validation already logged the keys."""
+    runtime.side_effect = cli.ConfigValidationError(
+        'Invalid configuration: battery_control.always_allow_discharge_limit')
+
+    assert cli.main() == 1
+    assert 'Configuration invalid. Terminating batcontrol' in caplog.text

@@ -65,7 +65,7 @@ from .runtime_state import (
     BatteryState, CalculationResult, ConfiguredParameters, PeakShavingState,
     SolarMetrics, as_number, cap_reserved_energy,
 )
-from .config import validate_battery_control
+from .config import validate_battery_control, warn_unreachable_always_allow
 from .value_utils import (
     parse_bool_config,
     parse_bool_flag,
@@ -214,6 +214,14 @@ class Batcontrol:
                 "Try e.g. 'Europe/Berlin'"
             ) from exc
 
+        # Typed validation of battery_control and battery_control_expert
+        # (issue #144, stage 1). It runs before any provider or inverter is
+        # created: the inverters write to the device in their constructor,
+        # and a configuration that stops here must not leave them changed.
+        # It coerces numeric strings in the dict; in the default warn mode
+        # it otherwise only logs, the code below keeps its own checks.
+        validate_battery_control(config)
+
         try:
             tz = os.environ['TZ']
             logger.info("Host system time zone is %s", tz)
@@ -284,11 +292,9 @@ class Batcontrol:
             target_resolution=self.time_resolution
         )
 
-        # Typed validation of battery_control and battery_control_expert
-        # (issue #144, stage 1). In the default warn mode it only logs;
-        # the code below keeps reading the dict and its own checks.
-        validate_battery_control(
-            config, inverter_max_soc=self._inverter_max_soc())
+        # Needs the inverter, so it runs here and not with the validation
+        # above; it only warns.
+        warn_unreachable_always_allow(config, self._inverter_max_soc())
         self.batconfig = config['battery_control']
         self.time_at_forecast_error = -1
 

@@ -160,7 +160,7 @@ The ranges are the same ones that the MQTT/API setters already enforce.
 
 **Errors** - values batcontrol cannot use, for example a text that is not a number such as `"abc"` or `"0,05"` for `min_price_difference`, or an empty value. Values that already stopped batcontrol before (for example `round_price_digits: four`) still stop it with the same message.
 
-**Always stops startup**, independent of the mode below: `always_allow_discharge_limit: 0`. With it discharging is always allowed and the price based control never runs. `false` counts as `0` here.
+**Always stops startup**, independent of the mode below: `always_allow_discharge_limit: 0`. With it discharging is always allowed and the price based control never runs. `false` counts as `0` here. Batcontrol logs the reason (level `CRITICAL`, prefix `[Config]`) and exits with code 1 before it connects to the inverter, so the inverter settings stay untouched.
 
 The environment variable `BATCONTROL_CONFIG_VALIDATION` controls how errors are handled:
 

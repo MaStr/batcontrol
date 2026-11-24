@@ -41,6 +41,10 @@ MODE_STRICT = 'strict'
 VALIDATION_MODES = (MODE_WARN, MODE_STRICT)
 
 
+class ConfigValidationError(ValueError):
+    """The configuration stops startup; the message names the keys."""
+
+
 @dataclass
 class ValidationReport:
     """Findings of one validation run, as log ready messages.
@@ -145,8 +149,11 @@ def validate_battery_control(config: dict, inverter_max_soc=None,
     First replaces numeric strings in config by their numbers (in every
     mode), so the core reads numbers. Raises ValueError if a value
     switches the control off (in every mode), and in strict mode also if
-    a value cannot be used. Otherwise warn mode does not raise: the code
-    after it keeps its own checks.
+    a value cannot be used; every such message is logged as critical
+    first. Otherwise warn mode does not raise: the code after it keeps its
+    own checks. inverter_max_soc is only for callers that have the
+    inverter already; Batcontrol runs this before it creates the inverter
+    and calls warn_unreachable_always_allow() afterwards.
     """
     if mode is None:
         mode = validation_mode()
@@ -166,16 +173,44 @@ def validate_battery_control(config: dict, inverter_max_soc=None,
         return ValidationReport()
     for warning in report.warnings:
         logger.warning('[Config] %s', warning)
-    if mode == MODE_STRICT and report.errors:
-        raise ValueError(
-            'Invalid configuration: '
-            + '; '.join(report.fatal + report.errors))
-    for error in report.errors:
-        logger.error(
-            '[Config] %s (%s=%s: not stopping here; the existing checks '
-            'may still stop startup, or the value fails in the control '
-            'cycle)', error, VALIDATION_ENV, MODE_WARN)
-    if report.fatal:
-        raise ValueError(
-            'Invalid configuration: ' + '; '.join(report.fatal))
+    stopping = list(report.fatal)
+    if mode == MODE_STRICT:
+        stopping.extend(report.errors)
+    else:
+        for error in report.errors:
+            if report.fatal:
+                # Startup stops anyway, "not stopping here" would mislead
+                logger.error('[Config] %s', error)
+            else:
+                logger.error(
+                    '[Config] %s (%s=%s: not stopping here; the existing '
+                    'checks may still stop startup, or the value fails in '
+                    'the control cycle)', error, VALIDATION_ENV, MODE_WARN)
+    if stopping:
+        for message in stopping:
+            logger.critical('[Config] %s', message)
+        raise ConfigValidationError(
+            'Invalid configuration: ' + '; '.join(stopping))
     return report
+
+
+def warn_unreachable_always_allow(config: dict, inverter_max_soc) -> None:
+    """Log the cross-check of the inverter max_soc against
+    always_allow_discharge_limit (a warning in every mode).
+
+    Separate from validate_battery_control(), because it needs the
+    inverter, and the inverter must not be created (it writes to the
+    device) for a configuration that stops startup. Never raises.
+    """
+    try:
+        section = config.get(SECTION)
+        if not isinstance(section, dict):
+            return
+        warning = check_max_soc(
+            section.get('always_allow_discharge_limit', 0.9),
+            inverter_max_soc)
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception('[Config] max_soc cross-check failed, skipped')
+        return
+    if warning:
+        logger.warning('[Config] %s', warning)

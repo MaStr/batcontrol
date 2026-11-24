@@ -164,6 +164,34 @@ def test_always_allow_zero_stops_startup(monkeypatch, mode, value):
         Batcontrol(base_config(always_allow_discharge_limit=value))
 
 
+@pytest.mark.parametrize('mode', ['warn', 'strict'])
+def test_stopping_config_never_creates_the_inverter(mocker, monkeypatch,
+                                                    mode):
+    """The inverters write to the device in their constructor; a
+    configuration that stops startup must not leave them changed."""
+    monkeypatch.setenv(VALIDATION_ENV, mode)
+    create = mocker.patch(
+        'batcontrol.core.inverter_factory.create_inverters', autospec=True)
+    config = base_config(always_allow_discharge_limit=0)
+    if mode == 'strict':
+        config['battery_control']['min_price_difference'] = 'abc'
+    with pytest.raises(ValueError):
+        Batcontrol(config)
+    create.assert_not_called()
+
+
+def test_string_limit_is_cross_checked_as_a_number(caplog):
+    """The validation coerces before the inverter exists, the max_soc
+    cross-check after it sees the number."""
+    config = base_config(always_allow_discharge_limit='0.9')
+    config['inverter']['max_soc'] = 80
+    with caplog.at_level(logging.WARNING):
+        start(config)
+    messages = config_messages(caplog)
+    assert len(messages) == 1
+    assert 'max_soc (80 %)' in messages[0]
+
+
 def test_existing_startup_errors_are_unchanged():
     """Values the core already rejects still raise its own error."""
     config = base_config()

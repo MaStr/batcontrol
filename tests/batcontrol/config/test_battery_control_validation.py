@@ -16,12 +16,14 @@ import pytest
 import yaml
 
 from batcontrol.config import (
+    ConfigValidationError,
     MODE_STRICT,
     MODE_WARN,
     VALIDATION_ENV,
     check_battery_control,
     validate_battery_control,
     validation_mode,
+    warn_unreachable_always_allow,
 )
 from batcontrol.config.battery_control import (
     check_max_soc,
@@ -354,6 +356,27 @@ class TestMaxSocCrossCheck:
         report = check_battery_control(config, inverter_max_soc=85)
         assert len(report.warnings) == 1
 
+    def test_startup_check_logs_a_warning(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            warn_unreachable_always_allow(make_config({}), 85)
+        assert [r.levelno for r in caplog.records] == [logging.WARNING]
+        assert 'max_soc (85 %)' in caplog.text
+
+    @pytest.mark.parametrize('config', [
+        {}, {'battery_control': 'x'},
+        {'battery_control': {'always_allow_discharge_limit': 1.0}}])
+    def test_startup_check_is_silent_otherwise(self, caplog, config):
+        with caplog.at_level(logging.DEBUG):
+            warn_unreachable_always_allow(config, 80)
+        assert caplog.records == []
+
+    def test_startup_check_never_raises(self, mocker, caplog):
+        mocker.patch('batcontrol.config.validation.check_max_soc',
+                     side_effect=RuntimeError('boom'))
+        with caplog.at_level(logging.ERROR):
+            warn_unreachable_always_allow(make_config({}), 80)
+        assert 'cross-check failed' in caplog.text
+
 
 class TestModes:
     """BATCONTROL_CONFIG_VALIDATION: warn (default) or strict."""
@@ -384,11 +407,13 @@ class TestModes:
         assert len(errors) == 1
         assert 'battery_control.min_price_difference' in errors[0].getMessage()
 
-    def test_strict_raises_on_errors(self):
-        with pytest.raises(ValueError,
-                           match='battery_control.min_price_difference'):
+    def test_strict_raises_on_errors(self, caplog):
+        with caplog.at_level(logging.WARNING), \
+                pytest.raises(ConfigValidationError,
+                              match='battery_control.min_price_difference'):
             validate_battery_control(
                 with_value('min_price_difference', 'abc'), mode=MODE_STRICT)
+        assert [r.levelno for r in caplog.records] == [logging.CRITICAL]
 
     def test_strict_keeps_plausibility_findings_as_warnings(self, caplog):
         with caplog.at_level(logging.WARNING):
@@ -557,14 +582,33 @@ class TestAlwaysAllowZero:
             validate_battery_control(
                 with_value('always_allow_discharge_limit', 0), mode=mode)
 
+    @pytest.mark.parametrize('mode', [MODE_WARN, MODE_STRICT])
+    def test_is_logged_as_critical_before_raising(self, caplog, mode):
+        """The message reaches the logfile, not only the traceback."""
+        with caplog.at_level(logging.WARNING), \
+                pytest.raises(ConfigValidationError):
+            validate_battery_control(
+                with_value('always_allow_discharge_limit', 0), mode=mode)
+        critical = [r.getMessage() for r in caplog.records
+                    if r.levelno == logging.CRITICAL]
+        assert len(critical) == 1
+        assert critical[0].startswith(
+            '[Config] battery_control.always_allow_discharge_limit is 0')
+
     def test_other_errors_are_logged_in_warn_mode(self, caplog):
+        """Logged as errors, without the "not stopping here" hint:
+        startup stops anyway."""
         section = copy.deepcopy(VALID_BATTERY_CONTROL)
         section['always_allow_discharge_limit'] = 0
         section['min_price_difference'] = 'abc'
         with caplog.at_level(logging.ERROR), \
                 pytest.raises(ValueError, match='always_allow'):
             validate_battery_control(make_config(section), mode=MODE_WARN)
-        assert 'battery_control.min_price_difference' in caplog.text
+        errors = [r.getMessage() for r in caplog.records
+                  if r.levelno == logging.ERROR]
+        assert len(errors) == 1
+        assert 'battery_control.min_price_difference' in errors[0]
+        assert 'not stopping here' not in caplog.text
 
     def test_strict_mode_reports_fatal_and_errors_together(self):
         section = copy.deepcopy(VALID_BATTERY_CONTROL)

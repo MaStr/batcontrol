@@ -11,6 +11,7 @@ import threading
 import time
 
 from .banner import log_startup_banner
+from .config import ConfigValidationError
 from .core import Batcontrol
 from .inverter import InverterOutageError
 from .mqtt_api import MqttConnectionError
@@ -128,6 +129,11 @@ def main() -> int:
         # Clean exit: a supervisor (Docker, HA add-on, systemd) restarts
         # batcontrol; running without the configured broker is not supported.
         logger.critical('%s. Terminating batcontrol.', e)
+        return 1
+    except ConfigValidationError:
+        # Already logged (critical, naming the keys) by the validation,
+        # which runs before the inverter is created: nothing to restore.
+        logger.critical('Configuration invalid. Terminating batcontrol.')
         return 1
 
     # SIGHUP (kill -HUP <pid>) requests a refresh of all providers. The
