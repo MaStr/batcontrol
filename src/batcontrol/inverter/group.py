@@ -34,6 +34,7 @@ Idle members during grid charging:
 import logging
 
 from .inverter_interface import InverterInterface
+from .resilient_wrapper import log_shutdown_failure
 
 logger = logging.getLogger(__name__)
 
@@ -384,11 +385,14 @@ class InverterGroup(InverterInterface):
                     getattr(inverter, 'inverter_num', '?'), exc)
 
     def shutdown(self):
-        """ Shut down all members, even if one of them fails. """
+        """ Shut down all members, even if one of them fails.
+
+        Members wrapped in ResilientInverterWrapper already log and swallow
+        their own shutdown failure; this catch covers members without the
+        wrapper (enable_resilient_wrapper: false).
+        """
         for inverter in self._inverters:
             try:
                 inverter.shutdown()
             except Exception as exc:  # pylint: disable=broad-exception-caught
-                logger.warning(
-                    'shutdown failed for inverter %s: %s',
-                    getattr(inverter, 'inverter_num', '?'), exc)
+                log_shutdown_failure(logger, inverter, exc)
