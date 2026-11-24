@@ -2,15 +2,20 @@
 
 Stage 1 of the configuration migration (issue #144, see
 docs/development/pydantic-config-migration.md). The models only validate:
-the core keeps reading the raw config dict, so nothing changes for a
-configuration that starts today.
+the core keeps reading the raw config dict. The one change made to that
+dict is coerce_numeric_strings(): a number given as a string (the Home
+Assistant add-on delivers some values that way) is replaced by the
+number, so the core computes with it instead of failing on it.
 
-Three kinds of findings:
+Four kinds of findings:
 
+- Fatal: always_allow_discharge_limit 0 switches the control off
+  completely; it stops startup in every validation mode.
 - Errors: values the code cannot use. Either it already rejects them at
   startup (the expert values, min_grid_charge_soc, ...), then the model
   uses the very same parser, or it reads them unparsed and fails later in
-  the control cycle (a string or an empty value as min_price_difference).
+  the control cycle (a non-numeric string or an empty value as
+  min_price_difference).
 - Warnings: values the code accepts but that are almost certainly wrong.
   The limits are the ones the MQTT/API setters apply to the same values.
   They never stop batcontrol.
@@ -48,6 +53,72 @@ KNOWN_LOGIC_TYPES = ('default', 'next')
 # Upper limit of the production offset, as applied by api_set_production_offset
 MAX_PRODUCTION_OFFSET = 2.0
 
+# Numeric keys whose value is replaced by the number if it is given as a
+# numeric string, see coerce_numeric_strings(). Booleans and times of day
+# are not numbers and are left alone.
+NUMERIC_KEYS = {
+    SECTION: (
+        'min_price_difference',
+        'min_price_difference_rel',
+        'always_allow_discharge_limit',
+        'max_charging_from_grid_limit',
+        'min_recharge_amount',
+        'min_grid_charge_soc',
+        'charge_rate_multiplier',
+    ),
+    EXPERT_SECTION: (
+        'charge_rate_multiplier',
+        'soften_price_difference_on_charging_factor',
+        'round_price_digits',
+        'production_offset_percent',
+        'max_forecast_hours',
+    ),
+}
+
+
+def parse_numeric_string(value):
+    """The number a numeric string stands for, None for anything else.
+
+    "60" becomes 60, " 0.05 " becomes 0.05. Not finite values ("nan",
+    "inf") and anything that is not a string give None.
+    """
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text or '_' in text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        number = float(text)
+    except ValueError:
+        return None
+    return number if math.isfinite(number) else None
+
+
+def coerce_numeric_strings(config: dict) -> list:
+    """Replace numeric strings in the two sections by their numbers.
+
+    Changes config in place and returns (key, raw value, number) for every
+    replaced value. The Home Assistant add-on passes some numbers as
+    strings; the core reads several values unconverted and would fail on
+    them in the control cycle. Keys are never added or removed.
+    """
+    coerced = []
+    for section_name, keys in NUMERIC_KEYS.items():
+        section = config.get(section_name)
+        if not isinstance(section, dict):
+            continue
+        for key in keys:
+            raw = section.get(key)
+            number = parse_numeric_string(raw)
+            if number is not None:
+                section[key] = number
+                coerced.append((f'{section_name}.{key}', raw, number))
+    return coerced
+
 
 def _with_parser(parser: Callable, key: str) -> BeforeValidator:
     """Run one of the existing value_utils parsers on the raw value.
@@ -82,8 +153,10 @@ def _add_warning(info: ValidationInfo, message: str) -> None:
 def _unparsed_number(value, info: ValidationInfo) -> float:
     """Accept what the core can compute with: int, float and bool.
 
-    The core reads these values without conversion. A string, None or a
-    list fails later in the control cycle (TypeError), so it is an error.
+    The core reads these values without conversion. A numeric string is
+    accepted because coerce_numeric_strings() replaces it by its number
+    before the core reads it. Any other string, None or a list fails
+    later in the control cycle (TypeError), so it is an error.
     A bool is an int subclass and works in every consumer, so it is only
     a plausibility warning: a configuration that runs today keeps running,
     in strict mode as well.
@@ -97,6 +170,9 @@ def _unparsed_number(value, info: ValidationInfo) -> float:
         return float(value)
     if isinstance(value, (int, float)):
         return float(value)
+    number = parse_numeric_string(value)
+    if number is not None:
+        return float(number)
     raise ValueError(
         f'{key} must be a number, got {value!r} '
         f'({type(value).__name__})')
@@ -133,9 +209,10 @@ class BatteryControlSection(BaseModel):
     """The battery_control section.
 
     The five numeric values are read by the core without conversion, so
-    they must already be numbers: UnparsedNumber rejects strings and empty
-    values that would otherwise fail later in the control cycle, and only
-    warns about booleans, which the code computes with as 0 and 1.
+    they must be numbers or numeric strings (which are coerced):
+    UnparsedNumber rejects other strings and empty values that would
+    otherwise fail later in the control cycle, and only warns about
+    booleans, which the code computes with as 0 and 1.
     """
     model_config = ConfigDict(extra='allow')
 
@@ -262,6 +339,27 @@ def unknown_keys(section: dict, model: type[BaseModel]) -> list:
     return [key for key in section if key not in model.model_fields]
 
 
+def check_always_allow_disabled(always_allow_discharge_limit) -> Optional[str]:
+    """Error text if always_allow_discharge_limit switches the control off.
+
+    With 0, discharging is always allowed at any SoC, so the price based
+    control never decides anything. False counts as 0, it is used as 0
+    by the code; a numeric string is read as its number.
+    """
+    value = always_allow_discharge_limit
+    number = parse_numeric_string(value)
+    if number is not None:
+        value = number
+    if not isinstance(value, (int, float)) or value != 0:
+        return None
+    return (
+        f'{SECTION}.always_allow_discharge_limit is {always_allow_discharge_limit!r}: '
+        'discharging would always be allowed and the price based control '
+        'would never run. Set the state of charge ratio above which '
+        'discharging is always allowed, e.g. 0.9 for 90 % SoC; 1.0 allows '
+        'it only at a full battery.')
+
+
 def check_max_soc(always_allow_discharge_limit, inverter_max_soc) -> Optional[str]:
     """Warning text if the inverter max_soc makes Always-Allow unreachable.
 
@@ -273,9 +371,10 @@ def check_max_soc(always_allow_discharge_limit, inverter_max_soc) -> Optional[st
     if not _is_number(always_allow_discharge_limit) \
             or not _is_number(inverter_max_soc):
         return None
-    if inverter_max_soc <= 0 or not 0 < always_allow_discharge_limit <= 1:
-        # max_soc unknown (-1 until the inverter reported it), or a limit
-        # that already got its own warning
+    if inverter_max_soc <= 0 or not 0 < always_allow_discharge_limit < 1:
+        # max_soc unknown (-1 until the inverter reported it), a limit
+        # that already got its own warning or error, or 1.0 and above:
+        # Always-Allow deliberately (almost) off, nothing to reach
         return None
     # Same comparison as CommonLogic.is_discharge_always_allowed_soc();
     # limit * 100 would round 0.55 to 55.00000000000001 and warn wrongly
@@ -286,8 +385,7 @@ def check_max_soc(always_allow_discharge_limit, inverter_max_soc) -> Optional[st
         f'{SECTION}.always_allow_discharge_limit '
         f'({always_allow_discharge_limit:g}); the battery never reaches '
         'the SoC above which discharging is always allowed. Lower '
-        'always_allow_discharge_limit or raise max_soc, unless Always-Allow '
-        'is meant to stay off.')
+        'always_allow_discharge_limit or raise max_soc.')
 
 
 def _is_number(value) -> bool:

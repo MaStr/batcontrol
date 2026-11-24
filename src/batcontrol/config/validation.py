@@ -8,6 +8,11 @@ The environment variable BATCONTROL_CONFIG_VALIDATION selects the mode:
 - strict: values the code cannot use stop batcontrol right at startup
   with a message naming the key. Plausibility findings stay warnings.
 
+In both modes, numeric strings are replaced by their numbers in the
+config dict (the Home Assistant add-on delivers some numbers as strings),
+and always_allow_discharge_limit 0 stops startup, because it switches the
+whole control off.
+
 See docs/development/pydantic-config-migration.md.
 """
 import logging
@@ -22,7 +27,9 @@ from .battery_control import (
     SECTION,
     BatteryControlExpertSection,
     BatteryControlSection,
+    check_always_allow_disabled,
     check_max_soc,
+    coerce_numeric_strings,
     unknown_keys,
 )
 
@@ -36,7 +43,11 @@ VALIDATION_MODES = (MODE_WARN, MODE_STRICT)
 
 @dataclass
 class ValidationReport:
-    """Findings of one validation run, as log ready messages."""
+    """Findings of one validation run, as log ready messages.
+
+    fatal stops startup in every mode, errors only in strict mode.
+    """
+    fatal: list = field(default_factory=list)
     errors: list = field(default_factory=list)
     warnings: list = field(default_factory=list)
 
@@ -115,6 +126,10 @@ def check_battery_control(config: dict,
 
     section = config.get(SECTION)
     if isinstance(section, dict):
+        fatal = check_always_allow_disabled(
+            section.get('always_allow_discharge_limit', 0.9))
+        if fatal:
+            report.fatal.append(fatal)
         warning = check_max_soc(
             section.get('always_allow_discharge_limit', 0.9),
             inverter_max_soc)
@@ -127,12 +142,18 @@ def validate_battery_control(config: dict, inverter_max_soc=None,
                              mode: Optional[str] = None) -> ValidationReport:
     """Validate the battery_control sections, log the findings.
 
-    Raises ValueError in strict mode if a value cannot be used. In warn
-    mode it never raises: the code after it keeps its own checks.
+    First replaces numeric strings in config by their numbers (in every
+    mode), so the core reads numbers. Raises ValueError if a value
+    switches the control off (in every mode), and in strict mode also if
+    a value cannot be used. Otherwise warn mode does not raise: the code
+    after it keeps its own checks.
     """
     if mode is None:
         mode = validation_mode()
     try:
+        for key, raw, number in coerce_numeric_strings(config):
+            logger.debug('[Config] %s: string %r is used as %r',
+                         key, raw, number)
         report = check_battery_control(config, inverter_max_soc)
     except Exception:  # pylint: disable=broad-exception-caught
         if mode == MODE_STRICT:
@@ -145,14 +166,16 @@ def validate_battery_control(config: dict, inverter_max_soc=None,
         return ValidationReport()
     for warning in report.warnings:
         logger.warning('[Config] %s', warning)
-    if not report.errors:
-        return report
-    if mode == MODE_STRICT:
+    if mode == MODE_STRICT and report.errors:
         raise ValueError(
-            'Invalid configuration: ' + '; '.join(report.errors))
+            'Invalid configuration: '
+            + '; '.join(report.fatal + report.errors))
     for error in report.errors:
         logger.error(
             '[Config] %s (%s=%s: not stopping here; the existing checks '
             'may still stop startup, or the value fails in the control '
             'cycle)', error, VALIDATION_ENV, MODE_WARN)
+    if report.fatal:
+        raise ValueError(
+            'Invalid configuration: ' + '; '.join(report.fatal))
     return report

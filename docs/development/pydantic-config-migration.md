@@ -111,15 +111,55 @@ Two precisions:
   evcc) treats `cafile: ""` as missing and raises, and enforces that `certfile` and
   `keyfile` are set together. An `EmptyStrNone` `BeforeValidator` must keep that meaning.
 
-For the first section the quirks are harmless: the add-on schema types all
-`battery_control` values as `float`/`int`, so they arrive as JSON numbers.
+Quirk 1 is the one that matters most in the long run; it has its own section below.
+
+### String inputs from the add-on schema
+
+Numeric values do not reliably arrive as numbers. Where they come from:
+
+- **`list(a|b|c)` always delivers a string**, even if every option is a number:
+  `time_resolution_minutes: list(15|60)` arrives as `"60"`, `pvinstallations[].percentile:
+  list(10|50|90)` as `"50"`. A `list(...)` type is the only way to offer a fixed set of
+  values in the add-on UI, so every future "pick one of these numbers" field has this
+  shape.
+- **`str` / `str?` fields carry numbers and lists** because the schema has no better type
+  for them: `fronius_inverter_id: str?` (`"1"`), `history_days: str?` (`"-7;-14;-21"`,
+  quirk 2), `zone_1_hours: str?`.
+- **`float` / `int` fields** arrive as JSON numbers in `/data/options.json` as long as the
+  schema types them so. That is a property of the add-on schema, not of batcontrol: the
+  schema lives in another repository (`MaStr/batcontrol_ha_addon`) and changes
+  independently, and the `addon_config/batcontrol_config.yaml` branch and hand-written YAML
+  in general bypass it (`min_price_difference: "0.05"` with quotes is valid YAML).
+
+Today each consumer copes on its own (`core.py` for `time_resolution_minutes`,
+`consumption.py` for `history_days`, `value_utils.parse_*` for the expert values) or does
+not cope at all: `battery_control.min_price_difference: "0.05"` started and then failed
+with a `TypeError` in every control cycle. This scattered, per-call-site handling is one
+of the key reasons for the Pydantic migration: one model per section, one place where a
+string becomes a number.
+
+**Policy, binding for every section of the migration: a numeric string is a number.**
+`"0.05"`, `" 5 "` and `"60"` are accepted and coerced to the field's number type, in
+`warn` and `strict` mode alike, without a warning (a debug log line at most). Only a
+string that is not a number (`"abc"`, `"0,05"`, `""`, `"nan"`) stays an error naming the
+key. Coercion only makes more configurations work, so the guard rail holds. As long as a
+section's consumers still read the dict, the coerced value is **written back into the
+dict** (the existing key only, never a new one), so the code after the validation reads
+numbers too. Booleans are not covered by this rule: `"true"` stays a string for a numeric
+field, and for a boolean field the existing `parse_bool_config` decides.
+
+Stage 1 implements this for `battery_control` and `battery_control_expert`
+(`coerce_numeric_strings()` in `config/battery_control.py`); later sections reuse it
+through `normalize.py`.
 
 ### Normalisation layer
 
 `config/normalize.py` runs **before** validation: generic coercions (quirks 1, 2, 3, 5)
 as unconditional `BeforeValidator`s — idempotent and harmless for hand-written YAML — and
 type-dependent pruning (quirks 4, 6) once the discriminator is known. It is only needed
-from the inverter/utility/consumption sections on, so it does not ship in stage 1.
+from the inverter/utility/consumption sections on, so it does not ship in stage 1; stage 1
+only carries the numeric-string coercion of its two sections (see above), which moves
+there with the first add-on-heavy section.
 
 **Hard constraint: `normalize.py` must never add a key it did not receive.** See
 "Absence is information" below.
@@ -175,7 +215,9 @@ set of the input at every nesting level.
 | Plausibility (`min_grid_charge_soc > max_charging_from_grid_limit`; inverter `max_soc` below `always_allow_discharge_limit`; `min_pv_charge_rate > max_pv_charge_rate`) | **warning** | Matches the existing warnings in `core.py`. |
 
 **Binding guard rail: every configuration that starts successfully today must still start
-successfully, and must produce the same control behaviour.**
+successfully, and must produce the same control behaviour.** One deliberate exception,
+decided by the maintainer: `always_allow_discharge_limit: 0` stops startup, because it
+switches the whole control off (see stage 1).
 
 The guard rail is fragile in one direction — inventing constraints that feel obviously
 right. Traps found while reviewing this plan:
@@ -197,10 +239,12 @@ right. Traps found while reviewing this plan:
    test fixtures rely on that.
 7. **`tls: "true"` flips behaviour silently.** `configure_tls` uses `is not True`, so a
    string leaves TLS off today; lax coercion would switch it on.
-8. **Lax coercion repairs what crashes today.** `min_price_difference: "0.05"` passes a
-   lax `float` field, but the code reads the raw string and fails with `TypeError` in the
-   first calculation. As long as the code reads the dict, a model must flag such values
-   (strict numeric types), not silently accept them.
+8. **Lax coercion repairs what crashes today - only if the dict is repaired too.**
+   `min_price_difference: "0.05"` passes a lax `float` field, but the code reads the raw
+   string and fails with `TypeError` in the first calculation. As long as the code reads
+   the dict, a model that accepts a numeric string must write the number back into the
+   dict (see "String inputs from the add-on schema"); a model that only validates would
+   hide the crash.
 
 ### Escape hatch
 
@@ -283,19 +327,30 @@ continue.
     | `battery_control_expert.round_price_digits` | below 0 (rounds every price to 0) | — |
     | `battery_control_expert.production_offset_percent` | above 2.0 | `api_set_production_offset` |
 
-- **Type problems** in the five unvalidated numeric fields (a string, an empty value) are
-  logged as errors in `warn` and stop startup in `strict`; today they start and fail in
-  every control cycle. A boolean is only a warning: it is an `int` subclass and every
+- **Numeric strings** (`"0.05"`, `" 5 "`) in the numeric fields of both sections are
+  coerced and written back to the dict, in both modes and without a message (debug log
+  only), see "String inputs from the add-on schema".
+- **Type problems** in the five unvalidated numeric fields (a non-numeric string, an empty
+  value) are logged as errors in `warn` and stop startup in `strict`; today they start and
+  fail in every control cycle. A boolean is only a warning: it is an `int` subclass and every
   consumer computes with it as 0 or 1 today. Fields that the core already parses at startup keep
   their existing hard errors, the model reports them with the same parser.
+- **`always_allow_discharge_limit: 0` stops startup in every mode** (maintainer
+  decision). It allows discharging at every SoC, so the price based control never runs;
+  `false` is used as `0` and stops it as well. This is the one deliberate exception to
+  the guard rail. Other values outside 0..1 stay warnings. The MQTT/API setter still
+  accepts 0 at runtime.
 - **Unknown keys** in both sections are warned about (typos are silently ignored today).
 - **Cross-check:** inverter `max_soc` below `always_allow_discharge_limit` warns, because
   the Always-Allow SoC can never be reached — analogous to the existing warning for
-  `min_grid_charge_soc` above `max_charging_from_grid_limit`.
+  `min_grid_charge_soc` above `max_charging_from_grid_limit`. A limit of `1.0` or above
+  is silent: Always-Allow is deliberately off.
 - `time_resolution_minutes` given as a non-numeric string stops startup today with a bare
   `ValueError: invalid literal for int()`; it now uses `parse_integer` and names the key.
 - **Tests:** dummy config and the doc examples of the two sections validate without any
-  message; one test per limit for its warning; both modes; the env switch.
+  message; one test per limit for its warning; both modes; the env switch; numeric
+  strings are written back and reach the core as numbers; `always_allow_discharge_limit:
+  0` stops startup in both modes.
 
 ### Stage 2 — decide after one release
 
@@ -322,7 +377,8 @@ Points to settle when a section's consumers start reading the model instead of t
 ### Stage 3 — strict by default, add-on reconciliation
 
 Only after `warn` has run without false positives for a release: `strict` as the default,
-and the add-on `schema:` aligned to the same limits (in `MaStr/batcontrol_ha_addon`,
+and the add-on `schema:` aligned to the same limits (for example
+`always_allow_discharge_limit: float(0,1)` still admits the rejected `0`) (in `MaStr/batcontrol_ha_addon`,
 against `batcontrol-development/` first, with a `version:` bump and changelog entry).
 
 ### Not in this plan: the schema generator

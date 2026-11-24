@@ -3,6 +3,8 @@ battery_control_expert (issue #144 stage 1, TODO R-L22..R-L29).
 
 Guard rail: every configuration that starts today must still start. The
 models only warn about new limits; errors are values the code cannot use.
+Two deliberate exceptions: numeric strings are coerced (more configs
+work), and always_allow_discharge_limit 0 stops startup.
 """
 import copy
 import logging
@@ -21,7 +23,10 @@ from batcontrol.config import (
     validate_battery_control,
     validation_mode,
 )
-from batcontrol.config.battery_control import check_max_soc
+from batcontrol.config.battery_control import (
+    check_max_soc,
+    parse_numeric_string,
+)
 from batcontrol.setup import load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -90,6 +95,7 @@ class TestExampleConfigs:
     def test_dummy_config_is_clean(self):
         report = check_battery_control(
             load_config(str(DUMMY_CONFIG)), inverter_max_soc=95)
+        assert report.fatal == []
         assert report.errors == []
         assert report.warnings == []
 
@@ -103,6 +109,7 @@ class TestExampleConfigs:
         # completed with the valid default section.
         fragment.setdefault('battery_control', VALID_BATTERY_CONTROL)
         report = check_battery_control(fragment, inverter_max_soc=100)
+        assert report.fatal == []
         assert report.errors == []
         assert report.warnings == []
 
@@ -138,7 +145,7 @@ class TestLimitWarnings:
         assert 'not a percentage' in report.warnings[0]
 
     @pytest.mark.parametrize('key, value', [
-        ('always_allow_discharge_limit', 0),
+        ('always_allow_discharge_limit', 0.01),
         ('always_allow_discharge_limit', 1),
         ('max_charging_from_grid_limit', 0),
         ('max_charging_from_grid_limit', 1.0),
@@ -151,6 +158,7 @@ class TestLimitWarnings:
         report = check_battery_control(with_value(key, value))
         assert report.warnings == []
         assert report.errors == []
+        assert report.fatal == []
 
     def test_negative_round_price_digits(self):
         """R-L23: round(x, -2) turns every price into 0."""
@@ -212,26 +220,32 @@ class TestUnknownKeys:
 class TestErrors:
     """Values the code cannot use are errors."""
 
-    @pytest.mark.parametrize('value', ['0.05', 'abc', None, [0.05]])
+    @pytest.mark.parametrize('value', [
+        'abc', '', ' ', '0,05', 'nan', 'inf', '1_000', 'true', None, [0.05]])
     @pytest.mark.parametrize('key', [
         'min_price_difference', 'min_price_difference_rel',
         'always_allow_discharge_limit', 'max_charging_from_grid_limit',
         'min_recharge_amount'])
     def test_unparsed_numeric_value_must_be_a_number(self, key, value):
-        """R-L22: the core reads these unconverted; a string fails later
-        with a TypeError in the control cycle."""
+        """R-L22: the core reads these unconverted; a non-numeric string
+        fails later with a TypeError in the control cycle."""
         report = check_battery_control(with_value(key, value))
         assert len(report.errors) == 1
         assert report.errors[0].startswith(f'battery_control.{key} ')
 
-    @pytest.mark.parametrize('value', [True, False])
-    @pytest.mark.parametrize('key', [
-        'min_price_difference', 'min_price_difference_rel',
-        'always_allow_discharge_limit', 'max_charging_from_grid_limit',
-        'min_recharge_amount'])
+    @pytest.mark.parametrize('key, value', [
+        (key, value)
+        for key in ('min_price_difference', 'min_price_difference_rel',
+                    'always_allow_discharge_limit',
+                    'max_charging_from_grid_limit', 'min_recharge_amount')
+        for value in (True, False)
+        # used as 0, which stops startup, see TestAlwaysAllowZero
+        if (key, value) != ('always_allow_discharge_limit', False)])
     def test_bool_is_only_a_warning(self, key, value):
         """A bool is an int subclass; the core computes with it today,
-        so it must not stop startup, not even in strict mode."""
+        so it must not stop startup, not even in strict mode. Exception:
+        always_allow_discharge_limit False is used as 0, see
+        TestAlwaysAllowZero."""
         report = check_battery_control(with_value(key, value))
         assert report.errors == []
         assert len(report.warnings) == 1
@@ -314,6 +328,13 @@ class TestMaxSocCrossCheck:
     def test_reachable_limit_is_fine(self, limit, max_soc):
         assert check_max_soc(limit, max_soc) is None
 
+    @pytest.mark.parametrize('limit', [1, 1.0, 1.5])
+    @pytest.mark.parametrize('max_soc', [50, 80, 99, 100])
+    def test_always_allow_off_is_silent(self, limit, max_soc):
+        """1.0 and above: Always-Allow deliberately (almost) off, no
+        warning about max_soc."""
+        assert check_max_soc(limit, max_soc) is None
+
     @pytest.mark.parametrize('limit, max_soc', [
         (0.9, None), (0.9, -1), (0.9, 'x'), (0.9, True), ('0.9', 80),
         (90, 80), (0.9, math.nan)])
@@ -394,15 +415,172 @@ class TestModes:
     def test_mode_is_read_from_the_environment(self, monkeypatch):
         monkeypatch.setenv(VALIDATION_ENV, 'strict')
         with pytest.raises(ValueError):
-            validate_battery_control(with_value('min_recharge_amount', '1'))
+            validate_battery_control(
+                with_value('min_recharge_amount', 'one'))
 
-    def test_validation_never_changes_the_config(self):
+    def test_check_never_changes_the_config(self):
         config = make_config(
-            with_value('min_price_difference', 1)['battery_control'],
+            with_value('min_price_difference', '0.05')['battery_control'],
             {'round_price_digits': '4', 'production_offset_percent': '0.8'})
         before = copy.deepcopy(config)
-        validate_battery_control(config, mode=MODE_WARN)
+        check_battery_control(config)
         assert config == before
-        assert config['battery_control']['min_price_difference'] == 1
-        assert isinstance(
-            config['battery_control_expert']['round_price_digits'], str)
+
+    def test_validation_changes_only_numeric_strings(self):
+        """Only numeric strings are replaced; nothing is added, removed
+        or materialised from a default."""
+        section = copy.deepcopy(VALID_BATTERY_CONTROL)
+        section['min_price_difference'] = 'abc'
+        expert = {'round_price_digits': '4',
+                  'soften_price_difference_on_charging': 'true',
+                  'market_price_refresh_time': '12:30'}
+        config = make_config(section, expert)
+        validate_battery_control(config, mode=MODE_WARN)
+        assert config['battery_control'] == section
+        assert config['battery_control_expert'] == {
+            'round_price_digits': 4,
+            'soften_price_difference_on_charging': 'true',
+            'market_price_refresh_time': '12:30'}
+
+
+class TestNumericStrings:
+    """Numbers given as strings (Home Assistant add-on) are coerced."""
+
+    @pytest.mark.parametrize('raw, expected', [
+        ('0.05', 0.05), (' 5 ', 5), ('60', 60), ('-0.1', -0.1),
+        ('1e3', 1000.0), ('0', 0), ('4.0', 4.0)])
+    def test_parse_numeric_string(self, raw, expected):
+        number = parse_numeric_string(raw)
+        assert number == expected
+        assert type(number) is type(expected)
+
+    @pytest.mark.parametrize('raw', [
+        '', ' ', 'abc', '0,05', 'nan', 'inf', '-inf', '1_000', '0x10',
+        None, 5, 0.5, True, [1]])
+    def test_parse_rejects_everything_else(self, raw):
+        assert parse_numeric_string(raw) is None
+
+    @pytest.mark.parametrize('key, raw, expected', [
+        ('min_price_difference', '0.05', 0.05),
+        ('min_price_difference_rel', ' 0.1 ', 0.1),
+        ('always_allow_discharge_limit', '0.9', 0.9),
+        ('max_charging_from_grid_limit', '0.8', 0.8),
+        ('min_recharge_amount', '100', 100),
+        ('min_grid_charge_soc', '0.3', 0.3),
+        ('charge_rate_multiplier', '1.1', 1.1),
+    ])
+    @pytest.mark.parametrize('mode', [MODE_WARN, MODE_STRICT])
+    def test_battery_control_values_are_written_back(
+            self, key, raw, expected, mode, caplog):
+        config = with_value(key, raw)
+        with caplog.at_level(logging.WARNING):
+            report = validate_battery_control(config, mode=mode)
+        assert report.errors == []
+        assert report.warnings == []
+        assert caplog.records == []
+        value = config['battery_control'][key]
+        assert value == expected
+        assert type(value) is type(expected)
+
+    @pytest.mark.parametrize('key, raw, expected', [
+        ('charge_rate_multiplier', '1.2', 1.2),
+        ('soften_price_difference_on_charging_factor', '5', 5),
+        ('round_price_digits', '4', 4),
+        ('production_offset_percent', '0.8', 0.8),
+        ('max_forecast_hours', '48', 48),
+    ])
+    @pytest.mark.parametrize('mode', [MODE_WARN, MODE_STRICT])
+    def test_expert_values_are_written_back(self, key, raw, expected, mode):
+        config = make_config(expert={key: raw})
+        report = validate_battery_control(config, mode=mode)
+        assert report.errors == []
+        assert report.warnings == []
+        assert config['battery_control_expert'][key] == expected
+
+    def test_coercion_is_logged_at_debug_level(self, caplog):
+        with caplog.at_level(logging.DEBUG, logger='batcontrol.config'):
+            validate_battery_control(
+                with_value('min_price_difference', '0.05'), mode=MODE_WARN)
+        assert [r.levelno for r in caplog.records] == [logging.DEBUG]
+        assert 'battery_control.min_price_difference' in caplog.text
+
+    def test_coerced_value_is_checked_against_its_limit(self):
+        """A numeric string gets the same plausibility check as the
+        number."""
+        report = validate_battery_control(
+            with_value('always_allow_discharge_limit', '90'), mode=MODE_WARN)
+        assert report.errors == []
+        assert len(report.warnings) == 1
+        assert 'not a percentage' in report.warnings[0]
+
+    def test_check_accepts_numeric_strings_without_coercing(self):
+        report = check_battery_control(
+            with_value('min_price_difference', '0.05'))
+        assert report.errors == []
+        assert report.warnings == []
+
+    def test_coercion_survives_an_error_elsewhere(self):
+        section = copy.deepcopy(VALID_BATTERY_CONTROL)
+        section['min_price_difference'] = 'abc'
+        section['min_recharge_amount'] = '200'
+        config = make_config(section)
+        validate_battery_control(config, mode=MODE_WARN)
+        assert config['battery_control']['min_recharge_amount'] == 200
+
+    def test_sections_that_are_not_mappings_are_left_alone(self):
+        config = {'battery_control': ['0.05'],
+                  'battery_control_expert': '0.8'}
+        report = validate_battery_control(config, mode=MODE_WARN)
+        assert config == {'battery_control': ['0.05'],
+                          'battery_control_expert': '0.8'}
+        assert len(report.errors) == 2
+
+
+class TestAlwaysAllowZero:
+    """always_allow_discharge_limit 0 switches the control off: discharging
+    is always allowed and the price logic never runs. It stops startup in
+    every mode."""
+
+    @pytest.mark.parametrize('value', [0, 0.0, '0', ' 0.0 ', False])
+    def test_is_fatal(self, value):
+        report = check_battery_control(
+            with_value('always_allow_discharge_limit', value))
+        assert len(report.fatal) == 1
+        assert 'battery_control.always_allow_discharge_limit' \
+            in report.fatal[0]
+        assert 'price based control would never run' in report.fatal[0]
+
+    @pytest.mark.parametrize('mode', [MODE_WARN, MODE_STRICT])
+    def test_stops_startup_in_every_mode(self, mode):
+        with pytest.raises(ValueError,
+                           match='always_allow_discharge_limit is 0'):
+            validate_battery_control(
+                with_value('always_allow_discharge_limit', 0), mode=mode)
+
+    def test_other_errors_are_logged_in_warn_mode(self, caplog):
+        section = copy.deepcopy(VALID_BATTERY_CONTROL)
+        section['always_allow_discharge_limit'] = 0
+        section['min_price_difference'] = 'abc'
+        with caplog.at_level(logging.ERROR), \
+                pytest.raises(ValueError, match='always_allow'):
+            validate_battery_control(make_config(section), mode=MODE_WARN)
+        assert 'battery_control.min_price_difference' in caplog.text
+
+    def test_strict_mode_reports_fatal_and_errors_together(self):
+        section = copy.deepcopy(VALID_BATTERY_CONTROL)
+        section['always_allow_discharge_limit'] = 0
+        section['min_price_difference'] = 'abc'
+        with pytest.raises(ValueError) as exc:
+            validate_battery_control(make_config(section), mode=MODE_STRICT)
+        assert 'always_allow_discharge_limit' in str(exc.value)
+        assert 'min_price_difference' in str(exc.value)
+
+    @pytest.mark.parametrize('value', [0.01, -0.1, 1.0, 90, 'abc', None])
+    def test_other_values_are_not_fatal(self, value):
+        report = check_battery_control(
+            with_value('always_allow_discharge_limit', value))
+        assert report.fatal == []
+
+    def test_default_is_not_fatal(self):
+        report = check_battery_control(make_config({}))
+        assert report.fatal == []

@@ -99,11 +99,11 @@ def test_new_limit_only_warns(caplog):
 
 
 def test_warn_mode_keeps_starting_with_unusable_value(caplog):
-    """A string the core reads unconverted is logged as an error, startup
-    continues as it did before."""
+    """A non-numeric string the core reads unconverted is logged as an
+    error, startup continues as it did before."""
     with caplog.at_level(logging.WARNING):
-        bc = start(base_config(min_price_difference='0.05'))
-    assert bc.min_price_difference == '0.05'
+        bc = start(base_config(min_price_difference='abc'))
+    assert bc.min_price_difference == 'abc'
     errors = config_messages(caplog, logging.ERROR)
     assert len(errors) == 1
     assert 'battery_control.min_price_difference' in errors[0]
@@ -113,7 +113,7 @@ def test_strict_mode_stops_on_unusable_value(monkeypatch):
     monkeypatch.setenv(VALIDATION_ENV, 'strict')
     with pytest.raises(ValueError,
                        match='battery_control.min_price_difference'):
-        Batcontrol(base_config(min_price_difference='0.05'))
+        Batcontrol(base_config(min_price_difference='abc'))
 
 
 def test_strict_mode_starts_with_plausibility_warning(monkeypatch, caplog):
@@ -121,6 +121,47 @@ def test_strict_mode_starts_with_plausibility_warning(monkeypatch, caplog):
     with caplog.at_level(logging.WARNING):
         start(base_config(always_allow_discharge_limit=90))
     assert len(config_messages(caplog)) == 1
+
+
+@pytest.mark.parametrize('mode', ['warn', 'strict'])
+def test_numeric_strings_reach_the_core_as_numbers(monkeypatch, caplog,
+                                                   mode):
+    """Home Assistant add-on: numbers may arrive as strings. They are
+    coerced in the dict the core reads, without any message."""
+    monkeypatch.setenv(VALIDATION_ENV, mode)
+    config = base_config(
+        min_price_difference='0.05', min_price_difference_rel=' 0.1 ',
+        always_allow_discharge_limit='0.9',
+        max_charging_from_grid_limit='0.8', min_recharge_amount='100')
+    config['battery_control_expert'] = {
+        'round_price_digits': '4', 'production_offset_percent': '0.8'}
+    with caplog.at_level(logging.WARNING):
+        bc = start(config)
+    assert config_messages(caplog) == []
+    assert bc.batconfig is config['battery_control']
+    assert bc.batconfig == {
+        'min_price_difference': 0.05, 'min_price_difference_rel': 0.1,
+        'always_allow_discharge_limit': 0.9,
+        'max_charging_from_grid_limit': 0.8, 'min_recharge_amount': 100}
+    assert bc.min_price_difference == 0.05
+    assert bc.min_price_difference_rel == 0.1
+    assert bc.max_charging_from_grid_limit == 0.8
+    assert bc.general_logic.get_always_allow_discharge_limit() == 0.9
+    assert bc.general_logic.min_charge_energy == 100
+    assert bc.round_price_digits == 4
+    assert bc.production_offset_percent == 0.8
+    assert config['battery_control_expert'] == {
+        'round_price_digits': 4, 'production_offset_percent': 0.8}
+
+
+@pytest.mark.parametrize('mode', ['warn', 'strict'])
+@pytest.mark.parametrize('value', [0, '0'])
+def test_always_allow_zero_stops_startup(monkeypatch, mode, value):
+    """0 allows discharging at any SoC, the control never decides."""
+    monkeypatch.setenv(VALIDATION_ENV, mode)
+    with pytest.raises(ValueError,
+                       match='always_allow_discharge_limit is'):
+        Batcontrol(base_config(always_allow_discharge_limit=value))
 
 
 def test_existing_startup_errors_are_unchanged():
@@ -163,6 +204,14 @@ class TestMaxSocCrossCheck:
         with caplog.at_level(logging.WARNING):
             start(config)
         assert len(config_messages(caplog)) == 1
+
+    @pytest.mark.parametrize('limit', [1, 1.0])
+    def test_always_allow_off_is_quiet(self, caplog, limit):
+        config = base_config(always_allow_discharge_limit=limit)
+        config['inverter']['max_soc'] = 80
+        with caplog.at_level(logging.WARNING):
+            start(config)
+        assert config_messages(caplog) == []
 
     def test_reachable_limit_is_quiet(self, caplog):
         config = base_config(always_allow_discharge_limit=0.9)
