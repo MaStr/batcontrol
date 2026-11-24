@@ -84,7 +84,7 @@ battery_control:
   min_recharge_amount: 100          
 ```
 Details about the Price configuration can be found on [price difference calculation](../features/price-difference-calculation.md) page.
-`always_allow_discharge_limit` & `max_charging_from_grid_limit` is explained [here](../getting-started/how-batcontrol-works.md).
+`always_allow_discharge_limit` & `max_charging_from_grid_limit` is explained [here](../getting-started/how-batcontrol-works.md). `always_allow_discharge_limit: 0` (or a negative value) is rejected at startup: it would allow discharging at every SoC, so batcontrol would never control anything. `1.0` allows discharging freely only at a full battery.
 
 ![Picture of different parameters on battery soc](../assets/battery_limits_parameter.png)
 
@@ -136,3 +136,35 @@ These expert parameters allow fine-tuning of Batcontrol's behavior. See [Battery
 | `preserve_min_grid_charge_soc` | boolean | false | Also preserve `min_grid_charge_soc` as reserved battery energy during cheap/pre-expensive windows |
 | `market_price_refresh_time` | string | "12:30" | UTC time ("HH:MM") of the daily forced price refresh that picks up newly published next-day prices. An invalid value aborts startup |
 | `max_forecast_hours` | float | 0 | Use at most this many hours of the forecasts, for example `48`. `0` does not limit the horizon |
+
+## Configuration check at startup (with 0.11.1)
+
+At startup batcontrol checks `battery_control` and `battery_control_expert` and reports its findings in the log, with the prefix `[Config]`. This is the first step of moving the configuration to typed models ([plan](../development/pydantic-config-migration.md)); the other sections follow later.
+
+**Warnings** - the value is used as before, but it is very likely wrong:
+
+| Key | Warning when | Typical cause |
+|-----|--------------|---------------|
+| `always_allow_discharge_limit` | above 1 | `90` instead of `0.90` - Always-Allow would never trigger (0 and below stop startup, see below) |
+| `max_charging_from_grid_limit` | outside 0..1 | `80` instead of `0.80` |
+| `min_price_difference`, `min_price_difference_rel` | below 0 | |
+| `min_recharge_amount` | below 0 | |
+| `battery_control_expert.round_price_digits` | below 0 | a negative value rounds every price to 0, so no grid charging happens |
+| `battery_control_expert.production_offset_percent` | above 2.0 | `80` instead of `0.8`; MQTT and the API accept only 0..2 |
+| inverter `max_soc` | below `always_allow_discharge_limit` (not checked for `1.0` and above) | the battery never reaches the SoC above which discharging is always allowed |
+| any key the two sections do not know | always | a typo, e.g. `production_ofset_percent`, which batcontrol would otherwise ignore silently |
+
+The ranges are the same ones that the MQTT/API setters already enforce.
+
+**Numbers given as text** are accepted: `"0.05"` (in quotes) or `" 60 "` is used as the number. The Home Assistant add-on delivers some numbers that way. This applies to all numeric keys of both sections and needs no action; it is not reported.
+
+**Errors** - values batcontrol cannot use, for example a text that is not a number such as `"abc"` or `"0,05"` for `min_price_difference`, or an empty value. Values that already stopped batcontrol before (for example `round_price_digits: four`) still stop it with the same message.
+
+**Always stops startup**, independent of the mode below: `always_allow_discharge_limit` of `0` or below (e.g. `-0.1`, also given as text). With it discharging is always allowed and the price based control never runs. `false` counts as `0` here. The MQTT/API setter rejects `0` as well and keeps the current value. Batcontrol logs the reason (level `CRITICAL`, prefix `[Config]`) and exits with code 1 before it connects to the inverter, so the inverter settings stay untouched.
+
+The environment variable `BATCONTROL_CONFIG_VALIDATION` controls how errors are handled:
+
+- `warn` (default): errors are logged, batcontrol starts as it did before. A configuration that started with an earlier version keeps starting.
+- `strict`: batcontrol stops at startup with a message that names the key. Warnings stay warnings.
+
+`time_resolution_minutes` is checked before anything else is set up. Only `15` and `60` are accepted, also as text (`"15"`, as the Home Assistant add-on delivers it, or `" 15 "`). Any other value, or a text that is not a number (e.g. `"quarter"`), stops startup with a message that names the key and the allowed values.

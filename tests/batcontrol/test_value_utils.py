@@ -11,6 +11,7 @@ from batcontrol.value_utils import (
     parse_bool_flag,
     parse_optional_ratio,
     parse_positive_number,
+    parse_time_of_day,
     reset_alias_warnings,
 )
 
@@ -335,3 +336,16 @@ class TestParseNonNegativeNumber:
     def test_invalid_values_name_the_key(self, value):
         with pytest.raises(ValueError, match="section.key must be a number >= 0"):
             value_utils.parse_non_negative_number(value, 'section.key')
+
+
+class TestParseTimeOfDay:
+    """parse_time_of_day validates "HH:MM" and returns it unchanged."""
+
+    @pytest.mark.parametrize('value', ['00:00', '12:30', '23:59', '7:05'])
+    def test_valid(self, value):
+        assert parse_time_of_day(value, 'section.key') == value
+
+    @pytest.mark.parametrize('value', ['24:00', '12.30', '', None, 1230])
+    def test_invalid_names_the_key(self, value):
+        with pytest.raises(ValueError, match='section.key must be a valid'):
+            parse_time_of_day(value, 'section.key')

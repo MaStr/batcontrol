@@ -67,12 +67,18 @@ from .runtime_state import (
     BatteryState, CalculationResult, ConfiguredParameters, PeakShavingState,
     SolarMetrics, as_number, cap_reserved_energy,
 )
+from .config import (
+    parse_time_resolution,
+    validate_battery_control,
+    warn_unreachable_always_allow,
+)
 from .value_utils import (
     parse_bool_config,
     parse_bool_flag,
     parse_non_negative_number,
     parse_optional_ratio,
     parse_positive_number,
+    parse_time_of_day,
 )
 
 ERROR_IGNORE_TIME = 600  # 10 Minutes
@@ -237,21 +243,13 @@ class Batcontrol:
         self.config = configdict
         config = configdict
 
-        # Extract and validate time resolution (15 or 60 minutes)
-        # Get time resolution from config, convert string to int if needed
-        # (HomeAssistant form fields may provide string values)
-        time_resolution_raw = config.get('time_resolution_minutes', 60)
-        if isinstance(time_resolution_raw, str):
-            self.time_resolution = int(time_resolution_raw)
-        else:
-            self.time_resolution = time_resolution_raw
-
-        if self.time_resolution not in [15, 60]:
-            raise ValueError(
-                "time_resolution_minutes must be either 15 (quarter-hourly) "
-                f"or 60 (hourly), got '{self.time_resolution}'. "
-                "Please update your configuration file."
-            )
+        # Time resolution (15 or 60 minutes), checked first: before any
+        # provider or inverter is created. The Home Assistant add-on
+        # delivers it as a string ("15"). The validated int is written
+        # back, so every later reader of the dict gets it as well.
+        self.time_resolution = parse_time_resolution(
+            config.get('time_resolution_minutes', 60))
+        config['time_resolution_minutes'] = self.time_resolution
 
         self.intervals_per_hour = 60 // self.time_resolution
         logger.info(
@@ -274,6 +272,14 @@ class Batcontrol:
                 f"Config entry 'timezone' is not valid: {tzstring!r}. "
                 "Try e.g. 'Europe/Berlin'"
             ) from exc
+
+        # Typed validation of battery_control and battery_control_expert
+        # (issue #144, stage 1). It runs before any provider or inverter is
+        # created: the inverters write to the device in their constructor,
+        # and a configuration that stops here must not leave them changed.
+        # It coerces numeric strings in the dict; in the default warn mode
+        # it otherwise only logs, the code below keeps its own checks.
+        validate_battery_control(config)
 
         try:
             tz = os.environ['TZ']
@@ -345,6 +351,9 @@ class Batcontrol:
             target_resolution=self.time_resolution
         )
 
+        # Needs the inverter, so it runs here and not with the validation
+        # above; it only warns.
+        warn_unreachable_always_allow(config, self._inverter_max_soc())
         self.batconfig = config['battery_control']
         self.time_at_forecast_error = -1
 
@@ -868,16 +877,21 @@ class Batcontrol:
         return max(MIN_FORECAST_SLOTS, math.ceil(
             self.max_forecast_hours * 60 / self.time_resolution))
 
+    def _inverter_max_soc(self):
+        """ The inverter max_soc in percent for the startup config check,
+            or None if it cannot be read without an error. """
+        try:
+            return getattr(self.inverter, 'max_soc', None)
+        except Exception:  # pylint: disable=broad-exception-caught
+            # A group computes it from the member capacities, which may
+            # need the device. The check is optional, startup is not.
+            return None
+
     @staticmethod
     def _validate_market_price_refresh_time(value: str) -> None:
-        """Raise ValueError if value is not a valid HH:MM time string."""
-        try:
-            datetime.datetime.strptime(value, "%H:%M")
-        except (ValueError, TypeError) as exc:
-            raise ValueError(
-                f"battery_control_expert.market_price_refresh_time must be "
-                f"a valid HH:MM time string (e.g. '12:30'), got: {value!r}"
-            ) from exc
+        """Raise ValueError if value is not a valid H:MM or HH:MM time string."""
+        parse_time_of_day(
+            value, 'battery_control_expert.market_price_refresh_time')
 
     def _hard_refresh_prices(self) -> None:
         """Force a price refresh regardless of cache state.
@@ -1913,8 +1927,11 @@ class Batcontrol:
     def api_set_always_allow_discharge_limit(self, limit: float):
         """ Set always allow discharge limit for battery control via external API request.
             The change is temporary and will not be written to the config file.
+            0 is rejected like at startup: discharging would be allowed at
+            every SoC and the price based control would never run.
         """
-        if limit < 0 or limit > 1:
+        # not (...): also rejects NaN
+        if not 0 < limit <= 1:
             logger.warning(
                 'API: Invalid always allow discharge limit %.2f', limit)
             return

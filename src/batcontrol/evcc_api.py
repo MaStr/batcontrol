@@ -359,17 +359,30 @@ class EvccApi():
             return
         try:
             new_soc = int(message.payload)
-            if self.evcc_battery_halt_soc is None or \
-               self.evcc_battery_halt_soc != new_soc:
-                self.evcc_battery_halt_soc = new_soc
-                logger.info('New battery_halt value: %s', new_soc)
-                self.battery_halt_soc_float = new_soc / 100
-                if self.evcc_is_charging is True:
-                    self.__save_old_limits()
-                    self.set_always_allow_discharge_limit_function(
-                        self.battery_halt_soc_float)
         except ValueError:
             logger.error('Could not convert battery_halt to int')
+            return
+        if new_soc < 0 or new_soc > 100:
+            logger.warning(
+                'Ignoring evcc battery_halt value %s: outside 0..100', new_soc)
+            return
+        if new_soc == 0:
+            # A limit of 0 would allow discharging at every SoC; batcontrol
+            # rejects it at startup and over MQTT. Use the smallest valid
+            # limit (1 %) instead.
+            logger.warning(
+                'evcc battery_halt value 0 would disable the discharge '
+                'limit, using %s %% instead', 1)
+            new_soc = 1
+        if self.evcc_battery_halt_soc is None or \
+           self.evcc_battery_halt_soc != new_soc:
+            self.evcc_battery_halt_soc = new_soc
+            logger.info('New battery_halt value: %s', new_soc)
+            self.battery_halt_soc_float = new_soc / 100
+            if self.evcc_is_charging is True:
+                self.__save_old_limits()
+                self.set_always_allow_discharge_limit_function(
+                    self.battery_halt_soc_float)
 
     def handle_charging_message(self, message):
         """ Handle incoming charging messages from the MQTT broker """

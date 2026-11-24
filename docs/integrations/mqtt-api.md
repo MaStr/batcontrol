@@ -174,7 +174,7 @@ See [Forecast Metrics](forecast-metrics.md) for a detailed explanation of these 
 - `house/batcontrol/forecast_min_battery_wh` - Minimum battery level in Wh over the entire forecast horizon
 
 ### Configuration Limits
-- `house/batcontrol/always_allow_discharge_limit` - Always discharge limit (0.0-1.0)
+- `house/batcontrol/always_allow_discharge_limit` - Always discharge limit (greater than 0, up to 1.0). `0` is never applied: the MQTT/API setter rejects it, and the [evcc integration](evcc-connection.md) maps evcc's `bufferSoc` `0` to `0.01` (1 %).
 - `house/batcontrol/always_allow_discharge_limit_percent` - Always discharge limit in %
 - `house/batcontrol/always_allow_discharge_limit_capacity` - Always discharge limit as stored energy in Wh: the limit times the capacity at 100% SOC, independent of the inverter's `max_soc`. Only while the inverter does not report a `max_soc`, the capacity it reports as maximum is used instead.
 - `house/batcontrol/max_charging_from_grid_limit` - Max charging from grid limit in effect (0.0-1.0)
@@ -231,7 +231,7 @@ Batcontrol listens to the following `/set` topics for remote control:
 - `house/batcontrol/limit_battery_charge_rate/set` - Set dynamic battery charge rate limit in W
 
 ### Configuration
-- `house/batcontrol/always_allow_discharge_limit/set` - Set always discharge limit (0.0-1.0)
+- `house/batcontrol/always_allow_discharge_limit/set` - Set always discharge limit (greater than 0 up to 1.0). `0` and values outside that range are rejected with a warning in the log, the current value stays: with `0` discharging would be allowed at every SoC and batcontrol would control nothing.
 - `house/batcontrol/max_charging_from_grid_limit/set` - Set max charging from grid limit (0.0-1.0). The published value is the limit in effect: while `always_allow_discharge_limit` is lower than the value set here, it stays one percentage point below that limit and returns to the set value once `always_allow_discharge_limit` is raised again.
 - `house/batcontrol/min_price_difference/set` - Set minimum price difference in EUR
 - `house/batcontrol/min_price_difference_rel/set` - Set relative minimum price difference (e.g. `0.10` for 10%)

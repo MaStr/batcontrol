@@ -617,6 +617,21 @@ class TestDiscoveryMessages:
             for call in api.publish_mqtt_discovery_message.call_args_list
         )
 
+    def test_always_allow_discharge_limit_number_excludes_only_zero(self):
+        """0 is rejected by the setter; whole percentages from evcc
+        bufferSoc (0.01-0.09) must stay valid Home Assistant states."""
+        api = _make_discovery_stub()
+
+        api.send_mqtt_discovery_messages()
+
+        calls = [
+            call for call in api.publish_mqtt_discovery_message.call_args_list
+            if call.args[1] == 'batcontrol_always_allow_discharge_limit']
+        assert len(calls) == 1
+        assert calls[0].kwargs['min_value'] == 0.01
+        assert calls[0].kwargs['step_value'] == 0.01
+        assert calls[0].kwargs['max_value'] == 1.0
+
     def test_discovery_includes_the_new_battery_sensors(self):
         api = _make_discovery_stub()
 

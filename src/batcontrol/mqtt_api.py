@@ -982,9 +982,12 @@ class MqttApi:
             self.base_topic +
             "/always_allow_discharge_limit/set",
             entity_category="config",
-            min_value=0.0,
+            # 0 is rejected by api_set_always_allow_discharge_limit;
+            # 0.01 steps keep whole percentages from evcc bufferSoc
+            # (1-9 %) valid states
+            min_value=0.01,
             max_value=1.0,
-            step_value=0.1,
+            step_value=0.01,
             initial_value=0.9)
 
         self.publish_mqtt_discovery_message(

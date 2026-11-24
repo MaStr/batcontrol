@@ -135,6 +135,8 @@ These are used by [peak shaving](../features/peak-shaving.md): peak shaving is a
 
 ### Buffer SOC (Optional)
 - `evcc/site/bufferSoc` - Dynamic discharge threshold (integer 0-100)
+  - `0` would allow discharging at every SoC, so batcontrol uses `1` (1 %) instead and logs a warning.
+  - Values outside 0-100 are ignored with a warning; the current limit stays.
 
 ## Behavior During EV Charging
 

@@ -244,8 +244,56 @@ class TestTimeResolutionString:
     def test_invalid_time_resolution_names_the_value(self, base_mock_config):
         """Regression: the message used to contain a literal '%s'."""
         base_mock_config['time_resolution_minutes'] = 30
-        with pytest.raises(ValueError, match="got '30'"):
+        with pytest.raises(ValueError, match="got 30[.]"):
             Batcontrol(base_mock_config)
+
+    @pytest.mark.parametrize('raw, expected', [
+        (' 15 ', 15), ('60', 60), (15, 15), (60.0, 60), ('15.0', 15)])
+    @patch('batcontrol.core.tariff_factory.create_tarif_provider')
+    @patch('batcontrol.core.inverter_factory.create_inverter')
+    @patch('batcontrol.core.solar_factory.create_solar_provider')
+    @patch('batcontrol.core.consumption_factory.create_consumption')
+    def test_validated_int_is_written_back(
+        self, mock_consumption, mock_solar, mock_inverter_factory,
+        mock_tariff, base_mock_config, raw, expected
+    ):
+        """Every later reader of the dict gets the int, not the string."""
+        mock_inverter = MagicMock()
+        mock_inverter.get_max_capacity = MagicMock(return_value=10000)
+        mock_inverter_factory.return_value = mock_inverter
+        base_mock_config['time_resolution_minutes'] = raw
+        bc = Batcontrol(base_mock_config)
+
+        assert type(bc.time_resolution) is int
+        assert bc.time_resolution == expected
+        assert bc.intervals_per_hour == 60 // expected
+        assert type(bc.intervals_per_hour) is int
+        assert base_mock_config['time_resolution_minutes'] == expected
+        assert type(base_mock_config['time_resolution_minutes']) is int
+
+    @pytest.mark.parametrize('raw', [
+        'quarter', '', '30', 30, 15.5, None, True, [15]])
+    def test_invalid_time_resolution_stops_before_anything_is_created(
+            self, mocker, base_mock_config, raw):
+        """Clear error naming key and allowed values; no provider and
+        no inverter exists yet."""
+        factories = [
+            mocker.patch(target, autospec=True) for target in (
+                'batcontrol.core.tariff_factory.create_tarif_provider',
+                'batcontrol.core.inverter_factory.create_inverters',
+                'batcontrol.core.solar_factory.create_solar_provider',
+                'batcontrol.core.consumption_factory.create_consumption',
+                'batcontrol.core.validate_battery_control',
+            )]
+        base_mock_config['time_resolution_minutes'] = raw
+        with pytest.raises(ValueError) as excinfo:
+            Batcontrol(base_mock_config)
+        message = str(excinfo.value)
+        assert 'time_resolution_minutes' in message
+        assert '15 (quarter-hourly) or 60 (hourly)' in message
+        assert repr(raw) in message
+        for factory in factories:
+            factory.assert_not_called()
 
     def test_missing_timezone_is_reported(self, base_mock_config):
         """Regression: the handler itself raised a bare KeyError."""
@@ -2011,6 +2059,27 @@ class TestEffectiveGridChargeLimit:
 
         bc.set_always_allow_discharge_limit(1.0)
         assert bc.max_charging_from_grid_limit == 0.95
+
+    @pytest.mark.parametrize('limit', [0, 0.0, -0.1, 1.01, float('nan')])
+    def test_api_rejects_invalid_discharge_limit(self, bc, caplog, limit):
+        """0 is rejected like at startup: discharging at every SoC would
+        switch the price based control off. The current value stays."""
+        bc.mqtt_api = MagicMock()
+        bc.set_always_allow_discharge_limit(0.8)
+        bc.mqtt_api.reset_mock()
+
+        with caplog.at_level(logging.WARNING, logger='batcontrol.core'):
+            bc.api_set_always_allow_discharge_limit(limit)
+
+        assert bc.get_always_allow_discharge_limit() == 0.8
+        bc.mqtt_api.publish_always_allow_discharge_limit.assert_not_called()
+        assert 'Invalid always allow discharge limit' in caplog.text
+
+    @pytest.mark.parametrize('limit', [0.01, 0.5, 1.0])
+    def test_api_accepts_discharge_limit_above_zero_up_to_one(self, bc, limit):
+        bc.mqtt_api = MagicMock()
+        bc.api_set_always_allow_discharge_limit(limit)
+        assert bc.get_always_allow_discharge_limit() == limit
 
     def test_discharge_limit_of_zero_does_not_go_negative(self, bc):
         bc.set_always_allow_discharge_limit(0.0)
