@@ -118,3 +118,43 @@ class TestLogout:
         inverter.send_request = Mock(return_value=None)
 
         assert inverter.logout() is None
+
+
+class TestRestoreTimeOfUseBackup:
+    """restore_time_of_use_config must not hide a broken backup (PR #513)."""
+
+    def _inverter(self, path):
+        inverter = FroniusWR.__new__(FroniusWR)
+        inverter.timeofuse_config_filename = str(path)
+        inverter.set_time_of_use = Mock()
+        return inverter
+
+    def test_missing_backup_is_nothing_to_restore(self, tmp_path):
+        inverter = self._inverter(tmp_path / 'missing.json')
+        inverter.restore_time_of_use_config()
+        inverter.set_time_of_use.assert_not_called()
+
+    def test_unreadable_backup_raises_with_path(self, tmp_path):
+        backup = tmp_path / 'tou.json'
+        backup.mkdir()  # a directory cannot be read as a file
+        inverter = self._inverter(backup)
+        with pytest.raises(RuntimeError, match='not readable'):
+            inverter.restore_time_of_use_config()
+        inverter.set_time_of_use.assert_not_called()
+
+    def test_invalid_json_raises_with_path(self, tmp_path):
+        backup = tmp_path / 'tou.json'
+        backup.write_text('{broken', encoding='utf-8')
+        inverter = self._inverter(backup)
+        with pytest.raises(RuntimeError, match='tou.json is not valid JSON'):
+            inverter.restore_time_of_use_config()
+
+    def test_broken_backup_is_reported_by_shutdown(self, tmp_path):
+        backup = tmp_path / 'tou.json'
+        backup.write_text('{broken', encoding='utf-8')
+        inverter = _bare_inverter()
+        inverter.timeofuse_config_filename = str(backup)
+        del inverter.restore_time_of_use_config  # use the real method
+        with pytest.raises(RuntimeError, match='time of use restore: .*not valid JSON'):
+            inverter.shutdown()
+        inverter.logout.assert_called_once()

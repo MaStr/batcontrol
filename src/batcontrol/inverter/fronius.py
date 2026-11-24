@@ -630,24 +630,31 @@ class FroniusWR(InverterBaseclass):
         return self.set_time_of_use(timeofuselist)
 
     def restore_time_of_use_config(self):
-        """ Restore the previous time of use config from a backup file."""
+        """ Restore the previous time of use config from a backup file.
+
+        A missing backup means there is nothing to restore. An unreadable or
+        invalid backup raises, so shutdown() reports it with the inverter
+        identity instead of treating the restore as successful.
+        """
         try:
             with open(self.timeofuse_config_filename, 'r', encoding="utf-8") as f:
                 time_of_use_config_json = f.read()
-        except OSError as exc:
-            logger.error(
-                'Could not restore timeofuse config, backup %s not readable: %s',
-                self.timeofuse_config_filename, exc)
+        except FileNotFoundError:
+            logger.info(
+                'No timeofuse backup %s, nothing to restore',
+                self.timeofuse_config_filename)
             return
+        except OSError as exc:
+            raise RuntimeError(
+                f'timeofuse backup {self.timeofuse_config_filename} '
+                f'not readable: {exc}') from exc
 
         try:
             time_of_use_config = json.loads(time_of_use_config_json)
-        except:  # pylint: disable=bare-except
-            logger.error(
-                'Could not parse timeofuse config from %s',
-                self.timeofuse_config_filename
-            )
-            return
+        except ValueError as exc:
+            raise RuntimeError(
+                f'timeofuse backup {self.timeofuse_config_filename} '
+                f'is not valid JSON: {exc}') from exc
 
         stripped_time_of_use_config = []
         for listitem in time_of_use_config:
