@@ -29,7 +29,7 @@ Your annual electricity consumption in kWh. The default load profile covers typi
 
 ## Configuration File
 
-Docker (plain or Compose) and local Python installs use a `batcontrol_config.yaml` in the `config/` directory. If none is present when the Docker container starts for the first time, batcontrol copies a sample configuration that uses a dummy inverter. Home Assistant add-on configuration is done via the add-on UI (no local YAML file).
+Docker (plain or Compose) and local Python installs use a `batcontrol_config.yaml` in the `config/` directory. If none is present when the Docker container starts for the first time, batcontrol copies a sample configuration that uses a dummy inverter. The Home Assistant add-on is normally configured via the add-on UI; optionally it can use an own YAML file (see [Home Assistant Add-on](#home-assistant-add-on)).
 
 Once you are ready, edit `config/batcontrol_config.yaml` and set your inverter type, credentials, tariff provider, and PV details. See [Main Configuration](../configuration/batcontrol-configuration.md) and the other configuration pages for a full reference.
 
@@ -150,7 +150,22 @@ services:
 
 ## Home Assistant Add-on
 
-Add the [batcontrol_ha_addon](https://github.com/MaStr/batcontrol_ha_addon) repository to your Home Assistant add-on store. Configuration is done through the add-on UI rather than a YAML file.
+Add the [batcontrol_ha_addon](https://github.com/MaStr/batcontrol_ha_addon) repository to your Home Assistant add-on store. Configuration is normally done through the add-on UI.
+
+**Own configuration file (advanced):** if the file
+`/addon_configs/<HEXCODE>_batcontrol/batcontrol_config.yaml` exists, the add-on starts batcontrol
+with this file instead of the UI options.
+
+- **All settings in the add-on UI are then ignored.** The UI does not show this; only the add-on log
+  says `Using Config file found in addon config folder.`
+- Home Assistant does not check the file, so the UI's range and type checks do not apply.
+  batcontrol validates the values itself at startup.
+- Start from [`config/batcontrol_config_dummy.yaml`](https://github.com/MaStr/batcontrol/blob/main/config/batcontrol_config_dummy.yaml).
+  For the sidebar panel keep `api.enabled: true`, `api.host: 0.0.0.0` and `api.port: 8080`.
+- To return to the UI options, rename or delete the file and restart the add-on.
+
+A custom `load_profile.csv` in the same folder is picked up the same way. Details are in the add-on
+documentation (DOCS tab of the add-on).
 
 ## Local Python
 
