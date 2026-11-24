@@ -746,10 +746,14 @@ class Batcontrol:
         loop's cleanup) returns without touching the already removed
         inverter and clients.
         """
+        # Check and set in one locked step: from here on, external commands
+        # (evcc/API/MQTT) are ignored, also while the scheduler and the
+        # command executor are being stopped.
         with self._control_lock:
             if self._shutting_down:
                 logger.debug('Batcontrol shutdown already in progress or done')
                 return
+            self._shutting_down = True
         logger.info('Shutting down Batcontrol')
         try:
             # Stop scheduler thread first, then clear jobs.
@@ -765,12 +769,11 @@ class Batcontrol:
                 self._command_executor = None
             # Under the control lock, so no external command (evcc) is
             # halfway through an inverter call while the settings are
-            # restored; commands arriving later are ignored. The MQTT/evcc
+            # restored (later commands are ignored, see above). The MQTT/evcc
             # clients are stopped after the lock is released: their
             # shutdown joins the network thread, which may be waiting for
             # the lock in an evcc callback.
             with self._control_lock:
-                self._shutting_down = True
                 self.inverter.shutdown()
                 del self.inverter
             if self.evcc_api is not None:

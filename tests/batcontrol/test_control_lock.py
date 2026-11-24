@@ -251,6 +251,24 @@ def test_commands_after_shutdown_are_ignored(setup):
     assert _mode_commands(backend) == []
 
 
+def test_commands_during_shutdown_teardown_are_ignored(setup, mocker):
+    """A command arriving while shutdown() still stops the scheduler must
+    not reach the inverter (flag is set at the start of shutdown)."""
+    bc, backend, _tariff = setup
+    scheduler = mocker.MagicMock()
+
+    def late_command():
+        backend.reset_mock()
+        bc.set_discharge_blocked(True)
+
+    scheduler.stop.side_effect = late_command
+    bc.scheduler = scheduler
+    bc.shutdown()
+
+    assert not bc.discharge_blocked
+    assert _mode_commands(backend) == []
+
+
 def test_shutdown_waits_for_running_command(setup):
     """shutdown() restores the inverter only after a running external
     command has finished its inverter call."""
