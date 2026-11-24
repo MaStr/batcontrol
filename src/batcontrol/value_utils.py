@@ -239,13 +239,17 @@ def parse_integer(value, config_key: str) -> int:
 
 
 def parse_time_of_day(value, config_key: str) -> str:
-    """Validate an "HH:MM" time of day config value and return it unchanged."""
+    """Validate a time of day config value and return it unchanged.
+
+    Accepts "HH:MM" and "H:MM" (24 h, e.g. '12:30' or '7:05'), as parsed
+    by ``datetime.strptime`` with ``%H:%M``.
+    """
     try:
         datetime.datetime.strptime(value, "%H:%M")
     except (ValueError, TypeError) as exc:
         raise ValueError(
             f"{config_key} must be "
-            f"a valid HH:MM time string (e.g. '12:30'), got: {value!r}"
+            f"a valid H:MM or HH:MM time string (e.g. '12:30'), got: {value!r}"
         ) from exc
     return value
 

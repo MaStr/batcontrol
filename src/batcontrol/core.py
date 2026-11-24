@@ -779,7 +779,7 @@ class Batcontrol:
 
     @staticmethod
     def _validate_market_price_refresh_time(value: str) -> None:
-        """Raise ValueError if value is not a valid HH:MM time string."""
+        """Raise ValueError if value is not a valid H:MM or HH:MM time string."""
         parse_time_of_day(
             value, 'battery_control_expert.market_price_refresh_time')
 
