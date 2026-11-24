@@ -353,8 +353,11 @@ continue.
   `"-0.1"`) acts the same, both stop it as well. This is the one deliberate exception to
   the guard rail. Values above 1 stay warnings. The MQTT/API setter
   (`api_set_always_allow_discharge_limit`) rejects 0 at runtime as well and keeps the
-  current value; the Home Assistant number entity starts at 0.1. The evcc path
-  (`set_always_allow_discharge_limit`, from `bufferSoc`) is unchanged.
+  current value; the Home Assistant number entity starts at 0.01 (step 0.01, so whole
+  percentages from evcc stay valid states). The evcc path
+  (`set_always_allow_discharge_limit`, from `bufferSoc`) is unchanged and can still set
+  0, which the Home Assistant entity cannot show. A negative infinity string (`"-inf"`)
+  stops startup like any other value below 0.
 - **Unknown keys** in both sections are warned about (typos are silently ignored today).
 - **Cross-check:** inverter `max_soc` below `always_allow_discharge_limit` warns, because
   the Always-Allow SoC can never be reached — analogous to the existing warning for

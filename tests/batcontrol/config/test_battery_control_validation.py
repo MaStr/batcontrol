@@ -566,7 +566,8 @@ class TestAlwaysAllowZero:
     startup in every mode."""
 
     @pytest.mark.parametrize('value', [
-        0, 0.0, '0', ' 0.0 ', False, -0.1, -1, '-0.1', ' -5 ', -math.inf])
+        0, 0.0, '0', ' 0.0 ', False, -0.1, -1, '-0.1', ' -5 ', -math.inf,
+        '-inf', ' -1e400 '])
     def test_is_fatal(self, value):
         report = check_battery_control(
             with_value('always_allow_discharge_limit', value))

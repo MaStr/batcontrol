@@ -352,6 +352,15 @@ def check_always_allow_disabled(always_allow_discharge_limit) -> Optional[str]:
     """
     value = always_allow_discharge_limit
     number = parse_numeric_string(value)
+    if number is None and isinstance(value, str) and '_' not in value:
+        # parse_numeric_string() refuses non finite values, but a negative
+        # infinity ("-inf", "-1e400") switches the control off as well
+        try:
+            number = float(value.strip())
+        except ValueError:
+            number = None
+        if number is not None and not number == -math.inf:
+            number = None
     if number is not None:
         value = number
     if not isinstance(value, (int, float)) or not value <= 0:
