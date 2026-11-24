@@ -10,8 +10,8 @@ The environment variable BATCONTROL_CONFIG_VALIDATION selects the mode:
 
 In both modes, numeric strings are replaced by their numbers in the
 config dict (the Home Assistant add-on delivers some numbers as strings),
-and always_allow_discharge_limit 0 stops startup, because it switches the
-whole control off.
+and always_allow_discharge_limit 0 or below stops startup, because it
+switches the whole control off.
 
 See docs/development/pydantic-config-migration.md.
 """

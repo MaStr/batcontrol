@@ -65,11 +65,14 @@ from .runtime_state import (
     BatteryState, CalculationResult, ConfiguredParameters, PeakShavingState,
     SolarMetrics, as_number, cap_reserved_energy,
 )
-from .config import validate_battery_control, warn_unreachable_always_allow
+from .config import (
+    parse_time_resolution,
+    validate_battery_control,
+    warn_unreachable_always_allow,
+)
 from .value_utils import (
     parse_bool_config,
     parse_bool_flag,
-    parse_integer,
     parse_non_negative_number,
     parse_optional_ratio,
     parse_positive_number,
@@ -175,22 +178,13 @@ class Batcontrol:
         self.config = configdict
         config = configdict
 
-        # Extract and validate time resolution (15 or 60 minutes)
-        # Get time resolution from config, convert string to int if needed
-        # (HomeAssistant form fields may provide string values)
-        time_resolution_raw = config.get('time_resolution_minutes', 60)
-        if isinstance(time_resolution_raw, str):
-            self.time_resolution = parse_integer(
-                time_resolution_raw, 'time_resolution_minutes')
-        else:
-            self.time_resolution = time_resolution_raw
-
-        if self.time_resolution not in [15, 60]:
-            raise ValueError(
-                "time_resolution_minutes must be either 15 (quarter-hourly) "
-                f"or 60 (hourly), got '{self.time_resolution}'. "
-                "Please update your configuration file."
-            )
+        # Time resolution (15 or 60 minutes), checked first: before any
+        # provider or inverter is created. The Home Assistant add-on
+        # delivers it as a string ("15"). The validated int is written
+        # back, so every later reader of the dict gets it as well.
+        self.time_resolution = parse_time_resolution(
+            config.get('time_resolution_minutes', 60))
+        config['time_resolution_minutes'] = self.time_resolution
 
         self.intervals_per_hour = 60 // self.time_resolution
         logger.info(
@@ -1771,8 +1765,11 @@ class Batcontrol:
     def api_set_always_allow_discharge_limit(self, limit: float):
         """ Set always allow discharge limit for battery control via external API request.
             The change is temporary and will not be written to the config file.
+            0 is rejected like at startup: discharging would be allowed at
+            every SoC and the price based control would never run.
         """
-        if limit < 0 or limit > 1:
+        # not (...): also rejects NaN
+        if not 0 < limit <= 1:
             logger.warning(
                 'API: Invalid always allow discharge limit %.2f', limit)
             return

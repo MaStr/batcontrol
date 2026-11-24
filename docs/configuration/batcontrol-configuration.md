@@ -84,7 +84,7 @@ battery_control:
   min_recharge_amount: 100          
 ```
 Details about the Price configuration can be found on [price difference calculation](../features/price-difference-calculation.md) page.
-`always_allow_discharge_limit` & `max_charging_from_grid_limit` is explained [here](../getting-started/how-batcontrol-works.md). `always_allow_discharge_limit: 0` is rejected at startup: it would allow discharging at every SoC, so batcontrol would never control anything. `1.0` allows discharging freely only at a full battery.
+`always_allow_discharge_limit` & `max_charging_from_grid_limit` is explained [here](../getting-started/how-batcontrol-works.md). `always_allow_discharge_limit: 0` (or a negative value) is rejected at startup: it would allow discharging at every SoC, so batcontrol would never control anything. `1.0` allows discharging freely only at a full battery.
 
 ![Picture of different parameters on battery soc](../assets/battery_limits_parameter.png)
 
@@ -145,7 +145,7 @@ At startup batcontrol checks `battery_control` and `battery_control_expert` and 
 
 | Key | Warning when | Typical cause |
 |-----|--------------|---------------|
-| `always_allow_discharge_limit` | outside 0..1 | `90` instead of `0.90` - Always-Allow would never trigger |
+| `always_allow_discharge_limit` | above 1 | `90` instead of `0.90` - Always-Allow would never trigger (0 and below stop startup, see below) |
 | `max_charging_from_grid_limit` | outside 0..1 | `80` instead of `0.80` |
 | `min_price_difference`, `min_price_difference_rel` | below 0 | |
 | `min_recharge_amount` | below 0 | |
@@ -160,11 +160,11 @@ The ranges are the same ones that the MQTT/API setters already enforce.
 
 **Errors** - values batcontrol cannot use, for example a text that is not a number such as `"abc"` or `"0,05"` for `min_price_difference`, or an empty value. Values that already stopped batcontrol before (for example `round_price_digits: four`) still stop it with the same message.
 
-**Always stops startup**, independent of the mode below: `always_allow_discharge_limit: 0`. With it discharging is always allowed and the price based control never runs. `false` counts as `0` here. Batcontrol logs the reason (level `CRITICAL`, prefix `[Config]`) and exits with code 1 before it connects to the inverter, so the inverter settings stay untouched.
+**Always stops startup**, independent of the mode below: `always_allow_discharge_limit` of `0` or below (e.g. `-0.1`, also given as text). With it discharging is always allowed and the price based control never runs. `false` counts as `0` here. The MQTT/API setter rejects `0` as well and keeps the current value. Batcontrol logs the reason (level `CRITICAL`, prefix `[Config]`) and exits with code 1 before it connects to the inverter, so the inverter settings stay untouched.
 
 The environment variable `BATCONTROL_CONFIG_VALIDATION` controls how errors are handled:
 
 - `warn` (default): errors are logged, batcontrol starts as it did before. A configuration that started with an earlier version keeps starting.
 - `strict`: batcontrol stops at startup with a message that names the key. Warnings stay warnings.
 
-`time_resolution_minutes` given as a text that is not a number (e.g. `"quarter"`) now stops startup with a message that names the key, instead of `invalid literal for int()`.
+`time_resolution_minutes` is checked before anything else is set up. Only `15` and `60` are accepted, also as text (`"15"`, as the Home Assistant add-on delivers it, or `" 15 "`). Any other value, or a text that is not a number (e.g. `"quarter"`), stops startup with a message that names the key and the allowed values.

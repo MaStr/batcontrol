@@ -155,9 +155,10 @@ def test_numeric_strings_reach_the_core_as_numbers(monkeypatch, caplog,
 
 
 @pytest.mark.parametrize('mode', ['warn', 'strict'])
-@pytest.mark.parametrize('value', [0, '0'])
+@pytest.mark.parametrize('value', [0, '0', -0.1, '-0.1'])
 def test_always_allow_zero_stops_startup(monkeypatch, mode, value):
-    """0 allows discharging at any SoC, the control never decides."""
+    """0 or below allows discharging at any SoC, the control never
+    decides."""
     monkeypatch.setenv(VALIDATION_ENV, mode)
     with pytest.raises(ValueError,
                        match='always_allow_discharge_limit is'):

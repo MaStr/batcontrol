@@ -9,8 +9,8 @@ number, so the core computes with it instead of failing on it.
 
 Four kinds of findings:
 
-- Fatal: always_allow_discharge_limit 0 switches the control off
-  completely; it stops startup in every validation mode.
+- Fatal: always_allow_discharge_limit 0 or below switches the control
+  off completely; it stops startup in every validation mode.
 - Errors: values the code cannot use. Either it already rejects them at
   startup (the expert values, min_grid_charge_soc, ...), then the model
   uses the very same parser, or it reads them unparsed and fails later in
@@ -238,6 +238,10 @@ class BatteryControlSection(BaseModel):
                      'max_charging_from_grid_limit')
     @classmethod
     def _check_soc_ratio(cls, value, info):
+        if info.field_name == 'always_allow_discharge_limit' and value <= 0:
+            # Fatal, see check_always_allow_disabled(); a warning on top
+            # would only repeat it
+            return value
         hint = ''
         if value > 1:
             hint = ('It is a state of charge ratio (0.9 = 90 % SoC), '
@@ -342,22 +346,23 @@ def unknown_keys(section: dict, model: type[BaseModel]) -> list:
 def check_always_allow_disabled(always_allow_discharge_limit) -> Optional[str]:
     """Error text if always_allow_discharge_limit switches the control off.
 
-    With 0, discharging is always allowed at any SoC, so the price based
-    control never decides anything. False counts as 0, it is used as 0
-    by the code; a numeric string is read as its number.
+    With 0 or below, discharging is always allowed at any SoC, so the
+    price based control never decides anything. False counts as 0, it is
+    used as 0 by the code; a numeric string is read as its number.
     """
     value = always_allow_discharge_limit
     number = parse_numeric_string(value)
     if number is not None:
         value = number
-    if not isinstance(value, (int, float)) or value != 0:
+    if not isinstance(value, (int, float)) or not value <= 0:
+        # not value <= 0: NaN is not fatal, it gets a warning instead
         return None
     return (
         f'{SECTION}.always_allow_discharge_limit is {always_allow_discharge_limit!r}: '
-        'discharging would always be allowed and the price based control '
-        'would never run. Set the state of charge ratio above which '
-        'discharging is always allowed, e.g. 0.9 for 90 % SoC; 1.0 allows '
-        'it only at a full battery.')
+        'with 0 or below, discharging would always be allowed and the '
+        'price based control would never run. Set the state of charge '
+        'ratio above which discharging is always allowed, e.g. 0.9 for '
+        '90 % SoC; 1.0 allows it only at a full battery.')
 
 
 def check_max_soc(always_allow_discharge_limit, inverter_max_soc) -> Optional[str]:

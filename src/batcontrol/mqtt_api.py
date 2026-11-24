@@ -961,7 +961,8 @@ class MqttApi:
             self.base_topic +
             "/always_allow_discharge_limit/set",
             entity_category="config",
-            min_value=0.0,
+            # 0 is rejected by api_set_always_allow_discharge_limit
+            min_value=0.1,
             max_value=1.0,
             step_value=0.1,
             initial_value=0.9)

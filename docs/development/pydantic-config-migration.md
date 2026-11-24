@@ -219,8 +219,8 @@ set of the input at every nesting level.
 
 **Binding guard rail: every configuration that starts successfully today must still start
 successfully, and must produce the same control behaviour.** One deliberate exception,
-decided by the maintainer: `always_allow_discharge_limit: 0` stops startup, because it
-switches the whole control off (see stage 1).
+decided by the maintainer: `always_allow_discharge_limit` of 0 or below stops startup,
+because it switches the whole control off (see stage 1).
 
 The guard rail is fragile in one direction — inventing constraints that feel obviously
 right. Traps found while reviewing this plan:
@@ -331,7 +331,7 @@ continue.
 
     | Key | Warns when | Setter it mirrors |
     |-----|------------|-------------------|
-    | `always_allow_discharge_limit` | outside 0..1 (e.g. `90` instead of `0.9`) | `api_set_always_allow_discharge_limit` |
+    | `always_allow_discharge_limit` | above 1 (e.g. `90` instead of `0.9`); 0 and below are fatal, see below | `api_set_always_allow_discharge_limit` |
     | `max_charging_from_grid_limit` | outside 0..1 | `api_set_max_charging_from_grid_limit` |
     | `min_price_difference` | below 0 | `api_set_min_price_difference` |
     | `min_price_difference_rel` | below 0 | `api_set_min_price_difference_rel` |
@@ -347,22 +347,30 @@ continue.
   fail in every control cycle. A boolean is only a warning: it is an `int` subclass and every
   consumer computes with it as 0 or 1 today. Fields that the core already parses at startup keep
   their existing hard errors, the model reports them with the same parser.
-- **`always_allow_discharge_limit: 0` stops startup in every mode** (maintainer
-  decision). It allows discharging at every SoC, so the price based control never runs;
-  `false` is used as `0` and stops it as well. This is the one deliberate exception to
-  the guard rail. Other values outside 0..1 stay warnings. The MQTT/API setter still
-  accepts 0 at runtime.
+- **`always_allow_discharge_limit` of 0 or below stops startup in every mode**
+  (maintainer decision). It allows discharging at every SoC, so the price based control
+  never runs; `false` is used as `0` and a negative value (also as a numeric string,
+  `"-0.1"`) acts the same, both stop it as well. This is the one deliberate exception to
+  the guard rail. Values above 1 stay warnings. The MQTT/API setter
+  (`api_set_always_allow_discharge_limit`) rejects 0 at runtime as well and keeps the
+  current value; the Home Assistant number entity starts at 0.1. The evcc path
+  (`set_always_allow_discharge_limit`, from `bufferSoc`) is unchanged.
 - **Unknown keys** in both sections are warned about (typos are silently ignored today).
 - **Cross-check:** inverter `max_soc` below `always_allow_discharge_limit` warns, because
   the Always-Allow SoC can never be reached — analogous to the existing warning for
   `min_grid_charge_soc` above `max_charging_from_grid_limit`. A limit of `1.0` or above
   is silent: Always-Allow is deliberately off.
-- `time_resolution_minutes` given as a non-numeric string stops startup today with a bare
-  `ValueError: invalid literal for int()`; it now uses `parse_integer` and names the key.
+- `time_resolution_minutes` is validated first in `Batcontrol.__init__`, before any
+  provider or inverter exists (`config.general.parse_time_resolution`). Numeric strings
+  (`"15"` from the add-on `list(15|60)` schema, `" 15 "`) use the same parsing as the
+  coercion above and become an `int`, which is written back to the dict; anything else
+  than 15 or 60 is a `ValueError` naming the key and the allowed values. Before, a
+  non-numeric string failed with a bare `invalid literal for int()` and `15.0` slipped
+  through as a float.
 - **Tests:** dummy config and the doc examples of the two sections validate without any
   message; one test per limit for its warning; both modes; the env switch; numeric
-  strings are written back and reach the core as numbers; `always_allow_discharge_limit:
-  0` stops startup in both modes.
+  strings are written back and reach the core as numbers; `always_allow_discharge_limit`
+  of 0 or below stops startup in both modes.
 
 ### Stage 2 — decide after one release
 

@@ -126,7 +126,6 @@ class TestLimitWarnings:
 
     @pytest.mark.parametrize('key, value', [
         ('always_allow_discharge_limit', 90),
-        ('always_allow_discharge_limit', -0.1),
         ('always_allow_discharge_limit', math.nan),
         ('max_charging_from_grid_limit', 80),
         ('max_charging_from_grid_limit', -0.1),
@@ -562,11 +561,12 @@ class TestNumericStrings:
 
 
 class TestAlwaysAllowZero:
-    """always_allow_discharge_limit 0 switches the control off: discharging
-    is always allowed and the price logic never runs. It stops startup in
-    every mode."""
+    """always_allow_discharge_limit 0 or below switches the control off:
+    discharging is always allowed and the price logic never runs. It stops
+    startup in every mode."""
 
-    @pytest.mark.parametrize('value', [0, 0.0, '0', ' 0.0 ', False])
+    @pytest.mark.parametrize('value', [
+        0, 0.0, '0', ' 0.0 ', False, -0.1, -1, '-0.1', ' -5 ', -math.inf])
     def test_is_fatal(self, value):
         report = check_battery_control(
             with_value('always_allow_discharge_limit', value))
@@ -619,7 +619,24 @@ class TestAlwaysAllowZero:
         assert 'always_allow_discharge_limit' in str(exc.value)
         assert 'min_price_difference' in str(exc.value)
 
-    @pytest.mark.parametrize('value', [0.01, -0.1, 1.0, 90, 'abc', None])
+    @pytest.mark.parametrize('value', [-0.1, '-0.1'])
+    def test_negative_is_fatal_without_a_repeating_warning(self, value):
+        report = check_battery_control(
+            with_value('always_allow_discharge_limit', value))
+        assert len(report.fatal) == 1
+        assert report.warnings == []
+        assert report.errors == []
+
+    @pytest.mark.parametrize('mode', [MODE_WARN, MODE_STRICT])
+    def test_negative_stops_startup_in_every_mode(self, mode):
+        with pytest.raises(ConfigValidationError,
+                           match='always_allow_discharge_limit is -0.1: with 0 or below'):
+            validate_battery_control(
+                with_value('always_allow_discharge_limit', '-0.1'),
+                mode=mode)
+
+    @pytest.mark.parametrize('value', [
+        0.01, 1.0, 90, 'abc', None, math.nan, True])
     def test_other_values_are_not_fatal(self, value):
         report = check_battery_control(
             with_value('always_allow_discharge_limit', value))
