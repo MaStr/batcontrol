@@ -244,6 +244,12 @@ Batcontrol listens to the following `/set` topics for remote control:
 
 All `/set` changes are temporary runtime overrides and are not written back to the configuration file.
 
+Commands are applied one at a time, in the order they arrive. A command that
+arrives while a control cycle is running is applied right after that cycle
+(usually within a second, longer only while the inverter is slow to answer),
+so the cycle cannot overwrite it with a decision it made before the command
+arrived. See [Threading and Control Lock](../development/threading.md).
+
 ### Inverter Control (per inverter, e.g., inverter 0)
 - `house/batcontrol/inverters/0/max_grid_charge_rate/set` - Set max grid charge rate in W
 - `house/batcontrol/inverters/0/max_pv_charge_rate/set` - Set max PV charge rate in W

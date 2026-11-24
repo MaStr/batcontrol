@@ -145,6 +145,11 @@ These are used by [peak shaving](../features/peak-shaving.md): peak shaving is a
 2. **Limit Adjustment**: If `battery_halt_topic` configured, discharge limit is temporarily set to buffer SOC
 3. **Logging**: Batcontrol logs: `"evcc is charging, set block"` (only if blocking enabled)
 
+If the block arrives while batcontrol is in the middle of an evaluation, it is
+applied right after that evaluation, so the evaluation cannot switch the
+battery back to discharging. See
+[Threading and Control Lock](../development/threading.md).
+
 ### When Charging Stops
 1. **Battery Unblocking**: Battery discharge blocking is removed
 2. **Limit Restoration**: Original discharge limit is restored

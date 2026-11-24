@@ -16,7 +16,10 @@ Behaviour:
   Successful mode commands supersede earlier failed mode commands.
 - If failures persist past the tolerance window, they are escalated to
   InverterOutageError, which terminates batcontrol.
-- shutdown() and refresh_api_values() are best-effort: they never abort a cycle.
+- shutdown() and refresh_api_values() are best-effort: they never raise.
+  A failed refresh_api_values() (MQTT publishing) is only logged at debug,
+  a failed shutdown() is logged as an error with the inverter identity,
+  because it means the inverter settings were not restored.
 """
 
 import time
@@ -39,6 +42,29 @@ _COMMAND_METHODS = frozenset({
 
 # Best-effort methods never abort a control cycle - just log and move on.
 _BEST_EFFORT_METHODS = frozenset({'refresh_api_values', 'shutdown'})
+
+# Best-effort methods whose failure must be visible in the log. A failed
+# shutdown leaves the inverter on batcontrol's settings (e.g. a Fronius
+# battery config / time-of-use schedule that was not restored).
+_LOUD_BEST_EFFORT_METHODS = frozenset({'shutdown'})
+
+
+def describe_inverter(inverter):
+    """Identify an inverter in log messages, e.g. '0 (fronius_gen24)'."""
+    num = getattr(inverter, 'inverter_num', '?')
+    inverter_type = (getattr(inverter, 'inverter_type', None)
+                     or type(inverter).__name__)
+    return f'{num} ({inverter_type})'
+
+
+def log_shutdown_failure(log, inverter, error, context=None):
+    """Log a swallowed shutdown failure as an error with the inverter
+    identity, so a restore that did not happen is visible in the log."""
+    where = f' {context}' if context else ''
+    log.error(
+        "Inverter %s: 'shutdown' failed%s, inverter settings may not have "
+        "been restored: %s: %s",
+        describe_inverter(inverter), where, type(error).__name__, error)
 
 
 def _remaining_failures(failed_methods, successful_method):
@@ -83,8 +109,7 @@ class ResilientInverterWrapper:
                 result = method(*args, **kwargs)
             except Exception as e:  # pylint: disable=broad-exception-caught
                 if best_effort:
-                    logger.debug(
-                        "Inverter '%s' failed (best-effort, ignored): %s", name, e)
+                    self._log_best_effort_failure(name, e)
                     return None
                 self._on_failure(name, e)  # always raises
                 return None  # unreachable, keeps linters happy
@@ -100,6 +125,15 @@ class ResilientInverterWrapper:
                 self._initialized = True
             return result
         return guarded
+
+    def _log_best_effort_failure(self, name, error):
+        """Log a swallowed best-effort failure at the level it deserves."""
+        if name in _LOUD_BEST_EFFORT_METHODS:
+            log_shutdown_failure(logger, self._inverter, error)
+            return
+        logger.debug(
+            "Inverter %s: '%s' failed (best-effort, ignored): %s",
+            describe_inverter(self._inverter), name, error)
 
     def _on_failure(self, name, error):
         """Classify a failure. Never returns - always raises."""

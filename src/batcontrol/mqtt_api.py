@@ -235,6 +235,8 @@ class MqttApi:
         # topics of the MQTT inverter). Kept here so on_connect can renew them
         # after a reconnect - paho does not resubscribe on a clean session.
         self.raw_subscriptions = {}
+        # Optional SerialExecutor for the callbacks, see set_command_executor
+        self._command_executor = None
 
         # Remove trailing slashes if present to avoid double slashes in topics
         self.base_topic = self.base_topic.rstrip('/')
@@ -327,25 +329,44 @@ class MqttApi:
         """Build a command topic below the configured base topic."""
         return f"{self.base_topic}/{topic}{TOPIC_SET_SUFFIX}"
 
+    def set_command_executor(self, executor) -> None:
+        """ Run the registered set/external topic callbacks on executor
+            (a SerialExecutor) instead of on paho's network thread.
+
+            batcontrol's callbacks wait for the control lock while a control
+            cycle runs; on the network thread that would stall the client,
+            including the MQTT inverter's SOC messages the cycle may wait
+            for. None (default) runs them directly on the network thread.
+        """
+        self._command_executor = executor
+
     def _handle_message(self, client, userdata, message):  # pylint: disable=unused-argument
         """ Handle and dispatch incoming messages"""
         logger.debug('Received message on %s', message.topic)
         if message.topic in self.callbacks:
-            try:
-                payload = message.payload
-                if isinstance(payload, bytes):
-                    payload = payload.decode('utf-8')
-                self.callbacks[message.topic]['function'](
-                    self.callbacks[message.topic]['convert'](payload)
-                )
-            except (ValueError, TypeError, UnicodeDecodeError) as e:
-                logger.error(
-                    'Error in callback %s for payload type %s: %s',
-                    message.topic,
-                    type(message.payload).__name__,
-                    e)
+            if self._command_executor is not None:
+                self._command_executor.submit(
+                    self._dispatch, message.topic, message.payload)
+            else:
+                self._dispatch(message.topic, message.payload)
         else:
             logger.warning('No callback registered for %s', message.topic)
+
+    def _dispatch(self, topic: str, payload) -> None:
+        """ Convert the payload and call the callback registered for topic """
+        payload_type = type(payload).__name__
+        try:
+            if isinstance(payload, bytes):
+                payload = payload.decode('utf-8')
+            self.callbacks[topic]['function'](
+                self.callbacks[topic]['convert'](payload)
+            )
+        except (ValueError, TypeError, UnicodeDecodeError) as e:
+            logger.error(
+                'Error in callback %s for payload type %s: %s',
+                topic,
+                payload_type,
+                e)
 
     def register_set_callback(
             self,

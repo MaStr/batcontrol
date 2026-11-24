@@ -95,6 +95,7 @@ plugins:
           - development/mcp-spec.md: Design contract for the read-only MCP server
           - development/mcp-evaluation.md: Questions for checking the MCP tools against real use
           - development/pydantic-config-migration.md: Plan for moving the configuration to Pydantic models, section by section
+          - development/threading.md: Threading model, the control lock and how external commands are serialized
 
 nav:
   - Home: index.md
@@ -131,6 +132,7 @@ nav:
       - MCP Server Specification: development/mcp-spec.md
       - MCP Evaluation: development/mcp-evaluation.md
       - Pydantic Config Migration: development/pydantic-config-migration.md
+      - Threading and Control Lock: development/threading.md
 
 extra_javascript:
   - assets/js/vendor/chart.umd.js

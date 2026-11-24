@@ -16,6 +16,7 @@ from batcontrol.inverter import (
     InverterCommunicationError,
     InverterOutageError,
 )
+from batcontrol.inverter.resilient_wrapper import ResilientInverterWrapper
 from batcontrol.logic.logic import Logic as LogicFactory
 from batcontrol.logic.common import CommonLogic
 from batcontrol.value_utils import parse_bool_flag
@@ -484,6 +485,18 @@ class TestCoreRunDispatch:
 
         assert bc.min_grid_charge_soc == 0.55
         bc.shutdown()
+
+    def test_second_shutdown_is_a_no_op(self, mock_config, mocker, caplog):
+        self._patch_core_dependencies(mocker)
+        bc = Batcontrol(mock_config)
+        inverter = bc.inverter
+
+        bc.shutdown()
+        with caplog.at_level(logging.DEBUG, logger='batcontrol.core'):
+            bc.shutdown()
+
+        inverter.shutdown.assert_called_once()
+        assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
     def test_rejects_invalid_min_grid_charge_soc_config(
             self, mock_config, mocker):
@@ -2326,6 +2339,96 @@ class TestMqttBrokerUnreachable:
 
         mock_mqtt_api.shutdown.assert_called_once()
         inverter.shutdown.assert_called_once()
+
+
+class TestInverterShutdownFailure:
+    """R-I17: a failed inverter restore must be logged with the inverter
+    identity and must not stop the rest of the shutdown."""
+
+    CONFIG = TestMqttBrokerUnreachable.CONFIG
+
+    @staticmethod
+    def _failing_inverter(mocker):
+        inverter = mocker.MagicMock()
+        inverter.max_pv_charge_rate = 3000
+        inverter.get_max_capacity.return_value = 10000
+        inverter.inverter_num = 0
+        inverter.inverter_type = 'fronius_gen24'
+        inverter.shutdown.side_effect = RuntimeError(
+            'failed to restore battery config')
+        return inverter
+
+    @staticmethod
+    def _patch_core(mocker, inverter):
+        mocker.patch('batcontrol.core.tariff_factory.create_tarif_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.inverter_factory.create_inverter',
+                     autospec=True, return_value=inverter)
+        mocker.patch('batcontrol.core.solar_factory.create_solar_provider',
+                     autospec=True, return_value=mocker.MagicMock())
+        mocker.patch('batcontrol.core.consumption_factory.create_consumption',
+                     autospec=True, return_value=mocker.MagicMock())
+
+    @staticmethod
+    def _errors(caplog):
+        return [r.getMessage() for r in caplog.records
+                if r.levelno >= logging.ERROR
+                and 'failed to restore battery config' in r.getMessage()]
+
+    def test_wrapped_restore_failure_on_broker_abort_is_logged(
+            self, mocker, caplog):
+        inner = self._failing_inverter(mocker)
+        self._patch_core(mocker, ResilientInverterWrapper(inner))
+        mocker.patch('batcontrol.core.MqttApi',
+                     side_effect=MqttConnectionError('unreachable'))
+
+        with caplog.at_level(logging.DEBUG):
+            with pytest.raises(MqttConnectionError):
+                Batcontrol(dict(self.CONFIG))
+
+        inner.shutdown.assert_called_once()
+        errors = self._errors(caplog)
+        assert len(errors) == 1
+        assert 'Inverter 0 (fronius_gen24)' in errors[0]
+
+    def test_wrapped_restore_failure_on_shutdown_is_logged(
+            self, mocker, caplog):
+        inner = self._failing_inverter(mocker)
+        self._patch_core(mocker, ResilientInverterWrapper(inner))
+        mock_mqtt_api = mocker.MagicMock()
+        mock_mqtt_api.wait_ready.return_value = True
+        mocker.patch('batcontrol.core.MqttApi', return_value=mock_mqtt_api)
+        bc = Batcontrol(dict(self.CONFIG))
+
+        with caplog.at_level(logging.DEBUG):
+            bc.shutdown()
+
+        inner.shutdown.assert_called_once()
+        mock_mqtt_api.shutdown.assert_called_once()
+        errors = self._errors(caplog)
+        assert len(errors) == 1
+        assert 'Inverter 0 (fronius_gen24)' in errors[0]
+
+    def test_unwrapped_restore_failure_still_shuts_down_mqtt(
+            self, mocker, caplog):
+        """enable_resilient_wrapper: false - the raising inverter must not
+        skip the MQTT disconnect, and the failure must be logged."""
+        inverter = self._failing_inverter(mocker)
+        self._patch_core(mocker, inverter)
+        mock_mqtt_api = mocker.MagicMock()
+        mock_mqtt_api.wait_ready.return_value = True
+        mocker.patch('batcontrol.core.MqttApi', return_value=mock_mqtt_api)
+        bc = Batcontrol(dict(self.CONFIG))
+
+        with caplog.at_level(logging.DEBUG):
+            bc.shutdown()
+
+        mock_mqtt_api.shutdown.assert_called_once()
+        errors = self._errors(caplog)
+        assert len(errors) == 1
+        assert 'Inverter 0 (fronius_gen24)' in errors[0]
+        assert 'during shutdown' in errors[0]
+        assert 'RuntimeError: failed to restore battery config' in errors[0]
 
 
 if __name__ == '__main__':

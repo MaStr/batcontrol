@@ -8,8 +8,10 @@ Behaviour under test:
 4. Recovery of failed operations resets tracking; unrelated successes do not.
 """
 
-import pytest
+import logging
 import time
+
+import pytest
 from unittest.mock import Mock
 
 from batcontrol.inverter.resilient_wrapper import ResilientInverterWrapper
@@ -217,6 +219,92 @@ class TestRefreshApiValues:
         inv.should_fail = True
         w.refresh_api_values()
         assert w._outage_start is None
+
+
+    def test_refresh_failure_is_logged_at_debug_only(self, caplog):
+        inv = MockInverter()
+        w = ResilientInverterWrapper(inv)
+        w.set_mode_allow_discharge()
+        inv.should_fail = True
+        with caplog.at_level(logging.DEBUG,
+                             logger='batcontrol.inverter.resilient_wrapper'):
+            w.refresh_api_values()
+        records = [r for r in caplog.records if 'refresh_api_values' in r.message]
+        assert records
+        assert all(r.levelno == logging.DEBUG for r in records)
+
+
+# ---------------------------------------------------------------------------
+# shutdown is best-effort, but a failure must be visible (R-I17)
+# ---------------------------------------------------------------------------
+
+class FailingShutdownInverter(MockInverter):
+    def __init__(self):
+        super().__init__()
+        self.inverter_num = 1
+        self.inverter_type = 'fronius_gen24'
+        self.shutdown_calls = 0
+
+    def shutdown(self):
+        self.shutdown_calls += 1
+        raise RuntimeError('failed to restore battery config')
+
+
+class TestShutdown:
+    def _error_records(self, caplog):
+        return [r for r in caplog.records
+                if r.levelno >= logging.WARNING and 'shutdown' in r.message]
+
+    def test_failed_shutdown_never_raises_and_is_logged_as_error(self, caplog):
+        inv = FailingShutdownInverter()
+        w = ResilientInverterWrapper(inv)
+        w.set_mode_allow_discharge()
+
+        with caplog.at_level(logging.DEBUG):
+            assert w.shutdown() is None
+
+        assert inv.shutdown_calls == 1
+        records = self._error_records(caplog)
+        assert len(records) == 1
+        assert records[0].levelno == logging.ERROR
+        message = records[0].getMessage()
+        assert 'Inverter 1 (fronius_gen24)' in message
+        assert 'RuntimeError: failed to restore battery config' in message
+
+    def test_failed_shutdown_before_initialization_is_logged(self, caplog):
+        """The broker-startup abort path shuts down before any set_mode."""
+        inv = FailingShutdownInverter()
+        w = ResilientInverterWrapper(inv)
+
+        with caplog.at_level(logging.DEBUG):
+            w.shutdown()
+
+        assert len(self._error_records(caplog)) == 1
+
+    def test_failed_shutdown_does_not_start_outage_tracking(self):
+        inv = FailingShutdownInverter()
+        w = ResilientInverterWrapper(inv)
+        w.set_mode_allow_discharge()
+        w.shutdown()
+        assert w._outage_start is None
+
+    def test_identity_falls_back_to_class_name(self, caplog):
+        inv = FailingShutdownInverter()
+        del inv.inverter_type
+        w = ResilientInverterWrapper(inv)
+
+        with caplog.at_level(logging.DEBUG):
+            w.shutdown()
+
+        assert 'Inverter 1 (FailingShutdownInverter)' in \
+            self._error_records(caplog)[0].getMessage()
+
+    def test_successful_shutdown_logs_nothing(self, caplog):
+        w = ResilientInverterWrapper(MockInverter())
+        with caplog.at_level(logging.DEBUG,
+                             logger='batcontrol.inverter.resilient_wrapper'):
+            w.shutdown()
+        assert not caplog.records
 
 
 # ---------------------------------------------------------------------------

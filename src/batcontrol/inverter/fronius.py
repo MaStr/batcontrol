@@ -630,22 +630,31 @@ class FroniusWR(InverterBaseclass):
         return self.set_time_of_use(timeofuselist)
 
     def restore_time_of_use_config(self):
-        """ Restore the previous time of use config from a backup file."""
+        """ Restore the previous time of use config from a backup file.
+
+        A missing backup means there is nothing to restore. An unreadable or
+        invalid backup raises, so shutdown() reports it with the inverter
+        identity instead of treating the restore as successful.
+        """
         try:
             with open(self.timeofuse_config_filename, 'r', encoding="utf-8") as f:
                 time_of_use_config_json = f.read()
-        except OSError:
-            logger.error('Could not restore timeofuse config')
+        except FileNotFoundError:
+            logger.info(
+                'No timeofuse backup %s, nothing to restore',
+                self.timeofuse_config_filename)
             return
+        except OSError as exc:
+            raise RuntimeError(
+                f'timeofuse backup {self.timeofuse_config_filename} '
+                f'not readable: {exc}') from exc
 
         try:
             time_of_use_config = json.loads(time_of_use_config_json)
-        except:  # pylint: disable=bare-except
-            logger.error(
-                'Could not parse timeofuse config from %s',
-                self.timeofuse_config_filename
-            )
-            return
+        except ValueError as exc:
+            raise RuntimeError(
+                f'timeofuse backup {self.timeofuse_config_filename} '
+                f'is not valid JSON: {exc}') from exc
 
         stripped_time_of_use_config = []
         for listitem in time_of_use_config:
@@ -1038,8 +1047,9 @@ class FroniusWR(InverterBaseclass):
         """Logout from Fronius API"""
         path = self.api_config.commands_logout_path
         response = self.send_request(path, auth=True)
-        if not response:
+        if response is None:
             logger_auth.warning('Logout failed. No response from server')
+            return None
         if response.status_code == 200:
             logger_auth.info('Logout successful')
         else:
@@ -1211,11 +1221,26 @@ class FroniusWR(InverterBaseclass):
                 self.get_mqtt_inverter_topic() + 'em_mode', mode)
 
     def shutdown(self):
-        """Change back batcontrol changes."""
+        """Change back batcontrol changes.
+
+        Every step runs even if an earlier one failed, so a failed battery
+        config restore does not also skip the time-of-use restore and the
+        logout. Failures are collected and raised together at the end, so
+        the caller (ResilientInverterWrapper / InverterGroup) logs them.
+        """
         logger.info('Reverting batcontrol created config changes')
-        self.restore_battery_config()
-        self.restore_time_of_use_config()
-        self.logout()
+        failures = []
+        for step, action in (
+                ('battery config restore', self.restore_battery_config),
+                ('time of use restore', self.restore_time_of_use_config),
+                ('logout', self.logout)):
+            try:
+                action()
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                failures.append(f'{step}: {type(exc).__name__}: {exc}')
+        if failures:
+            raise RuntimeError(
+                f'Fronius {self.address}: ' + '; '.join(failures))
 
     def activate_mqtt(self, api_mqtt_api):
         """

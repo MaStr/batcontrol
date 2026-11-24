@@ -1,6 +1,7 @@
 """Tests for MqttApi._handle_message, focusing on bytes payload decoding."""
 import dataclasses
 import json
+import threading
 import warnings
 from unittest.mock import MagicMock, call, patch
 
@@ -28,8 +29,10 @@ def _make_handler_stub():
     stub = MagicMock(spec=MqttApi)
     stub.callbacks = {}
     stub.raw_subscriptions = {}
-    # Bind the real _handle_message to our stub
+    stub._command_executor = None
+    # Bind the real _handle_message and _dispatch to our stub
     stub._handle_message = MqttApi._handle_message.__get__(stub, MqttApi)
+    stub._dispatch = MqttApi._dispatch.__get__(stub, MqttApi)
     return stub
 
 
@@ -163,6 +166,48 @@ def _make_publish_stub():
         MqttApi.publish_reserved_energy_capacity_effective.__get__(api, MqttApi)
     )
     return api
+
+
+class TestHandleMessageCommandExecutor:
+    """With a command executor, callbacks leave paho's network thread."""
+
+    def test_callback_is_submitted_not_called(self):
+        api = _make_handler_stub()
+        received = []
+        api.callbacks['batcontrol/test/set'] = {
+            'function': received.append, 'convert': int}
+        executor = MagicMock()
+        api._command_executor = executor
+
+        api._handle_message(
+            None, None, _make_message('batcontrol/test/set', b'5'))
+
+        assert received == []
+        executor.submit.assert_called_once_with(
+            api._dispatch, 'batcontrol/test/set', b'5')
+        # the worker then runs the conversion and the callback
+        func, *args = executor.submit.call_args.args
+        func(*args)
+        assert received == [5]
+
+    def test_unknown_topic_is_not_submitted(self):
+        api = _make_handler_stub()
+        executor = MagicMock()
+        api._command_executor = executor
+
+        api._handle_message(None, None, _make_message('other/topic', b'1'))
+
+        executor.submit.assert_not_called()
+
+    def test_conversion_error_on_worker_is_logged(self, caplog):
+        api = _make_handler_stub()
+        api.callbacks['batcontrol/test/set'] = {
+            'function': MagicMock(), 'convert': int}
+
+        api._dispatch('batcontrol/test/set', b'not-a-number')
+
+        api.callbacks['batcontrol/test/set']['function'].assert_not_called()
+        assert 'Error in callback batcontrol/test/set' in caplog.text
 
 
 class TestHandleMessageBytesDecoding:
@@ -906,6 +951,9 @@ def _make_bc_stub(initial_config: PeakShavingConfig = None) -> MagicMock:
     bc.peak_shaving_config = (initial_config if initial_config is not None
                               else PeakShavingConfig())
     bc.mqtt_api = MagicMock()
+    # The setters run under the control lock (core._serialized)
+    bc._control_lock = threading.RLock()
+    bc._shutting_down = False
     return bc
 
 
