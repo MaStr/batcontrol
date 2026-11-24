@@ -438,6 +438,18 @@ class TestCoreRunDispatch:
         assert bc.min_grid_charge_soc == 0.55
         bc.shutdown()
 
+    def test_second_shutdown_is_a_no_op(self, mock_config, mocker, caplog):
+        self._patch_core_dependencies(mocker)
+        bc = Batcontrol(mock_config)
+        inverter = bc.inverter
+
+        bc.shutdown()
+        with caplog.at_level(logging.DEBUG, logger='batcontrol.core'):
+            bc.shutdown()
+
+        inverter.shutdown.assert_called_once()
+        assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
     def test_rejects_invalid_min_grid_charge_soc_config(
             self, mock_config, mocker):
         mock_config['battery_control']['min_grid_charge_soc'] = 'fifty-five'

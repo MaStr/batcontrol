@@ -323,6 +323,31 @@ class TestCoreDecisionJournal:
         assert events[0].mode == MODE_ALLOW_DISCHARGING
         assert events[0].value is None
 
+    def test_mqtt_commands_run_on_the_command_worker(
+            self, mock_config, mocker):
+        """With MQTT enabled, set callbacks are handed to a SerialExecutor
+        that holds the control lock, before any callback is registered."""
+        mqtt_api = mocker.MagicMock()
+        mocker.patch('batcontrol.core.MqttApi', return_value=mqtt_api)
+        mock_config['mqtt'] = {'enabled': True, 'broker': 'localhost',
+                               'port': 1883, 'topic': 'house/batcontrol'}
+        bc, _inverter, _tariff, _consumption = self._build(
+            mock_config, mocker)
+        try:
+            executor = bc._command_executor  # pylint: disable=protected-access
+            assert executor is not None
+            assert executor._lock is bc._control_lock  # pylint: disable=protected-access
+            names = [c[0] for c in mqtt_api.method_calls]
+            assert names.index('set_command_executor') < \
+                names.index('register_set_callback')
+            mqtt_api.set_command_executor.assert_called_once_with(executor)
+        finally:
+            bc.shutdown()
+            CommonLogic._instance = None  # pylint: disable=protected-access
+        # shutdown stops the worker
+        assert bc._command_executor is None  # pylint: disable=protected-access
+        assert not executor.submit(lambda: None)
+
     def test_decision_sensor_follows_the_status_changes(
             self, mock_config, mocker):
         """With MQTT enabled the Decision sensor is fed by the journal."""
@@ -479,7 +504,8 @@ class TestCoreDecisionJournal:
 
     def test_concurrent_mode_changes_keep_their_own_trace(self, setup):
         """The scheduler is inside a slow inverter call while an API thread
-        changes the mode: each change must report its own reason."""
+        changes the mode: the API request waits for the cycle (control
+        lock) and each change reports its own reason."""
         bc, inverter, _tariff, _consumption = setup
         entered = threading.Event()
         release = threading.Event()
@@ -492,17 +518,27 @@ class TestCoreDecisionJournal:
         events = []
         bc.decision_journal.add_listener(events.append)
         scheduler = threading.Thread(target=bc.run)
+        api = threading.Thread(
+            target=bc.api_set_mode, args=(MODE_AVOID_DISCHARGING,))
         scheduler.start()
         try:
             assert entered.wait(timeout=5)
-            bc.api_set_mode(MODE_AVOID_DISCHARGING)
+            api.start()
+            api.join(timeout=0.2)
+            # Waits for the cycle instead of commanding the inverter now
+            assert api.is_alive()
+            inverter.set_mode_avoid_discharge.assert_not_called()
         finally:
             release.set()
             scheduler.join(timeout=5)
+            api.join(timeout=5)
 
         assert not scheduler.is_alive()
+        assert not api.is_alive()
+        # The API request came last and stays in effect
+        assert [e.mode for e in events] == [
+            MODE_ALLOW_DISCHARGING, MODE_AVOID_DISCHARGING]
         by_mode = {e.mode: e for e in events}
-        assert set(by_mode) == {MODE_AVOID_DISCHARGING, MODE_ALLOW_DISCHARGING}
         api_mode = self._mode_record(by_mode[MODE_AVOID_DISCHARGING].trace)
         assert api_mode.reason == Reason.API_REQUEST
         assert by_mode[MODE_AVOID_DISCHARGING].control_source == CONTROL_SOURCE_API
