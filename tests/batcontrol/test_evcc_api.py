@@ -1,6 +1,7 @@
 """Tests for EvccApi TLS configuration and broker connection."""
+import logging
 import warnings
-from unittest.mock import call, patch
+from unittest.mock import Mock, call, patch
 
 import paho.mqtt.client as mqtt
 import pytest
@@ -235,3 +236,48 @@ class TestOnConnect:
 
         client.subscribe.assert_not_called()
         assert 'Bad user name or password' in caplog.text
+
+
+class TestBatteryHaltSoc:
+    """evcc bufferSoc must not switch the discharge limit off (R-L22)."""
+
+    @pytest.fixture(name='api')
+    def fixture_api(self):
+        with patch('batcontrol.evcc_api.mqtt.Client'):
+            api = EvccApi(_make_config(battery_halt_topic='evcc/site/bufferSoc'))
+        api.set_always_allow_discharge_limit_function = Mock()
+        api.get_always_allow_discharge_limit_function = Mock(return_value=0.9)
+        api.get_max_charge_limit_function = Mock(return_value=0.8)
+        api.set_max_charge_limit_function = Mock()
+        api.evcc_is_charging = True
+        return api
+
+    @staticmethod
+    def _msg(payload):
+        message = Mock()
+        message.payload = payload
+        return message
+
+    def test_regular_value_is_applied(self, api):
+        api.handle_battery_halt_soc(self._msg(b'50'))
+        api.set_always_allow_discharge_limit_function.assert_called_once_with(0.5)
+
+    def test_zero_becomes_one_percent_with_warning(self, api, caplog):
+        with caplog.at_level(logging.WARNING, logger='batcontrol.evcc_api'):
+            api.handle_battery_halt_soc(self._msg(b'0'))
+        api.set_always_allow_discharge_limit_function.assert_called_once_with(0.01)
+        assert api.evcc_battery_halt_soc == 1
+        assert 'using 1 % instead' in caplog.text
+
+    @pytest.mark.parametrize('payload', [b'-1', b'101', b'250'])
+    def test_out_of_range_is_ignored_with_warning(self, api, caplog, payload):
+        with caplog.at_level(logging.WARNING, logger='batcontrol.evcc_api'):
+            api.handle_battery_halt_soc(self._msg(payload))
+        api.set_always_allow_discharge_limit_function.assert_not_called()
+        assert api.evcc_battery_halt_soc is None
+        assert 'outside 0..100' in caplog.text
+
+    def test_not_a_number_is_logged(self, api, caplog):
+        api.handle_battery_halt_soc(self._msg(b'abc'))
+        api.set_always_allow_discharge_limit_function.assert_not_called()
+        assert 'Could not convert battery_halt' in caplog.text
